@@ -4,6 +4,40 @@ const foldersEl = document.getElementById("folders");
 const createBtn = document.getElementById("createFolderBtn");
 const folderInput = document.getElementById("folderName");
 
+// 主要な不規則動詞の活用データベース
+const irregularVerbs = {
+  "slay": "slay - slew - slain - slaying",
+  "forgive": "forgive - forgave - forgiven - forgiving",
+  "do": "do - did - done - doing",
+  "go": "go - went - gone - going",
+  "see": "see - saw - seen - seeing",
+  "take": "take - took - taken - taking",
+  "have": "have - had - had - having",
+  "come": "come - came - come - coming",
+  "make": "make - made - made - making",
+  "speak": "speak - spoke - spoken - speaking",
+  "write": "write - wrote - written - writing",
+  "know": "know - knew - known - knowing",
+  "get": "get - got - gotten - getting",
+  "give": "give - gave - given - giving",
+  "find": "find - found - found - finding",
+  "think": "think - thought - thought - thinking",
+  "run": "run - ran - run - running",
+  "eat": "eat - ate - eaten - eating",
+  "drink": "drink - drank - drunk - drinking",
+  "begin": "begin - began - begun - beginning",
+  "break": "break - broke - broken - breaking",
+  "choose": "choose - chose - chosen - choosing",
+  "fly": "fly - flew - flown - flying",
+  "forget": "forget - forgot - forgotten - forgetting",
+  "freeze": "freeze - froze - frozen - freezing",
+  "grow": "grow - grew - grown - growing",
+  "hide": "hide - hid - hidden - hiding",
+  "ride": "ride - rode - ridden - riding",
+  "sing": "sing - sang - sung - singing",
+  "swim": "swim - swam - swum - swimming"
+};
+
 // --- 1. フォルダ作成 ---
 function createFolder() {
   const name = folderInput.value.trim();
@@ -61,7 +95,7 @@ function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// --- 4. 発音再生（0.5秒遅延＋合成音声バックアップ） ---
+// --- 4. 発音再生 ---
 window.playAudio = function(audioUrl, wordText) {
   setTimeout(() => {
     if (audioUrl) {
@@ -83,29 +117,35 @@ function speakFallback(text) {
   }
 }
 
-// --- 5. 自然な日本語訳を取得する関数 ---
-async function fetchCleanJP(text) {
-  if (!text) return "";
+// --- 5. 単語直訳用ヘルパー ---
+async function fetchWordTranslation(word) {
   try {
-    const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(text)}`);
+    const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(word)}`);
     const data = await res.json();
     let translated = data[0].map(item => item[0]).join("");
     return translated.replace(/[。、.]$/g, '').trim();
   } catch (e) {
-    return text;
+    return word;
   }
 }
 
-// --- 6. 単語追加（訳の正常化 ＋ 活用変化の取得） ---
+// --- 6. 単語追加処理 ---
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
   if(!cleanWord) return;
 
   let audioUrl = "";
   let meanings = [];
-  let inflections = ""; // 活用変化 (do - did - done - doing)
+  let inflections = "";
   let exampleEN = "";
   let exampleJP = "";
+
+  const lowerWord = cleanWord.toLowerCase();
+
+  // ① 活用変化の判定（不規則動詞 DB 優先）
+  if (irregularVerbs[lowerWord]) {
+    inflections = irregularVerbs[lowerWord];
+  }
 
   try {
     const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(cleanWord)}`);
@@ -114,67 +154,51 @@ window.addWord = async function(folderId, word){
       const dictData = await dictRes.json();
       const entry = dictData[0];
 
-      // 音声URLの取得
+      // 音声URL
       const audioObj = entry.phonetics?.find(p => p.audio && p.audio.length > 0);
       if (audioObj) audioUrl = audioObj.audio;
 
       // 品詞ごとの処理
+      const processedParts = new Set();
       for (const m of entry.meanings) {
         let part = m.partOfSpeech;
+        if (processedParts.has(part)) continue; // 品詞の重複防止
+        processedParts.add(part);
+
         let partLabel = part;
         if (part === "verb") partLabel = "動詞";
         else if (part === "noun") partLabel = "名詞";
         else if (part === "adjective") partLabel = "形容詞";
         else if (part === "adverb") partLabel = "副詞";
 
-        const rawDef = m.definitions[0]?.definition || "";
-        if (rawDef) {
-          // 定義文（Definition）を綺麗な日本語訳に変換
-          const jpDef = await fetchCleanJP(rawDef);
-          meanings.push(`【${partLabel}】 ${jpDef}`);
+        // 動詞で規則変化の場合の簡易生成
+        if (part === "verb" && !inflections) {
+          const ed = lowerWord.endsWith('e') ? lowerWord + 'd' : lowerWord + 'ed';
+          const ing = lowerWord.endsWith('e') ? lowerWord.slice(0, -1) + 'ing' : lowerWord + 'ing';
+          inflections = `${lowerWord} - ${ed} - ${ed} - ${ing}`;
         }
+
+        // 単語そのものの簡潔な訳を取得
+        const cleanJP = await fetchWordTranslation(cleanWord);
+        meanings.push(`【${partLabel}】 ${cleanJP}`);
 
         if (!exampleEN && m.definitions[0]?.example) {
           exampleEN = m.definitions[0].example;
         }
       }
-
-      // 活用変化（Inflections / Verb Forms）の取得処理
-      // 例: do ➔ did / done / doing など
-      try {
-        // Free Dictionary API の別構造または定義から簡単な過去形等を補完
-        const isVerb = entry.meanings.some(m => m.partOfSpeech === "verb");
-        if (isVerb) {
-          // 基本的な不規則変化・規則変化の推測補助（簡易生成）
-          const base = cleanWord.toLowerCase();
-          if (base === "do") inflections = "do - did - done - doing";
-          else if (base === "go") inflections = "go - went - gone - going";
-          else if (base === "see") inflections = "see - saw - seen - seeing";
-          else if (base === "take") inflections = "take - took - taken - taking";
-          else if (base === "have") inflections = "have - had - had - having";
-          else if (base === "come") inflections = "come - came - come - coming";
-          else if (base === "make") inflections = "make - made - made - making";
-          else {
-            // 一般動詞の標準活用
-            const ed = base.endsWith('e') ? base + 'd' : base + 'ed';
-            const ing = base.endsWith('e') ? base.slice(0, -1) + 'ing' : base + 'ing';
-            inflections = `${base} - ${ed} - ${ed} - ${ing}`;
-          }
-        }
-      } catch(e) {}
     }
   } catch (e) {
     console.error("辞書APIエラー:", e);
   }
 
-  // フォールバック（辞書にない場合）
+  // フォールバック
   if (meanings.length === 0) {
-    const fallbackJP = await fetchCleanJP(cleanWord);
+    const fallbackJP = await fetchWordTranslation(cleanWord);
     meanings.push(`【訳】 ${fallbackJP}`);
   }
 
   if (exampleEN) {
-    exampleJP = await fetchCleanJP(exampleEN);
+    exampleJP = await fetchWordTranslation(exampleEN);
   }
 
   const folder = folders.find(f => f.id === folderId);
