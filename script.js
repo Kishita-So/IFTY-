@@ -6,6 +6,7 @@ const folderInput = document.getElementById("folderName");
 
 // 1. 不規則動詞データベース
 const irregularVerbs = {
+  "swell": "swell - swelled - swollen/swelled - swelling",
   "slay": "slay - slew - slain - slaying",
   "forgive": "forgive - forgave - forgiven - forgiving",
   "say": "say - said - said - saying",
@@ -27,16 +28,39 @@ const irregularVerbs = {
 
 // 2. 文法・語法特別解説データベース
 const grammarNotes = {
-  "say": "say to + 人 + 「〜」の形をとる（say me...は不可）。",
+  "say": "say to + 人 + 「〜」の形をとる（× say me は不可）。",
   "given": "〜を考慮すると、〜と仮定すると（前置詞・接続詞）。",
   "tell": "tell + 人 + that節 / tell + 人 + to do の形が基本。",
   "discuss": "他動詞のため discuss about... としない（○ discuss it）。",
   "marry": "他動詞のため marry with... としない（○ marry him）。"
 };
 
-// 3. 特殊用法・多義語補完
-const specialMeanings = {
-  "say": ["【副/接】 例えば、仮に〜とすれば", "【他動】 （本・看板に）〜と書いてある", "【名・可】 発言権、決定権"]
+// 3. 英和辞典風のきれいな和訳データベース（swellなどの特殊・多義語対応）
+const dictionaryDB = {
+  "swell": [
+    "【動・自】 膨らむ、腫れる、増大する",
+    "【動・他】 〜を膨らませる、〜を増やす",
+    "【名・可】 膨らみ、うねり、増大",
+    "【形】 素晴らしい、最高の（口語）"
+  ],
+  "say": [
+    "【動・他】 〜と言う、〜と語る",
+    "【動・他】 （本・看板などに）〜と書いてある",
+    "【副/接】 例えば、仮に〜とすれば（例: Let's say...）",
+    "【名・可】 発言権、決定権"
+  ],
+  "kill": [
+    "【動・他】 〜を殺す、〜を台無しにする",
+    "【動・自】 殺害する",
+    "【名・可】 殺害、獲物"
+  ],
+  "slay": [
+    "【動・他】 〜を殺害する、〜を打ち負かす（古風/文学表現）"
+  ],
+  "forgive": [
+    "【動・他】 （人・罪を）許す、勘弁する",
+    "【動・自】 許す"
+  ]
 };
 
 // --- フォルダ作成 ---
@@ -118,7 +142,7 @@ function speakFallback(text) {
   }
 }
 
-// --- 単語単体の短い日本語訳を取得 ---
+// --- 翻訳APIヘルパー ---
 async function fetchCleanWordJP(word) {
   try {
     const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(word)}`);
@@ -143,12 +167,19 @@ window.addWord = async function(folderId, word){
 
   const lowerWord = cleanWord.toLowerCase();
 
+  // 1. 文法ノートの確認
   if (grammarNotes[lowerWord]) {
     grammarNote = grammarNotes[lowerWord];
   }
 
+  // 2. 活用形の確認
   if (irregularVerbs[lowerWord]) {
     inflections = irregularVerbs[lowerWord];
+  }
+
+  // 3. 辞書データベースの確認（最優先）
+  if (dictionaryDB[lowerWord]) {
+    meanings = [...dictionaryDB[lowerWord]];
   }
 
   try {
@@ -161,31 +192,36 @@ window.addWord = async function(folderId, word){
       const audioObj = entry.phonetics?.find(p => p.audio && p.audio.length > 0);
       if (audioObj) audioUrl = audioObj.audio;
 
-      // 品詞ごとのスッキリしたラベル設定
-      const processedParts = new Set();
-      for (const m of entry.meanings) {
-        let part = m.partOfSpeech;
-        if (processedParts.has(part)) continue;
-        processedParts.add(part);
+      // DBに訳がない場合のフォールバック（自動取得処理）
+      if (meanings.length === 0) {
+        const processedParts = new Set();
+        for (const m of entry.meanings) {
+          let part = m.partOfSpeech;
+          if (processedParts.has(part)) continue;
+          processedParts.add(part);
 
-        let partLabel = part;
-        if (part === "verb") partLabel = "動・自/他";
-        else if (part === "noun") partLabel = "名・可/不可";
-        else if (part === "adjective") partLabel = "形";
-        else if (part === "adverb") partLabel = "副";
-        else if (part === "preposition") partLabel = "前";
-        else if (part === "conjunction") partLabel = "接";
+          let partLabel = part;
+          if (part === "verb") partLabel = "動・自/他";
+          else if (part === "noun") partLabel = "名・可/不可";
+          else if (part === "adjective") partLabel = "形";
+          else if (part === "adverb") partLabel = "副";
+          else if (part === "preposition") partLabel = "前";
+          else if (part === "conjunction") partLabel = "接";
 
-        if (part === "verb" && !inflections) {
-          const ed = lowerWord.endsWith('e') ? lowerWord + 'd' : lowerWord + 'ed';
-          const ing = lowerWord.endsWith('e') ? lowerWord.slice(0, -1) + 'ing' : lowerWord + 'ing';
-          inflections = `${lowerWord} - ${ed} - ${ed} - ${ing}`;
+          const cleanJP = await fetchCleanWordJP(cleanWord);
+          meanings.push(`【${partLabel}】 ${cleanJP}`);
         }
+      }
 
-        const cleanJP = await fetchCleanWordJP(cleanWord);
-        meanings.push(`【${partLabel}】 ${cleanJP}`);
+      // 活用形の自動生成（未登録の動詞用）
+      if (!inflections && entry.meanings.some(m => m.partOfSpeech === "verb")) {
+        const ed = lowerWord.endsWith('e') ? lowerWord + 'd' : lowerWord + 'ed';
+        const ing = lowerWord.endsWith('e') ? lowerWord.slice(0, -1) + 'ing' : lowerWord + 'ing';
+        inflections = `${lowerWord} - ${ed} - ${ed} - ${ing}`;
+      }
 
-        // 例文取得
+      // 例文の取得
+      for (const m of entry.meanings) {
         for (const def of m.definitions) {
           if (def.example && examples.length < 2) {
             const exJP = await fetchCleanWordJP(def.example);
@@ -196,10 +232,6 @@ window.addWord = async function(folderId, word){
     }
   } catch (e) {
     console.error("辞書APIエラー:", e);
-  }
-
-  if (specialMeanings[lowerWord]) {
-    meanings.push(...specialMeanings[lowerWord]);
   }
 
   if (meanings.length === 0) {
