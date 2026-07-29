@@ -27,7 +27,7 @@ const irregularVerbs = {
   "dwell": "dwell - dwelt/dwelled - dwelt/dwelled - dwelling"
 };
 
-// 2. 自動詞に伴う主要な前置詞データベース
+// 2. 自動詞に伴う前置詞
 const verbPrepositions = {
   "dwell": "on / in（〜に固執する、〜に住む）",
   "listen": "to（〜を聴く）",
@@ -41,17 +41,11 @@ const verbPrepositions = {
   "participate": "in（〜に参加する）"
 };
 
-// 3. 英和辞典風データベース（熟語・多義語含む）
+// 3. 英和辞典風データベース
 const dictionaryDB = {
-  "be interested in": [
-    "【熟語】 〜に興味がある、〜に関心を持っている"
-  ],
-  "dwell on": [
-    "【熟語】 〜をくどくど考える、〜に固執する"
-  ],
-  "dwell": [
-    "【動・自】 住む、宿る、長々と考える"
-  ],
+  "be interested in": ["【熟語】 〜に興味がある、〜に関心を持っている"],
+  "dwell on": ["【熟語】 〜をくどくど考える、〜に固執する"],
+  "dwell": ["【動・自】 住む、宿る、長々と考える"],
   "swell": [
     "【動・自】 膨らむ、腫れる、増大する",
     "【動・他】 〜を膨らませる、〜を増やす",
@@ -71,10 +65,9 @@ const dictionaryDB = {
   ]
 };
 
-// スペル予測用の辞書（主要単語リスト）
 const wordDictionary = ["kill", "play", "say", "dwell", "swell", "forgive", "slay", "think", "speak", "write", "make", "take", "give", "listen", "depend"];
 
-// --- 類似度（スペルミス判定）計算アルゴリズム ---
+// スペル予測アルゴリズム
 function getLevenshteinDistance(a, b) {
   const matrix = [];
   for (let i = 0; i <= b.length; i++) matrix[i] = [i];
@@ -98,8 +91,7 @@ function getLevenshteinDistance(a, b) {
 
 function findSpellingSuggestion(inputWord) {
   let closestWord = "";
-  let minDistance = 3; // 2文字以内のミスを候補とする
-
+  let minDistance = 3;
   for (const dictWord of wordDictionary) {
     const dist = getLevenshteinDistance(inputWord.toLowerCase(), dictWord);
     if (dist < minDistance && dist > 0) {
@@ -110,7 +102,7 @@ function findSpellingSuggestion(inputWord) {
   return closestWord;
 }
 
-// --- フォルダ作成 ---
+// --- 1. フォルダ作成 ---
 function createFolder() {
   const name = folderInput.value.trim();
   if (!name) return;
@@ -118,6 +110,7 @@ function createFolder() {
   folders.push({
     id: Date.now(),
     name,
+    isCollapsed: false, // 折りたたみフラグ
     words: []
   });
 
@@ -136,7 +129,17 @@ if (folderInput) {
   });
 }
 
-// --- 削除機能 ---
+// フォルダ折りたたみトグル
+window.toggleFolder = function(folderId) {
+  const f = folders.find(x => x.id === folderId);
+  if (f) {
+    f.isCollapsed = !f.isCollapsed;
+    save();
+    render();
+  }
+};
+
+// --- 2. 削除機能 ---
 window.deleteFolder = function(folderId) {
   if (confirm("このフォルダを削除しますか？")) {
     folders = folders.filter(f => f.id !== folderId);
@@ -154,12 +157,30 @@ window.deleteWord = function(folderId, index) {
   }
 };
 
-// --- 手修正した訳の保存 ---
+// --- 3. 手修正した訳・色の保存 ---
 window.updateMeaning = function(folderId, wordIndex, meaningIndex, newText) {
   const f = folders.find(x => x.id === folderId);
-  if (f && f.words[wordIndex]) {
-    f.words[wordIndex].meanings[meaningIndex] = newText;
+  if (f && f.words[wordIndex] && f.words[wordIndex].meanings[meaningIndex]) {
+    if (typeof f.words[wordIndex].meanings[meaningIndex] === 'object') {
+      f.words[wordIndex].meanings[meaningIndex].text = newText;
+    } else {
+      f.words[wordIndex].meanings[meaningIndex] = { text: newText, color: "#334155" };
+    }
     save();
+  }
+};
+
+window.updateMeaningColor = function(folderId, wordIndex, meaningIndex, color) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words[wordIndex] && f.words[wordIndex].meanings[meaningIndex]) {
+    if (typeof f.words[wordIndex].meanings[meaningIndex] === 'object') {
+      f.words[wordIndex].meanings[meaningIndex].color = color;
+    } else {
+      const oldText = f.words[wordIndex].meanings[meaningIndex];
+      f.words[wordIndex].meanings[meaningIndex] = { text: oldText, color: color };
+    }
+    save();
+    render();
   }
 };
 
@@ -189,7 +210,7 @@ function speakFallback(text) {
   }
 }
 
-// --- 翻訳APIヘルパー ---
+// 翻訳ヘルパー
 async function fetchCleanWordJP(word) {
   try {
     const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(word)}`);
@@ -201,13 +222,38 @@ async function fetchCleanWordJP(word) {
   }
 }
 
+// 自然な実用例文の生成（API連携）
+async function generateNaturalExample(word) {
+  try {
+    const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
+    if (res.ok) {
+      const data = await res.json();
+      for (const entry of data) {
+        for (const m of entry.meanings) {
+          for (const d of m.definitions) {
+            if (d.example) {
+              const jp = await fetchCleanWordJP(d.example);
+              return { en: d.example, jp: jp };
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 辞書APIに例文が無い場合の高品質フォールバック
+  const fallbackEn = `She learned how to use "${word}" correctly.`;
+  const fallbackJp = await fetchCleanWordJP(fallbackEn);
+  return { en: fallbackEn, jp: fallbackJp };
+}
+
 // --- 単語追加処理 ---
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
   if(!cleanWord) return;
 
   let audioUrl = "";
-  let meanings = [];
+  let rawMeanings = [];
   let inflections = "";
   let examples = [];
   let prepNote = "";
@@ -215,25 +261,14 @@ window.addWord = async function(folderId, word){
 
   const lowerWord = cleanWord.toLowerCase();
 
-  // 1. スペルミス予測
   const suggestedWord = findSpellingSuggestion(lowerWord);
-  if (suggestedWord) {
-    suggestion = suggestedWord;
-  }
+  if (suggestedWord) suggestion = suggestedWord;
 
-  // 2. 自動詞に伴う前置詞の確認
-  if (verbPrepositions[lowerWord]) {
-    prepNote = verbPrepositions[lowerWord];
-  }
+  if (verbPrepositions[lowerWord]) prepNote = verbPrepositions[lowerWord];
+  if (irregularVerbs[lowerWord]) inflections = irregularVerbs[lowerWord];
 
-  // 3. 活用形の確認
-  if (irregularVerbs[lowerWord]) {
-    inflections = irregularVerbs[lowerWord];
-  }
-
-  // 4. 辞書データベースの確認（熟語・特定多義語優先）
   if (dictionaryDB[lowerWord]) {
-    meanings = [...dictionaryDB[lowerWord]];
+    rawMeanings = [...dictionaryDB[lowerWord]];
   }
 
   try {
@@ -246,8 +281,7 @@ window.addWord = async function(folderId, word){
       const audioObj = entry.phonetics?.find(p => p.audio && p.audio.length > 0);
       if (audioObj) audioUrl = audioObj.audio;
 
-      // 意味の取得（DBにない場合）
-      if (meanings.length === 0) {
+      if (rawMeanings.length === 0) {
         const processedParts = new Set();
         for (const m of entry.meanings) {
           let part = m.partOfSpeech;
@@ -261,7 +295,7 @@ window.addWord = async function(folderId, word){
           else if (part === "adverb") partLabel = "副";
 
           const cleanJP = await fetchCleanWordJP(cleanWord);
-          meanings.push(`【${partLabel}】 ${cleanJP}`);
+          rawMeanings.push(`【${partLabel}】 ${cleanJP}`);
         }
       }
 
@@ -279,17 +313,19 @@ window.addWord = async function(folderId, word){
     console.error("辞書APIエラー:", e);
   }
 
-  // 例文が無い場合の自動生成フォールバック
+  // 例文がない場合は自然な例文を自動作成
   if (examples.length === 0) {
-    const generatedEn = `This is a sample sentence using "${cleanWord}".`;
-    const generatedJp = await fetchCleanWordJP(generatedEn);
-    examples.push({ en: generatedEn, jp: generatedJp });
+    const natEx = await generateNaturalExample(cleanWord);
+    examples.push(natEx);
   }
 
-  if (meanings.length === 0) {
+  if (rawMeanings.length === 0) {
     const fallbackJP = await fetchCleanWordJP(cleanWord);
-    meanings.push(`【訳】 ${fallbackJP}`);
+    rawMeanings.push(`【訳】 ${fallbackJP}`);
   }
+
+  // オブジェクト型に変換してカラープロパティを保持
+  const meanings = rawMeanings.map(m => ({ text: m, color: "#334155" }));
 
   const folder = folders.find(f => f.id === folderId);
   if (folder) {
@@ -315,72 +351,95 @@ function render(){
   folders.forEach(folder => {
     const div = document.createElement("div");
     div.className = "folder";
+    div.style.cssText = "background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; margin-bottom: 16px;";
+
+    const isCollapsed = folder.isCollapsed || false;
 
     div.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h2 style="margin: 0;">📁 ${folder.name}</h2>
-        <button onclick="deleteFolder(${folder.id})" style="background-color: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">🗑️ フォルダ削除</button>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 8px; cursor: pointer;" onclick="toggleFolder(${folder.id})">
+          <span style="font-size: 1.1em; color: #64748b;">${isCollapsed ? '▶' : '▼'}</span>
+          <h2 style="margin: 0; font-size: 1.2em; color: #0f172a;">📁 ${folder.name} <span style="font-size:0.8em; color:#64748b; font-weight:normal;">(${folder.words.length}語)</span></h2>
+        </div>
+        <button onclick="deleteFolder(${folder.id})" style="background-color: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">🗑️ 削除</button>
       </div>
 
-      <input placeholder="単語を入力してEnter"
-        onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }"
-        style="width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px;"
-      >
+      ${!isCollapsed ? `
+        <div style="margin-top: 12px;">
+          <input placeholder="単語を入力してEnter"
+            onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }"
+            style="width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px; border: 1px solid #cbd5e1; border-radius: 4px;"
+          >
 
-      ${folder.words.map((w, wordIndex) => `
-        <div class="word" style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 5px solid #2563eb; padding: 14px; margin-top: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-          
-          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <b style="font-size: 1.3em; color: #0f172a;">${w.word}</b>
-              <button onclick="playAudio('${w.audio}', '${w.word}')" style="background:#2563eb; color:white; border:none; border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:0.8em;" title="発音を聞く">🔊</button>
-            </div>
-            <button onclick="deleteWord(${folder.id}, ${wordIndex})" style="background-color: #f1f5f9; color: #64748b; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size:0.8em;">削除</button>
-          </div>
-
-          ${w.suggestion ? `
-            <div style="margin-top: 6px; font-size: 0.85em; color: #d97706; background: #fffbeb; padding: 4px 8px; border-radius: 4px;">
-              🔍 <b>もしかして：</b> 「<a href="#" onclick="addWord(${folder.id}, '${w.suggestion}'); return false;" style="color: #2563eb; font-weight: bold;">${w.suggestion}</a>」 ですか？
-            </div>
-          ` : ''}
-
-          ${w.inflections ? `
-            <div style="margin-top: 6px; font-size: 0.8em; color: #0284c7; background: #f0f9ff; display: inline-block; padding: 2px 8px; border-radius: 4px;">
-              活用: ${w.inflections}
-            </div>
-          ` : ''}
-
-          ${w.prepNote ? `
-            <div style="margin-top: 6px; font-size: 0.82em; color: #059669; background: #ecfdf5; padding: 4px 8px; border-radius: 4px;">
-              🔗 <b>伴う前置詞:</b> ${w.prepNote}
-            </div>
-          ` : ''}
-          
-          <div style="margin-top: 8px;">
-            <ul style="margin: 0; padding-left: 0; list-style: none;">
-              ${w.meanings.map((m, meaningIndex) => `
-                <li 
-                  contenteditable="true" 
-                  onblur="updateMeaning(${folder.id}, ${wordIndex}, ${meaningIndex}, this.innerText)"
-                  style="outline: none; padding: 4px 6px; font-size: 0.95em; color: #334155; border-radius: 4px; font-weight: 500;"
-                  title="クリックして訳を直接変更できます"
-                >${m}</li>
-              `).join("")}
-            </ul>
-          </div>
-
-          ${w.examples && w.examples.length > 0 ? `
-            <div style="margin-top: 10px; background: #f8fafc; padding: 8px 10px; border-radius: 6px; font-size: 0.85em; border: 1px solid #f1f5f9;">
-              ${w.examples.map(ex => `
-                <div style="margin-bottom: 4px;">
-                  <p style="margin: 0; color: #334155; font-weight: 500;">• ${ex.en}</p>
-                  <p style="margin: 0; color: #64748b; padding-left: 10px;">${ex.jp}</p>
+          ${folder.words.map((w, wordIndex) => `
+            <div class="word" style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 5px solid #2563eb; padding: 14px; margin-top: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+              
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <b style="font-size: 1.3em; color: #0f172a;">${w.word}</b>
+                  <button onclick="playAudio('${w.audio}', '${w.word}')" style="background:#2563eb; color:white; border:none; border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:0.8em;" title="発音を聞く">🔊</button>
                 </div>
-              `).join("")}
+                <button onclick="deleteWord(${folder.id}, ${wordIndex})" style="background-color: #f1f5f9; color: #64748b; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size:0.8em;">削除</button>
+              </div>
+
+              ${w.suggestion ? `
+                <div style="margin-top: 6px; font-size: 0.85em; color: #d97706; background: #fffbeb; padding: 4px 8px; border-radius: 4px;">
+                  🔍 <b>もしかして：</b> 「<a href="#" onclick="addWord(${folder.id}, '${w.suggestion}'); return false;" style="color: #2563eb; font-weight: bold;">${w.suggestion}</a>」 ですか？
+                </div>
+              ` : ''}
+
+              ${w.inflections ? `
+                <div style="margin-top: 6px; font-size: 0.8em; color: #0284c7; background: #f0f9ff; display: inline-block; padding: 2px 8px; border-radius: 4px;">
+                  活用: ${w.inflections}
+                </div>
+              ` : ''}
+
+              ${w.prepNote ? `
+                <div style="margin-top: 6px; font-size: 0.82em; color: #059669; background: #ecfdf5; padding: 4px 8px; border-radius: 4px;">
+                  🔗 <b>伴う前置詞:</b> ${w.prepNote}
+                </div>
+              ` : ''}
+              
+              <div style="margin-top: 8px;">
+                <ul style="margin: 0; padding-left: 0; list-style: none;">
+                  ${w.meanings.map((m, meaningIndex) => {
+                    const text = typeof m === 'object' ? m.text : m;
+                    const color = typeof m === 'object' ? (m.color || "#334155") : "#334155";
+                    return `
+                      <li style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                        <span 
+                          contenteditable="true" 
+                          onblur="updateMeaning(${folder.id}, ${wordIndex}, ${meaningIndex}, this.innerText)"
+                          style="outline: none; padding: 2px 4px; font-size: 0.95em; color: ${color}; border-radius: 4px; font-weight: 500; flex: 1;"
+                          title="クリックして訳を直接編集できます"
+                        >${text}</span>
+                        <input 
+                          type="color" 
+                          value="${color}" 
+                          onchange="updateMeaningColor(${folder.id}, ${wordIndex}, ${meaningIndex}, this.value)"
+                          style="border: none; background: transparent; width: 24px; height: 24px; cursor: pointer; padding: 0;"
+                          title="文字色を変更"
+                        >
+                      </li>
+                    `;
+                  }).join("")}
+                </ul>
+              </div>
+
+              ${w.examples && w.examples.length > 0 ? `
+                <div style="margin-top: 10px; background: #f8fafc; padding: 8px 10px; border-radius: 6px; font-size: 0.85em; border: 1px solid #f1f5f9;">
+                  ${w.examples.map(ex => `
+                    <div style="margin-bottom: 4px;">
+                      <p style="margin: 0; color: #334155; font-weight: 500;">• ${ex.en}</p>
+                      <p style="margin: 0; color: #64748b; padding-left: 10px;">${ex.jp}</p>
+                    </div>
+                  `).join("")}
+                </div>
+              ` : ''}
             </div>
-          ` : ''}
+          `).join("")}
         </div>
-      `).join("")}
+      ` : ''}
     `;
 
     foldersEl.appendChild(div);
