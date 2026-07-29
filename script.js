@@ -4,7 +4,8 @@ const foldersEl = document.getElementById("folders");
 const createBtn = document.getElementById("createFolderBtn");
 const folderInput = document.getElementById("folderName");
 
-createBtn.onclick = () => {
+// --- 1. フォルダ作成機能 ---
+function createFolder() {
   const name = folderInput.value.trim();
   if (!name) return;
 
@@ -17,43 +18,45 @@ createBtn.onclick = () => {
   folderInput.value = "";
   save();
   render();
+}
+
+// ボタンクリックとEnterキーの両方に対応
+createBtn.onclick = createFolder;
+folderInput.onkeydown = (e) => {
+  if (e.key === "Enter") createFolder();
 };
 
+// --- 2. フォルダ削除機能 ---
+function deleteFolder(folderId) {
+  if (confirm("このフォルダと中の単語をすべて削除しますか？")) {
+    folders = folders.filter(f => f.id !== folderId);
+    save();
+    render();
+  }
+}
+
+// --- 3. データの保存 ---
 function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// 無料の Free Dictionary API を直接呼び出すように変更
+// --- 4. 単語追加（無料翻訳APIで日本語の意味を取得） ---
 async function addWord(folderId, word){
-  if(!word) return;
+  if(!word.trim()) return;
 
   try {
-    const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
+    // 完全無料の翻訳APIを利用して英単語を日本語に翻訳
+    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|ja`);
+    const data = await res.json();
     
-    let meaning = "意味が見つかりませんでした";
-    let example = "";
-    let audio = "";
-
-    if (res.ok) {
-      const data = await res.json();
-      const firstEntry = data[0];
-      
-      // 最初の意味を取得
-      meaning = firstEntry.meanings[0]?.definitions[0]?.definition || "意味なし";
-      // 例文を取得（あれば）
-      example = firstEntry.meanings[0]?.definitions[0]?.example || "";
-      // 発音音声を検索
-      const phoneticsWithAudio = firstEntry.phonetics?.find(p => p.audio);
-      audio = phoneticsWithAudio ? phoneticsWithAudio.audio : "";
-    }
+    // 翻訳結果を取得（見つからない場合はメッセージ）
+    const meaningJP = data.responseData?.translatedText || "意味を取得できませんでした";
 
     const folder = folders.find(f => f.id === folderId);
 
     folder.words.push({
-      word,
-      meaning: meaning, // 英語の定義
-      example: example, // 英語の例文
-      audio: audio      // 音声データURL
+      word: word.trim(),
+      meaning: meaningJP
     });
 
     save();
@@ -65,13 +68,15 @@ async function addWord(folderId, word){
   }
 }
 
+// --- 5. 単語削除機能 ---
 function deleteWord(folderId, index){
   const f = folders.find(x => x.id === folderId);
-  f.words.splice(index,1);
+  f.words.splice(index, 1);
   save();
   render();
 }
 
+// --- 6. 画面描画（UI） ---
 function render(){
   foldersEl.innerHTML = "";
 
@@ -80,22 +85,22 @@ function render(){
     div.className = "folder";
 
     div.innerHTML = `
-      <h2>📁 ${folder.name}</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h2 style="margin: 0;">📁 ${folder.name}</h2>
+        <button onclick="deleteFolder(${folder.id})" style="background-color: #ef4444;">🗑️ フォルダ削除</button>
+      </div>
 
       <input placeholder="単語を入力してEnter"
-        onkeydown="if(event.key==='Enter'){addWord(${folder.id},this.value);this.value=''}"
+        onkeydown="if(event.key==='Enter'){addWord(${folder.id}, this.value); this.value=''}"
       >
 
-      ${folder.words.map((w,i)=>`
+      ${folder.words.map((w, i) => `
         <div class="word">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <b>${w.word}</b>
-            ${w.audio ? `<button onclick="new Audio('${w.audio}').play()">🔊 発音</button>` : ''}
+            <b style="font-size: 1.1em; color: #1e3a8a;">${w.word}</b>
+            <button onclick="deleteWord(${folder.id}, ${i})" style="background-color: #64748b; font-size: 12px;">削除</button>
           </div>
-          <p><b>意味:</b> ${w.meaning}</p>
-          ${w.example ? `<p><i>例文:</i> ${w.example}</p>` : ''}
-
-          <button onclick="deleteWord(${folder.id},${i})" style="margin-top: 5px;">削除</button>
+          <p style="margin: 5px 0 0 0; color: #334155;"><b>意味:</b> ${w.meaning}</p>
         </div>
       `).join("")}
     `;
