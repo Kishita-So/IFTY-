@@ -5,7 +5,7 @@ const foldersEl = document.getElementById("folders");
 const createBtn = document.getElementById("createFolderBtn");
 const folderInput = document.getElementById("folderName");
 
-// --- 0. 辞書データ(ejdict.json)の読み込み ---
+// --- 0. 辞書データの読み込み ---
 async function loadDictionary() {
   try {
     const res = await fetch("./ejdict.json");
@@ -13,12 +13,12 @@ async function loadDictionary() {
       dictionaryData = await res.json();
     }
   } catch (e) {
-    console.error("辞書データの読み込みに失敗しました:", e);
+    console.error("辞書の読み込みに失敗しました:", e);
   }
 }
 loadDictionary();
 
-// --- 1. フォルダ作成（Enter確定対応） ---
+// --- 1. フォルダ作成 ---
 function createFolder() {
   const name = folderInput.value.trim();
   if (!name) return;
@@ -44,7 +44,7 @@ if (folderInput) {
   });
 }
 
-// --- 2. フォルダ＆単語の削除 ---
+// --- 2. 削除機能 ---
 window.deleteFolder = function(folderId) {
   if (confirm("このフォルダを削除しますか？")) {
     folders = folders.filter(f => f.id !== folderId);
@@ -66,51 +66,48 @@ function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// --- 3. 外部翻訳API（辞書データに無かった時のフォールバック） ---
-async function fallbackTranslate(word) {
+// バックアップ用無料翻訳（Google経由）
+async function translateFallback(text) {
   try {
-    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|ja`);
+    const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(text)}`);
     const data = await res.json();
-    return data.responseData?.translatedText || "訳が見つかりませんでした";
-  } catch (e) {
-    return "訳の取得に失敗しました";
+    return data[0][0][0]; 
+  } catch(e) {
+    return "訳が見つかりませんでした";
   }
 }
 
-// --- 4. 単語追加（高品質辞書 ➔ 無料翻訳の順で検索） ---
+// --- 3. 単語追加（ハイブリッド検索） ---
 window.addWord = async function(folderId, word){
-  const cleanWord = word.trim().toLowerCase();
+  const cleanWord = word.trim();
   if(!cleanWord) return;
 
   let meanings = [];
-  let exampleEN = "";
-  let exampleJP = "";
-
-  // ① まずは正確な辞書データ(ejdict.json)から検索
-  if (dictionaryData[cleanWord]) {
-    meanings = dictionaryData[cleanWord].meanings;
-    exampleEN = dictionaryData[cleanWord].exampleEN || "";
-    exampleJP = dictionaryData[cleanWord].exampleJP || "";
+  const lowerWord = cleanWord.toLowerCase();
+  
+  // ① まずはEJDictから検索
+  if (dictionaryData[lowerWord]) {
+    meanings = dictionaryData[lowerWord].meanings || [dictionaryData[lowerWord]];
   } else {
-    // ② 辞書になければ外部翻訳APIを使用
-    const transResult = await fallbackTranslate(cleanWord);
-    meanings = [`【訳】 ${transResult}`];
+    // ② 辞書になかった超難単語・固有名詞は無料翻訳APIで自動取得
+    const translated = await translateFallback(cleanWord);
+    meanings = [`【訳】 ${translated}`];
   }
 
   const folder = folders.find(f => f.id === folderId);
   if (folder) {
     folder.words.push({
       word: cleanWord,
-      meanings: meanings,
-      exampleEN: exampleEN,
-      exampleJP: exampleJP
+      meanings: meanings
     });
+    
+    // 💡 重要：保存して画面を再描画する
     save();
     render();
   }
 };
 
-// --- 5. 画面描画（UI） ---
+// --- 4. 画面描画 ---
 function render(){
   if (!foldersEl) return;
   foldersEl.innerHTML = "";
@@ -133,23 +130,16 @@ function render(){
       ${folder.words.map((w, i) => `
         <div class="word" style="background: #f8fafc; border-left: 4px solid #2563eb; padding: 12px; margin-top: 10px; border-radius: 6px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <b style="font-size: 1.2em; color: #1e3a8a; text-transform: capitalize;">${w.word}</b>
+            <b style="font-size: 1.2em; color: #1e3a8a;">${w.word}</b>
             <button onclick="deleteWord(${folder.id}, ${i})" style="background-color: #94a3b8; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">削除</button>
           </div>
           
           <div style="margin-top: 8px; color: #334155;">
             <b>意味:</b>
             <ul style="margin: 4px 0; padding-left: 20px;">
-              ${w.meanings.map(m => `<li>${m}</li>`).join("")}
+              ${Array.isArray(w.meanings) ? w.meanings.map(m => `<li>${m}</li>`).join("") : `<li>${w.meanings}</li>`}
             </ul>
           </div>
-
-          ${w.exampleEN ? `
-            <div style="margin-top: 8px; background: #fff; padding: 8px; border-radius: 4px; font-size: 0.9em;">
-              <p style="margin: 0; color: #475569;"><b>例文:</b> ${w.exampleEN}</p>
-              ${w.exampleJP ? `<p style="margin: 4px 0 0 0; color: #64748b;">${w.exampleJP}</p>` : ''}
-            </div>
-          ` : ''}
         </div>
       `).join("")}
     `;
