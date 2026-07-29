@@ -23,45 +23,92 @@ const irregularVerbs = {
   "know": "know - knew - known - knowing",
   "get": "get - got - gotten - getting",
   "find": "find - found - found - finding",
-  "think": "think - thought - thought - thinking"
+  "think": "think - thought - thought - thinking",
+  "dwell": "dwell - dwelt/dwelled - dwelt/dwelled - dwelling"
 };
 
-// 2. 文法・語法特別解説データベース
-const grammarNotes = {
-  "say": "say to + 人 + 「〜」の形をとる（× say me は不可）。",
-  "given": "〜を考慮すると、〜と仮定すると（前置詞・接続詞）。",
-  "tell": "tell + 人 + that節 / tell + 人 + to do の形が基本。",
-  "discuss": "他動詞のため discuss about... としない（○ discuss it）。",
-  "marry": "他動詞のため marry with... としない（○ marry him）。"
+// 2. 自動詞に伴う主要な前置詞データベース
+const verbPrepositions = {
+  "dwell": "on / in（〜に固執する、〜に住む）",
+  "listen": "to（〜を聴く）",
+  "depend": "on（〜に依存する）",
+  "rely": "on（〜に頼る）",
+  "look": "at / for / after（〜を見る / 探す / 世話する）",
+  "apologize": "to [人] for [事]（〜に謝罪する）",
+  "belong": "to（〜に所属する）",
+  "complain": "about / of（〜について不平を言う）",
+  "consist": "of（〜で構成される）",
+  "participate": "in（〜に参加する）"
 };
 
-// 3. 英和辞典風のきれいな和訳データベース（swellなどの特殊・多義語対応）
+// 3. 英和辞典風データベース（熟語・多義語含む）
 const dictionaryDB = {
+  "be interested in": [
+    "【熟語】 〜に興味がある、〜に関心を持っている"
+  ],
+  "dwell on": [
+    "【熟語】 〜をくどくど考える、〜に固執する"
+  ],
+  "dwell": [
+    "【動・自】 住む、宿る、長々と考える"
+  ],
   "swell": [
     "【動・自】 膨らむ、腫れる、増大する",
     "【動・他】 〜を膨らませる、〜を増やす",
-    "【名・可】 膨らみ、うねり、増大",
-    "【形】 素晴らしい、最高の（口語）"
+    "【名・可】 膨らみ、うねり",
+    "【形】 素晴らしい（口語）"
   ],
   "say": [
     "【動・他】 〜と言う、〜と語る",
-    "【動・他】 （本・看板などに）〜と書いてある",
-    "【副/接】 例えば、仮に〜とすれば（例: Let's say...）",
+    "【動・他】 （本・看板に）〜と書いてある",
+    "【副/接】 例えば、仮に〜とすれば",
     "【名・可】 発言権、決定権"
   ],
   "kill": [
     "【動・他】 〜を殺す、〜を台無しにする",
     "【動・自】 殺害する",
     "【名・可】 殺害、獲物"
-  ],
-  "slay": [
-    "【動・他】 〜を殺害する、〜を打ち負かす（古風/文学表現）"
-  ],
-  "forgive": [
-    "【動・他】 （人・罪を）許す、勘弁する",
-    "【動・自】 許す"
   ]
 };
+
+// スペル予測用の辞書（主要単語リスト）
+const wordDictionary = ["kill", "play", "say", "dwell", "swell", "forgive", "slay", "think", "speak", "write", "make", "take", "give", "listen", "depend"];
+
+// --- 類似度（スペルミス判定）計算アルゴリズム ---
+function getLevenshteinDistance(a, b) {
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+function findSpellingSuggestion(inputWord) {
+  let closestWord = "";
+  let minDistance = 3; // 2文字以内のミスを候補とする
+
+  for (const dictWord of wordDictionary) {
+    const dist = getLevenshteinDistance(inputWord.toLowerCase(), dictWord);
+    if (dist < minDistance && dist > 0) {
+      minDistance = dist;
+      closestWord = dictWord;
+    }
+  }
+  return closestWord;
+}
 
 // --- フォルダ作成 ---
 function createFolder() {
@@ -163,21 +210,28 @@ window.addWord = async function(folderId, word){
   let meanings = [];
   let inflections = "";
   let examples = [];
-  let grammarNote = "";
+  let prepNote = "";
+  let suggestion = "";
 
   const lowerWord = cleanWord.toLowerCase();
 
-  // 1. 文法ノートの確認
-  if (grammarNotes[lowerWord]) {
-    grammarNote = grammarNotes[lowerWord];
+  // 1. スペルミス予測
+  const suggestedWord = findSpellingSuggestion(lowerWord);
+  if (suggestedWord) {
+    suggestion = suggestedWord;
   }
 
-  // 2. 活用形の確認
+  // 2. 自動詞に伴う前置詞の確認
+  if (verbPrepositions[lowerWord]) {
+    prepNote = verbPrepositions[lowerWord];
+  }
+
+  // 3. 活用形の確認
   if (irregularVerbs[lowerWord]) {
     inflections = irregularVerbs[lowerWord];
   }
 
-  // 3. 辞書データベースの確認（最優先）
+  // 4. 辞書データベースの確認（熟語・特定多義語優先）
   if (dictionaryDB[lowerWord]) {
     meanings = [...dictionaryDB[lowerWord]];
   }
@@ -192,7 +246,7 @@ window.addWord = async function(folderId, word){
       const audioObj = entry.phonetics?.find(p => p.audio && p.audio.length > 0);
       if (audioObj) audioUrl = audioObj.audio;
 
-      // DBに訳がない場合のフォールバック（自動取得処理）
+      // 意味の取得（DBにない場合）
       if (meanings.length === 0) {
         const processedParts = new Set();
         for (const m of entry.meanings) {
@@ -205,19 +259,10 @@ window.addWord = async function(folderId, word){
           else if (part === "noun") partLabel = "名・可/不可";
           else if (part === "adjective") partLabel = "形";
           else if (part === "adverb") partLabel = "副";
-          else if (part === "preposition") partLabel = "前";
-          else if (part === "conjunction") partLabel = "接";
 
           const cleanJP = await fetchCleanWordJP(cleanWord);
           meanings.push(`【${partLabel}】 ${cleanJP}`);
         }
-      }
-
-      // 活用形の自動生成（未登録の動詞用）
-      if (!inflections && entry.meanings.some(m => m.partOfSpeech === "verb")) {
-        const ed = lowerWord.endsWith('e') ? lowerWord + 'd' : lowerWord + 'ed';
-        const ing = lowerWord.endsWith('e') ? lowerWord.slice(0, -1) + 'ing' : lowerWord + 'ing';
-        inflections = `${lowerWord} - ${ed} - ${ed} - ${ing}`;
       }
 
       // 例文の取得
@@ -234,6 +279,13 @@ window.addWord = async function(folderId, word){
     console.error("辞書APIエラー:", e);
   }
 
+  // 例文が無い場合の自動生成フォールバック
+  if (examples.length === 0) {
+    const generatedEn = `This is a sample sentence using "${cleanWord}".`;
+    const generatedJp = await fetchCleanWordJP(generatedEn);
+    examples.push({ en: generatedEn, jp: generatedJp });
+  }
+
   if (meanings.length === 0) {
     const fallbackJP = await fetchCleanWordJP(cleanWord);
     meanings.push(`【訳】 ${fallbackJP}`);
@@ -246,7 +298,8 @@ window.addWord = async function(folderId, word){
       audio: audioUrl,
       meanings: meanings,
       inflections: inflections,
-      grammarNote: grammarNote,
+      prepNote: prepNote,
+      suggestion: suggestion,
       examples: examples
     });
     save();
@@ -285,15 +338,21 @@ function render(){
             <button onclick="deleteWord(${folder.id}, ${wordIndex})" style="background-color: #f1f5f9; color: #64748b; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size:0.8em;">削除</button>
           </div>
 
+          ${w.suggestion ? `
+            <div style="margin-top: 6px; font-size: 0.85em; color: #d97706; background: #fffbeb; padding: 4px 8px; border-radius: 4px;">
+              🔍 <b>もしかして：</b> 「<a href="#" onclick="addWord(${folder.id}, '${w.suggestion}'); return false;" style="color: #2563eb; font-weight: bold;">${w.suggestion}</a>」 ですか？
+            </div>
+          ` : ''}
+
           ${w.inflections ? `
             <div style="margin-top: 6px; font-size: 0.8em; color: #0284c7; background: #f0f9ff; display: inline-block; padding: 2px 8px; border-radius: 4px;">
               活用: ${w.inflections}
             </div>
           ` : ''}
 
-          ${w.grammarNote ? `
-            <div style="margin-top: 6px; background: #fffbeb; border-left: 3px solid #f59e0b; color: #b45309; padding: 6px 10px; font-size: 0.82em; border-radius: 0 4px 4px 0;">
-              💡 <b>語法:</b> ${w.grammarNote}
+          ${w.prepNote ? `
+            <div style="margin-top: 6px; font-size: 0.82em; color: #059669; background: #ecfdf5; padding: 4px 8px; border-radius: 4px;">
+              🔗 <b>伴う前置詞:</b> ${w.prepNote}
             </div>
           ` : ''}
           
