@@ -48,11 +48,30 @@ window.deleteWord = function(folderId, index) {
   }
 };
 
+// --- 3. 手修正した訳・定義の保存機能 ---
+window.updateMeaning = function(folderId, wordIndex, meaningIndex, newText) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words[wordIndex]) {
+    f.words[wordIndex].meanings[meaningIndex] = newText;
+    save();
+  }
+};
+
 function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// --- 3. 高機能翻訳ヘルパー (Google Translate API) ---
+// --- 4. 0.5秒遅延付きの発音再生 ---
+window.playAudio = function(audioUrl) {
+  if (!audioUrl) return;
+  const audio = new Audio(audioUrl);
+  // 最初が途切れないよう 0.5秒（500ms）遅らせて再生
+  setTimeout(() => {
+    audio.play().catch(e => console.error("再生エラー:", e));
+  }, 500);
+};
+
+// --- 5. 高機能翻訳ヘルパー ---
 async function translateToJP(text) {
   if (!text) return "";
   try {
@@ -64,7 +83,7 @@ async function translateToJP(text) {
   }
 }
 
-// --- 4. 高機能単語検索 (発音・自他動詞・可算/不可算・複数品詞対応) ---
+// --- 6. 単語追加（簡潔な訳・英日Definition対応） ---
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
   if(!cleanWord) return;
@@ -75,36 +94,36 @@ window.addWord = async function(folderId, word){
   let exampleJP = "";
 
   try {
-    // ① Free Dictionary API から辞書データを取得
     const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(cleanWord)}`);
     
     if (dictRes.ok) {
       const dictData = await dictRes.json();
       const entry = dictData[0];
 
-      // 音声データの取得
+      // 音声URLの取得
       const audioObj = entry.phonetics?.find(p => p.audio && p.audio.length > 0);
       if (audioObj) audioUrl = audioObj.audio;
 
-      // 各品詞（名詞、動詞等）の処理
+      // 品詞ごとの処理
       for (const m of entry.meanings) {
-        let part = m.partOfSpeech; // noun, verb, adjective など
-        
-        // 品詞・自他動詞・可算/不可算の表記整形
+        let part = m.partOfSpeech;
         let partLabel = part;
         if (part === "verb") partLabel = "動詞 (自/他)";
-        else if (part === "noun") partLabel = "名詞 (可算/不可算)";
+        else if (part === "noun") partLabel = "名詞 (可/不可)";
         else if (part === "adjective") partLabel = "形容詞";
         else if (part === "adverb") partLabel = "副詞";
 
-        // 最初の定義を取得して日本語訳
         const rawDef = m.definitions[0]?.definition || "";
         if (rawDef) {
-          const jpDef = await translateToJP(rawDef);
-          meanings.push(`【${partLabel}】 ${jpDef}`);
+          // 英語のDefinition（定義）
+          const defEN = rawDef;
+          // 日本語に翻訳したDefinition
+          const defJP = await translateToJP(rawDef);
+          
+          // 単語帳向けに簡潔に整形
+          meanings.push(`【${partLabel}】 ${defJP} (${defEN})`);
         }
 
-        // 例文の取得
         if (!exampleEN && m.definitions[0]?.example) {
           exampleEN = m.definitions[0].example;
         }
@@ -114,13 +133,12 @@ window.addWord = async function(folderId, word){
     console.error("辞書APIエラー:", e);
   }
 
-  // ② 辞書APIで取れなかった場合のフォールバック（難単語・固有名詞）
+  // フォールバック（辞書にない場合）
   if (meanings.length === 0) {
     const fallbackJP = await translateToJP(cleanWord);
     meanings.push(`【訳】 ${fallbackJP}`);
   }
 
-  // 例文があれば日本語に翻訳
   if (exampleEN) {
     exampleJP = await translateToJP(exampleEN);
   }
@@ -139,7 +157,7 @@ window.addWord = async function(folderId, word){
   }
 };
 
-// --- 5. 画面描画 ---
+// --- 7. 画面描画 ---
 function render(){
   if (!foldersEl) return;
   foldersEl.innerHTML = "";
@@ -159,20 +177,27 @@ function render(){
         style="width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px;"
       >
 
-      ${folder.words.map((w, i) => `
+      ${folder.words.map((w, wordIndex) => `
         <div class="word" style="background: #f8fafc; border-left: 4px solid #2563eb; padding: 12px; margin-top: 10px; border-radius: 6px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <b style="font-size: 1.2em; color: #1e3a8a;">${w.word}</b>
-              ${w.audio ? `<button onclick="new Audio('${w.audio}').play()" style="background:#2563eb; color:white; border:none; border-radius:50%; width:28px; height:28px; cursor:pointer;" title="発音を聞く">🔊</button>` : ''}
+              ${w.audio ? `<button onclick="playAudio('${w.audio}')" style="background:#2563eb; color:white; border:none; border-radius:50%; width:28px; height:28px; cursor:pointer;" title="0.5秒後に再生">🔊</button>` : ''}
             </div>
-            <button onclick="deleteWord(${folder.id}, ${i})" style="background-color: #94a3b8; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">削除</button>
+            <button onclick="deleteWord(${folder.id}, ${wordIndex})" style="background-color: #94a3b8; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">削除</button>
           </div>
           
           <div style="margin-top: 8px; color: #334155;">
-            <b>意味・品詞:</b>
+            <b style="font-size: 0.9em; color: #64748b;">意味・Definition (クリックで編集可能):</b>
             <ul style="margin: 4px 0; padding-left: 20px;">
-              ${w.meanings.map(m => `<li>${m}</li>`).join("")}
+              ${w.meanings.map((m, meaningIndex) => `
+                <li 
+                  contenteditable="true" 
+                  onblur="updateMeaning(${folder.id}, ${wordIndex}, ${meaningIndex}, this.innerText)"
+                  style="outline: none; padding: 2px 4px; border-radius: 3px; cursor: text;"
+                  title="クリックして訳を直接変更できます"
+                >${m}</li>
+              `).join("")}
             </ul>
           </div>
 
