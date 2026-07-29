@@ -1,10 +1,24 @@
 let folders = JSON.parse(localStorage.getItem("folders")) || [];
+let dictionaryData = {};
 
 const foldersEl = document.getElementById("folders");
 const createBtn = document.getElementById("createFolderBtn");
 const folderInput = document.getElementById("folderName");
 
-// --- 1. フォルダ作成（Enterキー＆ボタン両対応） ---
+// --- 0. 辞書データ(ejdict.json)の読み込み ---
+async function loadDictionary() {
+  try {
+    const res = await fetch("./ejdict.json");
+    if (res.ok) {
+      dictionaryData = await res.json();
+    }
+  } catch (e) {
+    console.error("辞書データの読み込みに失敗しました:", e);
+  }
+}
+loadDictionary();
+
+// --- 1. フォルダ作成（Enter確定対応） ---
 function createFolder() {
   const name = folderInput.value.trim();
   if (!name) return;
@@ -30,7 +44,7 @@ if (folderInput) {
   });
 }
 
-// --- 2. フォルダ削除 ---
+// --- 2. フォルダ＆単語の削除 ---
 window.deleteFolder = function(folderId) {
   if (confirm("このフォルダを削除しますか？")) {
     folders = folders.filter(f => f.id !== folderId);
@@ -39,7 +53,6 @@ window.deleteFolder = function(folderId) {
   }
 };
 
-// --- 3. 単語削除 ---
 window.deleteWord = function(folderId, index) {
   const f = folders.find(x => x.id === folderId);
   if (f) {
@@ -49,86 +62,55 @@ window.deleteWord = function(folderId, index) {
   }
 };
 
-// --- 4. データの保存 ---
 function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// 無料でテキストを日本語に翻訳するヘルパー関数
-async function translateToJP(text) {
-  if (!text) return "";
+// --- 3. 外部翻訳API（辞書データに無かった時のフォールバック） ---
+async function fallbackTranslate(word) {
   try {
-    const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(text)}`);
+    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|ja`);
     const data = await res.json();
-    return data[0].map(item => item[0]).join("");
+    return data.responseData?.translatedText || "訳が見つかりませんでした";
   } catch (e) {
-    return text; // 失敗時は原文を返す
+    return "訳の取得に失敗しました";
   }
 }
 
-// --- 5. 高性能単語追加（辞書API + 翻訳API） ---
+// --- 4. 単語追加（高品質辞書 ➔ 無料翻訳の順で検索） ---
 window.addWord = async function(folderId, word){
-  const cleanWord = word.trim();
+  const cleanWord = word.trim().toLowerCase();
   if(!cleanWord) return;
 
-  try {
-    // ① 無料の辞書APIで品詞・意味・例文を取得
-    const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(cleanWord)}`);
-    
-    let meaningsList = [];
-    let exampleEN = "";
+  let meanings = [];
+  let exampleEN = "";
+  let exampleJP = "";
 
-    if (dictRes.ok) {
-      const dictData = await dictRes.json();
-      const entry = dictData[0];
+  // ① まずは正確な辞書データ(ejdict.json)から検索
+  if (dictionaryData[cleanWord]) {
+    meanings = dictionaryData[cleanWord].meanings;
+    exampleEN = dictionaryData[cleanWord].exampleEN || "";
+    exampleJP = dictionaryData[cleanWord].exampleJP || "";
+  } else {
+    // ② 辞書になければ外部翻訳APIを使用
+    const transResult = await fallbackTranslate(cleanWord);
+    meanings = [`【訳】 ${transResult}`];
+  }
 
-      // すべての品詞（名詞・動詞・形容詞など）と意味を抽出
-      for (const m of entry.meanings) {
-        const partOfSpeech = m.partOfSpeech; // noun, verb など
-        const def = m.definitions[0]?.definition || "";
-        if (def) {
-          // 品詞ごとの意味を英和翻訳
-          const defJP = await translateToJP(def);
-          meaningsList.push(`[${partOfSpeech}] ${defJP}`);
-        }
-        // 最初の例文を保持
-        if (!exampleEN && m.definitions[0]?.example) {
-          exampleEN = m.definitions[0].example;
-        }
-      }
-    }
-
-    // 辞書APIにデータがなかった場合のバックアップ（直接翻訳）
-    if (meaningsList.length === 0) {
-      const fallbackJP = await translateToJP(cleanWord);
-      meaningsList.push(fallbackJP);
-    }
-
-    // 例文があれば日本語訳も取得
-    let exampleJP = "";
-    if (exampleEN) {
-      exampleJP = await translateToJP(exampleEN);
-    }
-
-    const folder = folders.find(f => f.id === folderId);
-    if (folder) {
-      folder.words.push({
-        word: cleanWord,
-        meanings: meaningsList, // 配列で複数品詞を保持
-        exampleEN: exampleEN,   // 英語例文
-        exampleJP: exampleJP    // 日本語例文
-      });
-      save();
-      render();
-    }
-
-  } catch (error) {
-    console.error("APIエラー:", error);
-    alert("単語情報の取得に失敗しました。");
+  const folder = folders.find(f => f.id === folderId);
+  if (folder) {
+    folder.words.push({
+      word: cleanWord,
+      meanings: meanings,
+      exampleEN: exampleEN,
+      exampleJP: exampleJP
+    });
+    save();
+    render();
   }
 };
 
-// --- 6. 画面描画 ---
+// --- 5. 画面描画（UI） ---
 function render(){
   if (!foldersEl) return;
   foldersEl.innerHTML = "";
@@ -151,7 +133,7 @@ function render(){
       ${folder.words.map((w, i) => `
         <div class="word" style="background: #f8fafc; border-left: 4px solid #2563eb; padding: 12px; margin-top: 10px; border-radius: 6px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <b style="font-size: 1.2em; color: #1e3a8a;">${w.word}</b>
+            <b style="font-size: 1.2em; color: #1e3a8a; text-transform: capitalize;">${w.word}</b>
             <button onclick="deleteWord(${folder.id}, ${i})" style="background-color: #94a3b8; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">削除</button>
           </div>
           
@@ -165,7 +147,7 @@ function render(){
           ${w.exampleEN ? `
             <div style="margin-top: 8px; background: #fff; padding: 8px; border-radius: 4px; font-size: 0.9em;">
               <p style="margin: 0; color: #475569;"><b>例文:</b> ${w.exampleEN}</p>
-              <p style="margin: 4px 0 0 0; color: #64748b;">${w.exampleJP}</p>
+              ${w.exampleJP ? `<p style="margin: 4px 0 0 0; color: #64748b;">${w.exampleJP}</p>` : ''}
             </div>
           ` : ''}
         </div>
