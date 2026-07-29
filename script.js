@@ -34,7 +34,16 @@ const grammarNotes = {
   "marry": "【語法注意】他動詞なので marry with... と前置詞withをつけない（× marry with him ➔ ○ marry him）。"
 };
 
-// --- 1. フォルダ作成 ---
+// 3. 多義語・特殊用法の補完データベース
+const specialMeanings = {
+  "say": [
+    "【副詞・接続詞】 例えば、仮に〜とすれば（例: Let's say...）",
+    "【他動詞 (vt)】 （本・標識などに）〜と書いてある、表示されている",
+    "【名詞 (可算/c)】 発言権、決定権（例: have a say）"
+  ]
+};
+
+// --- フォルダ作成 ---
 function createFolder() {
   const name = folderInput.value.trim();
   if (!name) return;
@@ -60,7 +69,7 @@ if (folderInput) {
   });
 }
 
-// --- 2. 削除機能 ---
+// --- 削除機能 ---
 window.deleteFolder = function(folderId) {
   if (confirm("このフォルダを削除しますか？")) {
     folders = folders.filter(f => f.id !== folderId);
@@ -78,7 +87,7 @@ window.deleteWord = function(folderId, index) {
   }
 };
 
-// --- 3. 手修正した訳の保存 ---
+// --- 手修正した訳の保存 ---
 window.updateMeaning = function(folderId, wordIndex, meaningIndex, newText) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wordIndex]) {
@@ -91,7 +100,7 @@ function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// --- 4. 発音再生 ---
+// --- 発音再生 ---
 window.playAudio = function(audioUrl, wordText) {
   setTimeout(() => {
     if (audioUrl) {
@@ -113,7 +122,7 @@ function speakFallback(text) {
   }
 }
 
-// --- 5. 翻訳ヘルパー ---
+// --- 翻訳ヘルパー ---
 async function fetchTranslation(text) {
   if (!text) return "";
   try {
@@ -126,7 +135,7 @@ async function fetchTranslation(text) {
   }
 }
 
-// --- 6. 単語追加（自他動詞・可算/不可算・文法解説・複数例文） ---
+// --- 単語追加（多義語・複数定義対応） ---
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
   if(!cleanWord) return;
@@ -134,7 +143,7 @@ window.addWord = async function(folderId, word){
   let audioUrl = "";
   let meanings = [];
   let inflections = "";
-  let examples = []; // 複数例文用 [{en: "", jp: ""}]
+  let examples = [];
   let grammarNote = "";
 
   const lowerWord = cleanWord.toLowerCase();
@@ -160,14 +169,10 @@ window.addWord = async function(folderId, word){
       const audioObj = entry.phonetics?.find(p => p.audio && p.audio.length > 0);
       if (audioObj) audioUrl = audioObj.audio;
 
-      // 品詞および例文の処理
-      const processedParts = new Set();
+      // 品詞および複数定義の処理
       for (const m of entry.meanings) {
         let part = m.partOfSpeech;
-        if (processedParts.has(part)) continue;
-        processedParts.add(part);
 
-        // 詳細な品詞ラベル（自他動詞・可算不可算の表示）
         let partLabel = part;
         if (part === "verb") partLabel = "他動詞 (vt) / 自動詞 (vi)";
         else if (part === "noun") partLabel = "名詞 (可算/c・不可算/u)";
@@ -176,19 +181,22 @@ window.addWord = async function(folderId, word){
         else if (part === "preposition") partLabel = "前置詞";
         else if (part === "conjunction") partLabel = "接続詞";
 
-        // 動詞の規則変化の簡易補完
         if (part === "verb" && !inflections) {
           const ed = lowerWord.endsWith('e') ? lowerWord + 'd' : lowerWord + 'ed';
           const ing = lowerWord.endsWith('e') ? lowerWord.slice(0, -1) + 'ing' : lowerWord + 'ing';
           inflections = `${lowerWord} - ${ed} - ${ed} - ${ing}`;
         }
 
-        const cleanJP = await fetchTranslation(cleanWord);
-        meanings.push(`【${partLabel}】 ${cleanJP}`);
+        // 1つの品詞に含まれる定義（最大3つまで）を取得して多義語に対応
+        const defsToTake = m.definitions.slice(0, 3);
+        for (const def of defsToTake) {
+          if (def.definition) {
+            const jpDef = await fetchTranslation(def.definition);
+            meanings.push(`【${partLabel}】 ${jpDef}`);
+          }
 
-        // 複数例文の収集（各定義から収集）
-        for (const def of m.definitions) {
-          if (def.example && examples.length < 3) { // 最大3つまで収集
+          // 例文の収集
+          if (def.example && examples.length < 3) {
             const exJP = await fetchTranslation(def.example);
             examples.push({ en: def.example, jp: exJP });
           }
@@ -197,6 +205,11 @@ window.addWord = async function(folderId, word){
     }
   } catch (e) {
     console.error("辞書APIエラー:", e);
+  }
+
+  // 特殊用法・多義語の補完を追加
+  if (specialMeanings[lowerWord]) {
+    meanings.push(...specialMeanings[lowerWord]);
   }
 
   // フォールバック
@@ -220,7 +233,7 @@ window.addWord = async function(folderId, word){
   }
 };
 
-// --- 7. 画面描画 ---
+// --- 画面描画 ---
 function render(){
   if (!foldersEl) return;
   foldersEl.innerHTML = "";
@@ -263,7 +276,7 @@ function render(){
           ` : ''}
           
           <div style="margin-top: 8px; color: #334155;">
-            <b style="font-size: 0.9em; color: #64748b;">意味 (クリックで自由編集):</b>
+            <b style="font-size: 0.9em; color: #64748b;">意味・多義語 (クリックで自由編集):</b>
             <ul style="margin: 4px 0; padding-left: 20px;">
               ${w.meanings.map((m, meaningIndex) => `
                 <li 
