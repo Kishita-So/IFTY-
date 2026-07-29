@@ -4,7 +4,7 @@ const foldersEl = document.getElementById("folders");
 const createBtn = document.getElementById("createFolderBtn");
 const folderInput = document.getElementById("folderName");
 
-// --- 1. フォルダ作成機能 ---
+// --- 1. フォルダ作成（Enterキー＆ボタン両対応） ---
 function createFolder() {
   const name = folderInput.value.trim();
   if (!name) return;
@@ -20,64 +20,72 @@ function createFolder() {
   render();
 }
 
-// ボタンクリックとEnterキーの両方に対応
-createBtn.onclick = createFolder;
-folderInput.onkeydown = (e) => {
-  if (e.key === "Enter") createFolder();
-};
+// クリック時とEnterキー押下時の両方で発火
+if (createBtn) createBtn.onclick = createFolder;
+if (folderInput) {
+  folderInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault(); // フォーム送信等のデフォルト動作を防止
+      createFolder();
+    }
+  });
+}
 
 // --- 2. フォルダ削除機能 ---
-function deleteFolder(folderId) {
-  if (confirm("このフォルダと中の単語をすべて削除しますか？")) {
+window.deleteFolder = function(folderId) {
+  if (confirm("このフォルダを削除しますか？")) {
     folders = folders.filter(f => f.id !== folderId);
     save();
     render();
   }
-}
+};
 
-// --- 3. データの保存 ---
+// --- 3. 単語削除機能 ---
+window.deleteWord = function(folderId, index) {
+  const f = folders.find(x => x.id === folderId);
+  if (f) {
+    f.words.splice(index, 1);
+    save();
+    render();
+  }
+};
+
+// --- 4. データの保存 ---
 function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// --- 4. 単語追加（無料翻訳APIで日本語の意味を取得） ---
-async function addWord(folderId, word){
+// --- 5. 単語追加（無料APIで日本語訳を取得） ---
+window.addWord = async function(folderId, word){
   if(!word.trim()) return;
 
   try {
-    // 完全無料の翻訳APIを利用して英単語を日本語に翻訳
+    // MyMemory APIを使って英和翻訳を取得（完全無料・登録不要）
     const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|ja`);
     const data = await res.json();
     
-    // 翻訳結果を取得（見つからない場合はメッセージ）
-    const meaningJP = data.responseData?.translatedText || "意味を取得できませんでした";
+    // 翻訳結果を取得
+    const meaningJP = data.responseData?.translatedText || "意味が見つかりませんでした";
 
     const folder = folders.find(f => f.id === folderId);
-
-    folder.words.push({
-      word: word.trim(),
-      meaning: meaningJP
-    });
-
-    save();
-    render();
+    if (folder) {
+      folder.words.push({
+        word: word.trim(),
+        meaning: meaningJP
+      });
+      save();
+      render();
+    }
 
   } catch (error) {
     console.error("APIエラー:", error);
-    alert("単語の取得に失敗しました。");
+    alert("単語の意味を取得できませんでした。");
   }
-}
+};
 
-// --- 5. 単語削除機能 ---
-function deleteWord(folderId, index){
-  const f = folders.find(x => x.id === folderId);
-  f.words.splice(index, 1);
-  save();
-  render();
-}
-
-// --- 6. 画面描画（UI） ---
+// --- 6. 画面の描画 ---
 function render(){
+  if (!foldersEl) return;
   foldersEl.innerHTML = "";
 
   folders.forEach(folder => {
@@ -85,22 +93,23 @@ function render(){
     div.className = "folder";
 
     div.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <h2 style="margin: 0;">📁 ${folder.name}</h2>
-        <button onclick="deleteFolder(${folder.id})" style="background-color: #ef4444;">🗑️ フォルダ削除</button>
+        <button onclick="deleteFolder(${folder.id})" style="background-color: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">🗑️ フォルダ削除</button>
       </div>
 
       <input placeholder="単語を入力してEnter"
-        onkeydown="if(event.key==='Enter'){addWord(${folder.id}, this.value); this.value=''}"
+        onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }"
+        style="width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px;"
       >
 
       ${folder.words.map((w, i) => `
-        <div class="word">
+        <div class="word" style="background: #f1f5f9; padding: 10px; margin-top: 8px; border-radius: 6px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <b style="font-size: 1.1em; color: #1e3a8a;">${w.word}</b>
-            <button onclick="deleteWord(${folder.id}, ${i})" style="background-color: #64748b; font-size: 12px;">削除</button>
+            <b style="font-size: 1.1em; color: #1e293b;">${w.word}</b>
+            <button onclick="deleteWord(${folder.id}, ${i})" style="background-color: #94a3b8; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">削除</button>
           </div>
-          <p style="margin: 5px 0 0 0; color: #334155;"><b>意味:</b> ${w.meaning}</p>
+          <p style="margin: 6px 0 0 0; color: #334155;"><b>意味:</b> ${w.meaning}</p>
         </div>
       `).join("")}
     `;
@@ -109,4 +118,5 @@ function render(){
   });
 }
 
+// 初期描画
 render();
