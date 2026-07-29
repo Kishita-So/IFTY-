@@ -48,7 +48,7 @@ window.deleteWord = function(folderId, index) {
   }
 };
 
-// --- 3. 手修正した訳・定義の保存機能 ---
+// --- 3. 手修正した訳の保存 ---
 window.updateMeaning = function(folderId, wordIndex, meaningIndex, newText) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wordIndex]) {
@@ -61,29 +61,57 @@ function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// --- 4. 0.5秒遅延付きの発音再生 ---
-window.playAudio = function(audioUrl) {
-  if (!audioUrl) return;
-  const audio = new Audio(audioUrl);
-  // 最初が途切れないよう 0.5秒（500ms）遅らせて再生
+// --- 4. 0.5秒遅延 ＋ ブラウザ音声読み上げ対応の発音機能 ---
+window.playAudio = function(audioUrl, wordText) {
   setTimeout(() => {
-    audio.play().catch(e => console.error("再生エラー:", e));
-  }, 500);
+    if (audioUrl) {
+      const audio = new Audio(audioUrl);
+      audio.play().catch(() => speakFallback(wordText));
+    } else {
+      speakFallback(wordText);
+    }
+  }, 500); // 最初が途切れないよう0.5秒遅延
 };
 
-// --- 5. 高機能翻訳ヘルパー ---
-async function translateToJP(text) {
+// APIに音声ファイルがない場合のバックアップ（ブラウザ標準の合成音声）
+function speakFallback(text) {
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel(); // 前の音声をキャンセル
+    const uttr = new SpeechSynthesisUtterance(text);
+    uttr.lang = 'en-US';
+    uttr.rate = 0.9; // 少し聞き取りやすいスピード
+    window.speechSynthesis.speak(uttr);
+  } else {
+    alert("お使いのブラウザは音声再生に対応していません。");
+  }
+}
+
+// --- 5. 高機能翻訳 ＆ 単語帳風テキスト整形機能 ---
+async function translateToJP(text, partOfSpeech = "") {
   if (!text) return "";
   try {
     const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(text)}`);
     const data = await res.json();
-    return data[0].map(item => item[0]).join("");
+    let translated = data[0].map(item => item[0]).join("");
+
+    // 句読点や余計な記号を綺麗にする
+    translated = translated.replace(/[。、.]$/g, '').trim();
+
+    // 品詞に応じた単語帳スタイルの語尾整形
+    if (partOfSpeech === "verb") {
+      // 動詞：すでに「〜する」などで終わっていない場合は「（を）〜する」系に補正
+      if (!translated.endsWith("する") && !translated.endsWith("つ") && !translated.endsWith("く") && !translated.endsWith("む") && !translated.endsWith("ぶ") && !translated.endsWith("う") && !translated.endsWith("る")) {
+        translated = `（を）${translated}する`;
+      }
+    }
+
+    return translated;
   } catch (e) {
     return text;
   }
 }
 
-// --- 6. 単語追加（簡潔な訳・英日Definition対応） ---
+// --- 6. 単語追加（発音・品詞別・単語帳スタイルの訳） ---
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
   if(!cleanWord) return;
@@ -108,20 +136,17 @@ window.addWord = async function(folderId, word){
       for (const m of entry.meanings) {
         let part = m.partOfSpeech;
         let partLabel = part;
-        if (part === "verb") partLabel = "動詞 (自/他)";
-        else if (part === "noun") partLabel = "名詞 (可/不可)";
+        if (part === "verb") partLabel = "他/自動詞";
+        else if (part === "noun") partLabel = "名詞";
         else if (part === "adjective") partLabel = "形容詞";
         else if (part === "adverb") partLabel = "副詞";
 
         const rawDef = m.definitions[0]?.definition || "";
         if (rawDef) {
-          // 英語のDefinition（定義）
-          const defEN = rawDef;
-          // 日本語に翻訳したDefinition
-          const defJP = await translateToJP(rawDef);
+          // 単語そのものの簡潔な訳を取得
+          const jpDef = await translateToJP(cleanWord, part);
           
-          // 単語帳向けに簡潔に整形
-          meanings.push(`【${partLabel}】 ${defJP} (${defEN})`);
+          meanings.push(`【${partLabel}】 ${jpDef} （${rawDef}）`);
         }
 
         if (!exampleEN && m.definitions[0]?.example) {
@@ -133,7 +158,7 @@ window.addWord = async function(folderId, word){
     console.error("辞書APIエラー:", e);
   }
 
-  // フォールバック（辞書にない場合）
+  // フォールバック（辞書にない固有名詞・難単語など）
   if (meanings.length === 0) {
     const fallbackJP = await translateToJP(cleanWord);
     meanings.push(`【訳】 ${fallbackJP}`);
@@ -182,7 +207,7 @@ function render(){
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <b style="font-size: 1.2em; color: #1e3a8a;">${w.word}</b>
-              ${w.audio ? `<button onclick="playAudio('${w.audio}')" style="background:#2563eb; color:white; border:none; border-radius:50%; width:28px; height:28px; cursor:pointer;" title="0.5秒後に再生">🔊</button>` : ''}
+              <button onclick="playAudio('${w.audio}', '${w.word}')" style="background:#2563eb; color:white; border:none; border-radius:50%; width:28px; height:28px; cursor:pointer;" title="発音を聞く">🔊</button>
             </div>
             <button onclick="deleteWord(${folder.id}, ${wordIndex})" style="background-color: #94a3b8; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">削除</button>
           </div>
