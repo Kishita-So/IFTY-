@@ -48,7 +48,7 @@ window.deleteWord = function(folderId, index) {
   }
 };
 
-// --- 3. 手修正した訳の保存 ---
+// --- 3. 編集された訳の保存 ---
 window.updateMeaning = function(folderId, wordIndex, meaningIndex, newText) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wordIndex]) {
@@ -61,7 +61,7 @@ function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// --- 4. 0.5秒遅延 ＋ ブラウザ音声読み上げ対応の発音機能 ---
+// --- 4. 発音再生（0.5秒遅延＋合成音声バックアップ） ---
 window.playAudio = function(audioUrl, wordText) {
   setTimeout(() => {
     if (audioUrl) {
@@ -70,54 +70,40 @@ window.playAudio = function(audioUrl, wordText) {
     } else {
       speakFallback(wordText);
     }
-  }, 500); // 最初が途切れないよう0.5秒遅延
+  }, 500);
 };
 
-// APIに音声ファイルがない場合のバックアップ（ブラウザ標準の合成音声）
 function speakFallback(text) {
   if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel(); // 前の音声をキャンセル
+    window.speechSynthesis.cancel();
     const uttr = new SpeechSynthesisUtterance(text);
     uttr.lang = 'en-US';
-    uttr.rate = 0.9; // 少し聞き取りやすいスピード
+    uttr.rate = 0.9;
     window.speechSynthesis.speak(uttr);
-  } else {
-    alert("お使いのブラウザは音声再生に対応していません。");
   }
 }
 
-// --- 5. 高機能翻訳 ＆ 単語帳風テキスト整形機能 ---
-async function translateToJP(text, partOfSpeech = "") {
+// --- 5. 自然な日本語訳を取得する関数 ---
+async function fetchCleanJP(text) {
   if (!text) return "";
   try {
     const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(text)}`);
     const data = await res.json();
     let translated = data[0].map(item => item[0]).join("");
-
-    // 句読点や余計な記号を綺麗にする
-    translated = translated.replace(/[。、.]$/g, '').trim();
-
-    // 品詞に応じた単語帳スタイルの語尾整形
-    if (partOfSpeech === "verb") {
-      // 動詞：すでに「〜する」などで終わっていない場合は「（を）〜する」系に補正
-      if (!translated.endsWith("する") && !translated.endsWith("つ") && !translated.endsWith("く") && !translated.endsWith("む") && !translated.endsWith("ぶ") && !translated.endsWith("う") && !translated.endsWith("る")) {
-        translated = `（を）${translated}する`;
-      }
-    }
-
-    return translated;
+    return translated.replace(/[。、.]$/g, '').trim();
   } catch (e) {
     return text;
   }
 }
 
-// --- 6. 単語追加（発音・品詞別・単語帳スタイルの訳） ---
+// --- 6. 単語追加（訳の正常化 ＋ 活用変化の取得） ---
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
   if(!cleanWord) return;
 
   let audioUrl = "";
   let meanings = [];
+  let inflections = ""; // 活用変化 (do - did - done - doing)
   let exampleEN = "";
   let exampleJP = "";
 
@@ -136,36 +122,59 @@ window.addWord = async function(folderId, word){
       for (const m of entry.meanings) {
         let part = m.partOfSpeech;
         let partLabel = part;
-        if (part === "verb") partLabel = "他/自動詞";
+        if (part === "verb") partLabel = "動詞";
         else if (part === "noun") partLabel = "名詞";
         else if (part === "adjective") partLabel = "形容詞";
         else if (part === "adverb") partLabel = "副詞";
 
         const rawDef = m.definitions[0]?.definition || "";
         if (rawDef) {
-          // 単語そのものの簡潔な訳を取得
-          const jpDef = await translateToJP(cleanWord, part);
-          
-          meanings.push(`【${partLabel}】 ${jpDef} （${rawDef}）`);
+          // 定義文（Definition）を綺麗な日本語訳に変換
+          const jpDef = await fetchCleanJP(rawDef);
+          meanings.push(`【${partLabel}】 ${jpDef}`);
         }
 
         if (!exampleEN && m.definitions[0]?.example) {
           exampleEN = m.definitions[0].example;
         }
       }
+
+      // 活用変化（Inflections / Verb Forms）の取得処理
+      // 例: do ➔ did / done / doing など
+      try {
+        // Free Dictionary API の別構造または定義から簡単な過去形等を補完
+        const isVerb = entry.meanings.some(m => m.partOfSpeech === "verb");
+        if (isVerb) {
+          // 基本的な不規則変化・規則変化の推測補助（簡易生成）
+          const base = cleanWord.toLowerCase();
+          if (base === "do") inflections = "do - did - done - doing";
+          else if (base === "go") inflections = "go - went - gone - going";
+          else if (base === "see") inflections = "see - saw - seen - seeing";
+          else if (base === "take") inflections = "take - took - taken - taking";
+          else if (base === "have") inflections = "have - had - had - having";
+          else if (base === "come") inflections = "come - came - come - coming";
+          else if (base === "make") inflections = "make - made - made - making";
+          else {
+            // 一般動詞の標準活用
+            const ed = base.endsWith('e') ? base + 'd' : base + 'ed';
+            const ing = base.endsWith('e') ? base.slice(0, -1) + 'ing' : base + 'ing';
+            inflections = `${base} - ${ed} - ${ed} - ${ing}`;
+          }
+        }
+      } catch(e) {}
     }
   } catch (e) {
     console.error("辞書APIエラー:", e);
   }
 
-  // フォールバック（辞書にない固有名詞・難単語など）
+  // フォールバック（辞書にない場合）
   if (meanings.length === 0) {
-    const fallbackJP = await translateToJP(cleanWord);
+    const fallbackJP = await fetchCleanJP(cleanWord);
     meanings.push(`【訳】 ${fallbackJP}`);
   }
 
   if (exampleEN) {
-    exampleJP = await translateToJP(exampleEN);
+    exampleJP = await fetchCleanJP(exampleEN);
   }
 
   const folder = folders.find(f => f.id === folderId);
@@ -174,6 +183,7 @@ window.addWord = async function(folderId, word){
       word: cleanWord,
       audio: audioUrl,
       meanings: meanings,
+      inflections: inflections,
       exampleEN: exampleEN,
       exampleJP: exampleJP
     });
@@ -211,9 +221,15 @@ function render(){
             </div>
             <button onclick="deleteWord(${folder.id}, ${wordIndex})" style="background-color: #94a3b8; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">削除</button>
           </div>
+
+          ${w.inflections ? `
+            <div style="margin-top: 4px; font-size: 0.85em; color: #0284c7; font-weight: bold;">
+              活用: ${w.inflections}
+            </div>
+          ` : ''}
           
           <div style="margin-top: 8px; color: #334155;">
-            <b style="font-size: 0.9em; color: #64748b;">意味・Definition (クリックで編集可能):</b>
+            <b style="font-size: 0.9em; color: #64748b;">意味 (クリックで自由編集):</b>
             <ul style="margin: 4px 0; padding-left: 20px;">
               ${w.meanings.map((m, meaningIndex) => `
                 <li 
