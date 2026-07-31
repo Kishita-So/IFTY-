@@ -41,27 +41,39 @@ const verbPrepositions = {
   "participate": "in（〜に参加する）"
 };
 
-// 3. 英和辞典風データベース
+// 3. 英和辞典風データベース（豊富な多義語・ニュアンス対応）
 const dictionaryDB = {
   "be interested in": ["【熟語】 〜に興味がある、〜に関心を持っている"],
   "dwell on": ["【熟語】 〜をくどくど考える、〜に固執する"],
-  "dwell": ["【動・自】 住む、宿る、長々と考える"],
+  "dwell": [
+    "【動・自】 住む、宿る、居住する",
+    "【動・自】 （dwell onで）〜をくどくど考える、〜に固執する"
+  ],
   "swell": [
-    "【動・自】 膨らむ、腫れる、増大する",
-    "【動・他】 〜を膨らませる、〜を増やす",
-    "【名・可】 膨らみ、うねり",
-    "【形】 素晴らしい（口語）"
+    "【動・自】 膨らむ、腫れる、むくむ（怪我・病気）",
+    "【動・自】 （声・感情・数量が）増大する、高まる",
+    "【動・他】 〜を膨らませる、〜を増大させる",
+    "【名・可】 膨らみ、うねり、湧き上がり",
+    "【形】 素晴らしい、最高の、ハイカラな（口語）"
   ],
   "say": [
-    "【動・他】 〜と言う、〜と語る",
-    "【動・他】 （本・看板に）〜と書いてある",
-    "【副/接】 例えば、仮に〜とすれば",
-    "【名・可】 発言権、決定権"
+    "【動・他】 〜と言う、〜と述べる（発言内容に重点）",
+    "【動・他】 （本・標識・時計に）〜と書いてある、〜を示している",
+    "【副/接】 例えば、仮に〜とすれば（例: Let's say...）",
+    "【名・可】 発言権、決定権（例: have a say in...）"
   ],
   "kill": [
-    "【動・他】 〜を殺す、〜を台無しにする",
-    "【動・自】 殺害する",
+    "【動・他】 〜を殺す、殺害する",
+    "【動・他】 〜を台無しにする、〜を台無しにして終わらせる",
+    "【動・他】 （時間を）つぶす（kill time）",
+    "【動・他】 （痛みを）和らげる（painkiller）",
     "【名・可】 殺害、獲物"
+  ],
+  "play": [
+    "【動・自/他】 遊ぶ、演奏する、（スポーツ・ゲームを）する",
+    "【動・他】 （役を）演じる、〜を演劇で演じる",
+    "【名・可】 劇、戯曲",
+    "【名・不可】 遊び、いたずら、ゆとり・遊び幅"
   ]
 };
 
@@ -102,7 +114,7 @@ function findSpellingSuggestion(inputWord) {
   return closestWord;
 }
 
-// --- 1. フォルダ作成 ---
+// --- フォルダ操作 ---
 function createFolder() {
   const name = folderInput.value.trim();
   if (!name) return;
@@ -110,7 +122,7 @@ function createFolder() {
   folders.push({
     id: Date.now(),
     name,
-    isCollapsed: false, // 折りたたみフラグ
+    isCollapsed: false,
     words: []
   });
 
@@ -129,7 +141,6 @@ if (folderInput) {
   });
 }
 
-// フォルダ折りたたみトグル
 window.toggleFolder = function(folderId) {
   const f = folders.find(x => x.id === folderId);
   if (f) {
@@ -139,7 +150,6 @@ window.toggleFolder = function(folderId) {
   }
 };
 
-// --- 2. 削除機能 ---
 window.deleteFolder = function(folderId) {
   if (confirm("このフォルダを削除しますか？")) {
     folders = folders.filter(f => f.id !== folderId);
@@ -157,38 +167,25 @@ window.deleteWord = function(folderId, index) {
   }
 };
 
-// --- 3. 手修正した訳・色の保存 ---
-window.updateMeaning = function(folderId, wordIndex, meaningIndex, newText) {
+// --- HTML構造（装飾含む）を保存 ---
+window.updateMeaningHTML = function(folderId, wordIndex, meaningIndex, newHTML) {
   const f = folders.find(x => x.id === folderId);
-  if (f && f.words[wordIndex] && f.words[wordIndex].meanings[meaningIndex]) {
-    if (typeof f.words[wordIndex].meanings[meaningIndex] === 'object') {
-      f.words[wordIndex].meanings[meaningIndex].text = newText;
-    } else {
-      f.words[wordIndex].meanings[meaningIndex] = { text: newText, color: "#334155" };
-    }
+  if (f && f.words[wordIndex] && f.words[wordIndex].meanings) {
+    f.words[wordIndex].meanings[meaningIndex] = newHTML;
     save();
   }
 };
 
-window.updateMeaningColor = function(folderId, wordIndex, meaningIndex, color) {
-  const f = folders.find(x => x.id === folderId);
-  if (f && f.words[wordIndex] && f.words[wordIndex].meanings[meaningIndex]) {
-    if (typeof f.words[wordIndex].meanings[meaningIndex] === 'object') {
-      f.words[wordIndex].meanings[meaningIndex].color = color;
-    } else {
-      const oldText = f.words[wordIndex].meanings[meaningIndex];
-      f.words[wordIndex].meanings[meaningIndex] = { text: oldText, color: color };
-    }
-    save();
-    render();
-  }
+// 選択部分の文字色変更機能
+window.applyColorToSelection = function(color) {
+  document.execCommand('foreColor', false, color);
 };
 
 function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// --- 発音再生 ---
+// 発音再生
 window.playAudio = function(audioUrl, wordText) {
   setTimeout(() => {
     if (audioUrl) {
@@ -210,19 +207,19 @@ function speakFallback(text) {
   }
 }
 
-// 翻訳ヘルパー
-async function fetchCleanWordJP(word) {
+// 翻訳APIヘルパー
+async function fetchCleanWordJP(text) {
   try {
-    const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(word)}`);
+    const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(text)}`);
     const data = await res.json();
     let translated = data[0].map(item => item[0]).join("");
     return translated.replace(/[。、.]$/g, '').trim();
   } catch (e) {
-    return word;
+    return text;
   }
 }
 
-// 自然な実用例文の生成（API連携）
+// 自然な例文生成
 async function generateNaturalExample(word) {
   try {
     const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
@@ -241,7 +238,6 @@ async function generateNaturalExample(word) {
     }
   } catch (e) {}
 
-  // 辞書APIに例文が無い場合の高品質フォールバック
   const fallbackEn = `She learned how to use "${word}" correctly.`;
   const fallbackJp = await fetchCleanWordJP(fallbackEn);
   return { en: fallbackEn, jp: fallbackJp };
@@ -253,7 +249,7 @@ window.addWord = async function(folderId, word){
   if(!cleanWord) return;
 
   let audioUrl = "";
-  let rawMeanings = [];
+  let meanings = [];
   let inflections = "";
   let examples = [];
   let prepNote = "";
@@ -267,8 +263,9 @@ window.addWord = async function(folderId, word){
   if (verbPrepositions[lowerWord]) prepNote = verbPrepositions[lowerWord];
   if (irregularVerbs[lowerWord]) inflections = irregularVerbs[lowerWord];
 
+  // 1. DBに登録済みの豊富な定義を優先
   if (dictionaryDB[lowerWord]) {
-    rawMeanings = [...dictionaryDB[lowerWord]];
+    meanings = [...dictionaryDB[lowerWord]];
   }
 
   try {
@@ -281,21 +278,25 @@ window.addWord = async function(folderId, word){
       const audioObj = entry.phonetics?.find(p => p.audio && p.audio.length > 0);
       if (audioObj) audioUrl = audioObj.audio;
 
-      if (rawMeanings.length === 0) {
-        const processedParts = new Set();
+      // 2. DBにない場合、複数の定義（最大4つ）を豊富に取得
+      if (meanings.length === 0) {
         for (const m of entry.meanings) {
           let part = m.partOfSpeech;
-          if (processedParts.has(part)) continue;
-          processedParts.add(part);
-
           let partLabel = part;
           if (part === "verb") partLabel = "動・自/他";
           else if (part === "noun") partLabel = "名・可/不可";
           else if (part === "adjective") partLabel = "形";
           else if (part === "adverb") partLabel = "副";
+          else if (part === "preposition") partLabel = "前";
+          else if (part === "conjunction") partLabel = "接";
 
-          const cleanJP = await fetchCleanWordJP(cleanWord);
-          rawMeanings.push(`【${partLabel}】 ${cleanJP}`);
+          const defsToTake = m.definitions.slice(0, 3);
+          for (const def of defsToTake) {
+            if (def.definition) {
+              const jpDef = await fetchCleanWordJP(def.definition);
+              meanings.push(`【${partLabel}】 ${jpDef}`);
+            }
+          }
         }
       }
 
@@ -313,19 +314,15 @@ window.addWord = async function(folderId, word){
     console.error("辞書APIエラー:", e);
   }
 
-  // 例文がない場合は自然な例文を自動作成
   if (examples.length === 0) {
     const natEx = await generateNaturalExample(cleanWord);
     examples.push(natEx);
   }
 
-  if (rawMeanings.length === 0) {
+  if (meanings.length === 0) {
     const fallbackJP = await fetchCleanWordJP(cleanWord);
-    rawMeanings.push(`【訳】 ${fallbackJP}`);
+    meanings.push(`【訳】 ${fallbackJP}`);
   }
-
-  // オブジェクト型に変換してカラープロパティを保持
-  const meanings = rawMeanings.map(m => ({ text: m, color: "#334155" }));
 
   const folder = folders.find(f => f.id === folderId);
   if (folder) {
@@ -400,29 +397,29 @@ function render(){
                 </div>
               ` : ''}
               
-              <div style="margin-top: 8px;">
+              <div style="margin-top: 10px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; color: #475569;">
+                  <span>選択文字に色付け:</span>
+                  <button onmousedown="event.preventDefault(); applyColorToSelection('#ef4444');" style="background:#ef4444; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="赤"></button>
+                  <button onmousedown="event.preventDefault(); applyColorToSelection('#2563eb');" style="background:#2563eb; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="青"></button>
+                  <button onmousedown="event.preventDefault(); applyColorToSelection('#10b981');" style="background:#10b981; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="緑"></button>
+                  <button onmousedown="event.preventDefault(); applyColorToSelection('#f59e0b');" style="background:#f59e0b; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="オレンジ"></button>
+                  <button onmousedown="event.preventDefault(); applyColorToSelection('#0f172a');" style="background:#0f172a; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="黒（元に戻す）"></button>
+                </div>
+
                 <ul style="margin: 0; padding-left: 0; list-style: none;">
-                  ${w.meanings.map((m, meaningIndex) => {
-                    const text = typeof m === 'object' ? m.text : m;
-                    const color = typeof m === 'object' ? (m.color || "#334155") : "#334155";
-                    return `
-                      <li style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                        <span 
-                          contenteditable="true" 
-                          onblur="updateMeaning(${folder.id}, ${wordIndex}, ${meaningIndex}, this.innerText)"
-                          style="outline: none; padding: 2px 4px; font-size: 0.95em; color: ${color}; border-radius: 4px; font-weight: 500; flex: 1;"
-                          title="クリックして訳を直接編集できます"
-                        >${text}</span>
-                        <input 
-                          type="color" 
-                          value="${color}" 
-                          onchange="updateMeaningColor(${folder.id}, ${wordIndex}, ${meaningIndex}, this.value)"
-                          style="border: none; background: transparent; width: 24px; height: 24px; cursor: pointer; padding: 0;"
-                          title="文字色を変更"
-                        >
-                      </li>
-                    `;
-                  }).join("")}
+                  ${w.meanings.map((m, meaningIndex) => `
+                    <li style="margin-bottom: 4px;">
+                      <div 
+                        contenteditable="true" 
+                        onblur="updateMeaningHTML(${folder.id}, ${wordIndex}, ${meaningIndex}, this.innerHTML)"
+                        style="outline: none; padding: 4px 6px; font-size: 0.95em; color: #334155; border-radius: 4px; font-weight: 500; border: 1px transparent dashed;"
+                        onmouseover="this.style.borderColor='#cbd5e1'"
+                        onmouseout="this.style.borderColor='transparent'"
+                        title="文字を選択して上のボタンで色を変えられます"
+                      >${m}</div>
+                    </li>
+                  `).join("")}
                 </ul>
               </div>
 
