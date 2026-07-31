@@ -4,7 +4,10 @@ let folders = rawFolders.map(f => ({
   id: f.id || Date.now() + Math.random(),
   name: f.name || "無題のフォルダ",
   isCollapsed: f.isCollapsed || false,
-  words: Array.isArray(f.words) ? f.words : []
+  words: Array.isArray(f.words) ? f.words.map(w => ({
+    ...w,
+    examples: Array.isArray(w.examples) ? w.examples : []
+  })) : []
 }));
 
 const foldersEl = document.getElementById("folders");
@@ -86,7 +89,6 @@ const dictionaryDB = {
 
 const wordDictionary = ["kill", "play", "say", "dwell", "swell", "forgive", "slay", "think", "speak", "write", "make", "take", "give", "listen", "depend"];
 
-// スペル予測アルゴリズム
 function getLevenshteinDistance(a, b) {
   const matrix = [];
   for (let i = 0; i <= b.length; i++) matrix[i] = [i];
@@ -121,7 +123,12 @@ function findSpellingSuggestion(inputWord) {
   return closestWord;
 }
 
-// --- フォルダ作成 ---
+// 保存
+function save(){
+  localStorage.setItem("folders", JSON.stringify(folders));
+}
+
+// --- フォルダ関連操作 ---
 function createFolder() {
   if (!folderInput) return;
   const name = folderInput.value.trim();
@@ -149,6 +156,40 @@ if (folderInput) {
   });
 }
 
+window.renameFolder = function(folderId) {
+  const f = folders.find(x => x.id === folderId);
+  if (f) {
+    const newName = prompt("新しいフォルダ名を入力してください:", f.name);
+    if (newName && newName.trim()) {
+      f.name = newName.trim();
+      save();
+      render();
+    }
+  }
+};
+
+window.clearFolderWords = function(folderId) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words.length > 0) {
+    if (confirm(`「${f.name}」内のすべての単語（${f.words.length}語）を全消ししますか？`)) {
+      f.words = [];
+      save();
+      render();
+    }
+  }
+};
+
+window.moveFolder = function(index, direction) {
+  const targetIndex = index + direction;
+  if (targetIndex >= 0 && targetIndex < folders.length) {
+    const temp = folders[index];
+    folders[index] = folders[targetIndex];
+    folders[targetIndex] = temp;
+    save();
+    render();
+  }
+};
+
 window.toggleFolder = function(folderId) {
   const f = folders.find(x => x.id === folderId);
   if (f) {
@@ -166,6 +207,7 @@ window.deleteFolder = function(folderId) {
   }
 };
 
+// --- 単語関連操作 ---
 window.deleteWord = function(folderId, index) {
   const f = folders.find(x => x.id === folderId);
   if (f) {
@@ -175,6 +217,36 @@ window.deleteWord = function(folderId, index) {
   }
 };
 
+window.moveWordOrder = function(folderId, wordIndex, direction) {
+  const f = folders.find(x => x.id === folderId);
+  if (f) {
+    const targetIndex = wordIndex + direction;
+    if (targetIndex >= 0 && targetIndex < f.words.length) {
+      const temp = f.words[wordIndex];
+      f.words[wordIndex] = f.words[targetIndex];
+      f.words[targetIndex] = temp;
+      save();
+      render();
+    }
+  }
+};
+
+window.transferWordToFolder = function(sourceFolderId, wordIndex, targetFolderId) {
+  targetFolderId = Number(targetFolderId);
+  if (!targetFolderId || sourceFolderId === targetFolderId) return;
+
+  const sourceF = folders.find(x => x.id === sourceFolderId);
+  const targetF = folders.find(x => x.id === targetFolderId);
+
+  if (sourceF && targetF) {
+    const [wordToMove] = sourceF.words.splice(wordIndex, 1);
+    targetF.words.push(wordToMove);
+    save();
+    render();
+  }
+};
+
+// --- 意味（訳）関連操作 ---
 window.updateMeaningHTML = function(folderId, wordIndex, meaningIndex, newHTML) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wordIndex] && f.words[wordIndex].meanings) {
@@ -187,11 +259,52 @@ window.applyColorToSelection = function(color) {
   document.execCommand('foreColor', false, color);
 };
 
-function save(){
-  localStorage.setItem("folders", JSON.stringify(folders));
-}
+// --- 例文関連操作（編集・追加・削除・並べ替え） ---
+window.updateExampleText = function(folderId, wordIndex, exIndex, key, text) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words[wordIndex] && f.words[wordIndex].examples[exIndex]) {
+    f.words[wordIndex].examples[exIndex][key] = text;
+    save();
+  }
+};
 
-// 発音再生
+window.addExample = function(folderId, wordIndex) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words[wordIndex]) {
+    f.words[wordIndex].examples.push({
+      en: "Click here to edit English example.",
+      jp: "ここをクリックして日本語訳を編集。"
+    });
+    save();
+    render();
+  }
+};
+
+window.deleteExample = function(folderId, wordIndex, exIndex) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words[wordIndex]) {
+    f.words[wordIndex].examples.splice(exIndex, 1);
+    save();
+    render();
+  }
+};
+
+window.moveExampleOrder = function(folderId, wordIndex, exIndex, direction) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words[wordIndex]) {
+    const exs = f.words[wordIndex].examples;
+    const targetIndex = exIndex + direction;
+    if (targetIndex >= 0 && targetIndex < exs.length) {
+      const temp = exs[exIndex];
+      exs[exIndex] = exs[targetIndex];
+      exs[targetIndex] = temp;
+      save();
+      render();
+    }
+  }
+};
+
+// --- 音声再生 ---
 window.playAudio = function(audioUrl, wordText) {
   setTimeout(() => {
     if (audioUrl) {
@@ -224,7 +337,9 @@ async function fetchCleanWordJP(text) {
   }
 }
 
-async function generateNaturalExample(word) {
+// バラエティ豊かな自然な例文生成
+async function generateVariedExamples(word) {
+  const examples = [];
   try {
     const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
     if (res.ok) {
@@ -232,9 +347,9 @@ async function generateNaturalExample(word) {
       for (const entry of data) {
         for (const m of entry.meanings) {
           for (const d of m.definitions) {
-            if (d.example) {
+            if (d.example && examples.length < 3) {
               const jp = await fetchCleanWordJP(d.example);
-              return { en: d.example, jp: jp };
+              examples.push({ en: d.example, jp: jp });
             }
           }
         }
@@ -242,9 +357,18 @@ async function generateNaturalExample(word) {
     }
   } catch (e) {}
 
-  const fallbackEn = `She learned how to use "${word}" correctly.`;
-  const fallbackJp = await fetchCleanWordJP(fallbackEn);
-  return { en: fallbackEn, jp: fallbackJp };
+  if (examples.length === 0) {
+    const templates = [
+      `I always remember how to use "${word}" in daily conversations.`,
+      `It is important to understand the concept of "${word}".`
+    ];
+    for (const en of templates) {
+      const jp = await fetchCleanWordJP(en);
+      examples.push({ en, jp });
+    }
+  }
+
+  return examples;
 }
 
 // --- 単語追加処理 ---
@@ -304,7 +428,7 @@ window.addWord = async function(folderId, word){
 
       for (const m of entry.meanings) {
         for (const def of m.definitions) {
-          if (def.example && examples.length < 2) {
+          if (def.example && examples.length < 3) {
             const exJP = await fetchCleanWordJP(def.example);
             examples.push({ en: def.example, jp: exJP });
           }
@@ -316,8 +440,7 @@ window.addWord = async function(folderId, word){
   }
 
   if (examples.length === 0) {
-    const natEx = await generateNaturalExample(cleanWord);
-    examples.push(natEx);
+    examples = await generateVariedExamples(cleanWord);
   }
 
   if (meanings.length === 0) {
@@ -346,7 +469,7 @@ function render(){
   if (!foldersEl) return;
   foldersEl.innerHTML = "";
 
-  folders.forEach(folder => {
+  folders.forEach((folder, folderIndex) => {
     const div = document.createElement("div");
     div.className = "folder";
     div.style.cssText = "background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; margin-bottom: 16px;";
@@ -354,12 +477,19 @@ function render(){
     const isCollapsed = folder.isCollapsed || false;
 
     div.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
         <div style="display: flex; align-items: center; gap: 8px; cursor: pointer;" onclick="toggleFolder(${folder.id})">
           <span style="font-size: 1.1em; color: #64748b;">${isCollapsed ? '▶' : '▼'}</span>
           <h2 style="margin: 0; font-size: 1.2em; color: #0f172a;">📁 ${folder.name} <span style="font-size:0.8em; color:#64748b; font-weight:normal;">(${folder.words.length}語)</span></h2>
         </div>
-        <button onclick="deleteFolder(${folder.id})" style="background-color: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">🗑️ 削除</button>
+
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <button onclick="moveFolder(${folderIndex}, -1)" ${folderIndex === 0 ? 'disabled' : ''} style="padding: 4px 8px; font-size: 0.8em; cursor: pointer;" title="上へ移動">▲</button>
+          <button onclick="moveFolder(${folderIndex}, 1)" ${folderIndex === folders.length - 1 ? 'disabled' : ''} style="padding: 4px 8px; font-size: 0.8em; cursor: pointer;" title="下へ移動">▼</button>
+          <button onclick="renameFolder(${folder.id})" style="background:#0284c7; color:white; border:none; padding: 4px 8px; border-radius: 4px; font-size:0.8em; cursor:pointer;">✏️ リネーム</button>
+          <button onclick="clearFolderWords(${folder.id})" style="background:#f59e0b; color:white; border:none; padding: 4px 8px; border-radius: 4px; font-size:0.8em; cursor:pointer;" title="全単語削除">🧹 単語全消し</button>
+          <button onclick="deleteFolder(${folder.id})" style="background-color: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size:0.8em; cursor: pointer;">🗑️ フォルダ削除</button>
+        </div>
       </div>
 
       ${!isCollapsed ? `
@@ -372,12 +502,24 @@ function render(){
           ${folder.words.map((w, wordIndex) => `
             <div class="word" style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 5px solid #2563eb; padding: 14px; margin-top: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
               
-              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; flex-wrap: wrap; gap: 6px;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                   <b style="font-size: 1.3em; color: #0f172a;">${w.word}</b>
                   <button onclick="playAudio('${w.audio}', '${w.word}')" style="background:#2563eb; color:white; border:none; border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:0.8em;" title="発音を聞く">🔊</button>
                 </div>
-                <button onclick="deleteWord(${folder.id}, ${wordIndex})" style="background-color: #f1f5f9; color: #64748b; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size:0.8em;">削除</button>
+
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <select onchange="transferWordToFolder(${folder.id}, ${wordIndex}, this.value)" style="font-size:0.8em; padding: 2px 4px; border-radius:4px; border: 1px solid #cbd5e1;">
+                    <option value="">📂 他フォルダへ移動...</option>
+                    ${folders.map(targetF => `
+                      <option value="${targetF.id}" ${targetF.id === folder.id ? 'disabled' : ''}>${targetF.name}</option>
+                    `).join('')}
+                  </select>
+
+                  <button onclick="moveWordOrder(${folder.id}, ${wordIndex}, -1)" ${wordIndex === 0 ? 'disabled' : ''} style="padding: 2px 6px; font-size: 0.75em; cursor: pointer;" title="単語を上へ">▲</button>
+                  <button onclick="moveWordOrder(${folder.id}, ${wordIndex}, 1)" ${wordIndex === folder.words.length - 1 ? 'disabled' : ''} style="padding: 2px 6px; font-size: 0.75em; cursor: pointer;" title="単語を下へ">▼</button>
+                  <button onclick="deleteWord(${folder.id}, ${wordIndex})" style="background-color: #f1f5f9; color: #64748b; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size:0.8em;">削除</button>
+                </div>
               </div>
 
               ${w.suggestion ? `
@@ -405,7 +547,7 @@ function render(){
                   <button onmousedown="event.preventDefault(); applyColorToSelection('#2563eb');" style="background:#2563eb; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="青"></button>
                   <button onmousedown="event.preventDefault(); applyColorToSelection('#10b981');" style="background:#10b981; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="緑"></button>
                   <button onmousedown="event.preventDefault(); applyColorToSelection('#f59e0b');" style="background:#f59e0b; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="オレンジ"></button>
-                  <button onmousedown="event.preventDefault(); applyColorToSelection('#0f172a');" style="background:#0f172a; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="黒（元に戻す）"></button>
+                  <button onmousedown="event.preventDefault(); applyColorToSelection('#0f172a');" style="background:#0f172a; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="黒"></button>
                 </div>
 
                 <ul style="margin: 0; padding-left: 0; list-style: none;">
@@ -419,7 +561,7 @@ function render(){
                           style="outline: none; padding: 4px 6px; font-size: 0.95em; color: #334155; border-radius: 4px; font-weight: 500; border: 1px transparent dashed;"
                           onmouseover="this.style.borderColor='#cbd5e1'"
                           onmouseout="this.style.borderColor='transparent'"
-                          title="文字を選択して上のボタンで色を変えられます"
+                          title="選択して色変更可能"
                         >${textContent}</div>
                       </li>
                     `;
@@ -427,16 +569,38 @@ function render(){
                 </ul>
               </div>
 
-              ${w.examples && w.examples.length > 0 ? `
-                <div style="margin-top: 10px; background: #f8fafc; padding: 8px 10px; border-radius: 6px; font-size: 0.85em; border: 1px solid #f1f5f9;">
-                  ${w.examples.map(ex => `
-                    <div style="margin-bottom: 4px;">
-                      <p style="margin: 0; color: #334155; font-weight: 500;">• ${ex.en}</p>
-                      <p style="margin: 0; color: #64748b; padding-left: 10px;">${ex.jp}</p>
-                    </div>
-                  `).join("")}
+              <div style="margin-top: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; font-size: 0.85em; border: 1px solid #e2e8f0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+                  <span style="font-weight: bold; color: #475569;">💬 例文</span>
+                  <button onclick="addExample(${folder.id}, ${wordIndex})" style="background:#10b981; color:white; border:none; padding:2px 8px; border-radius:4px; font-size:0.8em; cursor:pointer;">➕ 例文追加</button>
                 </div>
-              ` : ''}
+
+                ${w.examples && w.examples.length > 0 ? w.examples.map((ex, exIndex) => `
+                  <div style="margin-bottom: 8px; background: #ffffff; padding: 6px 8px; border-radius: 4px; border: 1px solid #f1f5f9;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;">
+                      <div style="flex: 1;">
+                        <p 
+                          contenteditable="true" 
+                          onblur="updateExampleText(${folder.id}, ${wordIndex}, ${exIndex}, 'en', this.innerText)"
+                          style="margin: 0; color: #334155; font-weight: 500; outline: none;"
+                        >• ${ex.en}</p>
+                        <p 
+                          contenteditable="true" 
+                          onblur="updateExampleText(${folder.id}, ${wordIndex}, ${exIndex}, 'jp', this.innerText)"
+                          style="margin: 0; color: #64748b; padding-left: 10px; outline: none;"
+                        >${ex.jp}</p>
+                      </div>
+
+                      <div style="display: flex; align-items: center; gap: 2px;">
+                        <button onclick="moveExampleOrder(${folder.id}, ${wordIndex}, ${exIndex}, -1)" ${exIndex === 0 ? 'disabled' : ''} style="padding: 1px 4px; font-size: 0.7em; cursor: pointer;">▲</button>
+                        <button onclick="moveExampleOrder(${folder.id}, ${wordIndex}, ${exIndex}, 1)" ${exIndex === w.examples.length - 1 ? 'disabled' : ''} style="padding: 1px 4px; font-size: 0.7em; cursor: pointer;">▼</button>
+                        <button onclick="deleteExample(${folder.id}, ${wordIndex}, ${exIndex})" style="background: transparent; color: #ef4444; border: none; font-size: 0.8em; cursor: pointer;" title="例文削除">🗑️</button>
+                      </div>
+                    </div>
+                  </div>
+                `).join("") : '<p style="margin:0; color:#94a3b8; font-style:italic;">例文はありません。</p>'}
+              </div>
+
             </div>
           `).join("")}
         </div>
@@ -447,5 +611,5 @@ function render(){
   });
 }
 
-// 初期化実行
+// 初期化描画
 render();
