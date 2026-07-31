@@ -1,4 +1,11 @@
-let folders = JSON.parse(localStorage.getItem("folders")) || [];
+// localStorage データの取得と安全な補正
+let rawFolders = JSON.parse(localStorage.getItem("folders")) || [];
+let folders = rawFolders.map(f => ({
+  id: f.id || Date.now() + Math.random(),
+  name: f.name || "無題のフォルダ",
+  isCollapsed: f.isCollapsed || false,
+  words: Array.isArray(f.words) ? f.words : []
+}));
 
 const foldersEl = document.getElementById("folders");
 const createBtn = document.getElementById("createFolderBtn");
@@ -41,7 +48,7 @@ const verbPrepositions = {
   "participate": "in（〜に参加する）"
 };
 
-// 3. 英和辞典風データベース（豊富な多義語・ニュアンス対応）
+// 3. 英和辞典風データベース
 const dictionaryDB = {
   "be interested in": ["【熟語】 〜に興味がある、〜に関心を持っている"],
   "dwell on": ["【熟語】 〜をくどくど考える、〜に固執する"],
@@ -114,14 +121,15 @@ function findSpellingSuggestion(inputWord) {
   return closestWord;
 }
 
-// --- フォルダ操作 ---
+// --- フォルダ作成 ---
 function createFolder() {
+  if (!folderInput) return;
   const name = folderInput.value.trim();
   if (!name) return;
 
   folders.push({
     id: Date.now(),
-    name,
+    name: name,
     isCollapsed: false,
     words: []
   });
@@ -167,7 +175,6 @@ window.deleteWord = function(folderId, index) {
   }
 };
 
-// --- HTML構造（装飾含む）を保存 ---
 window.updateMeaningHTML = function(folderId, wordIndex, meaningIndex, newHTML) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wordIndex] && f.words[wordIndex].meanings) {
@@ -176,7 +183,6 @@ window.updateMeaningHTML = function(folderId, wordIndex, meaningIndex, newHTML) 
   }
 };
 
-// 選択部分の文字色変更機能
 window.applyColorToSelection = function(color) {
   document.execCommand('foreColor', false, color);
 };
@@ -207,7 +213,6 @@ function speakFallback(text) {
   }
 }
 
-// 翻訳APIヘルパー
 async function fetchCleanWordJP(text) {
   try {
     const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(text)}`);
@@ -219,7 +224,6 @@ async function fetchCleanWordJP(text) {
   }
 }
 
-// 自然な例文生成
 async function generateNaturalExample(word) {
   try {
     const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
@@ -263,7 +267,6 @@ window.addWord = async function(folderId, word){
   if (verbPrepositions[lowerWord]) prepNote = verbPrepositions[lowerWord];
   if (irregularVerbs[lowerWord]) inflections = irregularVerbs[lowerWord];
 
-  // 1. DBに登録済みの豊富な定義を優先
   if (dictionaryDB[lowerWord]) {
     meanings = [...dictionaryDB[lowerWord]];
   }
@@ -278,7 +281,6 @@ window.addWord = async function(folderId, word){
       const audioObj = entry.phonetics?.find(p => p.audio && p.audio.length > 0);
       if (audioObj) audioUrl = audioObj.audio;
 
-      // 2. DBにない場合、複数の定義（最大4つ）を豊富に取得
       if (meanings.length === 0) {
         for (const m of entry.meanings) {
           let part = m.partOfSpeech;
@@ -300,7 +302,6 @@ window.addWord = async function(folderId, word){
         }
       }
 
-      // 例文の取得
       for (const m of entry.meanings) {
         for (const def of m.definitions) {
           if (def.example && examples.length < 2) {
@@ -408,18 +409,21 @@ function render(){
                 </div>
 
                 <ul style="margin: 0; padding-left: 0; list-style: none;">
-                  ${w.meanings.map((m, meaningIndex) => `
-                    <li style="margin-bottom: 4px;">
-                      <div 
-                        contenteditable="true" 
-                        onblur="updateMeaningHTML(${folder.id}, ${wordIndex}, ${meaningIndex}, this.innerHTML)"
-                        style="outline: none; padding: 4px 6px; font-size: 0.95em; color: #334155; border-radius: 4px; font-weight: 500; border: 1px transparent dashed;"
-                        onmouseover="this.style.borderColor='#cbd5e1'"
-                        onmouseout="this.style.borderColor='transparent'"
-                        title="文字を選択して上のボタンで色を変えられます"
-                      >${m}</div>
-                    </li>
-                  `).join("")}
+                  ${w.meanings.map((m, meaningIndex) => {
+                    const textContent = typeof m === 'object' ? (m.text || "") : m;
+                    return `
+                      <li style="margin-bottom: 4px;">
+                        <div 
+                          contenteditable="true" 
+                          onblur="updateMeaningHTML(${folder.id}, ${wordIndex}, ${meaningIndex}, this.innerHTML)"
+                          style="outline: none; padding: 4px 6px; font-size: 0.95em; color: #334155; border-radius: 4px; font-weight: 500; border: 1px transparent dashed;"
+                          onmouseover="this.style.borderColor='#cbd5e1'"
+                          onmouseout="this.style.borderColor='transparent'"
+                          title="文字を選択して上のボタンで色を変えられます"
+                        >${textContent}</div>
+                      </li>
+                    `;
+                  }).join("")}
                 </ul>
               </div>
 
@@ -443,4 +447,5 @@ function render(){
   });
 }
 
+// 初期化実行
 render();
