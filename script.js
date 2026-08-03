@@ -1,3 +1,6 @@
+// Hugging Face アクセストークン
+const HF_TOKEN = "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";
+
 // localStorage データの取得と安全な補正
 let rawFolders = JSON.parse(localStorage.getItem("folders")) || [];
 let folders = rawFolders.map(f => ({
@@ -123,12 +126,75 @@ function findSpellingSuggestion(inputWord) {
   return closestWord;
 }
 
-// 保存
 function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// --- フォルダ関連操作 ---
+// 翻訳・テキスト整形ヘルパー
+async function fetchCleanWordJP(text) {
+  try {
+    const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(text)}`);
+    const data = await res.json();
+    let translated = data[0].map(item => item[0]).join("");
+    return translated.replace(/[。、.]$/g, '').trim();
+  } catch (e) {
+    return text;
+  }
+}
+
+//🤖 Hugging Face AI による例文・和訳の自動生成機能
+async function generateAIExamples(word) {
+  const examples = [];
+  const MODEL_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct";
+
+  const prompt = `<|im_start|>system\nYou are a helpful English teacher. Create 2 short, practical English example sentences using the target word with Japanese translation.<|im_end|>\n<|im_start|>user\nWord: "${word}"\nFormat strictly as:\nEN: English sentence 1\nJP: Japanese translation 1\nEN: English sentence 2\nJP: Japanese translation 2<|im_end|>\n<|im_start|>assistant\n`;
+
+  try {
+    const response = await fetch(MODEL_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${HF_TOKEN}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        inputs: prompt,
+        parameters: { max_new_tokens: 180, temperature: 0.6 }
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const text = data[0]?.generated_text || "";
+      const assistantText = text.split("<|im_start|>assistant\n")[1] || text;
+      
+      const lines = assistantText.split("\n").map(l => l.trim()).filter(l => l);
+      let currentEn = "";
+
+      for (const line of lines) {
+        if (line.startsWith("EN:")) {
+          currentEn = line.replace("EN:", "").trim();
+        } else if (line.startsWith("JP:") && currentEn) {
+          const jp = line.replace("JP:", "").trim();
+          examples.push({ en: currentEn, jp: jp });
+          currentEn = "";
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Hugging Face API 呼び出しに失敗したため、バックアップ処理に切り替えます:", e);
+  }
+
+  // AI取得に失敗した場合の保険（フォールバック）
+  if (examples.length === 0) {
+    const fallbackEn = `She learned how to use "${word}" correctly in daily life.`;
+    const fallbackJp = await fetchCleanWordJP(fallbackEn);
+    examples.push({ en: fallbackEn, jp: fallbackJp });
+  }
+
+  return examples;
+}
+
+// --- フォルダ操作 ---
 function createFolder() {
   if (!folderInput) return;
   const name = folderInput.value.trim();
@@ -207,7 +273,7 @@ window.deleteFolder = function(folderId) {
   }
 };
 
-// --- 単語関連操作 ---
+// --- 単語操作 ---
 window.deleteWord = function(folderId, index) {
   const f = folders.find(x => x.id === folderId);
   if (f) {
@@ -246,7 +312,7 @@ window.transferWordToFolder = function(sourceFolderId, wordIndex, targetFolderId
   }
 };
 
-// --- 意味（訳）関連操作 ---
+// --- 意味（文字色変更対応） ---
 window.updateMeaningHTML = function(folderId, wordIndex, meaningIndex, newHTML) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wordIndex] && f.words[wordIndex].meanings) {
@@ -259,7 +325,7 @@ window.applyColorToSelection = function(color) {
   document.execCommand('foreColor', false, color);
 };
 
-// --- 例文関連操作（編集・追加・削除・並べ替え） ---
+// --- 例文操作（編集・追加・削除・並べ替え） ---
 window.updateExampleText = function(folderId, wordIndex, exIndex, key, text) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wordIndex] && f.words[wordIndex].examples[exIndex]) {
@@ -304,7 +370,7 @@ window.moveExampleOrder = function(folderId, wordIndex, exIndex, direction) {
   }
 };
 
-// --- 音声再生 ---
+// 音声再生
 window.playAudio = function(audioUrl, wordText) {
   setTimeout(() => {
     if (audioUrl) {
@@ -326,52 +392,7 @@ function speakFallback(text) {
   }
 }
 
-async function fetchCleanWordJP(text) {
-  try {
-    const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(text)}`);
-    const data = await res.json();
-    let translated = data[0].map(item => item[0]).join("");
-    return translated.replace(/[。、.]$/g, '').trim();
-  } catch (e) {
-    return text;
-  }
-}
-
-// バラエティ豊かな自然な例文生成
-async function generateVariedExamples(word) {
-  const examples = [];
-  try {
-    const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
-    if (res.ok) {
-      const data = await res.json();
-      for (const entry of data) {
-        for (const m of entry.meanings) {
-          for (const d of m.definitions) {
-            if (d.example && examples.length < 3) {
-              const jp = await fetchCleanWordJP(d.example);
-              examples.push({ en: d.example, jp: jp });
-            }
-          }
-        }
-      }
-    }
-  } catch (e) {}
-
-  if (examples.length === 0) {
-    const templates = [
-      `I always remember how to use "${word}" in daily conversations.`,
-      `It is important to understand the concept of "${word}".`
-    ];
-    for (const en of templates) {
-      const jp = await fetchCleanWordJP(en);
-      examples.push({ en, jp });
-    }
-  }
-
-  return examples;
-}
-
-// --- 単語追加処理 ---
+// --- 単語追加処理（辞書API ＋ Hugging Face AI自動生成） ---
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
   if(!cleanWord) return;
@@ -425,23 +446,13 @@ window.addWord = async function(folderId, word){
           }
         }
       }
-
-      for (const m of entry.meanings) {
-        for (const def of m.definitions) {
-          if (def.example && examples.length < 3) {
-            const exJP = await fetchCleanWordJP(def.example);
-            examples.push({ en: def.example, jp: exJP });
-          }
-        }
-      }
     }
   } catch (e) {
     console.error("辞書APIエラー:", e);
   }
 
-  if (examples.length === 0) {
-    examples = await generateVariedExamples(cleanWord);
-  }
+  // ✨ Hugging Face AI で例文を自動生成！
+  examples = await generateAIExamples(cleanWord);
 
   if (meanings.length === 0) {
     const fallbackJP = await fetchCleanWordJP(cleanWord);
@@ -494,7 +505,7 @@ function render(){
 
       ${!isCollapsed ? `
         <div style="margin-top: 12px;">
-          <input placeholder="単語を入力してEnter"
+          <input placeholder="単語を入力してEnter (AIが例文を自動生成します)"
             onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }"
             style="width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px; border: 1px solid #cbd5e1; border-radius: 4px;"
           >
@@ -571,7 +582,7 @@ function render(){
 
               <div style="margin-top: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; font-size: 0.85em; border: 1px solid #e2e8f0;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
-                  <span style="font-weight: bold; color: #475569;">💬 例文</span>
+                  <span style="font-weight: bold; color: #475569;">🤖 AI生成例文</span>
                   <button onclick="addExample(${folder.id}, ${wordIndex})" style="background:#10b981; color:white; border:none; padding:2px 8px; border-radius:4px; font-size:0.8em; cursor:pointer;">➕ 例文追加</button>
                 </div>
 
@@ -611,5 +622,4 @@ function render(){
   });
 }
 
-// 初期化描画
 render();
