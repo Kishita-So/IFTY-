@@ -88,19 +88,14 @@ async function generateAIContent(word) {
   };
 
   if (!HF_TOKEN) {
-    console.warn("Hugging Face トークンが未設定です。");
+    alert("AIトークンが設定されていません。右上の「🔑 AIトークン設定」から入力してください。");
   } else {
     const MODEL_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct";
     
-    // プロンプト：複数の意味（品詞別・ニュアンス別）をたくさん出させ、実用的な例文を作成させる
-    const prompt = `<|im_start|>system\nYou are a professional English-Japanese vocabulary dictionary writer. 
-Generate a comprehensive list of Japanese meanings (covering different parts of speech like 【名】【動】【形】 and varied nuances) for the target word.
-Also generate 2-3 realistic, high-quality example sentences suitable for an English vocabulary book, with natural Japanese translations.<|im_end|>
-<|im_start|>user\nWord: "${word}"
-Format strictly as:
-MEANING: 【品詞】 意味1
-MEANING: 【品詞】 意味2
-MEANING: 【品詞】 意味3（主要な意味をできるだけ多く）
+    const prompt = `<|im_start|>system\nYou are an expert English-Japanese lexicographer. Provide detailed Japanese meanings (with part of speech tags like 【名】【動】【形】) and 2 natural, practical English example sentences with Japanese translations for the word: "${word}".<|im_end|>
+<|im_start|>user\nFormat your answer strictly as follows:
+MEANING: 【名】 意味1
+MEANING: 【動】 意味2
 EN: Practical English example sentence 1
 JP: 自然な日本語訳 1
 EN: Practical English example sentence 2
@@ -116,14 +111,26 @@ JP: 自然な日本語訳 2<|im_end|>
         },
         body: JSON.stringify({
           inputs: prompt,
-          parameters: { max_new_tokens: 350, temperature: 0.6 }
+          parameters: { max_new_tokens: 350, temperature: 0.7 }
         })
       });
 
-      if (response.ok) {
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error("APIエラーレスポンス:", response.status, errText);
+        if (response.status === 401) {
+          alert("トークンが無効です。右上のボタンから正しく設定し直してください。");
+        } else if (response.status === 503) {
+          alert("AIモデルが起動中です。数秒待ってもう一度追加してください。");
+        } else {
+          alert(`APIエラーが発生しました (${response.status})`);
+        }
+      } else {
         const data = await response.json();
-        const text = data[0]?.generated_text || "";
-        const assistantText = text.split("<|im_start|>assistant\n")[1] || text;
+        const text = Array.isArray(data) ? (data[0]?.generated_text || "") : (data.generated_text || "");
+        const assistantText = text.includes("<|im_start|>assistant\n") 
+          ? text.split("<|im_start|>assistant\n")[1] 
+          : text;
         
         const lines = assistantText.split("\n").map(l => l.trim()).filter(l => l);
         let currentEn = "";
@@ -142,7 +149,8 @@ JP: 自然な日本語訳 2<|im_end|>
         }
       }
     } catch (e) {
-      console.warn("AI生成エラー:", e);
+      console.error("通信エラー:", e);
+      alert("通信エラーが発生しました。ネットワーク接続を確認してください。");
     }
   }
 
@@ -359,7 +367,7 @@ function speakFallback(text) {
   }
 }
 
-// --- 単語追加処理（音声取得＋AI多角的意味/例文生成） ---
+// --- 単語追加処理（音声取得＋AI意味/例文生成） ---
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
   if(!cleanWord) return;
@@ -442,7 +450,7 @@ function render(){
 
       ${!isCollapsed ? `
         <div style="margin-top: 12px;">
-          <input placeholder="単語を入力してEnter (AIが「意味リスト」と「例文」を自動作成します)"
+          <input placeholder="単語を入力してEnter (AIが「意味」と「例文」を生成します)"
             onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }"
             style="width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px; border: 1px solid #cbd5e1; border-radius: 4px;"
           >
