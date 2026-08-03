@@ -80,7 +80,7 @@ async function fetchCleanWordJP(text) {
   }
 }
 
-// 🤖 Hugging Face AI で「意味」と「実践的な例文」をまとめて生成
+// 🤖 Hugging Face AI で「多角的な意味」と「本格的な単語帳例文」を生成
 async function generateAIContent(word) {
   let result = {
     meanings: [],
@@ -92,17 +92,19 @@ async function generateAIContent(word) {
   } else {
     const MODEL_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct";
     
-    // プロンプト：品詞ごとの詳しい日本語の意味と、リアルな例文を出力させる
-    const prompt = `<|im_start|>system\nYou are an expert English-Japanese lexicographer and tutor. 
-Provide concise, accurate Japanese meanings (with part of speech tags like 【動】 or 【名】) and 2 practical, natural English example sentences with Japanese translations for the target word.<|im_end|>
+    // プロンプト：複数の意味（品詞別・ニュアンス別）をたくさん出させ、実用的な例文を作成させる
+    const prompt = `<|im_start|>system\nYou are a professional English-Japanese vocabulary dictionary writer. 
+Generate a comprehensive list of Japanese meanings (covering different parts of speech like 【名】【動】【形】 and varied nuances) for the target word.
+Also generate 2-3 realistic, high-quality example sentences suitable for an English vocabulary book, with natural Japanese translations.<|im_end|>
 <|im_start|>user\nWord: "${word}"
 Format strictly as:
-MEANING: 【品詞】 日本語の意味
-MEANING: 【品詞】 別の意味（あれば）
-EN: Practical English sentence 1
-JP: 日本語訳 1
-EN: Practical English sentence 2
-JP: 日本語訳 2<|im_end|>
+MEANING: 【品詞】 意味1
+MEANING: 【品詞】 意味2
+MEANING: 【品詞】 意味3（主要な意味をできるだけ多く）
+EN: Practical English example sentence 1
+JP: 自然な日本語訳 1
+EN: Practical English example sentence 2
+JP: 自然な日本語訳 2<|im_end|>
 <|im_start|>assistant\n`;
 
     try {
@@ -114,7 +116,7 @@ JP: 日本語訳 2<|im_end|>
         },
         body: JSON.stringify({
           inputs: prompt,
-          parameters: { max_new_tokens: 250, temperature: 0.7 }
+          parameters: { max_new_tokens: 350, temperature: 0.6 }
         })
       });
 
@@ -357,7 +359,7 @@ function speakFallback(text) {
   }
 }
 
-// --- 単語追加処理（音声取得＋AI意味/例文生成） ---
+// --- 単語追加処理（音声取得＋AI多角的意味/例文生成） ---
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
   if(!cleanWord) return;
@@ -383,7 +385,7 @@ window.addWord = async function(folderId, word){
     console.error("音声APIエラー:", e);
   }
 
-  // ✨ AI で「意味」と「実践的例文」を生成
+  // ✨ AI で「多角的な意味」と「本格的な単語帳例文」を生成
   const aiResult = await generateAIContent(cleanWord);
 
   const folder = folders.find(f => f.id === folderId);
@@ -440,7 +442,7 @@ function render(){
 
       ${!isCollapsed ? `
         <div style="margin-top: 12px;">
-          <input placeholder="単語を入力してEnter (AIが「意味」と「例文」を自動作成します)"
+          <input placeholder="単語を入力してEnter (AIが「意味リスト」と「例文」を自動作成します)"
             onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }"
             style="width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px; border: 1px solid #cbd5e1; border-radius: 4px;"
           >
