@@ -1,7 +1,17 @@
-// Hugging Face アクセストークン
-const HF_TOKEN = "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";
+// localStorage から Hugging Face トークンを取得
+let HF_TOKEN = localStorage.getItem("hf_token") || "";
 
-// localStorage データの取得と安全な補正
+// トークン設定関数
+window.setHFToken = function() {
+  const token = prompt("Hugging Face の Access Token (hf_...) を入力してください:", HF_TOKEN);
+  if (token !== null) {
+    HF_TOKEN = token.trim();
+    localStorage.setItem("hf_token", HF_TOKEN);
+    alert(HF_TOKEN ? "トークンを保存しました！" : "トークンをクリアしました。");
+  }
+};
+
+// localStorage データの取得と補正
 let rawFolders = JSON.parse(localStorage.getItem("folders")) || [];
 let folders = rawFolders.map(f => ({
   id: f.id || Date.now() + Math.random(),
@@ -17,7 +27,7 @@ const foldersEl = document.getElementById("folders");
 const createBtn = document.getElementById("createFolderBtn");
 const folderInput = document.getElementById("folderName");
 
-// 1. 不規則動詞データベース
+// 不規則動詞データベース
 const irregularVerbs = {
   "swell": "swell - swelled - swollen/swelled - swelling",
   "slay": "slay - slew - slain - slaying",
@@ -40,7 +50,7 @@ const irregularVerbs = {
   "dwell": "dwell - dwelt/dwelled - dwelt/dwelled - dwelling"
 };
 
-// 2. 自動詞に伴う前置詞
+// 自動詞に伴う前置詞
 const verbPrepositions = {
   "dwell": "on / in（〜に固執する、〜に住む）",
   "listen": "to（〜を聴く）",
@@ -54,83 +64,11 @@ const verbPrepositions = {
   "participate": "in（〜に参加する）"
 };
 
-// 3. 英和辞典風データベース
-const dictionaryDB = {
-  "be interested in": ["【熟語】 〜に興味がある、〜に関心を持っている"],
-  "dwell on": ["【熟語】 〜をくどくど考える、〜に固執する"],
-  "dwell": [
-    "【動・自】 住む、宿る、居住する",
-    "【動・自】 （dwell onで）〜をくどくど考える、〜に固執する"
-  ],
-  "swell": [
-    "【動・自】 膨らむ、腫れる、むくむ（怪我・病気）",
-    "【動・自】 （声・感情・数量が）増大する、高まる",
-    "【動・他】 〜を膨らませる、〜を増大させる",
-    "【名・可】 膨らみ、うねり、湧き上がり",
-    "【形】 素晴らしい、最高の、ハイカラな（口語）"
-  ],
-  "say": [
-    "【動・他】 〜と言う、〜と述べる（発言内容に重点）",
-    "【動・他】 （本・標識・時計に）〜と書いてある、〜を示している",
-    "【副/接】 例えば、仮に〜とすれば（例: Let's say...）",
-    "【名・可】 発言権、決定権（例: have a say in...）"
-  ],
-  "kill": [
-    "【動・他】 〜を殺す、殺害する",
-    "【動・他】 〜を台無しにする、〜を台無しにして終わらせる",
-    "【動・他】 （時間を）つぶす（kill time）",
-    "【動・他】 （痛みを）和らげる（painkiller）",
-    "【名・可】 殺害、獲物"
-  ],
-  "play": [
-    "【動・自/他】 遊ぶ、演奏する、（スポーツ・ゲームを）する",
-    "【動・他】 （役を）演じる、〜を演劇で演じる",
-    "【名・可】 劇、戯曲",
-    "【名・不可】 遊び、いたずら、ゆとり・遊び幅"
-  ]
-};
-
-const wordDictionary = ["kill", "play", "say", "dwell", "swell", "forgive", "slay", "think", "speak", "write", "make", "take", "give", "listen", "depend"];
-
-function getLevenshteinDistance(a, b) {
-  const matrix = [];
-  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
-  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
-
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
-      if (b.charAt(i - 1) === a.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1
-        );
-      }
-    }
-  }
-  return matrix[b.length][a.length];
-}
-
-function findSpellingSuggestion(inputWord) {
-  let closestWord = "";
-  let minDistance = 3;
-  for (const dictWord of wordDictionary) {
-    const dist = getLevenshteinDistance(inputWord.toLowerCase(), dictWord);
-    if (dist < minDistance && dist > 0) {
-      minDistance = dist;
-      closestWord = dictWord;
-    }
-  }
-  return closestWord;
-}
-
 function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// 翻訳・テキスト整形ヘルパー
+// 翻訳ヘルパー（フォールバック用）
 async function fetchCleanWordJP(text) {
   try {
     const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(text)}`);
@@ -142,56 +80,83 @@ async function fetchCleanWordJP(text) {
   }
 }
 
-//🤖 Hugging Face AI による例文・和訳の自動生成機能
-async function generateAIExamples(word) {
-  const examples = [];
-  const MODEL_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct";
+// 🤖 Hugging Face AI で「意味」と「実践的な例文」をまとめて生成
+async function generateAIContent(word) {
+  let result = {
+    meanings: [],
+    examples: []
+  };
 
-  const prompt = `<|im_start|>system\nYou are a helpful English teacher. Create 2 short, practical English example sentences using the target word with Japanese translation.<|im_end|>\n<|im_start|>user\nWord: "${word}"\nFormat strictly as:\nEN: English sentence 1\nJP: Japanese translation 1\nEN: English sentence 2\nJP: Japanese translation 2<|im_end|>\n<|im_start|>assistant\n`;
+  if (!HF_TOKEN) {
+    console.warn("Hugging Face トークンが未設定です。");
+  } else {
+    const MODEL_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct";
+    
+    // プロンプト：品詞ごとの詳しい日本語の意味と、リアルな例文を出力させる
+    const prompt = `<|im_start|>system\nYou are an expert English-Japanese lexicographer and tutor. 
+Provide concise, accurate Japanese meanings (with part of speech tags like 【動】 or 【名】) and 2 practical, natural English example sentences with Japanese translations for the target word.<|im_end|>
+<|im_start|>user\nWord: "${word}"
+Format strictly as:
+MEANING: 【品詞】 日本語の意味
+MEANING: 【品詞】 別の意味（あれば）
+EN: Practical English sentence 1
+JP: 日本語訳 1
+EN: Practical English sentence 2
+JP: 日本語訳 2<|im_end|>
+<|im_start|>assistant\n`;
 
-  try {
-    const response = await fetch(MODEL_URL, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${HF_TOKEN}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        inputs: prompt,
-        parameters: { max_new_tokens: 180, temperature: 0.6 }
-      })
-    });
+    try {
+      const response = await fetch(MODEL_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${HF_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          inputs: prompt,
+          parameters: { max_new_tokens: 250, temperature: 0.7 }
+        })
+      });
 
-    if (response.ok) {
-      const data = await response.json();
-      const text = data[0]?.generated_text || "";
-      const assistantText = text.split("<|im_start|>assistant\n")[1] || text;
-      
-      const lines = assistantText.split("\n").map(l => l.trim()).filter(l => l);
-      let currentEn = "";
+      if (response.ok) {
+        const data = await response.json();
+        const text = data[0]?.generated_text || "";
+        const assistantText = text.split("<|im_start|>assistant\n")[1] || text;
+        
+        const lines = assistantText.split("\n").map(l => l.trim()).filter(l => l);
+        let currentEn = "";
 
-      for (const line of lines) {
-        if (line.startsWith("EN:")) {
-          currentEn = line.replace("EN:", "").trim();
-        } else if (line.startsWith("JP:") && currentEn) {
-          const jp = line.replace("JP:", "").trim();
-          examples.push({ en: currentEn, jp: jp });
-          currentEn = "";
+        for (const line of lines) {
+          if (line.startsWith("MEANING:")) {
+            const m = line.replace("MEANING:", "").trim();
+            if (m) result.meanings.push(m);
+          } else if (line.startsWith("EN:")) {
+            currentEn = line.replace("EN:", "").trim();
+          } else if (line.startsWith("JP:") && currentEn) {
+            const jp = line.replace("JP:", "").trim();
+            result.examples.push({ en: currentEn, jp: jp });
+            currentEn = "";
+          }
         }
       }
+    } catch (e) {
+      console.warn("AI生成エラー:", e);
     }
-  } catch (e) {
-    console.warn("Hugging Face API 呼び出しに失敗したため、バックアップ処理に切り替えます:", e);
   }
 
-  // AI取得に失敗した場合の保険（フォールバック）
-  if (examples.length === 0) {
-    const fallbackEn = `She learned how to use "${word}" correctly in daily life.`;
+  // AI取得失敗時のフォールバック処理
+  if (result.meanings.length === 0) {
+    const fallbackJP = await fetchCleanWordJP(word);
+    result.meanings.push(`【訳】 ${fallbackJP}`);
+  }
+
+  if (result.examples.length === 0) {
+    const fallbackEn = `It is useful to learn how to use "${word}" in daily conversation.`;
     const fallbackJp = await fetchCleanWordJP(fallbackEn);
-    examples.push({ en: fallbackEn, jp: fallbackJp });
+    result.examples.push({ en: fallbackEn, jp: fallbackJp });
   }
 
-  return examples;
+  return result;
 }
 
 // --- フォルダ操作 ---
@@ -312,7 +277,7 @@ window.transferWordToFolder = function(sourceFolderId, wordIndex, targetFolderId
   }
 };
 
-// --- 意味（文字色変更対応） ---
+// --- 意味（編集・文字色変更） ---
 window.updateMeaningHTML = function(folderId, wordIndex, meaningIndex, newHTML) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wordIndex] && f.words[wordIndex].meanings) {
@@ -325,7 +290,7 @@ window.applyColorToSelection = function(color) {
   document.execCommand('foreColor', false, color);
 };
 
-// --- 例文操作（編集・追加・削除・並べ替え） ---
+// --- 例文操作 ---
 window.updateExampleText = function(folderId, wordIndex, exIndex, key, text) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wordIndex] && f.words[wordIndex].examples[exIndex]) {
@@ -392,83 +357,44 @@ function speakFallback(text) {
   }
 }
 
-// --- 単語追加処理（辞書API ＋ Hugging Face AI自動生成） ---
+// --- 単語追加処理（音声取得＋AI意味/例文生成） ---
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
   if(!cleanWord) return;
 
   let audioUrl = "";
-  let meanings = [];
   let inflections = "";
-  let examples = [];
   let prepNote = "";
-  let suggestion = "";
 
   const lowerWord = cleanWord.toLowerCase();
-
-  const suggestedWord = findSpellingSuggestion(lowerWord);
-  if (suggestedWord) suggestion = suggestedWord;
 
   if (verbPrepositions[lowerWord]) prepNote = verbPrepositions[lowerWord];
   if (irregularVerbs[lowerWord]) inflections = irregularVerbs[lowerWord];
 
-  if (dictionaryDB[lowerWord]) {
-    meanings = [...dictionaryDB[lowerWord]];
-  }
-
+  // 発音音声の取得
   try {
     const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(cleanWord)}`);
-    
     if (dictRes.ok) {
       const dictData = await dictRes.json();
-      const entry = dictData[0];
-
-      const audioObj = entry.phonetics?.find(p => p.audio && p.audio.length > 0);
+      const audioObj = dictData[0]?.phonetics?.find(p => p.audio && p.audio.length > 0);
       if (audioObj) audioUrl = audioObj.audio;
-
-      if (meanings.length === 0) {
-        for (const m of entry.meanings) {
-          let part = m.partOfSpeech;
-          let partLabel = part;
-          if (part === "verb") partLabel = "動・自/他";
-          else if (part === "noun") partLabel = "名・可/不可";
-          else if (part === "adjective") partLabel = "形";
-          else if (part === "adverb") partLabel = "副";
-          else if (part === "preposition") partLabel = "前";
-          else if (part === "conjunction") partLabel = "接";
-
-          const defsToTake = m.definitions.slice(0, 3);
-          for (const def of defsToTake) {
-            if (def.definition) {
-              const jpDef = await fetchCleanWordJP(def.definition);
-              meanings.push(`【${partLabel}】 ${jpDef}`);
-            }
-          }
-        }
-      }
     }
   } catch (e) {
-    console.error("辞書APIエラー:", e);
+    console.error("音声APIエラー:", e);
   }
 
-  // ✨ Hugging Face AI で例文を自動生成！
-  examples = await generateAIExamples(cleanWord);
-
-  if (meanings.length === 0) {
-    const fallbackJP = await fetchCleanWordJP(cleanWord);
-    meanings.push(`【訳】 ${fallbackJP}`);
-  }
+  // ✨ AI で「意味」と「実践的例文」を生成
+  const aiResult = await generateAIContent(cleanWord);
 
   const folder = folders.find(f => f.id === folderId);
   if (folder) {
     folder.words.push({
       word: cleanWord,
       audio: audioUrl,
-      meanings: meanings,
+      meanings: aiResult.meanings,
       inflections: inflections,
       prepNote: prepNote,
-      suggestion: suggestion,
-      examples: examples
+      examples: aiResult.examples
     });
     save();
     render();
@@ -479,6 +405,15 @@ window.addWord = async function(folderId, word){
 function render(){
   if (!foldersEl) return;
   foldersEl.innerHTML = "";
+
+  const tokenHeader = document.createElement("div");
+  tokenHeader.style.cssText = "margin-bottom: 12px; display: flex; justify-content: flex-end;";
+  tokenHeader.innerHTML = `
+    <button onclick="setHFToken()" style="background: #475569; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85em;">
+      🔑 AIトークン設定 ${HF_TOKEN ? "（設定済み）" : "（未設定）"}
+    </button>
+  `;
+  foldersEl.appendChild(tokenHeader);
 
   folders.forEach((folder, folderIndex) => {
     const div = document.createElement("div");
@@ -505,7 +440,7 @@ function render(){
 
       ${!isCollapsed ? `
         <div style="margin-top: 12px;">
-          <input placeholder="単語を入力してEnter (AIが例文を自動生成します)"
+          <input placeholder="単語を入力してEnter (AIが「意味」と「例文」を自動作成します)"
             onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }"
             style="width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px; border: 1px solid #cbd5e1; border-radius: 4px;"
           >
@@ -532,12 +467,6 @@ function render(){
                   <button onclick="deleteWord(${folder.id}, ${wordIndex})" style="background-color: #f1f5f9; color: #64748b; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size:0.8em;">削除</button>
                 </div>
               </div>
-
-              ${w.suggestion ? `
-                <div style="margin-top: 6px; font-size: 0.85em; color: #d97706; background: #fffbeb; padding: 4px 8px; border-radius: 4px;">
-                  🔍 <b>もしかして：</b> 「<a href="#" onclick="addWord(${folder.id}, '${w.suggestion}'); return false;" style="color: #2563eb; font-weight: bold;">${w.suggestion}</a>」 ですか？
-                </div>
-              ` : ''}
 
               ${w.inflections ? `
                 <div style="margin-top: 6px; font-size: 0.8em; color: #0284c7; background: #f0f9ff; display: inline-block; padding: 2px 8px; border-radius: 4px;">
