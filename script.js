@@ -1,16 +1,3 @@
-// localStorage から Hugging Face トークンを取得
-let HF_TOKEN = localStorage.getItem("hf_token") || "";
-
-// トークン設定関数
-window.setHFToken = function() {
-  const token = prompt("Hugging Face の Access Token (hf_...) を入力してください:", HF_TOKEN);
-  if (token !== null) {
-    HF_TOKEN = token.trim();
-    localStorage.setItem("hf_token", HF_TOKEN);
-    alert(HF_TOKEN ? "トークンを保存しました！" : "トークンをクリアしました。");
-  }
-};
-
 // localStorage データの取得と補正
 let rawFolders = JSON.parse(localStorage.getItem("folders")) || [];
 let folders = rawFolders.map(f => ({
@@ -64,106 +51,92 @@ const verbPrepositions = {
   "participate": "in（〜に参加する）"
 };
 
+// 品詞の日本語変換
+const posJP = {
+  "noun": "【名】",
+  "verb": "【動】",
+  "adjective": "【形】",
+  "adverb": "【副】",
+  "preposition": "【前】",
+  "conjunction": "【接】",
+  "pronoun": "【代】",
+  "interjection": "【感】"
+};
+
 function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// 翻訳ヘルパー（フォールバック用）
-async function fetchCleanWordJP(text) {
+// 翻訳ヘルパー
+async function translateToJP(text) {
+  if (!text) return "";
   try {
     const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(text)}`);
     const data = await res.json();
     let translated = data[0].map(item => item[0]).join("");
-    return translated.replace(/[。、.]$/g, '').trim();
+    return translated.replace(/[。]$/g, '').trim();
   } catch (e) {
     return text;
   }
 }
 
-// 🤖 Hugging Face AI で「多角的な意味」と「本格的な単語帳例文」を生成
-async function generateAIContent(word) {
+// 📖 辞書APIから多角的な意味と本格的な例文を確実に生成
+async function generateWordDetails(word) {
   let result = {
     meanings: [],
-    examples: []
+    examples: [],
+    audioUrl: ""
   };
 
-  if (!HF_TOKEN) {
-    alert("AIトークンが設定されていません。右上の「🔑 AIトークン設定」から入力してください。");
-  } else {
-    const MODEL_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct";
+  try {
+    const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
     
-    const prompt = `<|im_start|>system\nYou are an expert English-Japanese lexicographer. Provide detailed Japanese meanings (with part of speech tags like 【名】【動】【形】) and 2 natural, practical English example sentences with Japanese translations for the word: "${word}".<|im_end|>
-<|im_start|>user\nFormat your answer strictly as follows:
-MEANING: 【名】 意味1
-MEANING: 【動】 意味2
-EN: Practical English example sentence 1
-JP: 自然な日本語訳 1
-EN: Practical English example sentence 2
-JP: 自然な日本語訳 2<|im_end|>
-<|im_start|>assistant\n`;
+    if (dictRes.ok) {
+      const dictData = await dictRes.json();
+      const entry = dictData[0];
 
-    try {
-      const response = await fetch(MODEL_URL, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${HF_TOKEN}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          inputs: prompt,
-          parameters: { max_new_tokens: 350, temperature: 0.7 }
-        })
-      });
+      // 音声の取得
+      const audioObj = entry?.phonetics?.find(p => p.audio && p.audio.length > 0);
+      if (audioObj) result.audioUrl = audioObj.audio;
 
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error("APIエラーレスポンス:", response.status, errText);
-        if (response.status === 401) {
-          alert("トークンが無効です。右上のボタンから正しく設定し直してください。");
-        } else if (response.status === 503) {
-          alert("AIモデルが起動中です。数秒待ってもう一度追加してください。");
-        } else {
-          alert(`APIエラーが発生しました (${response.status})`);
-        }
-      } else {
-        const data = await response.json();
-        const text = Array.isArray(data) ? (data[0]?.generated_text || "") : (data.generated_text || "");
-        const assistantText = text.includes("<|im_start|>assistant\n") 
-          ? text.split("<|im_start|>assistant\n")[1] 
-          : text;
-        
-        const lines = assistantText.split("\n").map(l => l.trim()).filter(l => l);
-        let currentEn = "";
+      // 意味と例文の抽出
+      if (entry.meanings && entry.meanings.length > 0) {
+        for (const m of entry.meanings) {
+          const tag = posJP[m.partOfSpeech] || `【${m.partOfSpeech}】`;
+          
+          // 定義（意味）を上位2つまで抽出
+          const defs = m.definitions.slice(0, 2);
+          for (const d of defs) {
+            const jpDef = await translateToJP(d.definition);
+            result.meanings.push(`${tag} ${jpDef}`);
 
-        for (const line of lines) {
-          if (line.startsWith("MEANING:")) {
-            const m = line.replace("MEANING:", "").trim();
-            if (m) result.meanings.push(m);
-          } else if (line.startsWith("EN:")) {
-            currentEn = line.replace("EN:", "").trim();
-          } else if (line.startsWith("JP:") && currentEn) {
-            const jp = line.replace("JP:", "").trim();
-            result.examples.push({ en: currentEn, jp: jp });
-            currentEn = "";
+            // 辞書の例文があれば取得
+            if (d.example && result.examples.length < 3) {
+              const jpEx = await translateToJP(d.example);
+              result.examples.push({ en: d.example, jp: jpEx });
+            }
           }
         }
       }
-    } catch (e) {
-      console.error("通信エラー:", e);
-      alert("通信エラーが発生しました。ネットワーク接続を確認してください。");
     }
+  } catch (e) {
+    console.error("辞書APIエラー:", e);
   }
 
-  // AI取得失敗時のフォールバック処理
+  // 万が一例文が取得できなかった場合の自然なフォールバック例文作成
   if (result.meanings.length === 0) {
-    const fallbackJP = await fetchCleanWordJP(word);
+    const fallbackJP = await translateToJP(word);
     result.meanings.push(`【訳】 ${fallbackJP}`);
   }
 
   if (result.examples.length === 0) {
-    const fallbackEn = `It is useful to learn how to use "${word}" in daily conversation.`;
-    const fallbackJp = await fetchCleanWordJP(fallbackEn);
-    result.examples.push({ en: fallbackEn, jp: fallbackJp });
+    const sampleEn1 = `He learned the true meaning of ${word}.`;
+    const sampleJp1 = await translateToJP(sampleEn1);
+    result.examples.push({ en: sampleEn1, jp: sampleJp1 });
+
+    const sampleEn2 = `This book explains how ${word} is used in modern context.`;
+    const sampleJp2 = await translateToJP(sampleEn2);
+    result.examples.push({ en: sampleEn2, jp: sampleJp2 });
   }
 
   return result;
@@ -354,7 +327,7 @@ window.playAudio = function(audioUrl, wordText) {
     } else {
       speakFallback(wordText);
     }
-  }, 500);
+  }, 200);
 };
 
 function speakFallback(text) {
@@ -367,12 +340,11 @@ function speakFallback(text) {
   }
 }
 
-// --- 単語追加処理（音声取得＋AI意味/例文生成） ---
+// --- 単語追加処理 ---
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
   if(!cleanWord) return;
 
-  let audioUrl = "";
   let inflections = "";
   let prepNote = "";
 
@@ -381,30 +353,18 @@ window.addWord = async function(folderId, word){
   if (verbPrepositions[lowerWord]) prepNote = verbPrepositions[lowerWord];
   if (irregularVerbs[lowerWord]) inflections = irregularVerbs[lowerWord];
 
-  // 発音音声の取得
-  try {
-    const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(cleanWord)}`);
-    if (dictRes.ok) {
-      const dictData = await dictRes.json();
-      const audioObj = dictData[0]?.phonetics?.find(p => p.audio && p.audio.length > 0);
-      if (audioObj) audioUrl = audioObj.audio;
-    }
-  } catch (e) {
-    console.error("音声APIエラー:", e);
-  }
-
-  // ✨ AI で「多角的な意味」と「本格的な単語帳例文」を生成
-  const aiResult = await generateAIContent(cleanWord);
+  // 意味・例文・音声を一括取得
+  const details = await generateWordDetails(cleanWord);
 
   const folder = folders.find(f => f.id === folderId);
   if (folder) {
     folder.words.push({
       word: cleanWord,
-      audio: audioUrl,
-      meanings: aiResult.meanings,
+      audio: details.audioUrl,
+      meanings: details.meanings,
       inflections: inflections,
       prepNote: prepNote,
-      examples: aiResult.examples
+      examples: details.examples
     });
     save();
     render();
@@ -415,15 +375,6 @@ window.addWord = async function(folderId, word){
 function render(){
   if (!foldersEl) return;
   foldersEl.innerHTML = "";
-
-  const tokenHeader = document.createElement("div");
-  tokenHeader.style.cssText = "margin-bottom: 12px; display: flex; justify-content: flex-end;";
-  tokenHeader.innerHTML = `
-    <button onclick="setHFToken()" style="background: #475569; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85em;">
-      🔑 AIトークン設定 ${HF_TOKEN ? "（設定済み）" : "（未設定）"}
-    </button>
-  `;
-  foldersEl.appendChild(tokenHeader);
 
   folders.forEach((folder, folderIndex) => {
     const div = document.createElement("div");
@@ -450,7 +401,7 @@ function render(){
 
       ${!isCollapsed ? `
         <div style="margin-top: 12px;">
-          <input placeholder="単語を入力してEnter (AIが「意味」と「例文」を生成します)"
+          <input placeholder="単語を入力してEnter (品詞別の意味と例文を自動生成します)"
             onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }"
             style="width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px; border: 1px solid #cbd5e1; border-radius: 4px;"
           >
@@ -521,7 +472,7 @@ function render(){
 
               <div style="margin-top: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; font-size: 0.85em; border: 1px solid #e2e8f0;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
-                  <span style="font-weight: bold; color: #475569;">🤖 AI生成例文</span>
+                  <span style="font-weight: bold; color: #475569;">📖 実践例文</span>
                   <button onclick="addExample(${folder.id}, ${wordIndex})" style="background:#10b981; color:white; border:none; padding:2px 8px; border-radius:4px; font-size:0.8em; cursor:pointer;">➕ 例文追加</button>
                 </div>
 
