@@ -55,20 +55,22 @@ function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// 🤖 AIで単語固有の意味・ニュアンス・実用例文を自動生成する（トークン不要）
+// 📖 市販単語帳風の「ニュアンス・同義語・例文」を生成するAIプロンプト
 async function generateAIContent(word) {
   let result = {
     meanings: [],
     examples: []
   };
 
-  const prompt = `You are an expert lexicographer for English language learners.
-For the word "${word}", output its concise core Japanese meanings with part of speech tags (like 【名】【動】【形】), and 2 natural, practical example sentences with Japanese translations that highlight the unique context of "${word}".
+  const prompt = `You are editing a Japanese high-grade vocabulary book (like Pass-Tan).
+For the English word "${word}", produce:
+1. Core Japanese meaning with red emphasis style and synonym in brackets if available (e.g. <span style="color:#e11d48; font-weight:bold;">大勝利</span> [= great victory], 反動 [= reaction]).
+2. 1 highly practical, authentic example sentence where the target word is used naturally, with a smooth Japanese translation.
 
-Format strictly as:
-MEANING: 【品詞】 簡潔な意味
-EN: Practical English sentence
-JP: 自然な日本語訳`;
+Strict Output Format:
+MEANING: [Part of speech tag like 【名】/【動】/【形】] <span style="color:#e11d48; font-weight:bold;">Core Meaning</span> [= synonym/nuance] secondary meaning
+EN: Example sentence containing ${word}
+JP: Natural Japanese translation`;
 
   try {
     const response = await fetch("https://text.pollinations.ai/", {
@@ -99,31 +101,31 @@ JP: 自然な日本語訳`;
       }
     }
   } catch (e) {
-    console.error("AI通信エラー:", e);
+    console.error("AI生成エラー:", e);
   }
 
-  // 万が一エラーが起きた場合の予備（Google翻訳API）
+  // フォールバック処理
   if (result.meanings.length === 0) {
     try {
       const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(word)}`);
       const data = await res.json();
-      result.meanings.push(`【訳】 ${data[0][0][0]}`);
+      result.meanings.push(`【訳】 <span style="color:#e11d48; font-weight:bold;">${data[0][0][0]}</span>`);
     } catch(e) {
-      result.meanings.push(`【訳】 ${word}`);
+      result.meanings.push(`【訳】 <span style="color:#e11d48; font-weight:bold;">${word}</span>`);
     }
   }
 
   if (result.examples.length === 0) {
     result.examples.push({
-      en: `This situation relates directly to ${word}.`,
-      jp: `この状況は${word}に直接関連しています。`
+      en: `The concept of ${word} plays an important role here.`,
+      jp: `ここで${word}の概念が重要な役割を果たします。`
     });
   }
 
   return result;
 }
 
-// 音声URLの取得
+// 音声再生用URLの取得
 async function getAudioUrl(word) {
   try {
     const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
@@ -349,7 +351,7 @@ window.addWord = async function(folderId, word){
   if (verbPrepositions[lowerWord]) prepNote = verbPrepositions[lowerWord];
   if (irregularVerbs[lowerWord]) inflections = irregularVerbs[lowerWord];
 
-  // 音声・AI生成コンテンツを取得
+  // 音声・AIコンテンツを一括取得
   const [audioUrl, aiResult] = await Promise.all([
     getAudioUrl(cleanWord),
     generateAIContent(cleanWord)
@@ -370,7 +372,7 @@ window.addWord = async function(folderId, word){
   }
 };
 
-// --- 画面描画 ---
+// --- 画面描画（市販単語帳レイアウト風） ---
 function render(){
   if (!foldersEl) return;
   foldersEl.innerHTML = "";
@@ -400,18 +402,18 @@ function render(){
 
       ${!isCollapsed ? `
         <div style="margin-top: 12px;">
-          <input placeholder="単語を入力してEnter (AIが固有の意味と自然な例文を生成します)"
+          <input placeholder="単語を入力してEnter (市販単語帳風の意味・同義語・例文を生成)"
             onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }"
             style="width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px; border: 1px solid #cbd5e1; border-radius: 4px;"
           >
 
           ${folder.words.map((w, wordIndex) => `
-            <div class="word" style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 5px solid #2563eb; padding: 14px; margin-top: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div class="word" style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 6px solid #e11d48; padding: 14px; margin-top: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
               
-              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px; flex-wrap: wrap; gap: 6px;">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                  <b style="font-size: 1.3em; color: #0f172a;">${w.word}</b>
-                  <button onclick="playAudio('${w.audio}', '${w.word}')" style="background:#2563eb; color:white; border:none; border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:0.8em;" title="発音を聞く">🔊</button>
+                  <b style="font-size: 1.4em; color: #0f172a; font-family: sans-serif;">${w.word}</b>
+                  <button onclick="playAudio('${w.audio}', '${w.word}')" style="background:#e11d48; color:white; border:none; border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:0.8em;" title="発音を聞く">🔊</button>
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 4px;">
@@ -440,14 +442,13 @@ function render(){
                 </div>
               ` : ''}
               
-              <div style="margin-top: 10px;">
-                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; color: #475569;">
-                  <span>選択文字に色付け:</span>
-                  <button onmousedown="event.preventDefault(); applyColorToSelection('#ef4444');" style="background:#ef4444; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="赤"></button>
-                  <button onmousedown="event.preventDefault(); applyColorToSelection('#2563eb');" style="background:#2563eb; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="青"></button>
-                  <button onmousedown="event.preventDefault(); applyColorToSelection('#10b981');" style="background:#10b981; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="緑"></button>
-                  <button onmousedown="event.preventDefault(); applyColorToSelection('#f59e0b');" style="background:#f59e0b; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="オレンジ"></button>
-                  <button onmousedown="event.preventDefault(); applyColorToSelection('#0f172a');" style="background:#0f172a; border:none; width:18px; height:18px; border-radius:50%; cursor:pointer;" title="黒"></button>
+              <div style="margin-top: 10px; background: #fff5f5; padding: 10px; border-radius: 6px; border: 1px solid #ffe4e6;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; background: #ffffff; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; color: #64748b; border: 1px solid #f1f5f9;">
+                  <span>マーカー/文字色:</span>
+                  <button onmousedown="event.preventDefault(); applyColorToSelection('#e11d48');" style="background:#e11d48; border:none; width:16px; height:16px; border-radius:50%; cursor:pointer;" title="赤（重要語）"></button>
+                  <button onmousedown="event.preventDefault(); applyColorToSelection('#2563eb');" style="background:#2563eb; border:none; width:16px; height:16px; border-radius:50%; cursor:pointer;" title="青"></button>
+                  <button onmousedown="event.preventDefault(); applyColorToSelection('#059669');" style="background:#059669; border:none; width:16px; height:16px; border-radius:50%; cursor:pointer;" title="緑"></button>
+                  <button onmousedown="event.preventDefault(); applyColorToSelection('#0f172a');" style="background:#0f172a; border:none; width:16px; height:16px; border-radius:50%; cursor:pointer;" title="黒"></button>
                 </div>
 
                 <ul style="margin: 0; padding-left: 0; list-style: none;">
@@ -458,10 +459,8 @@ function render(){
                         <div 
                           contenteditable="true" 
                           onblur="updateMeaningHTML(${folder.id}, ${wordIndex}, ${meaningIndex}, this.innerHTML)"
-                          style="outline: none; padding: 4px 6px; font-size: 0.95em; color: #334155; border-radius: 4px; font-weight: 500; border: 1px transparent dashed;"
-                          onmouseover="this.style.borderColor='#cbd5e1'"
-                          onmouseout="this.style.borderColor='transparent'"
-                          title="選択して色変更可能"
+                          style="outline: none; padding: 2px 4px; font-size: 1.05em; color: #1e293b; border-radius: 4px;"
+                          title="クリックして文字を直接編集可能"
                         >${textContent}</div>
                       </li>
                     `;
@@ -469,25 +468,25 @@ function render(){
                 </ul>
               </div>
 
-              <div style="margin-top: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; font-size: 0.85em; border: 1px solid #e2e8f0;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
-                  <span style="font-weight: bold; color: #475569;">📖 実践例文</span>
+              <div style="margin-top: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; font-size: 0.9em; border: 1px solid #e2e8f0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px;">
+                  <span style="font-weight: bold; color: #334155;">📖 単語帳例文</span>
                   <button onclick="addExample(${folder.id}, ${wordIndex})" style="background:#10b981; color:white; border:none; padding:2px 8px; border-radius:4px; font-size:0.8em; cursor:pointer;">➕ 例文追加</button>
                 </div>
 
                 ${w.examples && w.examples.length > 0 ? w.examples.map((ex, exIndex) => `
-                  <div style="margin-bottom: 8px; background: #ffffff; padding: 6px 8px; border-radius: 4px; border: 1px solid #f1f5f9;">
+                  <div style="margin-bottom: 8px; background: #ffffff; padding: 8px 10px; border-radius: 4px; border-left: 3px solid #3b82f6; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;">
                       <div style="flex: 1;">
                         <p 
                           contenteditable="true" 
                           onblur="updateExampleText(${folder.id}, ${wordIndex}, ${exIndex}, 'en', this.innerText)"
-                          style="margin: 0; color: #334155; font-weight: 500; outline: none;"
-                        >• ${ex.en}</p>
+                          style="margin: 0 0 4px 0; color: #0f172a; font-weight: 600; line-height: 1.4; outline: none;"
+                        >${ex.en}</p>
                         <p 
                           contenteditable="true" 
                           onblur="updateExampleText(${folder.id}, ${wordIndex}, ${exIndex}, 'jp', this.innerText)"
-                          style="margin: 0; color: #64748b; padding-left: 10px; outline: none;"
+                          style="margin: 0; color: #475569; font-size: 0.92em; line-height: 1.4; outline: none;"
                         >${ex.jp}</p>
                       </div>
 
