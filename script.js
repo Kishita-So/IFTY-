@@ -51,134 +51,91 @@ const verbPrepositions = {
   "participate": "in（〜に参加する）"
 };
 
-// 単語ごとのユニークな世界観・文脈データベース（主要単語のニュアンス補正用）
-const wordNuances = {
-  "sword": {
-    meanings: ["【名】 剣・刀（接近戦用武器）", "【名】 武力・軍事力", "【名】 権力・裁判権（権威の象徴）"],
-    examples: [
-      { en: "He drew his sword to protect the kingdom.", jp: "彼は王国を守るため剣を抜いた。" },
-      { en: "The knight was skilled in the art of the sword.", jp: "その騎士は剣術に長けていた。" }
-    ]
-  },
-  "plant": {
-    meanings: ["【名】 植物・草木", "【名】 工場・発電所（大規模生産施設）", "【動】 〜を植える・栽培する", "【動】 〜を設置する・仕込む"],
-    examples: [
-      { en: "They built a new power plant near the river.", jp: "彼らは川の近くに新しい発電所を建設した。" },
-      { en: "She decided to plant roses in her garden.", jp: "彼女は庭にバラを植えることにした。" }
-    ]
-  },
-  "dwell": {
-    meanings: ["【動】 居住する・住む（特定の場所に宿る）", "【動】 長々と考える・固執する（dwell on）"],
-    examples: [
-      { en: "Ancient tribes used to dwell in these mountain caves.", jp: "古代の部族はこの山の洞窟に住んでいた。" },
-      { en: "Don't dwell on past mistakes; focus on the future.", jp: "過去の過ちに固執せず、未来に集中しなさい。" }
-    ]
-  },
-  "slay": {
-    meanings: ["【動】 （戦闘で）〜を討ち取る・殺害する", "【動】 〜を圧倒する・爆笑させる（口語）"],
-    examples: [
-      { en: "The hero journeyed into the dark cave to slay the dragon.", jp: "勇者はドラゴンを討伐するため暗い洞窟へ旅立った。" }
-    ]
-  }
-};
-
-const posJP = {
-  "noun": "【名】",
-  "verb": "【動】",
-  "adjective": "【形】",
-  "adverb": "【副】",
-  "preposition": "【前】",
-  "conjunction": "【接】",
-  "pronoun": "【代】",
-  "interjection": "【感】"
-};
-
 function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// 翻訳ヘルパー（語尾の整理付き）
-async function translateToJP(text) {
-  if (!text) return "";
-  try {
-    const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(text)}`);
-    const data = await res.json();
-    let translated = data[0].map(item => item[0]).join("");
-    return translated.replace(/[。\.]$/g, '').trim();
-  } catch (e) {
-    return text;
-  }
-}
-
-// 📖 辞書API + 独自ニュアンスによる単語情報の自動生成
-async function generateWordDetails(word) {
-  const lowerWord = word.toLowerCase().trim();
-
-  // 1. 独自データベースに登録がある場合（世界観を最優先）
-  if (wordNuances[lowerWord]) {
-    return {
-      meanings: wordNuances[lowerWord].meanings,
-      examples: wordNuances[lowerWord].examples,
-      audioUrl: ""
-    };
-  }
-
+// 🤖 AIで単語固有の意味・ニュアンス・実用例文を自動生成する（トークン不要）
+async function generateAIContent(word) {
   let result = {
     meanings: [],
-    examples: [],
-    audioUrl: ""
+    examples: []
   };
 
+  const prompt = `You are an expert lexicographer for English language learners.
+For the word "${word}", output its concise core Japanese meanings with part of speech tags (like 【名】【動】【形】), and 2 natural, practical example sentences with Japanese translations that highlight the unique context of "${word}".
+
+Format strictly as:
+MEANING: 【品詞】 簡潔な意味
+EN: Practical English sentence
+JP: 自然な日本語訳`;
+
   try {
-    const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(cleanWord = word)}`);
-    
-    if (dictRes.ok) {
-      const dictData = await dictRes.json();
-      const entry = dictData[0];
+    const response = await fetch("https://text.pollinations.ai/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: prompt }],
+        model: "openai"
+      })
+    });
 
-      // 音声取得
-      const audioObj = entry?.phonetics?.find(p => p.audio && p.audio.length > 0);
-      if (audioObj) result.audioUrl = audioObj.audio;
+    if (response.ok) {
+      const text = await response.text();
+      const lines = text.split("\n").map(l => l.trim()).filter(l => l);
+      let currentEn = "";
 
-      // 品詞別に簡潔な訳を作成
-      if (entry.meanings) {
-        for (const m of entry.meanings) {
-          const tag = posJP[m.partOfSpeech] || `【${m.partOfSpeech}】`;
-          const def = m.definitions[0];
-          if (def) {
-            let jpDef = await translateToJP(def.definition);
-            // 簡潔化処理：長文解説を切り詰める
-            if (jpDef.length > 35) {
-              jpDef = jpDef.substring(0, 35) + "…";
-            }
-            result.meanings.push(`${tag} ${jpDef}`);
-
-            // 辞書の例文取得
-            if (def.example && result.examples.length < 2) {
-              const jpEx = await translateToJP(def.example);
-              result.examples.push({ en: def.example, jp: jpEx });
-            }
-          }
+      for (const line of lines) {
+        if (line.startsWith("MEANING:")) {
+          const m = line.replace("MEANING:", "").trim();
+          if (m) result.meanings.push(m);
+        } else if (line.startsWith("EN:")) {
+          currentEn = line.replace("EN:", "").trim();
+        } else if (line.startsWith("JP:") && currentEn) {
+          const jp = line.replace("JP:", "").trim();
+          result.examples.push({ en: currentEn, jp: jp });
+          currentEn = "";
         }
       }
     }
   } catch (e) {
-    console.error("辞書取得エラー:", e);
+    console.error("AI通信エラー:", e);
   }
 
-  // フォールバック処理（シンプルで実践的な文脈）
+  // 万が一エラーが起きた場合の予備（Google翻訳API）
   if (result.meanings.length === 0) {
-    const fallbackJP = await translateToJP(word);
-    result.meanings.push(`【訳】 ${fallbackJP}`);
+    try {
+      const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(word)}`);
+      const data = await res.json();
+      result.meanings.push(`【訳】 ${data[0][0][0]}`);
+    } catch(e) {
+      result.meanings.push(`【訳】 ${word}`);
+    }
   }
 
   if (result.examples.length === 0) {
-    const sampleEn1 = `They analyzed the core meaning of ${word}.`;
-    const sampleJp1 = await translateToJP(sampleEn1);
-    result.examples.push({ en: sampleEn1, jp: sampleJp1 });
+    result.examples.push({
+      en: `This situation relates directly to ${word}.`,
+      jp: `この状況は${word}に直接関連しています。`
+    });
   }
 
   return result;
+}
+
+// 音声URLの取得
+async function getAudioUrl(word) {
+  try {
+    const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
+    if (dictRes.ok) {
+      const dictData = await dictRes.json();
+      const audioObj = dictData[0]?.phonetics?.find(p => p.audio && p.audio.length > 0);
+      return audioObj ? audioObj.audio : "";
+    }
+  } catch (e) {
+    return "";
+  }
+  return "";
 }
 
 // --- フォルダ操作 ---
@@ -392,18 +349,21 @@ window.addWord = async function(folderId, word){
   if (verbPrepositions[lowerWord]) prepNote = verbPrepositions[lowerWord];
   if (irregularVerbs[lowerWord]) inflections = irregularVerbs[lowerWord];
 
-  // 固有ニュアンスを意識した意味・例文取得
-  const details = await generateWordDetails(cleanWord);
+  // 音声・AI生成コンテンツを取得
+  const [audioUrl, aiResult] = await Promise.all([
+    getAudioUrl(cleanWord),
+    generateAIContent(cleanWord)
+  ]);
 
   const folder = folders.find(f => f.id === folderId);
   if (folder) {
     folder.words.push({
       word: cleanWord,
-      audio: details.audioUrl,
-      meanings: details.meanings,
+      audio: audioUrl,
+      meanings: aiResult.meanings,
       inflections: inflections,
       prepNote: prepNote,
-      examples: details.examples
+      examples: aiResult.examples
     });
     save();
     render();
@@ -440,7 +400,7 @@ function render(){
 
       ${!isCollapsed ? `
         <div style="margin-top: 12px;">
-          <input placeholder="単語を入力してEnter (文脈を意識した意味・例文を生成)"
+          <input placeholder="単語を入力してEnter (AIが固有の意味と自然な例文を生成します)"
             onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }"
             style="width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px; border: 1px solid #cbd5e1; border-radius: 4px;"
           >
