@@ -55,72 +55,69 @@ function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// 🤖 高精度AI（Puter.js経由）による市販単語帳データ生成
+// 🤖 JSON出力指示による確実な単語帳データ生成
 async function fetchAIContent(word) {
   let result = {
     meanings: [],
     examples: []
   };
 
-  const prompt = `あなたは日本の難関大学受験・資格試験向け英単語帳の専門編集者です。
-英単語「${word}」について、以下の【出力フォーマット】に厳格に従ってデータを生成してください。
+  const prompt = `英単語「${word}」の単語帳データを生成してください。
+返答は余計な解説を一切含めず、純粋なJSONオブジェクトのみを出力してください。
 
-【出力ルール】
-1. MEANING: 品詞タグ（【名】【動】【形】【副】など）をつけ、重要度の高い意味を記載してください。最も重要なコアの意味には <span style="color:#e11d48; font-weight:bold;">核心の意味</span> というHTMLタグをつけて赤字太字にしてください。類義語がある場合は [= 類義語] も含めてください。
-2. 品詞や意味が複数ある場合は、MEANINGの行を2〜3行出力してください。
-3. EX1_EN / EX1_JP: 単語の主要な意味を使った、自然で実践的な英文と日本語訳①
-4. EX2_EN / EX2_JP: 別の文脈や派生的な意味を使った、自然で実践的な英文と日本語訳②
+JSON構造の仕様:
+{
+  "meanings": [
+    "【品詞】 <span style=\\"color:#e11d48; font-weight:bold;\\">コアの意味</span> [= 類義語], 派生的な意味",
+    "【別品詞】 別の品詞の意味（複数ある場合）"
+  ],
+  "examples": [
+    {
+      "en": "自然で実践的な英語の例文1",
+      "jp": "例文1の日本語訳"
+    },
+    {
+      "en": "文脈の異なる英語の例文2",
+      "jp": "例文2の日本語訳"
+    }
+  ]
+}
 
-【出力フォーマット】（余計な挨拶やコードブロックは含めず、以下の行のみを出力）
-MEANING: 【品詞】 <span style="color:#e11d48; font-weight:bold;">コアの意味</span> [= 類義語], 別の意味
-MEANING: 【別品詞】 別の品詞の意味（あれば）
-EX1_EN: 実践英文1
-EX1_JP: 自然な日本語訳1
-EX2_EN: 実践英文2
-EX2_JP: 自然な日本語訳2`;
+※コアの意味（赤字強調したい箇所）には必ず <span style="color:#e11d48; font-weight:bold;"> </span> のHTMLタグを含めてください。`;
 
   try {
-    let responseText = "";
-
     if (typeof puter !== "undefined" && puter.ai) {
-      // Puter.js 経由で Claude / GPT モデルを呼び出し
       const res = await puter.ai.chat(prompt);
-      responseText = typeof res === 'string' ? res : res?.message?.content || "";
-    } else {
-      // フォールバック処理
-      const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(word)}`);
-      const data = await res.json();
-      responseText = `MEANING: 【訳】 <span style="color:#e11d48; font-weight:bold;">${data[0][0][0]}</span>`;
-    }
+      let responseText = typeof res === 'string' ? res : res?.message?.content || "";
 
-    const lines = responseText.split("\n").map(l => l.trim()).filter(l => l);
-    let tempEx1 = {}, tempEx2 = {};
-
-    for (const line of lines) {
-      if (line.startsWith("MEANING:")) {
-        const m = line.replace("MEANING:", "").trim();
-        if (m) result.meanings.push(m);
-      } else if (line.startsWith("EX1_EN:")) {
-        tempEx1.en = line.replace("EX1_EN:", "").trim();
-      } else if (line.startsWith("EX1_JP:")) {
-        tempEx1.jp = line.replace("EX1_JP:", "").trim();
-      } else if (line.startsWith("EX2_EN:")) {
-        tempEx2.en = line.replace("EX2_EN:", "").trim();
-      } else if (line.startsWith("EX2_JP:")) {
-        tempEx2.jp = line.replace("EX2_JP:", "").trim();
+      // JSONブロックの抽出（```json ~ ``` の除去）
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(parsed.meanings)) result.meanings = parsed.meanings;
+        if (Array.isArray(parsed.examples)) result.examples = parsed.examples;
       }
     }
-
-    if (tempEx1.en && tempEx1.jp) result.examples.push(tempEx1);
-    if (tempEx2.en && tempEx2.jp) result.examples.push(tempEx2);
-
   } catch (e) {
-    console.error("AI通信エラー:", e);
+    console.error("AI通信・JSONパースエラー:", e);
   }
 
-  // 万が一データが欠けた場合のフォールバック
+  // 万が一エラーが出た場合のフォールバック（辞書Web翻訳API）
   if (result.meanings.length === 0) {
-    result.meanings.push(`【訳】 <span style="color:#e11d48; font-weight:bold;">${word}</span>`);
+    try {
+      const transRes = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(word)}`);
+      const transData = await transRes.json();
+      result.meanings.push(`【訳】 <span style="color:#e11d48; font-weight:bold;">${transData[0][0][0]}</span>`);
+    } catch (e) {
+      result.meanings.push(`【訳】 <span style="color:#e11d48; font-weight:bold;">${word}</span>`);
+    }
+  }
+
+  if (result.examples.length === 0) {
+    result.examples.push({
+      en: `She studied the history and usage of ${word}.`,
+      jp: `彼女は${word}の歴史と用法を研究した。`
+    });
   }
 
   return result;
