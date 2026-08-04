@@ -3,21 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IFTY AI</title>
+<title>IFTY AI単語帳</title>
 <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-<header>
-  <h1>📚 IFTY AI単語帳</h1>
+<header style="text-align: center; margin-bottom: 20px;">
+  <h1>📚 IFTY 単語帳</h1>
 </header>
 
-<main>
+<main style="max-width: 800px; margin: 0 auto; padding: 0 16px;">
 
-<section>
-  <input id="folderName" placeholder="フォルダ名">
-  <button id="createFolderBtn">作成</button>
+<section style="display: flex; gap: 8px; margin-bottom: 20px;">
+  <input id="folderName" placeholder="新しいフォルダ名を入力..." style="flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px;">
+  <button id="createFolderBtn" style="padding: 10px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">作成</button>
 </section>
 
 <section id="folders"></section>
