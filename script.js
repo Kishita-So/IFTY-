@@ -20,7 +20,7 @@ const irregularVerbs = {
   "slay": "slay - slew - slain - slaying",
   "forgive": "forgive - forgave - forgiven - forgiving",
   "say": "say - said - said - saying",
-  "give": "give - gave - given - giving",
+  "give": "give - gave - given - font-giving",
   "do": "do - did - done - doing",
   "go": "go - went - gone - going",
   "see": "see - saw - seen - seeing",
@@ -55,56 +55,76 @@ function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// 📖 市販単語帳風の「ニュアンス・同義語・例文」を生成するAIプロンプト
+// 高性能AI（Puter.js経由）による多義語・例文の自動生成
 async function generateAIContent(word) {
   let result = {
     meanings: [],
     examples: []
   };
 
-  const prompt = `You are editing a Japanese high-grade vocabulary book (like Pass-Tan).
-For the English word "${word}", produce:
-1. Core Japanese meaning with red emphasis style and synonym in brackets if available (e.g. <span style="color:#e11d48; font-weight:bold;">大勝利</span> [= great victory], 反動 [= reaction]).
-2. 1 highly practical, authentic example sentence where the target word is used naturally, with a smooth Japanese translation.
+  const prompt = `あなたは難関英語資格・大学受験向け英単語帳の専門編集者です。
+英単語「${word}」について、以下のフォーマットで出力してください。
 
-Strict Output Format:
-MEANING: [Part of speech tag like 【名】/【動】/【形】] <span style="color:#e11d48; font-weight:bold;">Core Meaning</span> [= synonym/nuance] secondary meaning
-EN: Example sentence containing ${word}
-JP: Natural Japanese translation`;
+【ルール】
+1. MEANING: 品詞タグ（【名】【動】【形】【副】等）をつけて、重要度の高い意味を2〜4つ抽出してください。一番重要なコアの意味には赤字タグ <span style="color:#e11d48; font-weight:bold;">意味</span> を使ってください。同義語がある場合は [= 類義語] も記載してください。
+2. EX1_EN: 単語のニュアンスが伝わる実践的で自然な英文①
+3. EX1_JP: ①の自然な日本語訳
+4. EX2_EN: 別の文脈や意味で使われている自然な英文②
+5. EX2_JP: ②の自然な日本語訳
+
+出力フォーマット（余計な挨拶や解説は一切含めず、この通りに出力してください）:
+MEANING: 【品詞】 <span style="color:#e11d48; font-weight:bold;">コアの意味</span> [= 類義語], 2つ目の意味
+MEANING: 【別品詞】 別の意味（あれば）
+EX1_EN: 例文1
+EX1_JP: 訳1
+EX2_EN: 例文2
+EX2_JP: 訳2`;
 
   try {
-    const response = await fetch("https://text.pollinations.ai/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: [{ role: "user", content: prompt }],
-        model: "openai"
-      })
-    });
+    let responseText = "";
 
-    if (response.ok) {
-      const text = await response.text();
-      const lines = text.split("\n").map(l => l.trim()).filter(l => l);
-      let currentEn = "";
+    // Puter.js が利用可能な場合（高性能モデルを呼び出し）
+    if (typeof puter !== "undefined" && puter.ai) {
+      const response = await puter.ai.chat(prompt, { model: 'claude-3-5-sonnet' });
+      responseText = typeof response === 'string' ? response : response?.message?.content || "";
+    } else {
+      // フォールバック（Pollinations API）
+      const res = await fetch("https://text.pollinations.ai/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+      if (res.ok) responseText = await res.text();
+    }
 
-      for (const line of lines) {
-        if (line.startsWith("MEANING:")) {
-          const m = line.replace("MEANING:", "").trim();
-          if (m) result.meanings.push(m);
-        } else if (line.startsWith("EN:")) {
-          currentEn = line.replace("EN:", "").trim();
-        } else if (line.startsWith("JP:") && currentEn) {
-          const jp = line.replace("JP:", "").trim();
-          result.examples.push({ en: currentEn, jp: jp });
-          currentEn = "";
-        }
+    const lines = responseText.split("\n").map(l => l.trim()).filter(l => l);
+    let tempEx = {};
+
+    for (const line of lines) {
+      if (line.startsWith("MEANING:")) {
+        const m = line.replace("MEANING:", "").trim();
+        if (m) result.meanings.push(m);
+      } else if (line.startsWith("EX1_EN:")) {
+        tempEx.en1 = line.replace("EX1_EN:", "").trim();
+      } else if (line.startsWith("EX1_JP:")) {
+        tempEx.jp1 = line.replace("EX1_JP:", "").trim();
+      } else if (line.startsWith("EX2_EN:")) {
+        tempEx.en2 = line.replace("EX2_EN:", "").trim();
+      } else if (line.startsWith("EX2_JP:")) {
+        tempEx.jp2 = line.replace("EX2_JP:", "").trim();
       }
     }
+
+    if (tempEx.en1 && tempEx.jp1) result.examples.push({ en: tempEx.en1, jp: tempEx.jp1 });
+    if (tempEx.en2 && tempEx.jp2) result.examples.push({ en: tempEx.en2, jp: tempEx.jp2 });
+
   } catch (e) {
     console.error("AI生成エラー:", e);
   }
 
-  // フォールバック処理
+  // 万が一の予備フォールバック処理
   if (result.meanings.length === 0) {
     try {
       const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(word)}`);
@@ -117,8 +137,8 @@ JP: Natural Japanese translation`;
 
   if (result.examples.length === 0) {
     result.examples.push({
-      en: `The concept of ${word} plays an important role here.`,
-      jp: `ここで${word}の概念が重要な役割を果たします。`
+      en: `The analysis of ${word} requires careful consideration.`,
+      jp: `${word}の分析には慎重な検討が必要です。`
     });
   }
 
@@ -372,7 +392,7 @@ window.addWord = async function(folderId, word){
   }
 };
 
-// --- 画面描画（市販単語帳レイアウト風） ---
+// --- 画面描画（市販単語帳レイアウト） ---
 function render(){
   if (!foldersEl) return;
   foldersEl.innerHTML = "";
@@ -402,7 +422,7 @@ function render(){
 
       ${!isCollapsed ? `
         <div style="margin-top: 12px;">
-          <input placeholder="単語を入力してEnter (市販単語帳風の意味・同義語・例文を生成)"
+          <input placeholder="単語を入力してEnter (複数の意味・高精度の例文を自動生成)"
             onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }"
             style="width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px; border: 1px solid #cbd5e1; border-radius: 4px;"
           >
