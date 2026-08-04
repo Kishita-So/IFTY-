@@ -20,7 +20,7 @@ const irregularVerbs = {
   "slay": "slay - slew - slain - slaying",
   "forgive": "forgive - forgave - forgiven - forgiving",
   "say": "say - said - said - saying",
-  "give": "give - gave - given - font-giving",
+  "give": "give - gave - given - giving",
   "do": "do - did - done - doing",
   "go": "go - went - gone - going",
   "see": "see - saw - seen - seeing",
@@ -55,90 +55,73 @@ function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// 高性能AI（Puter.js経由）による多義語・例文の自動生成
-async function generateAIContent(word) {
+// 🤖 AI（OpenAIモデル互換エンドポイント）で自然な単語帳データを出力
+async function fetchAIContent(word) {
   let result = {
     meanings: [],
     examples: []
   };
 
-  const prompt = `あなたは難関英語資格・大学受験向け英単語帳の専門編集者です。
-英単語「${word}」について、以下のフォーマットで出力してください。
+  const systemPrompt = "あなたは日本の高校生・受験生向けの英単語帳（パス単など）を執筆するプロの編集者です。指示されたフォーマットを厳格に守って出力してください。";
+  const userPrompt = `英単語: "${word}"
 
-【ルール】
-1. MEANING: 品詞タグ（【名】【動】【形】【副】等）をつけて、重要度の高い意味を2〜4つ抽出してください。一番重要なコアの意味には赤字タグ <span style="color:#e11d48; font-weight:bold;">意味</span> を使ってください。同義語がある場合は [= 類義語] も記載してください。
-2. EX1_EN: 単語のニュアンスが伝わる実践的で自然な英文①
-3. EX1_JP: ①の自然な日本語訳
-4. EX2_EN: 別の文脈や意味で使われている自然な英文②
-5. EX2_JP: ②の自然な日本語訳
+以下のフォーマットに従って、日本語訳と自然な実践例文を2つ作成してください。
 
-出力フォーマット（余計な挨拶や解説は一切含めず、この通りに出力してください）:
-MEANING: 【品詞】 <span style="color:#e11d48; font-weight:bold;">コアの意味</span> [= 類義語], 2つ目の意味
-MEANING: 【別品詞】 別の意味（あれば）
-EX1_EN: 例文1
-EX1_JP: 訳1
-EX2_EN: 例文2
-EX2_JP: 訳2`;
+【フォーマット】
+MEANING: 【品詞】 <span style="color:#e11d48; font-weight:bold;">一番重要・コアな意味</span> [= 類義語] 派生的な意味
+MEANING: 【別の品詞】 別の品詞の意味（あれば）
+EX: 英語の例文1
+JP: 例文1の自然な日本語訳
+EX: 英語の例文2
+JP: 例文2の自然な日本語訳
+
+※余計な挨拶や解説は一切含めず、上記のフォーマット行のみを出力してください。`;
 
   try {
-    let responseText = "";
+    const response = await fetch("https://text.pollinations.ai/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        seed: Math.floor(Math.random() * 100000)
+      })
+    });
 
-    // Puter.js が利用可能な場合（高性能モデルを呼び出し）
-    if (typeof puter !== "undefined" && puter.ai) {
-      const response = await puter.ai.chat(prompt, { model: 'claude-3-5-sonnet' });
-      responseText = typeof response === 'string' ? response : response?.message?.content || "";
-    } else {
-      // フォールバック（Pollinations API）
-      const res = await fetch("https://text.pollinations.ai/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [{ role: "user", content: prompt }]
-        })
-      });
-      if (res.ok) responseText = await res.text();
-    }
+    if (response.ok) {
+      const text = await response.text();
+      const lines = text.split("\n").map(l => l.trim()).filter(l => l);
 
-    const lines = responseText.split("\n").map(l => l.trim()).filter(l => l);
-    let tempEx = {};
+      let currentEn = "";
 
-    for (const line of lines) {
-      if (line.startsWith("MEANING:")) {
-        const m = line.replace("MEANING:", "").trim();
-        if (m) result.meanings.push(m);
-      } else if (line.startsWith("EX1_EN:")) {
-        tempEx.en1 = line.replace("EX1_EN:", "").trim();
-      } else if (line.startsWith("EX1_JP:")) {
-        tempEx.jp1 = line.replace("EX1_JP:", "").trim();
-      } else if (line.startsWith("EX2_EN:")) {
-        tempEx.en2 = line.replace("EX2_EN:", "").trim();
-      } else if (line.startsWith("EX2_JP:")) {
-        tempEx.jp2 = line.replace("EX2_JP:", "").trim();
+      for (const line of lines) {
+        if (line.startsWith("MEANING:")) {
+          const m = line.replace("MEANING:", "").trim();
+          if (m) result.meanings.push(m);
+        } else if (line.startsWith("EX:")) {
+          currentEn = line.replace("EX:", "").trim();
+        } else if (line.startsWith("JP:") && currentEn) {
+          const jp = line.replace("JP:", "").trim();
+          result.examples.push({ en: currentEn, jp: jp });
+          currentEn = "";
+        }
       }
     }
-
-    if (tempEx.en1 && tempEx.jp1) result.examples.push({ en: tempEx.en1, jp: tempEx.jp1 });
-    if (tempEx.en2 && tempEx.jp2) result.examples.push({ en: tempEx.en2, jp: tempEx.jp2 });
-
   } catch (e) {
-    console.error("AI生成エラー:", e);
+    console.error("AI通信エラー:", e);
   }
 
-  // 万が一の予備フォールバック処理
+  // 万が一AIの取得に失敗した場合のバックアップ
   if (result.meanings.length === 0) {
-    try {
-      const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(word)}`);
-      const data = await res.json();
-      result.meanings.push(`【訳】 <span style="color:#e11d48; font-weight:bold;">${data[0][0][0]}</span>`);
-    } catch(e) {
-      result.meanings.push(`【訳】 <span style="color:#e11d48; font-weight:bold;">${word}</span>`);
-    }
+    result.meanings.push(`【訳】 <span style="color:#e11d48; font-weight:bold;">${word}</span>`);
   }
 
   if (result.examples.length === 0) {
     result.examples.push({
-      en: `The analysis of ${word} requires careful consideration.`,
-      jp: `${word}の分析には慎重な検討が必要です。`
+      en: `The concept of ${word} plays an important role here.`,
+      jp: `ここで${word}の概念が重要な役割を果たします。`
     });
   }
 
@@ -371,10 +354,10 @@ window.addWord = async function(folderId, word){
   if (verbPrepositions[lowerWord]) prepNote = verbPrepositions[lowerWord];
   if (irregularVerbs[lowerWord]) inflections = irregularVerbs[lowerWord];
 
-  // 音声・AIコンテンツを一括取得
-  const [audioUrl, aiResult] = await Promise.all([
+  // 音声とAIによる詳細データを取得
+  const [audioUrl, aiData] = await Promise.all([
     getAudioUrl(cleanWord),
-    generateAIContent(cleanWord)
+    fetchAIContent(cleanWord)
   ]);
 
   const folder = folders.find(f => f.id === folderId);
@@ -382,17 +365,17 @@ window.addWord = async function(folderId, word){
     folder.words.push({
       word: cleanWord,
       audio: audioUrl,
-      meanings: aiResult.meanings,
+      meanings: aiData.meanings,
       inflections: inflections,
       prepNote: prepNote,
-      examples: aiResult.examples
+      examples: aiData.examples
     });
     save();
     render();
   }
 };
 
-// --- 画面描画（市販単語帳レイアウト） ---
+// --- 画面描画 ---
 function render(){
   if (!foldersEl) return;
   foldersEl.innerHTML = "";
@@ -422,7 +405,7 @@ function render(){
 
       ${!isCollapsed ? `
         <div style="margin-top: 12px;">
-          <input placeholder="単語を入力してEnter (複数の意味・高精度の例文を自動生成)"
+          <input placeholder="単語を入力してEnter (AIが意味・同義語・例文を生成)"
             onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }"
             style="width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px; border: 1px solid #cbd5e1; border-radius: 4px;"
           >
@@ -464,8 +447,8 @@ function render(){
               
               <div style="margin-top: 10px; background: #fff5f5; padding: 10px; border-radius: 6px; border: 1px solid #ffe4e6;">
                 <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; background: #ffffff; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; color: #64748b; border: 1px solid #f1f5f9;">
-                  <span>マーカー/文字色:</span>
-                  <button onmousedown="event.preventDefault(); applyColorToSelection('#e11d48');" style="background:#e11d48; border:none; width:16px; height:16px; border-radius:50%; cursor:pointer;" title="赤（重要語）"></button>
+                  <span>文字色変更:</span>
+                  <button onmousedown="event.preventDefault(); applyColorToSelection('#e11d48');" style="background:#e11d48; border:none; width:16px; height:16px; border-radius:50%; cursor:pointer;" title="赤"></button>
                   <button onmousedown="event.preventDefault(); applyColorToSelection('#2563eb');" style="background:#2563eb; border:none; width:16px; height:16px; border-radius:50%; cursor:pointer;" title="青"></button>
                   <button onmousedown="event.preventDefault(); applyColorToSelection('#059669');" style="background:#059669; border:none; width:16px; height:16px; border-radius:50%; cursor:pointer;" title="緑"></button>
                   <button onmousedown="event.preventDefault(); applyColorToSelection('#0f172a');" style="background:#0f172a; border:none; width:16px; height:16px; border-radius:50%; cursor:pointer;" title="黒"></button>
@@ -480,7 +463,7 @@ function render(){
                           contenteditable="true" 
                           onblur="updateMeaningHTML(${folder.id}, ${wordIndex}, ${meaningIndex}, this.innerHTML)"
                           style="outline: none; padding: 2px 4px; font-size: 1.05em; color: #1e293b; border-radius: 4px;"
-                          title="クリックして文字を直接編集可能"
+                          title="クリックして直接編集可能"
                         >${textContent}</div>
                       </li>
                     `;
@@ -490,7 +473,7 @@ function render(){
 
               <div style="margin-top: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; font-size: 0.9em; border: 1px solid #e2e8f0;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px;">
-                  <span style="font-weight: bold; color: #334155;">📖 単語帳例文</span>
+                  <span style="font-weight: bold; color: #334155;">📖 AI生成例文</span>
                   <button onclick="addExample(${folder.id}, ${wordIndex})" style="background:#10b981; color:white; border:none; padding:2px 8px; border-radius:4px; font-size:0.8em; cursor:pointer;">➕ 例文追加</button>
                 </div>
 
