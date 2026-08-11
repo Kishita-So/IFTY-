@@ -21,7 +21,7 @@ function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// 🤖 Cloudflare Worker経由でフル機能データ取得
+// 🤖 AIデータ取得
 async function fetchAIContent(word) {
   try {
     const res = await fetch(WORKER_URL, {
@@ -50,20 +50,13 @@ async function fetchAIContent(word) {
   }
 
   return {
-    phonetics: "",
-    inflections: "",
-    derivatives: "",
-    synonyms: "",
-    antonyms: "",
-    memoryTip: "",
-    nuance: "",
-    usUkSpelling: "",
+    phonetics: "", inflections: "", derivatives: "", synonyms: "", antonyms: "", memoryTip: "", nuance: "", usUkSpelling: "",
     meanings: [`【訳】 <span style="color:#e11d48; font-weight:bold;">${word}</span>`],
     examples: [{ en: `Example with ${word}.`, jp: `${word}の例文` }]
   };
 }
 
-// 💬 AI自由質問（チャット）機能
+// 💬 AI自由質問（チャット＆折りたたみ＆YouTube風深掘り）
 window.askAIChat = async function(customQuery = null) {
   const inputEl = document.getElementById("aiChatInput");
   const resultEl = document.getElementById("aiChatResult");
@@ -73,7 +66,7 @@ window.askAIChat = async function(customQuery = null) {
 
   if (inputEl) inputEl.value = query;
   resultEl.style.display = "block";
-  resultEl.innerHTML = "⏳ AIが回答を作成中...";
+  resultEl.innerHTML = "⏳ AIが深掘り回答を作成中...";
 
   try {
     const res = await fetch(WORKER_URL, {
@@ -85,7 +78,27 @@ window.askAIChat = async function(customQuery = null) {
     if (res.ok) {
       const data = await res.json();
       const formattedAnswer = data.answer.replace(/\n/g, "<br>");
-      resultEl.innerHTML = `<b>💡 AIの回答:</b><br>${formattedAnswer}`;
+      
+      const followUpsHtml = (data.followUps && data.followUps.length > 0) ? `
+        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #cbd5e1;">
+          <div style="font-size: 0.85em; color: #166534; font-weight: bold; margin-bottom: 6px;">▶ YouTube風おすすめ深掘り質問:</div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            ${data.followUps.map(f => `
+              <button onclick="askAIChat('${f.replace(/'/g, "\\'")}')" style="background:#e8f5e9; color:#2e7d32; border:1px solid #a5d6a7; padding:4px 10px; border-radius:16px; font-size:0.8em; cursor:pointer;">🔍 ${f}</button>
+            `).join('')}
+          </div>
+        </div>
+      ` : '';
+
+      resultEl.innerHTML = `
+        <details open style="cursor: pointer;">
+          <summary style="font-weight: bold; color: #166534; margin-bottom: 8px;">💡 AIの回答（タップで開閉）</summary>
+          <div style="margin-top: 6px; color: #1e293b; line-height: 1.6;">
+            ${formattedAnswer}
+            ${followUpsHtml}
+          </div>
+        </details>
+      `;
     } else {
       resultEl.innerHTML = "❌ 回答を取得できませんでした。";
     }
@@ -94,7 +107,7 @@ window.askAIChat = async function(customQuery = null) {
   }
 };
 
-// 音声再生用URLの取得
+// 音声再生
 async function getAudioUrl(word) {
   try {
     const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
@@ -182,7 +195,6 @@ window.transferWordToFolder = function(sourceFolderId, wordIndex, targetFolderId
   }
 };
 
-// 単語テキスト自体の直接編集
 window.updateWordText = function(folderId, wordIndex, newWord) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wordIndex]) {
@@ -238,6 +250,11 @@ function speakFallback(text) {
   }
 }
 
+// 選択時に文字を全選択（文字を入力すると消える）にするヘルパー
+window.selectAllOnFocus = function(el) {
+  window.getSelection().selectAllChildren(el);
+};
+
 // --- 単語追加処理（AI自動生成） ---
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
@@ -260,21 +277,13 @@ window.addWord = async function(folderId, word){
   }
 };
 
-// 📝 白紙カード追加処理（手動用）
+// 📝 白紙カード追加処理（手動用プレースホルダー化）
 window.addBlankWord = function(folderId) {
   const folder = folders.find(f => f.id === folderId);
   if (folder) {
     folder.words.push({
       word: "New Word",
-      audio: "",
-      phonetics: "",
-      inflections: "",
-      derivatives: "",
-      synonyms: "",
-      antonyms: "",
-      memoryTip: "",
-      nuance: "",
-      usUkSpelling: "",
+      audio: "", phonetics: "", inflections: "", derivatives: "", synonyms: "", antonyms: "", memoryTip: "", nuance: "", usUkSpelling: "",
       meanings: ["【品詞】 ここに意味を入力"],
       examples: [{ en: "English Example", jp: "日本語訳" }]
     });
@@ -288,7 +297,7 @@ function render(){
   if (!foldersEl) return;
   foldersEl.innerHTML = "";
 
-  // 🤖 AI自由質問相談室（上部設置）
+  // 🤖 AI自由質問相談室
   const chatBox = document.createElement("div");
   chatBox.style.cssText = "background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px; margin-bottom: 20px;";
   chatBox.innerHTML = `
@@ -309,7 +318,7 @@ function render(){
       <button onclick="askAIChat('「誰何する」に相当する単語・表現は？')" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; padding:3px 8px; border-radius:12px; font-size:0.75em; cursor:pointer;">💡 「誰何」の英語</button>
     </div>
 
-    <div id="aiChatResult" style="display: none; background: #ffffff; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.9em; color: #1e293b; line-height: 1.6;"></div>
+    <div id="aiChatResult" style="display: none; background: #ffffff; padding: 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.9em; color: #1e293b; line-height: 1.6;"></div>
   `;
   foldersEl.appendChild(chatBox);
 
@@ -352,7 +361,11 @@ function render(){
               
               <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px; flex-wrap: wrap; gap: 6px;">
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                  <b contenteditable="true" onblur="updateWordText(${folder.id}, ${wordIndex}, this.innerText)" style="font-size: 1.4em; color: #0f172a; outline: none; border-bottom: 1px dashed #cbd5e1;" title="クリックして単語名を編集">${w.word}</b>
+                  <b contenteditable="true" 
+                     onfocus="selectAllOnFocus(this)"
+                     onblur="updateWordText(${folder.id}, ${wordIndex}, this.innerText)" 
+                     style="font-size: 1.4em; color: #0f172a; outline: none; border-bottom: 1px dashed #cbd5e1;" 
+                     title="クリックで入力可能">${w.word}</b>
                   ${w.phonetics ? `<span style="color: #64748b; font-size: 0.9em; font-family: monospace;">${w.phonetics}</span>` : ''}
                   <button onclick="playAudio('${w.audio}', '${w.word}')" style="background:#e11d48; color:white; border:none; border-radius:50%; width:26px; height:26px; cursor:pointer; font-size:0.8em;" title="発音を聞く">🔊</button>
                 </div>
@@ -395,7 +408,10 @@ function render(){
                 <ul style="margin: 0; padding-left: 0; list-style: none;">
                   ${w.meanings.map((m, meaningIndex) => `
                     <li style="margin-bottom: 6px; line-height: 1.5;">
-                      <div contenteditable="true" onblur="updateMeaningHTML(${folder.id}, ${wordIndex}, ${meaningIndex}, this.innerHTML)" style="outline: none; padding: 2px 4px; font-size: 1.05em; color: #1e293b; border-radius: 4px;" title="直接編集可能">${typeof m === 'object' ? (m.text || "") : m}</div>
+                      <div contenteditable="true" 
+                           onfocus="selectAllOnFocus(this)"
+                           onblur="updateMeaningHTML(${folder.id}, ${wordIndex}, ${meaningIndex}, this.innerHTML)" 
+                           style="outline: none; padding: 2px 4px; font-size: 1.05em; color: #1e293b; border-radius: 4px;">${typeof m === 'object' ? (m.text || "") : m}</div>
                     </li>
                   `).join("")}
                 </ul>
@@ -411,8 +427,8 @@ function render(){
                   <div style="margin-bottom: 8px; background: #ffffff; padding: 8px 10px; border-radius: 4px; border-left: 3px solid #3b82f6; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;">
                       <div style="flex: 1;">
-                        <p contenteditable="true" onblur="updateExampleText(${folder.id}, ${wordIndex}, ${exIndex}, 'en', this.innerText)" style="margin: 0 0 4px 0; color: #0f172a; font-weight: 600; line-height: 1.4; outline: none;">${ex.en}</p>
-                        <p contenteditable="true" onblur="updateExampleText(${folder.id}, ${wordIndex}, ${exIndex}, 'jp', this.innerText)" style="margin: 0; color: #475569; font-size: 0.92em; line-height: 1.4; outline: none;">${ex.jp}</p>
+                        <p contenteditable="true" onfocus="selectAllOnFocus(this)" onblur="updateExampleText(${folder.id}, ${wordIndex}, ${exIndex}, 'en', this.innerText)" style="margin: 0 0 4px 0; color: #0f172a; font-weight: 600; line-height: 1.4; outline: none;">${ex.en}</p>
+                        <p contenteditable="true" onfocus="selectAllOnFocus(this)" onblur="updateExampleText(${folder.id}, ${wordIndex}, ${exIndex}, 'jp', this.innerText)" style="margin: 0; color: #475569; font-size: 0.92em; line-height: 1.4; outline: none;">${ex.jp}</p>
                       </div>
                       <div style="display: flex; align-items: center; gap: 2px;">
                         <button onclick="moveExampleOrder(${folder.id}, ${wordIndex}, ${exIndex}, -1)" ${exIndex === 0 ? 'disabled' : ''} style="padding: 1px 4px; font-size: 0.7em; cursor: pointer;">▲</button>
