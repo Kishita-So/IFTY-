@@ -17,59 +17,30 @@ const folderInput = document.getElementById("folderName");
 // あなたのCloudflare WorkerのURL
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
-// 不規則動詞データベース
-const irregularVerbs = {
-  "swell": "swell - swelled - swollen/swelled - swelling",
-  "slay": "slay - slew - slain - slaying",
-  "forgive": "forgive - forgave - forgiven - forgiving",
-  "say": "say - said - said - saying",
-  "give": "give - gave - given - giving",
-  "do": "do - did - done - doing",
-  "go": "go - went - gone - going",
-  "see": "see - saw - seen - seeing",
-  "take": "take - took - taken - taking",
-  "have": "have - had - had - having",
-  "come": "come - came - come - coming",
-  "make": "make - made - made - making",
-  "speak": "speak - spoke - spoken - speaking",
-  "write": "write - wrote - written - writing",
-  "know": "know - knew - known - knowing",
-  "get": "get - got - gotten - getting",
-  "find": "find - found - found - finding",
-  "think": "think - thought - thought - thinking",
-  "dwell": "dwell - dwelt/dwelled - dwelt/dwelled - dwelling"
-};
-
-// 自動詞に伴う前置詞
-const verbPrepositions = {
-  "dwell": "on / in（〜に固執する、〜に住む）",
-  "listen": "to（〜を聴く）",
-  "depend": "on（〜に依存する）",
-  "rely": "on（〜に頼る）",
-  "look": "at / for / after（〜を見る / 探す / 世話する）",
-  "apologize": "to [人] for [事]（〜に謝罪する）",
-  "belong": "to（〜に所属する）",
-  "complain": "about / of（〜について不平を言う）",
-  "consist": "of（〜で構成される）",
-  "participate": "in（〜に参加する）"
-};
-
 function save(){
   localStorage.setItem("folders", JSON.stringify(folders));
 }
 
-// 🤖 Cloudflare Worker経由でパス単風の単語データを取得
+// 🤖 Cloudflare Worker経由でフル機能データ取得
 async function fetchAIContent(word) {
   try {
     const res = await fetch(WORKER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ word: word })
+      body: JSON.stringify({ type: "word", word: word })
     });
 
     if (res.ok) {
       const data = await res.json();
       return {
+        phonetics: data.phonetics || "",
+        inflections: data.inflections || "",
+        derivatives: data.derivatives || "",
+        synonyms: data.synonyms || "",
+        antonyms: data.antonyms || "",
+        memoryTip: data.memoryTip || "",
+        nuance: data.nuance || "",
+        usUkSpelling: data.usUkSpelling || "",
         meanings: Array.isArray(data.meanings) ? data.meanings : [`【訳】 <span style="color:#e11d48; font-weight:bold;">${word}</span>`],
         examples: Array.isArray(data.examples) ? data.examples : []
       };
@@ -78,17 +49,50 @@ async function fetchAIContent(word) {
     console.error("Worker通信エラー:", e);
   }
 
-  // 通信失敗時のフォールバック
   return {
+    phonetics: "",
+    inflections: "",
+    derivatives: "",
+    synonyms: "",
+    antonyms: "",
+    memoryTip: "",
+    nuance: "",
+    usUkSpelling: "",
     meanings: [`【訳】 <span style="color:#e11d48; font-weight:bold;">${word}</span>`],
-    examples: [
-      {
-        en: `She studied the meaning and usage of ${word}.`,
-        jp: `彼女は${word}の意味と用法を学んだ。`
-      }
-    ]
+    examples: [{ en: `Example with ${word}.`, jp: `${word}の例文` }]
   };
 }
+
+// 💬 AI自由質問（チャット）機能
+window.askAIChat = async function(customQuery = null) {
+  const inputEl = document.getElementById("aiChatInput");
+  const resultEl = document.getElementById("aiChatResult");
+  const query = customQuery || (inputEl ? inputEl.value.trim() : "");
+
+  if (!query) return;
+
+  if (inputEl) inputEl.value = query;
+  resultEl.style.display = "block";
+  resultEl.innerHTML = "⏳ AIが回答を作成中...";
+
+  try {
+    const res = await fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "chat", question: query })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const formattedAnswer = data.answer.replace(/\n/g, "<br>");
+      resultEl.innerHTML = `<b>💡 AIの回答:</b><br>${formattedAnswer}`;
+    } else {
+      resultEl.innerHTML = "❌ 回答を取得できませんでした。";
+    }
+  } catch (e) {
+    resultEl.innerHTML = "❌ エラーが発生しました。";
+  }
+};
 
 // 音声再生用URLの取得
 async function getAudioUrl(word) {
@@ -99,25 +103,16 @@ async function getAudioUrl(word) {
       const audioObj = dictData[0]?.phonetics?.find(p => p.audio && p.audio.length > 0);
       return audioObj ? audioObj.audio : "";
     }
-  } catch (e) {
-    return "";
-  }
+  } catch (e) {}
   return "";
 }
 
-// --- フォルダ操作 ---
+// --- フォルダ・単語操作 ---
 function createFolder() {
   if (!folderInput) return;
   const name = folderInput.value.trim();
   if (!name) return;
-
-  folders.push({
-    id: Date.now(),
-    name: name,
-    isCollapsed: false,
-    words: []
-  });
-
+  folders.push({ id: Date.now(), name: name, isCollapsed: false, words: [] });
   folderInput.value = "";
   save();
   render();
@@ -125,73 +120,44 @@ function createFolder() {
 
 if (createBtn) createBtn.onclick = createFolder;
 if (folderInput) {
-  folderInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      createFolder();
-    }
-  });
+  folderInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); createFolder(); } });
 }
 
 window.renameFolder = function(folderId) {
   const f = folders.find(x => x.id === folderId);
   if (f) {
-    const newName = prompt("新しいフォルダ名を入力してください:", f.name);
-    if (newName && newName.trim()) {
-      f.name = newName.trim();
-      save();
-      render();
-    }
+    const newName = prompt("新しいフォルダ名:", f.name);
+    if (newName && newName.trim()) { f.name = newName.trim(); save(); render(); }
   }
 };
 
 window.clearFolderWords = function(folderId) {
   const f = folders.find(x => x.id === folderId);
-  if (f && f.words.length > 0) {
-    if (confirm(`「${f.name}」内のすべての単語（${f.words.length}語）を全消ししますか？`)) {
-      f.words = [];
-      save();
-      render();
-    }
+  if (f && f.words.length > 0 && confirm(`「${f.name}」の全単語を消去しますか？`)) {
+    f.words = []; save(); render();
   }
 };
 
 window.moveFolder = function(index, direction) {
   const targetIndex = index + direction;
   if (targetIndex >= 0 && targetIndex < folders.length) {
-    const temp = folders[index];
-    folders[index] = folders[targetIndex];
-    folders[targetIndex] = temp;
-    save();
-    render();
+    const temp = folders[index]; folders[index] = folders[targetIndex]; folders[targetIndex] = temp;
+    save(); render();
   }
 };
 
 window.toggleFolder = function(folderId) {
   const f = folders.find(x => x.id === folderId);
-  if (f) {
-    f.isCollapsed = !f.isCollapsed;
-    save();
-    render();
-  }
+  if (f) { f.isCollapsed = !f.isCollapsed; save(); render(); }
 };
 
 window.deleteFolder = function(folderId) {
-  if (confirm("このフォルダを削除しますか？")) {
-    folders = folders.filter(f => f.id !== folderId);
-    save();
-    render();
-  }
+  if (confirm("フォルダを削除しますか？")) { folders = folders.filter(f => f.id !== folderId); save(); render(); }
 };
 
-// --- 単語操作 ---
 window.deleteWord = function(folderId, index) {
   const f = folders.find(x => x.id === folderId);
-  if (f) {
-    f.words.splice(index, 1);
-    save();
-    render();
-  }
+  if (f) { f.words.splice(index, 1); save(); render(); }
 };
 
 window.moveWordOrder = function(folderId, wordIndex, direction) {
@@ -199,11 +165,8 @@ window.moveWordOrder = function(folderId, wordIndex, direction) {
   if (f) {
     const targetIndex = wordIndex + direction;
     if (targetIndex >= 0 && targetIndex < f.words.length) {
-      const temp = f.words[wordIndex];
-      f.words[wordIndex] = f.words[targetIndex];
-      f.words[targetIndex] = temp;
-      save();
-      render();
+      const temp = f.words[wordIndex]; f.words[wordIndex] = f.words[targetIndex]; f.words[targetIndex] = temp;
+      save(); render();
     }
   }
 };
@@ -211,24 +174,27 @@ window.moveWordOrder = function(folderId, wordIndex, direction) {
 window.transferWordToFolder = function(sourceFolderId, wordIndex, targetFolderId) {
   targetFolderId = Number(targetFolderId);
   if (!targetFolderId || sourceFolderId === targetFolderId) return;
-
   const sourceF = folders.find(x => x.id === sourceFolderId);
   const targetF = folders.find(x => x.id === targetFolderId);
-
   if (sourceF && targetF) {
     const [wordToMove] = sourceF.words.splice(wordIndex, 1);
-    targetF.words.push(wordToMove);
-    save();
-    render();
+    targetF.words.push(wordToMove); save(); render();
   }
 };
 
-// --- 意味（編集・文字色変更） ---
+// 単語テキスト自体の直接編集
+window.updateWordText = function(folderId, wordIndex, newWord) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words[wordIndex]) {
+    f.words[wordIndex].word = newWord.trim();
+    save();
+  }
+};
+
 window.updateMeaningHTML = function(folderId, wordIndex, meaningIndex, newHTML) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wordIndex] && f.words[wordIndex].meanings) {
-    f.words[wordIndex].meanings[meaningIndex] = newHTML;
-    save();
+    f.words[wordIndex].meanings[meaningIndex] = newHTML; save();
   }
 };
 
@@ -236,87 +202,47 @@ window.applyColorToSelection = function(color) {
   document.execCommand('foreColor', false, color);
 };
 
-// --- 例文操作 ---
 window.updateExampleText = function(folderId, wordIndex, exIndex, key, text) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wordIndex] && f.words[wordIndex].examples[exIndex]) {
-    f.words[wordIndex].examples[exIndex][key] = text;
-    save();
+    f.words[wordIndex].examples[exIndex][key] = text; save();
   }
 };
 
 window.addExample = function(folderId, wordIndex) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wordIndex]) {
-    f.words[wordIndex].examples.push({
-      en: "Click here to edit English example.",
-      jp: "ここをクリックして日本語訳を編集。"
-    });
-    save();
-    render();
+    f.words[wordIndex].examples.push({ en: "New English example.", jp: "新しい例文の訳" });
+    save(); render();
   }
 };
 
 window.deleteExample = function(folderId, wordIndex, exIndex) {
   const f = folders.find(x => x.id === folderId);
-  if (f && f.words[wordIndex]) {
-    f.words[wordIndex].examples.splice(exIndex, 1);
-    save();
-    render();
-  }
+  if (f && f.words[wordIndex]) { f.words[wordIndex].examples.splice(exIndex, 1); save(); render(); }
 };
 
-window.moveExampleOrder = function(folderId, wordIndex, exIndex, direction) {
-  const f = folders.find(x => x.id === folderId);
-  if (f && f.words[wordIndex]) {
-    const exs = f.words[wordIndex].examples;
-    const targetIndex = exIndex + direction;
-    if (targetIndex >= 0 && targetIndex < exs.length) {
-      const temp = exs[exIndex];
-      exs[exIndex] = exs[targetIndex];
-      exs[targetIndex] = temp;
-      save();
-      render();
-    }
-  }
-};
-
-// 音声再生
 window.playAudio = function(audioUrl, wordText) {
   setTimeout(() => {
-    if (audioUrl) {
-      const audio = new Audio(audioUrl);
-      audio.play().catch(() => speakFallback(wordText));
-    } else {
-      speakFallback(wordText);
-    }
+    if (audioUrl) { new Audio(audioUrl).play().catch(() => speakFallback(wordText)); }
+    else { speakFallback(wordText); }
   }, 200);
 };
 
 function speakFallback(text) {
-  if ('speechSynthesis' in window) {
+  if ('speechSynthesis' in window && text) {
     window.speechSynthesis.cancel();
     const uttr = new SpeechSynthesisUtterance(text);
-    uttr.lang = 'en-US';
-    uttr.rate = 0.9;
+    uttr.lang = 'en-US'; uttr.rate = 0.9;
     window.speechSynthesis.speak(uttr);
   }
 }
 
-// --- 単語追加処理 ---
+// --- 単語追加処理（AI自動生成） ---
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
   if(!cleanWord) return;
 
-  let inflections = "";
-  let prepNote = "";
-
-  const lowerWord = cleanWord.toLowerCase();
-
-  if (verbPrepositions[lowerWord]) prepNote = verbPrepositions[lowerWord];
-  if (irregularVerbs[lowerWord]) inflections = irregularVerbs[lowerWord];
-
-  // 音声とAIデータの並列生成
   const [audioUrl, aiData] = await Promise.all([
     getAudioUrl(cleanWord),
     fetchAIContent(cleanWord)
@@ -327,10 +253,30 @@ window.addWord = async function(folderId, word){
     folder.words.push({
       word: cleanWord,
       audio: audioUrl,
-      meanings: aiData.meanings,
-      inflections: inflections,
-      prepNote: prepNote,
-      examples: aiData.examples
+      ...aiData
+    });
+    save();
+    render();
+  }
+};
+
+// 📝 白紙カード追加処理（手動用）
+window.addBlankWord = function(folderId) {
+  const folder = folders.find(f => f.id === folderId);
+  if (folder) {
+    folder.words.push({
+      word: "New Word",
+      audio: "",
+      phonetics: "",
+      inflections: "",
+      derivatives: "",
+      synonyms: "",
+      antonyms: "",
+      memoryTip: "",
+      nuance: "",
+      usUkSpelling: "",
+      meanings: ["【品詞】 ここに意味を入力"],
+      examples: [{ en: "English Example", jp: "日本語訳" }]
     });
     save();
     render();
@@ -342,6 +288,32 @@ function render(){
   if (!foldersEl) return;
   foldersEl.innerHTML = "";
 
+  // 🤖 AI自由質問相談室（上部設置）
+  const chatBox = document.createElement("div");
+  chatBox.style.cssText = "background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px; margin-bottom: 20px;";
+  chatBox.innerHTML = `
+    <h3 style="margin: 0 0 8px 0; color: #166534; font-size: 1.1em; display: flex; align-items: center; gap: 6px;">
+      🤖 AI英語相談室（ニュアンス・派生語・和英など何でも質問）
+    </h3>
+    <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+      <input id="aiChatInput" placeholder="例: enthusiasticとexuberantの違いは？ / considerの派生語は？ / 『誰何』は英語で？" 
+        style="flex: 1; padding: 8px; border: 1px solid #86efac; border-radius: 4px;"
+        onkeydown="if(event.key==='Enter') askAIChat();"
+      >
+      <button onclick="askAIChat()" style="background: #15803d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">質問する</button>
+    </div>
+    
+    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
+      <button onclick="askAIChat('enthusiasticとexuberantのニュアンスの違いを教えて')" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; padding:3px 8px; border-radius:12px; font-size:0.75em; cursor:pointer;">💡 enthusiastic vs exuberant</button>
+      <button onclick="askAIChat('considerの派生語を整理して')" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; padding:3px 8px; border-radius:12px; font-size:0.75em; cursor:pointer;">💡 considerの派生語</button>
+      <button onclick="askAIChat('「誰何する」に相当する単語・表現は？')" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; padding:3px 8px; border-radius:12px; font-size:0.75em; cursor:pointer;">💡 「誰何」の英語</button>
+    </div>
+
+    <div id="aiChatResult" style="display: none; background: #ffffff; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.9em; color: #1e293b; line-height: 1.6;"></div>
+  `;
+  foldersEl.appendChild(chatBox);
+
+  // フォルダ＆単語一覧描画
   folders.forEach((folder, folderIndex) => {
     const div = document.createElement("div");
     div.className = "folder";
@@ -357,56 +329,60 @@ function render(){
         </div>
 
         <div style="display: flex; align-items: center; gap: 4px;">
-          <button onclick="moveFolder(${folderIndex}, -1)" ${folderIndex === 0 ? 'disabled' : ''} style="padding: 4px 8px; font-size: 0.8em; cursor: pointer;" title="上へ移動">▲</button>
-          <button onclick="moveFolder(${folderIndex}, 1)" ${folderIndex === folders.length - 1 ? 'disabled' : ''} style="padding: 4px 8px; font-size: 0.8em; cursor: pointer;" title="下へ移動">▼</button>
+          <button onclick="moveFolder(${folderIndex}, -1)" ${folderIndex === 0 ? 'disabled' : ''} style="padding: 4px 8px; font-size: 0.8em; cursor: pointer;">▲</button>
+          <button onclick="moveFolder(${folderIndex}, 1)" ${folderIndex === folders.length - 1 ? 'disabled' : ''} style="padding: 4px 8px; font-size: 0.8em; cursor: pointer;">▼</button>
           <button onclick="renameFolder(${folder.id})" style="background:#0284c7; color:white; border:none; padding: 4px 8px; border-radius: 4px; font-size:0.8em; cursor:pointer;">✏️ リネーム</button>
-          <button onclick="clearFolderWords(${folder.id})" style="background:#f59e0b; color:white; border:none; padding: 4px 8px; border-radius: 4px; font-size:0.8em; cursor:pointer;" title="全単語削除">🧹 単語全消し</button>
+          <button onclick="clearFolderWords(${folder.id})" style="background:#f59e0b; color:white; border:none; padding: 4px 8px; border-radius: 4px; font-size:0.8em; cursor:pointer;">🧹 単語全消し</button>
           <button onclick="deleteFolder(${folder.id})" style="background-color: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size:0.8em; cursor: pointer;">🗑️ フォルダ削除</button>
         </div>
       </div>
 
       ${!isCollapsed ? `
         <div style="margin-top: 12px;">
-          <input placeholder="単語を入力してEnter (高精度AIが多義語・類義語・例文を自動生成)"
-            onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }"
-            style="width: 100%; padding: 8px; box-sizing: border-box; margin-bottom: 10px; border: 1px solid #cbd5e1; border-radius: 4px;"
-          >
+          <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+            <input placeholder="単語を入力してEnter (AI自動生成)"
+              onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }"
+              style="flex: 1; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px;"
+            >
+            <button onclick="addBlankWord(${folder.id})" style="background: #475569; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-size: 0.85em; cursor: pointer; white-space: nowrap;">📄 手動追加（白紙）</button>
+          </div>
 
           ${folder.words.map((w, wordIndex) => `
             <div class="word" style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 6px solid #e11d48; padding: 14px; margin-top: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
               
               <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 6px; flex-wrap: wrap; gap: 6px;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <b style="font-size: 1.4em; color: #0f172a; font-family: sans-serif;">${w.word}</b>
-                  <button onclick="playAudio('${w.audio}', '${w.word}')" style="background:#e11d48; color:white; border:none; border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:0.8em;" title="発音を聞く">🔊</button>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <b contenteditable="true" onblur="updateWordText(${folder.id}, ${wordIndex}, this.innerText)" style="font-size: 1.4em; color: #0f172a; outline: none; border-bottom: 1px dashed #cbd5e1;" title="クリックして単語名を編集">${w.word}</b>
+                  ${w.phonetics ? `<span style="color: #64748b; font-size: 0.9em; font-family: monospace;">${w.phonetics}</span>` : ''}
+                  <button onclick="playAudio('${w.audio}', '${w.word}')" style="background:#e11d48; color:white; border:none; border-radius:50%; width:26px; height:26px; cursor:pointer; font-size:0.8em;" title="発音を聞く">🔊</button>
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 4px;">
                   <select onchange="transferWordToFolder(${folder.id}, ${wordIndex}, this.value)" style="font-size:0.8em; padding: 2px 4px; border-radius:4px; border: 1px solid #cbd5e1;">
-                    <option value="">📂 他フォルダへ移動...</option>
-                    ${folders.map(targetF => `
-                      <option value="${targetF.id}" ${targetF.id === folder.id ? 'disabled' : ''}>${targetF.name}</option>
-                    `).join('')}
+                    <option value="">📂 他フォルダ移動...</option>
+                    ${folders.map(targetF => `<option value="${targetF.id}" ${targetF.id === folder.id ? 'disabled' : ''}>${targetF.name}</option>`).join('')}
                   </select>
-
-                  <button onclick="moveWordOrder(${folder.id}, ${wordIndex}, -1)" ${wordIndex === 0 ? 'disabled' : ''} style="padding: 2px 6px; font-size: 0.75em; cursor: pointer;" title="単語を上へ">▲</button>
-                  <button onclick="moveWordOrder(${folder.id}, ${wordIndex}, 1)" ${wordIndex === folder.words.length - 1 ? 'disabled' : ''} style="padding: 2px 6px; font-size: 0.75em; cursor: pointer;" title="単語を下へ">▼</button>
+                  <button onclick="moveWordOrder(${folder.id}, ${wordIndex}, -1)" ${wordIndex === 0 ? 'disabled' : ''} style="padding: 2px 6px; font-size: 0.75em; cursor: pointer;">▲</button>
+                  <button onclick="moveWordOrder(${folder.id}, ${wordIndex}, 1)" ${wordIndex === folder.words.length - 1 ? 'disabled' : ''} style="padding: 2px 6px; font-size: 0.75em; cursor: pointer;">▼</button>
                   <button onclick="deleteWord(${folder.id}, ${wordIndex})" style="background-color: #f1f5f9; color: #64748b; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size:0.8em;">削除</button>
                 </div>
               </div>
 
-              ${w.inflections ? `
-                <div style="margin-top: 6px; font-size: 0.8em; color: #0284c7; background: #f0f9ff; display: inline-block; padding: 2px 8px; border-radius: 4px;">
-                  活用: ${w.inflections}
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-size: 0.8em;">
+                ${w.inflections ? `<div style="color: #0284c7; background: #f0f9ff; border: 1px solid #bae6fd; padding: 2px 6px; border-radius: 4px;">🔄 <b>活用:</b> ${w.inflections}</div>` : ''}
+                ${w.derivatives ? `<div style="color: #7c3aed; background: #f5f3ff; border: 1px solid #ddd6fe; padding: 2px 6px; border-radius: 4px;">🌱 <b>派生語:</b> ${w.derivatives}</div>` : ''}
+                ${w.synonyms ? `<div style="color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 2px 6px; border-radius: 4px;">🔗 <b>類義・熟語:</b> ${w.synonyms}</div>` : ''}
+                ${w.antonyms ? `<div style="color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; padding: 2px 6px; border-radius: 4px;">⚡ <b>対義語:</b> ${w.antonyms}</div>` : ''}
+                ${w.usUkSpelling ? `<div style="color: #d97706; background: #fffbeb; border: 1px solid #fde68a; padding: 2px 6px; border-radius: 4px;">🌐 <b>米英差異:</b> ${w.usUkSpelling}</div>` : ''}
+              </div>
+
+              ${(w.memoryTip || w.nuance) ? `
+                <div style="margin-top: 8px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; padding: 8px; font-size: 0.85em; color: #92400e;">
+                  ${w.memoryTip ? `<div>💡 <b>覚え方・連想:</b> ${w.memoryTip}</div>` : ''}
+                  ${w.nuance ? `<div style="margin-top: 4px;">🔍 <b>ニュアンス:</b> ${w.nuance}</div>` : ''}
                 </div>
               ` : ''}
 
-              ${w.prepNote ? `
-                <div style="margin-top: 6px; font-size: 0.82em; color: #059669; background: #ecfdf5; padding: 4px 8px; border-radius: 4px;">
-                  🔗 <b>伴う前置詞:</b> ${w.prepNote}
-                </div>
-              ` : ''}
-              
               <div style="margin-top: 10px; background: #fff5f5; padding: 10px; border-radius: 6px; border: 1px solid #ffe4e6;">
                 <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; background: #ffffff; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; color: #64748b; border: 1px solid #f1f5f9;">
                   <span>文字色変更:</span>
@@ -417,19 +393,11 @@ function render(){
                 </div>
 
                 <ul style="margin: 0; padding-left: 0; list-style: none;">
-                  ${w.meanings.map((m, meaningIndex) => {
-                    const textContent = typeof m === 'object' ? (m.text || "") : m;
-                    return `
-                      <li style="margin-bottom: 6px; line-height: 1.5;">
-                        <div 
-                          contenteditable="true" 
-                          onblur="updateMeaningHTML(${folder.id}, ${wordIndex}, ${meaningIndex}, this.innerHTML)"
-                          style="outline: none; padding: 2px 4px; font-size: 1.05em; color: #1e293b; border-radius: 4px;"
-                          title="クリックして直接編集可能"
-                        >${textContent}</div>
-                      </li>
-                    `;
-                  }).join("")}
+                  ${w.meanings.map((m, meaningIndex) => `
+                    <li style="margin-bottom: 6px; line-height: 1.5;">
+                      <div contenteditable="true" onblur="updateMeaningHTML(${folder.id}, ${wordIndex}, ${meaningIndex}, this.innerHTML)" style="outline: none; padding: 2px 4px; font-size: 1.05em; color: #1e293b; border-radius: 4px;" title="直接編集可能">${typeof m === 'object' ? (m.text || "") : m}</div>
+                    </li>
+                  `).join("")}
                 </ul>
               </div>
 
@@ -443,22 +411,13 @@ function render(){
                   <div style="margin-bottom: 8px; background: #ffffff; padding: 8px 10px; border-radius: 4px; border-left: 3px solid #3b82f6; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;">
                       <div style="flex: 1;">
-                        <p 
-                          contenteditable="true" 
-                          onblur="updateExampleText(${folder.id}, ${wordIndex}, ${exIndex}, 'en', this.innerText)"
-                          style="margin: 0 0 4px 0; color: #0f172a; font-weight: 600; line-height: 1.4; outline: none;"
-                        >${ex.en}</p>
-                        <p 
-                          contenteditable="true" 
-                          onblur="updateExampleText(${folder.id}, ${wordIndex}, ${exIndex}, 'jp', this.innerText)"
-                          style="margin: 0; color: #475569; font-size: 0.92em; line-height: 1.4; outline: none;"
-                        >${ex.jp}</p>
+                        <p contenteditable="true" onblur="updateExampleText(${folder.id}, ${wordIndex}, ${exIndex}, 'en', this.innerText)" style="margin: 0 0 4px 0; color: #0f172a; font-weight: 600; line-height: 1.4; outline: none;">${ex.en}</p>
+                        <p contenteditable="true" onblur="updateExampleText(${folder.id}, ${wordIndex}, ${exIndex}, 'jp', this.innerText)" style="margin: 0; color: #475569; font-size: 0.92em; line-height: 1.4; outline: none;">${ex.jp}</p>
                       </div>
-
                       <div style="display: flex; align-items: center; gap: 2px;">
                         <button onclick="moveExampleOrder(${folder.id}, ${wordIndex}, ${exIndex}, -1)" ${exIndex === 0 ? 'disabled' : ''} style="padding: 1px 4px; font-size: 0.7em; cursor: pointer;">▲</button>
                         <button onclick="moveExampleOrder(${folder.id}, ${wordIndex}, ${exIndex}, 1)" ${exIndex === w.examples.length - 1 ? 'disabled' : ''} style="padding: 1px 4px; font-size: 0.7em; cursor: pointer;">▼</button>
-                        <button onclick="deleteExample(${folder.id}, ${wordIndex}, ${exIndex})" style="background: transparent; color: #ef4444; border: none; font-size: 0.8em; cursor: pointer;" title="例文削除">🗑️</button>
+                        <button onclick="deleteExample(${folder.id}, ${wordIndex}, ${exIndex})" style="background: transparent; color: #ef4444; border: none; font-size: 0.8em; cursor: pointer;">🗑️</button>
                       </div>
                     </div>
                   </div>
