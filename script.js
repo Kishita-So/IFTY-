@@ -420,7 +420,7 @@ function render(){
                   ${w.meanings.map((m, meaningIndex) => {
                     const textContent = typeof m === 'object' ? (m.text || "") : m;
                     return `
-                      <li style="margin-bottom: 4px;">
+                      <li style="margin-bottom: 6px; line-height: 1.5;">
                         <div 
                           contenteditable="true" 
                           onblur="updateMeaningHTML(${folder.id}, ${wordIndex}, ${meaningIndex}, this.innerHTML)"
