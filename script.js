@@ -70,7 +70,6 @@ window.showAuthModal = function(mode) {
   if (modalTitle) modalTitle.innerText = mode === "login" ? "ログイン" : "新規アカウント登録";
   if (authSubmitBtn) authSubmitBtn.innerText = mode === "login" ? "ログイン" : "登録する";
   
-  // 新規登録時の分かりやすい案内表示
   if (authGuide) {
     if (mode === "register") {
       authGuide.style.display = "block";
@@ -80,7 +79,6 @@ window.showAuthModal = function(mode) {
     }
   }
 
-  // パスワード忘れた用ボタンの表示切り替え（ログイン時のみ表示）
   if (resetPassBtn) {
     resetPassBtn.style.display = mode === "login" ? "block" : "none";
   }
@@ -90,6 +88,21 @@ window.showAuthModal = function(mode) {
 
 window.hideAuthModal = function() {
   document.getElementById("authModal").style.display = "none";
+};
+
+// 👁️ パスワード表示・非表示切り替え
+window.togglePassword = function() {
+  const passInput = document.getElementById("authPassword");
+  const btn = document.getElementById("togglePassBtn");
+  if (!passInput) return;
+
+  if (passInput.type === "password") {
+    passInput.type = "text";
+    if (btn) btn.innerText = "🙈"; // 見えている時は非表示アイコン（猿など）
+  } else {
+    passInput.type = "password";
+    if (btn) btn.innerText = "👁️"; // 伏せ字の時は目アイコン
+  }
 };
 
 window.handleAuthSubmit = async function() {
@@ -109,7 +122,6 @@ window.handleAuthSubmit = async function() {
   }
 };
 
-// ❓ パスワード再設定メール送信機能
 window.handleResetPassword = async function() {
   const email = document.getElementById("authEmail").value.trim();
   if (!email) return alert("パスワード再設定用メールを送信するため、まずメールアドレスを入力してください。");
@@ -122,7 +134,6 @@ window.handleResetPassword = async function() {
   }
 };
 
-// ログインモーダルのEnter確定イベントアタッチ
 setTimeout(() => {
   const emailInput = document.getElementById("authEmail");
   const passInput = document.getElementById("authPassword");
