@@ -13,15 +13,41 @@
     <button onclick="showAuthModal('register')" style="padding: 10px 20px; font-size: 1em; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer;">新規登録</button>
   </div>
 
-  <div id="mainPortal" style="display: none; max-width: 600px; margin: 0 auto;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <span id="userDisplay" style="font-weight: bold; color: #334155;"></span>
-      <button onclick="logout()" style="background: #e11d48; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">ログアウト</button>
+  <div id="mainPortal" style="display: none; max-width: 650px; margin: 0 auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; background: white; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0;">
+      <div>
+        <span style="font-size:0.8em; color:#64748b;">ログイン中:</span><br>
+        <b id="userDisplay" style="color: #0f172a;"></b>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <button onclick="showAccountSettings()" style="background: #475569; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85em;">⚙️ アカウント設定</button>
+        <button onclick="logout()" style="background: #e11d48; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85em;">ログアウト</button>
+      </div>
+    </div>
+
+    <div id="accountModal" style="display:none; background: #f1f5f9; padding: 14px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 20px;">
+      <h3 style="margin: 0 0 10px 0; font-size: 1em; color: #334155;">⚙️ アカウント設定・データ移行</h3>
+      
+      <div style="margin-bottom: 12px; background: white; padding: 10px; border-radius: 6px;">
+        <label style="font-size:0.85em; font-weight:bold; color:#475569;">📧 ログインアドレス（データ）の移動</label>
+        <div style="display:flex; gap:6px; margin-top:4px;">
+          <input id="newEmailInput" placeholder="新しいメールアドレスを入力" style="flex:1; padding:6px; font-size:0.85em; border:1px solid #cbd5e1; border-radius:4px;">
+          <button onclick="transferAccountData()" style="background:#0284c7; color:white; border:none; padding:6px 12px; border-radius:4px; font-size:0.85em; cursor:pointer;">移行する</button>
+        </div>
+      </div>
+
+      <div style="background: white; padding: 10px; border-radius: 6px;">
+        <label style="font-size:0.85em; font-weight:bold; color:#475569;">🔑 パスワードの変更</label>
+        <div style="display:flex; gap:6px; margin-top:4px;">
+          <input id="changePassInput" type="password" placeholder="新しいパスワードを入力" style="flex:1; padding:6px; font-size:0.85em; border:1px solid #cbd5e1; border-radius:4px;">
+          <button onclick="changePassword()" style="background:#15803d; color:white; border:none; padding:6px 12px; border-radius:4px; font-size:0.85em; cursor:pointer;">変更</button>
+        </div>
+      </div>
     </div>
 
     <div style="display: flex; gap: 8px; margin-bottom: 20px;">
-      <input id="folderName" placeholder="新しいフォルダ名" style="flex: 1; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px;">
-      <button id="createFolderBtn" onclick="createFolder()" style="background: #15803d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">フォルダ作成</button>
+      <input id="folderName" placeholder="新しいフォルダ名を入力してEnter" style="flex: 1; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px;">
+      <button id="createFolderBtn" onclick="createFolder()" style="background: #15803d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">フォルダ作成</button>
     </div>
 
     <div id="folders"></div>
@@ -32,7 +58,7 @@
       <h2 id="modalTitle" style="margin-top:0;">ログイン</h2>
       <p id="authGuide" style="display:none; font-size:0.8em; color:#e11d48; margin-bottom:8px;"></p>
 
-      <input id="authEmail" type="email" placeholder="メールアドレス" style="width:100%; padding:8px; margin-bottom:8px; box-sizing:border-box;">
+      <input id="authEmail" type="text" placeholder="メールアドレス（自由入力可能）" style="width:100%; padding:8px; margin-bottom:8px; box-sizing:border-box;">
       
       <div style="position:relative; width:100%; margin-bottom:12px;">
         <input id="authPassword" type="password" placeholder="パスワード" style="width:100%; padding:8px 36px 8px 8px; box-sizing:border-box;">
@@ -40,11 +66,9 @@
       </div>
       
       <div style="display:flex; justify-content:space-between; align-items:center;">
-        <button id="authSubmitBtn" onclick="handleAuthSubmit()" style="background:#15803d; color:white; border:none; padding:8px 16px; border-radius:4px; cursor:pointer;">ログイン</button>
+        <button id="authSubmitBtn" onclick="handleAuthSubmit()" style="background:#15803d; color:white; border:none; padding:8px 16px; border-radius:4px; cursor:pointer; font-weight:bold;">ログイン</button>
         <button onclick="hideAuthModal()" style="background:#64748b; color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer;">閉じる</button>
       </div>
-
-      <button id="resetPassBtn" onclick="handleResetPassword()" style="display:block; background:none; border:none; color:#0284c7; font-size:0.8em; margin-top:12px; cursor:pointer; padding:0;">🔑 パスワードをお忘れの際はこちら</button>
     </div>
   </div>
 
