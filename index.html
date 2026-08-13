@@ -27,7 +27,7 @@
 
     <div id="vocabPage">
       <div style="display: flex; gap: 8px; margin-bottom: 20px;">
-        <input id="folderName" placeholder="新しいフォルダ名を入力してEnter" style="flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95em;">
+        <input id="folderName" placeholder="新しいフォルダ名を入力してEnter" onkeydown="if(event.key==='Enter'){ createFolder(); }" style="flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95em;">
         <button onclick="createFolder()" style="background: #15803d; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold;">フォルダ作成</button>
       </div>
       <div id="folders"></div>
