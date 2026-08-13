@@ -117,15 +117,17 @@ async function loadUserData() {
   }
 }
 
-// --- 🔊 音声再生 ---
+// --- 🔊 音声再生（0.5秒遅延して発音） ---
 window.speakWord = function(text) {
   if (!text) return;
   if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const uttr = new SpeechSynthesisUtterance(text);
-    uttr.lang = 'en-US';
-    uttr.rate = 0.9;
-    window.speechSynthesis.speak(uttr);
+    window.speechSynthesis.cancel(); // 連続タップ時の重複防止
+    setTimeout(() => {
+      const uttr = new SpeechSynthesisUtterance(text);
+      uttr.lang = 'en-US';
+      uttr.rate = 0.9;
+      window.speechSynthesis.speak(uttr);
+    }, 500); // 500ms (0.5秒後)
   } else {
     alert("お使いのブラウザは音声読み上げに対応していません。");
   }
@@ -187,7 +189,7 @@ window.addWord = async function(folderId, word){
   }
 };
 
-// 白紙追加（プレースホルダー表示用に中身を空にして追加）
+// 白紙追加
 window.addBlankWord = async function(folderId) {
   const folder = folders.find(f => f.id === folderId);
   if (folder) {
@@ -263,7 +265,7 @@ window.moveWord = async function(fromFolderId, wIdx, toFolderId) {
 window.updateWordField = async function(folderId, wIdx, field, value) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wIdx]) {
-    if (field === 'meanings') f.words[wIdx].meanings = value.split("\n");
+    if (field === 'meanings') f.words[wIdx].meanings = [value];
     else if (field === 'details') f.words[wIdx].details = value;
     else if (field === 'word') f.words[wIdx].word = value;
     await saveUserData();
@@ -330,7 +332,11 @@ function render(){
               </div>
               
               <div style="margin-top:8px; background:#fff5f5; padding:8px; border-radius:4px; font-size:0.95em; border:1px solid #ffe4e6; line-height:1.5;">
-                <textarea placeholder="【品詞】 ここに意味を入力..." onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); this.blur(); }" onchange="updateWordField(${folder.id}, ${wIdx}, 'meanings', this.value)" style="width:100%; border:none; background:transparent; font-size:1em; resize:vertical; outline:none; font-family:sans-serif;" rows="${(w.meanings && w.meanings.join('\n') !== '') ? w.meanings.length : 1}">${(w.meanings || []).join("\n")}</textarea>
+                <div 
+                  contenteditable="true" 
+                  onblur="updateWordField(${folder.id}, ${wIdx}, 'meanings', this.innerHTML)" 
+                  style="width:100%; border:none; outline:none; font-family:sans-serif; min-height:1.2em;"
+                >${(w.meanings || []).join('<br>')}</div>
               </div>
 
               ${(w.examples && w.examples.length > 0) ? `
