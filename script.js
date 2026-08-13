@@ -1,4 +1,3 @@
-// --- 🔐 グローバル状態 ---
 let currentUser = null;
 let folders = [];
 let chatSessions = []; 
@@ -6,12 +5,10 @@ let currentSessionId = null;
 let currentView = "vocab"; 
 let selectedImageBase64 = null;
 
-// Grok対応のWorker URL
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
-// --- データ読み書き ---
 function getStorageKey(email) {
-  return "user_data_grok_v1_" + email.toLowerCase().trim();
+  return "user_data_grok_v2_" + email.toLowerCase().trim();
 }
 
 function saveUserData() {
@@ -46,7 +43,6 @@ function loadUserData(email) {
   }
 }
 
-// --- 画面切り替え ---
 window.toggleViewMode = function() {
   const vocabPage = document.getElementById("vocabPage");
   const aiChatPage = document.getElementById("aiChatPage");
@@ -66,12 +62,11 @@ window.toggleViewMode = function() {
   render();
 };
 
-// --- チャットセッション管理 ＆ 上下移動・削除 ---
 window.createNewChatSession = function(shouldRender = true) {
   const newSession = {
     id: Date.now(),
     title: "新しいチャット " + (chatSessions.length + 1),
-    messages: [{ role: "ai", text: "こんにちは！Grokアシスタントです。単語帳の編集指示や単語に関する質問ができます。" }]
+    messages: [{ role: "ai", text: "こんにちは！Grokアシスタントです。単語の追加や質問ができます。" }]
   };
   chatSessions.unshift(newSession);
   currentSessionId = newSession.id;
@@ -97,7 +92,6 @@ window.updateChatTitle = function(newTitle) {
 window.moveChatSession = function(direction) {
   const idx = chatSessions.findIndex(s => s.id === currentSessionId);
   if (idx === -1) return;
-
   const targetIdx = idx + direction;
   if (targetIdx < 0 || targetIdx >= chatSessions.length) return;
 
@@ -121,7 +115,6 @@ window.deleteCurrentChatSession = function() {
   }
 };
 
-// --- チャットメッセージ編集 ＆ コピー ---
 window.updateMessageText = function(msgIndex, newText) {
   const session = chatSessions.find(s => s.id === currentSessionId);
   if (session && session.messages[msgIndex]) {
@@ -132,17 +125,13 @@ window.updateMessageText = function(msgIndex, newText) {
 
 window.copyMessageText = function(text) {
   navigator.clipboard.writeText(text).then(() => {
-    alert("メッセージをコピーしました！");
-  }).catch(err => {
-    console.error("コピー失敗:", err);
+    alert("コピーしました！");
   });
 };
 
-// --- 画像選択処理 ---
 window.handleImageSelect = function(event) {
   const file = event.target.files[0];
   if (!file) return;
-
   const reader = new FileReader();
   reader.onload = function(e) {
     selectedImageBase64 = e.target.result;
@@ -158,7 +147,7 @@ window.clearSelectedImage = function() {
   document.getElementById("imagePreviewContainer").style.display = "none";
 };
 
-// --- Grok連携 AI送信・単語追加処理 ---
+// AIチャット送信
 window.sendChatMessage = async function() {
   const inputEl = document.getElementById("chatInput");
   const text = inputEl ? inputEl.value.trim() : "";
@@ -167,15 +156,13 @@ window.sendChatMessage = async function() {
   const session = chatSessions.find(s => s.id === currentSessionId);
   if (!session) return;
 
-  const userMsg = { role: "user", text: text, image: selectedImageBase64 };
-  session.messages.push(userMsg);
-
+  session.messages.push({ role: "user", text: text, image: selectedImageBase64 });
   inputEl.value = "";
   const currentImg = selectedImageBase64;
   clearSelectedImage();
   renderChatArea();
 
-  session.messages.push({ role: "ai", text: "🤖 Grokが考えています..." });
+  session.messages.push({ role: "ai", text: "🤖 Grokが処理中..." });
   renderChatArea();
 
   try {
@@ -196,9 +183,9 @@ window.sendChatMessage = async function() {
         folders = data.updatedFolders;
         saveUserData();
       }
-      session.messages[session.messages.length - 1].text = data.reply || "処理が完了しました。";
+      session.messages[session.messages.length - 1].text = data.reply || "完了しました。";
     } else {
-      session.messages[session.messages.length - 1].text = "⚠️ Grok応答の取得に失敗しました。";
+      session.messages[session.messages.length - 1].text = "⚠️ サーバー応答エラー";
     }
   } catch(e) {
     session.messages[session.messages.length - 1].text = "⚠️ 通信エラーが発生しました。";
@@ -208,7 +195,7 @@ window.sendChatMessage = async function() {
   render();
 };
 
-// --- 単語帳の高度な操作・装飾機能 ---
+// 単語帳への個別追加 (Worker経由)
 window.addWordToFolder = async function(folderId, word) {
   const clean = word.trim();
   if (!clean) return;
@@ -260,7 +247,7 @@ window.addExample = function(folderId, wIdx) {
   const folder = folders.find(f => f.id === folderId);
   if (folder && folder.words[wIdx]) {
     if (!folder.words[wIdx].examples) folder.words[wIdx].examples = [];
-    folder.words[wIdx].examples.push({ en: "New example sentence.", ja: "新しい例文の訳" });
+    folder.words[wIdx].examples.push({ en: "Example sentence.", ja: "例文の訳" });
     saveUserData();
     render();
   }
@@ -317,7 +304,6 @@ window.moveWordToFolder = function(fromFolderId, wIdx, toFolderIdStr) {
   render();
 };
 
-// 単語の文字装飾ヘルパー（赤字・青字など）
 window.formatWordText = function(folderId, wIdx, color) {
   const selection = window.getSelection();
   if (!selection.rangeCount) return;
@@ -342,11 +328,9 @@ window.formatWordText = function(folderId, wIdx, color) {
   }
 };
 
-// --- レンダリング処理 ---
 function renderChatArea() {
   const selectEl = document.getElementById("chatSessionSelect");
   const titleInput = document.getElementById("chatTitleInput");
-  
   const session = chatSessions.find(s => s.id === currentSessionId);
   if (!session) return;
 
@@ -365,15 +349,12 @@ function renderChatArea() {
   msgsEl.innerHTML = session.messages.map((m, mIdx) => `
     <div style="align-self: ${m.role === 'user' ? 'flex-end' : 'flex-start'}; max-width: 85%; background: ${m.role === 'user' ? '#e0f2fe' : '#ffffff'}; color: #0f172a; padding: 10px 14px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 0.9em; position: relative;">
       ${m.image ? `<img src="${m.image}" style="max-width: 100%; border-radius: 6px; margin-bottom: 6px;"><br>` : ''}
-      
-      <div contenteditable="true" onblur="updateMessageText(${mIdx}, this.innerText)" style="outline: none; white-space: pre-wrap; margin-bottom: 4px;" title="クリックして直接編集できます">${m.text}</div>
-
+      <div contenteditable="true" onblur="updateMessageText(${mIdx}, this.innerText)" style="outline: none; white-space: pre-wrap; margin-bottom: 4px;">${m.text}</div>
       <div style="display: flex; justify-content: flex-end; gap: 4px; margin-top: 4px; border-top: 1px solid #f1f5f9; padding-top: 4px;">
-        <button onclick='copyMessageText(${JSON.stringify(m.text)})' style="background: none; border: none; cursor: pointer; font-size: 0.75em; color: #64748b;" title="テキストをコピー">📋 コピー</button>
+        <button onclick='copyMessageText(${JSON.stringify(m.text)})' style="background: none; border: none; cursor: pointer; font-size: 0.75em; color: #64748b;">📋 コピー</button>
       </div>
     </div>
   `).join('');
-
   msgsEl.scrollTop = msgsEl.scrollHeight;
 }
 
@@ -462,19 +443,13 @@ function renderFolders() {
   `).join('');
 }
 
-// 認証・イベント関連
 window.loginWithAccount = function(email) {
   currentUser = { email: email };
   loadUserData(email);
   render();
 };
 window.logout = function() { location.reload(); };
-window.showAuthModal = function() { document.getElementById("authModal").style.display = "flex"; };
-window.hideAuthModal = function() { document.getElementById("authModal").style.display = "none"; };
-window.handleAuthSubmit = function() {
-  const email = document.getElementById("authEmail").value.trim();
-  if (email) { window.loginWithAccount(email); hideAuthModal(); }
-};
+
 window.createFolder = function() {
   const el = document.getElementById("folderName");
   if (el && el.value.trim()) {
@@ -483,18 +458,9 @@ window.createFolder = function() {
   }
 };
 
-document.addEventListener("keydown", function(e) {
-  if (e.key === "Enter") {
-    const folderInput = document.getElementById("folderName");
-    if (document.activeElement === folderInput) {
-      window.createFolder();
-    }
-  }
-});
-
 window.onload = function() {
   const accounts = ["16011264@kago.ed.jp", "humbleflail205@gmail.com"];
   document.getElementById("accountList").innerHTML = accounts.map(a => 
-    `<div onclick="loginWithAccount('${a}')" style="padding:10px; background:#334155; border-radius:6px; cursor:pointer;">${a}</div>`
+    `<div onclick="loginWithAccount('${a}')" style="padding:12px; background:#334155; border-radius:8px; cursor:pointer; color:white; font-weight:500; text-align:center;">${a}</div>`
   ).join('');
 };
