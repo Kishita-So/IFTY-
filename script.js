@@ -98,10 +98,10 @@ window.togglePassword = function() {
 
   if (passInput.type === "password") {
     passInput.type = "text";
-    if (btn) btn.innerText = "🙈"; // 見えている時は非表示アイコン（猿など）
+    if (btn) btn.innerText = "🙈";
   } else {
     passInput.type = "password";
-    if (btn) btn.innerText = "👁️"; // 伏せ字の時は目アイコン
+    if (btn) btn.innerText = "👁️";
   }
 };
 
@@ -397,6 +397,81 @@ function render(){
     const div = document.createElement("div");
     div.style.cssText = "background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);";
 
+    // 単語リスト生成
+    const wordsHtml = folder.words.map((w, wIdx) => {
+      const meaningText = (w.meanings || []).join('<br>');
+      const examplesList = (w.examples || []).map((ex, exIdx) => `
+        <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+          <div style="flex:1;">
+            <input value="${ex.en || ''}" placeholder="英語例文を入力..." onchange="updateExampleField(${folder.id}, ${wIdx}, ${exIdx}, 'en', this.value)" style="width:100%; font-size:0.88em; color:#0284c7; border:none; border-bottom:1px solid #cbd5e1; outline:none; background:transparent;">
+            <input value="${ex.jp || ''}" placeholder="日本語訳を入力..." onchange="updateExampleField(${folder.id}, ${wIdx}, ${exIdx}, 'jp', this.value)" style="width:100%; font-size:0.85em; color:#64748b; border:none; border-bottom:1px dashed #cbd5e1; outline:none; background:transparent; margin-top:2px;">
+          </div>
+          <button onclick="deleteExample(${folder.id}, ${wIdx}, ${exIdx})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:0.9em;">🗑️</button>
+        </div>
+      `).join('');
+
+      const folderOptions = folders.map(f => `<option value="${f.id}" ${f.id === folder.id ? 'disabled' : ''}>${f.name}</option>`).join('');
+
+      return `
+        <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:5px solid #e11d48; padding:12px; margin-top:10px; border-radius:6px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div style="display:flex; align-items:center; gap:6px; flex:1;">
+              <button onclick="speakWord('${w.word}')" title="発音を聞く" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:50%; width:32px; height:32px; cursor:pointer; font-size:1em; display:flex; align-items:center; justify-content:center;">🔊</button>
+              <input value="${w.word || ''}" placeholder="単語を入力..." onkeydown="if(event.key==='Enter') this.blur();" onchange="updateWordField(${folder.id}, ${wIdx}, 'word', this.value)" style="font-size:1.2em; font-weight:bold; border:none; outline:none; color:#0f172a; width:100%;">
+            </div>
+
+            <div style="display:flex; align-items:center; gap:6px;">
+              <select onchange="moveWord(${folder.id}, ${wIdx}, this.value)" style="font-size:0.8em; padding:4px; border-radius:4px; border:1px solid #cbd5e1; background:#f8fafc;">
+                <option value="">移動...</option>
+                ${folderOptions}
+              </select>
+              <button onclick="deleteWord(${folder.id}, ${wIdx})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:1.1em;">🗑️</button>
+            </div>
+          </div>
+          
+          <div style="margin-top:8px; display:flex; gap:4px; align-items:center; background:#f8fafc; padding:4px 8px; border-radius:4px; border:1px solid #e2e8f0; font-size:0.75em;">
+            <span style="color:#64748b; margin-right:4px;">文字色:</span>
+            <button onmousedown="event.preventDefault(); formatText('foreColor', '#e11d48');" style="background:#e11d48; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">赤</button>
+            <button onmousedown="event.preventDefault(); formatText('foreColor', '#0284c7');" style="background:#0284c7; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">青</button>
+            <button onmousedown="event.preventDefault(); formatText('hiliteColor', '#fef08a');" style="background:#fef08a; color:#0f172a; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">黄ハイライト</button>
+            <button onmousedown="event.preventDefault(); formatText('bold');" style="background:#cbd5e1; color:#0f172a; border:none; border-radius:3px; padding:2px 6px; cursor:pointer; font-weight:bold;">B</button>
+            <button onmousedown="event.preventDefault(); formatText('removeFormat');" style="background:#e2e8f0; color:#475569; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">🧹 リセット</button>
+          </div>
+
+          <div style="margin-top:4px; background:#fff5f5; padding:8px; border-radius:4px; font-size:0.95em; border:1px solid #ffe4e6; line-height:1.5;">
+            <div 
+              contenteditable="true" 
+              onblur="updateWordField(${folder.id}, ${wIdx}, 'meanings', this.innerHTML)" 
+              style="width:100%; border:none; outline:none; font-family:sans-serif; min-height:1.2em;"
+            >${meaningText}</div>
+          </div>
+
+          <div style="margin-top:8px; background:#f8fafc; padding:8px; border-radius:4px; border:1px solid #f1f5f9;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <span style="font-size:0.85em; font-weight:bold; color:#475569;">💬 例文</span>
+              <button onclick="addExample(${folder.id}, ${wIdx})" style="background:#0284c7; color:white; border:none; padding:2px 6px; border-radius:3px; font-size:0.75em; cursor:pointer;">+ 例文追加</button>
+            </div>
+            ${examplesList}
+          </div>
+
+          <div style="margin-top:6px; font-size:0.82em; color:#475569; background:#f1f5f9; padding:6px 8px; border-radius:4px;">
+            💡 <b>解説:</b> 
+            <input value="${w.details || ''}" placeholder="補足やメモを入力..." onkeydown="if(event.key==='Enter') this.blur();" onchange="updateWordField(${folder.id}, ${wIdx}, 'details', this.value)" style="width:80%; border:none; background:transparent; font-size:1em; outline:none; color:#475569;">
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    const innerContent = folder.isCollapsed ? '' : `
+      <div style="margin-top:12px;">
+        <div style="display:flex; gap:6px; margin-bottom:12px;">
+          <input placeholder="英単語を入力してEnter" onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }" style="flex:1; padding:8px; border:1px solid #cbd5e1; border-radius:4px;">
+          <button onclick="addBlankWord(${folder.id})" style="background:#475569; color:white; border:none; padding:8px 12px; border-radius:4px; font-size:0.85em; cursor:pointer;">📄 白紙追加</button>
+        </div>
+        ${wordsHtml}
+      </div>
+    `;
+
     div.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <div style="cursor:pointer;" onclick="toggleFolder(${folder.id})">
@@ -407,73 +482,9 @@ function render(){
           <button onclick="deleteFolder(${folder.id})" style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:0.8em; cursor:pointer;">削除</button>
         </div>
       </div>
-
-      ${!folder.isCollapsed ? `
-        <div style="margin-top:12px;">
-          <div style="display:flex; gap:6px; margin-bottom:12px;">
-            <input placeholder="英単語を入力してEnter" onkeydown="if(event.key==='Enter'){ addWord(${folder.id}, this.value); this.value=''; }" style="flex:1; padding:8px; border:1px solid #cbd5e1; border-radius:4px;">
-            <button onclick="addBlankWord(${folder.id})" style="background:#475569; color:white; border:none; padding:8px 12px; border-radius:4px; font-size:0.85em; cursor:pointer;">📄 白紙追加</button>
-          </div>
-
-          ${folder.words.map((w, wIdx) => `
-            <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:5px solid #e11d48; padding:12px; margin-top:10px; border-radius:6px;">
-              <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                <div style="display:flex; align-items:center; gap:6px; flex:1;">
-                  <button onclick="speakWord('${w.word}')" title="発音を聞く" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:50%; width:32px; height:32px; cursor:pointer; font-size:1em; display:flex; align-items:center; justify-content:center;">🔊</button>
-                  <input value="${w.word || ''}" placeholder="単語を入力..." onkeydown="if(event.key==='Enter') this.blur();" onchange="updateWordField(${folder.id}, ${wIdx}, 'word', this.value)" style="font-size:1.2em; font-weight:bold; border:none; outline:none; color:#0f172a; width:100%;">
-                </div>
-
-                <div style="display:flex; align-items:center; gap:6px;">
-                  <select onchange="moveWord(${folder.id}, ${wIdx}, this.value)" style="font-size:0.8em; padding:4px; border-radius:4px; border:1px solid #cbd5e1; background:#f8fafc;">
-                    <option value="">移動...</option>
-                    ${folders.map(f => `<option value="${f.id}" ${f.id === folder.id ? 'disabled' : ''}>${f.name}</option>`).join('')}
-                  </select>
-                  <button onclick="deleteWord(${folder.id}, ${wIdx})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:1.1em;">🗑️</button>
-                </div>
-              </div>
-              
-              <div style="margin-top:8px; display:flex; gap:4px; align-items:center; background:#f8fafc; padding:4px 8px; border-radius:4px; border:1px solid #e2e8f0; font-size:0.75em;">
-                <span style="color:#64748b; margin-right:4px;">文字色:</span>
-                <button onmousedown="event.preventDefault(); formatText('foreColor', '#e11d48');" style="background:#e11d48; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">赤</button>
-                <button onmousedown="event.preventDefault(); formatText('foreColor', '#0284c7');" style="background:#0284c7; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">青</button>
-                <button onmousedown="event.preventDefault(); formatText('hiliteColor', '#fef08a');" style="background:#fef08a; color:#0f172a; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">黄ハイライト</button>
-                <button onmousedown="event.preventDefault(); formatText('bold');" style="background:#cbd5e1; color:#0f172a; border:none; border-radius:3px; padding:2px 6px; cursor:pointer; font-weight:bold;">B</button>
-                <button onmousedown="event.preventDefault(); formatText('removeFormat');" style="background:#e2e8f0; color:#475569; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">🧹 リセット</button>
-              </div>
-
-              <div style="margin-top:4px; background:#fff5f5; padding:8px; border-radius:4px; font-size:0.95em; border:1px solid #ffe4e6; line-height:1.5;">
-                <div 
-                  contenteditable="true" 
-                  onblur="updateWordField(${folder.id}, ${wIdx}, 'meanings', this.innerHTML)" 
-                  style="width:100%; border:none; outline:none; font-family:sans-serif; min-height:1.2em;"
-                >${(w.meanings || []).join('<br>')}</div>
-              </div>
-
-              <div style="margin-top:8px; background:#f8fafc; padding:8px; border-radius:4px; border:1px solid #f1f5f9;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                  <span style="font-size:0.85em; font-weight:bold; color:#475569;">💬 例文</span>
-                  <button onclick="addExample(${folder.id}, ${wIdx})" style="background:#0284c7; color:white; border:none; padding:2px 6px; border-radius:3px; font-size:0.75em; cursor:pointer;">+ 例文追加</button>
-                </div>
-                ${(w.examples || []).map((ex, exIdx) => `
-                  <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
-                    <div style="flex:1;">
-                      <input value="${ex.en || ''}" placeholder="英語例文を入力..." onchange="updateExampleField(${folder.id}, ${wIdx}, ${exIdx}, 'en', this.value)" style="width:100%; font-size:0.88em; color:#0284c7; border:none; border-bottom:1px solid #cbd5e1; outline:none; background:transparent;">
-                      <input value="${ex.jp || ''}" placeholder="日本語訳を入力..." onchange="updateExampleField(${folder.id}, ${wIdx}, ${exIdx}, 'jp', this.value)" style="width:100%; font-size:0.85em; color:#64748b; border:none; border-bottom:1px dashed #cbd5e1; outline:none; background:transparent; margin-top:2px;">
-                    </div>
-                    <button onclick="deleteExample(${folder.id}, ${wIdx}, ${exIdx})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:0.9em;">🗑️</button>
-                  </div>
-                `).join('')}
-              </div>
-
-              <div style="margin-top:6px; font-size:0.82em; color:#475569; background:#f1f5f9; padding:6px 8px; border-radius:4px;">
-                💡 <b>解説:</b> 
-                <input value="${w.details || ''}" placeholder="補足やメモを入力..." onkeydown="if(event.key==='Enter') this.blur();" onchange="updateWordField(${folder.id}, ${wIdx}, 'details', this.value)" style="width:80%; border:none; background:transparent; font-size:1em; outline:none; color:#475569;">
-              </div>
-            </div>
-          `).join("")}
-        </div>
-      ` : ''}
+      ${innerContent}
     `;
+
     foldersEl.appendChild(div);
   });
 }
