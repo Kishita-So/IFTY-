@@ -1,30 +1,87 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IFTY AI単語帳</title>
-<link rel="stylesheet" href="style.css">
-<script src="https://js.puter.com/v2/"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ITFY - AI英単語ポータル</title>
+  <link rel="stylesheet" href="style.css">
 </head>
+<body style="font-family: sans-serif; background: #f8fafc; margin: 0; padding: 0; color: #0f172a;">
 
-<body>
+  <div id="landingPage" style="max-width: 800px; margin: 0 auto; padding: 60px 20px; text-align: center;">
+    <h1 style="font-size: 2.8em; margin-bottom: 10px;">✨ ITFY English</h1>
+    <p style="color: #475569; font-size: 1.1em; line-height: 1.6;">
+      AIで学ぶ、次世代の英単語学習ポータル。<br>
+      ログインして、あなたの英単語帳にアクセスしよう。
+    </p>
 
-<header style="text-align: center; margin-bottom: 20px;">
-  <h1>📚 IFTY 単語帳</h1>
-</header>
+    <div style="margin-top: 30px; display: flex; justify-content: center; gap: 12px;">
+      <button onclick="showAuthModal('login')" style="background: #0284c7; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 1em; cursor: pointer; font-weight: bold;">ログイン</button>
+      <button onclick="showAuthModal('signup')" style="background: #e11d48; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 1em; cursor: pointer; font-weight: bold;">新規アカウント登録</button>
+    </div>
+  </div>
 
-<main style="max-width: 800px; margin: 0 auto; padding: 0 16px;">
+  <div id="authModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000;">
+    <div style="background: white; padding: 30px; border-radius: 8px; width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+      <h3 id="modalTitle" style="margin-top: 0;">ログイン</h3>
+      
+      <input type="email" id="authEmail" placeholder="メールアドレス" style="width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 4px;">
+      <input type="password" id="authPassword" placeholder="パスワード" style="width: 100%; padding: 10px; margin-bottom: 15px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 4px;">
+      
+      <button id="authSubmitBtn" onclick="handleAuthSubmit()" style="width: 100%; padding: 10px; background: #e11d48; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">実行</button>
+      
+      <button onclick="hideAuthModal()" style="width: 100%; margin-top: 10px; padding: 8px; background: transparent; color: #64748b; border: none; cursor: pointer; font-size: 0.9em;">キャンセル</button>
+    </div>
+  </div>
 
-<section style="display: flex; gap: 8px; margin-bottom: 20px;">
-  <input id="folderName" placeholder="新しいフォルダ名を入力..." style="flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px;">
-  <button id="createFolderBtn" style="padding: 10px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">作成</button>
-</section>
+  <div id="mainPortal" style="display: none; max-width: 900px; margin: 0 auto; padding: 20px;">
+    
+    <header style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display: flex; align-items: center; gap: 8px; cursor: pointer;" onclick="showView('home')">
+        <span style="font-weight: bold; font-size: 1.2em;">✨ ITFY</span>
+        <span id="userDisplay" style="font-size: 0.85em; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 12px;"></span>
+      </div>
+      <div>
+        <button onclick="showView('home')" style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85em; margin-right: 6px;">🏠 ホーム</button>
+        <button onclick="logout()" style="background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85em;">ログアウト</button>
+      </div>
+    </header>
 
-<section id="folders"></section>
+    <div id="viewHome">
+      <h2 style="margin-bottom: 20px;">🎮 メインメニュー</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;">
+        
+        <div onclick="showView('vocab')" style="background: white; border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+          <div style="font-size: 2em; margin-bottom: 8px;">📚</div>
+          <h3 style="margin: 0 0 6px 0; color: #0284c7;">単語一覧 & AI相談</h3>
+          <p style="margin: 0; color: #64748b; font-size: 0.9em;">フォルダ別で単語を管理・AIに質問して学習します。</p>
+        </div>
 
-</main>
+        <div onclick="alert('フラッシュカード機能は準備中です！次回追加しましょう！')" style="background: white; border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; cursor: pointer; opacity: 0.8; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+          <div style="font-size: 2em; margin-bottom: 8px;">🎴</div>
+          <h3 style="margin: 0 0 6px 0; color: #e11d48;">フラッシュカード <span style="font-size:0.7em; background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px;">Coming Soon</span></h3>
+          <p style="margin: 0; color: #64748b; font-size: 0.9em;">登録した単語をカード形式でサクサク復習します。</p>
+        </div>
 
-<script src="script.js"></script>
+      </div>
+    </div>
+
+    <div id="viewVocab" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 style="margin: 0;">📚 単語帳</h2>
+        <button onclick="showView('home')" style="background: #e2e8f0; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">← メニューに戻る</button>
+      </div>
+
+      <div style="background: white; padding: 16px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <input id="folderName" placeholder="新しいフォルダ名を入力..." style="flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px;">
+        <button id="createFolderBtn" style="background: #0284c7; color: white; border: none; padding: 10px 16px; border-radius: 4px; font-weight: bold; cursor: pointer;">📁 フォルダ作成</button>
+      </div>
+
+      <div id="folders"></div>
+    </div>
+
+  </div>
+
+  <script type="module" src="script.js"></script>
 </body>
 </html>
