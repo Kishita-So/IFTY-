@@ -3,72 +3,77 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>単語帳アプリ</title>
+  <title>スマート単語帳 & AIアシスタント</title>
 </head>
-<body id="appBody" style="font-family: sans-serif; background: #0f172a; margin: 0; padding: 16px; min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; box-sizing: border-box;">
+<body id="appBody" style="font-family: sans-serif; background: #0f172a; margin: 0; padding: 16px; min-height: 100vh; box-sizing: border-box;">
 
-  <div id="landingPage" style="background: #1e293b; color: white; padding: 32px 24px; border-radius: 16px; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: left; margin-top: 40px;">
+  <div id="landingPage" style="background: #1e293b; color: white; padding: 32px 24px; border-radius: 16px; width: 100%; max-width: 400px; margin: 40px auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
     <div style="font-size: 2em; font-weight: bold; margin-bottom: 8px; color: #38bdf8;">単語帳</div>
     <h2 style="margin: 0 0 24px 0; font-size: 1.3em; font-weight: normal; color: #f1f5f9;">アカウントを選択してください</h2>
-
     <div id="accountList" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;"></div>
-
-    <div onclick="showAuthModal('login')" style="display: flex; align-items: center; gap: 12px; padding: 12px; border-top: 1px solid #334155; cursor: pointer; border-radius: 8px; transition: background 0.2s;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='transparent'">
+    <div onclick="showAuthModal('login')" style="display: flex; align-items: center; gap: 12px; padding: 12px; border-top: 1px solid #334155; cursor: pointer; border-radius: 8px;">
       <div style="width: 36px; height: 36px; border-radius: 50%; border: 1px solid #64748b; display: flex; align-items: center; justify-content: center; font-size: 1.2em;">👤</div>
       <span style="font-size: 0.95em; color: #cbd5e1;">別のアカウントを使用 / 新規登録</span>
     </div>
   </div>
 
-  <div id="mainPortal" style="display: none; width: 100%; max-width: 650px; margin: 0 auto;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; background: white; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+  <div id="mainPortal" style="display: none; width: 100%; max-width: 700px; margin: 0 auto;">
+    
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; background: white; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0;">
       <div>
         <span style="font-size:0.8em; color:#64748b;">ログイン中:</span><br>
         <b id="userDisplay" style="color: #0f172a; font-size: 1.05em;"></b>
       </div>
       <div style="display: flex; gap: 6px;">
-        <button onclick="showAccountSettings()" style="background: #475569; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85em;">⚙️ アカウント設定</button>
+        <button onclick="showAccountSettings()" style="background: #475569; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85em;">⚙️ 設定</button>
         <button onclick="logout()" style="background: #e11d48; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85em;">ログアウト</button>
       </div>
     </div>
 
-    <div id="accountModal" style="display:none; background: #f1f5f9; padding: 14px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 20px;">
-      <h3 style="margin: 0 0 10px 0; font-size: 1em; color: #334155;">⚙️ アカウント設定・データ移行</h3>
-      <div style="margin-bottom: 12px; background: white; padding: 10px; border-radius: 6px;">
-        <label style="font-size:0.85em; font-weight:bold; color:#475569;">📧 ログインアドレス（データ）の移動</label>
-        <div style="display:flex; gap:6px; margin-top:4px;">
-          <input id="newEmailInput" placeholder="新しいメールアドレスを入力" style="flex:1; padding:6px; font-size:0.85em; border:1px solid #cbd5e1; border-radius:4px;">
-          <button onclick="transferAccountData()" style="background:#0284c7; color:white; border:none; padding:6px 12px; border-radius:4px; font-size:0.85em; cursor:pointer;">移行する</button>
-        </div>
+    <div id="vocabPage">
+      <div style="display: flex; gap: 8px; margin-bottom: 20px;">
+        <input id="folderName" placeholder="新しいフォルダ名を入力してEnter" style="flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95em;">
+        <button onclick="createFolder()" style="background: #15803d; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold;">フォルダ作成</button>
       </div>
-      <div style="background: white; padding: 10px; border-radius: 6px;">
-        <label style="font-size:0.85em; font-weight:bold; color:#475569;">🔑 パスワードの変更</label>
-        <div style="display:flex; gap:6px; margin-top:4px;">
-          <input id="changePassInput" type="password" placeholder="新しいパスワードを入力" style="flex:1; padding:6px; font-size:0.85em; border:1px solid #cbd5e1; border-radius:4px;">
-          <button onclick="changePassword()" style="background:#15803d; color:white; border:none; padding:6px 12px; border-radius:4px; font-size:0.85em; cursor:pointer;">変更</button>
-        </div>
+      <div id="folders"></div>
+    </div>
+
+    <div id="aiChatPage" style="display: none; background: white; border-radius: 12px; border: 1px solid #cbd5e1; padding: 16px; min-height: 500px; flex-direction: column;">
+      
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 12px;">
+        <button onclick="createNewChatSession()" style="background: #0284c7; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.85em;">＋ 新しいチャット</button>
+        <select id="chatSessionSelect" onchange="switchChatSession(this.value)" style="padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.85em; max-width: 250px;"></select>
+      </div>
+
+      <div id="chatMessages" style="flex: 1; min-height: 350px; max-height: 450px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 8px; background: #f8fafc; border-radius: 8px; margin-bottom: 12px;"></div>
+
+      <div id="imagePreviewContainer" style="display:none; margin-bottom: 8px; align-items: center; gap: 8px;">
+        <img id="imagePreview" style="max-height: 60px; border-radius: 4px; border: 1px solid #cbd5e1;">
+        <button onclick="clearSelectedImage()" style="background: #ef4444; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 0.7em;">✕</button>
+      </div>
+
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <label style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 1.1em;" title="画像を読み込む">
+          📷 <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleImageSelect(event)">
+        </label>
+        <input id="chatInput" placeholder="AIに質問、または「〇〇な単語を追加して」と指示..." onkeydown="if(event.key==='Enter'){ sendChatMessage(); }" style="flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none;">
+        <button onclick="sendChatMessage()" style="background: #0284c7; color: white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: bold; cursor: pointer;">送信</button>
       </div>
     </div>
 
-    <div style="display: flex; gap: 8px; margin-bottom: 20px;">
-      <input id="folderName" placeholder="新しいフォルダ名を入力してEnter" style="flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95em;">
-      <button id="createFolderBtn" onclick="createFolder()" style="background: #15803d; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold;">フォルダ作成</button>
-    </div>
-
-    <div id="folders"></div>
   </div>
 
+  <button id="floatingAiBtn" onclick="toggleViewMode()" style="display: none; position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; border-radius: 50%; background: #0284c7; color: white; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-size: 1.5em; cursor: pointer; z-index: 999; justify-content: center; align-items: center;">
+    💬
+  </button>
+
   <div id="authModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; z-index:1000;">
-    <div style="background:white; padding:24px; border-radius:12px; width:320px; box-shadow:0 4px 15px rgba(0,0,0,0.3);">
-      <h2 id="modalTitle" style="margin-top:0; color:#0f172a; font-size: 1.3em;">ログイン / 新規登録</h2>
-      <input id="authEmail" type="text" placeholder="メールアドレス（自由入力）" style="width:100%; padding:10px; margin-bottom:10px; box-sizing:border-box; border:1px solid #cbd5e1; border-radius:6px;">
-      
-      <div style="position:relative; width:100%; margin-bottom:16px;">
-        <input id="authPassword" type="password" placeholder="パスワード" style="width:100%; padding:10px 36px 10px 10px; box-sizing:border-box; border:1px solid #cbd5e1; border-radius:6px;">
-        <button id="togglePassBtn" onclick="togglePassword()" type="button" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:1.1em;">👁️</button>
-      </div>
-      
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <button id="authSubmitBtn" onclick="handleAuthSubmit()" style="background:#15803d; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:bold;">決定</button>
+    <div style="background:white; padding:24px; border-radius:12px; width:320px;">
+      <h2 style="margin-top:0;">ログイン / 新規登録</h2>
+      <input id="authEmail" placeholder="メールアドレス" style="width:100%; padding:10px; margin-bottom:10px; box-sizing:border-box;">
+      <input id="authPassword" type="password" placeholder="パスワード" style="width:100%; padding:10px; margin-bottom:16px; box-sizing:border-box;">
+      <div style="display:flex; justify-content:space-between;">
+        <button onclick="handleAuthSubmit()" style="background:#15803d; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer;">決定</button>
         <button onclick="hideAuthModal()" style="background:#64748b; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">閉じる</button>
       </div>
     </div>
