@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>スマート単語帳 & AIアシスタント</title>
+  <title>スマート単語帳 & Grok AIアシスタント</title>
 </head>
 <body id="appBody" style="font-family: sans-serif; background: #0f172a; margin: 0; padding: 16px; min-height: 100vh; box-sizing: border-box;">
 
@@ -44,7 +44,7 @@
         
         <div style="display: flex; gap: 6px; align-items: center; flex: 1; justify-content: flex-end;">
           <select id="chatSessionSelect" onchange="switchChatSession(this.value)" style="padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.85em; max-width: 150px;"></select>
-          <input id="chatTitleInput" placeholder="チャット名" onchange="updateChatTitle(this.value)" style="padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.85em; width: 100px;" title="チャット名">
+          <input id="chatTitleInput" placeholder="チャット名" onchange="updateChatTitle(this.value)" style="padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.85em; width: 100px;" title="チャット名変更">
           <button onclick="moveChatSession(-1)" title="上のチャットに入れ替え" style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 4px 8px; border-radius: 4px; cursor: pointer;">▲</button>
           <button onclick="moveChatSession(1)" title="下のチャットに入れ替え" style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 4px 8px; border-radius: 4px; cursor: pointer;">▼</button>
           <button onclick="deleteCurrentChatSession()" title="このチャットを削除" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">🗑️</button>
@@ -62,7 +62,7 @@
         <label style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 1.1em;" title="画像を読み込む">
           📷 <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleImageSelect(event)">
         </label>
-        <input id="chatInput" placeholder="AIに質問、または「〇〇な単語を追加して」と指示..." onkeydown="if(event.key==='Enter'){ sendChatMessage(); }" style="flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none;">
+        <input id="chatInput" placeholder="Grokに質問、または「〇〇な単語を追加して」と指示..." onkeydown="if(event.key==='Enter'){ sendChatMessage(); }" style="flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none;">
         <button onclick="sendChatMessage()" style="background: #0284c7; color: white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: bold; cursor: pointer;">送信</button>
       </div>
     </div>
