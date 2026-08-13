@@ -5,7 +5,7 @@ let currentSessionId = null;
 let currentView = "vocab"; 
 let selectedImageBase64 = null;
 
-const WORKER_URL = "[https://ifty.humbleflail205.workers.dev](https://ifty.humbleflail205.workers.dev)";
+const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
 function getStorageKey(email) {
   return "user_data_grok_v3_" + email.toLowerCase().trim();
@@ -66,7 +66,7 @@ window.createNewChatSession = function(shouldRender = true) {
   const newSession = {
     id: Date.now(),
     title: "新しいチャット " + (chatSessions.length + 1),
-    messages: [{ role: "ai", text: "こんにちは！Grokアシスタントです。単語の追加や質問ができます。" }]
+    messages: [{ role: "ai", text: "こんにちは！AIアシスタントです。単語の追加や質問ができます。" }]
   };
   chatSessions.unshift(newSession);
   currentSessionId = newSession.id;
@@ -162,7 +162,7 @@ window.sendChatMessage = async function() {
   clearSelectedImage();
   renderChatArea();
 
-  session.messages.push({ role: "ai", text: "🤖 Grokが処理中..." });
+  session.messages.push({ role: "ai", text: "🤖 AIが処理中..." });
   renderChatArea();
 
   try {
