@@ -3,7 +3,7 @@ let currentUser = null;
 let folders = [];
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
-// 登録済みアカウント一覧を取得/保存
+// アカウント管理
 function getSavedAccounts() {
   const saved = localStorage.getItem("app_registered_accounts");
   return saved ? JSON.parse(saved) : ["16011264@kago.ed.jp", "humbleflail205@gmail.com"];
@@ -35,21 +35,19 @@ function loadUserData(email) {
   }
 }
 
-// 🌐 Google風 アカウント選択画面描画
+// 🌐 アカウント一覧画面を描画
 function renderAccountList() {
   const listEl = document.getElementById("accountList");
   if (!listEl) return;
   
   const accounts = getSavedAccounts();
   listEl.innerHTML = accounts.map(email => `
-    <div onclick="loginWithAccount('${email}')" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #334155; border-radius: 8px; cursor: pointer; transition: background 0.2s;">
+    <div onclick="loginWithAccount('${email}')" style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #334155; border-radius: 8px; cursor: pointer; transition: background 0.2s;">
       <div style="display: flex; align-items: center; gap: 12px;">
         <div style="width: 36px; height: 36px; border-radius: 50%; background: #0284c7; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold;">
           ${email.charAt(0).toUpperCase()}
         </div>
-        <div>
-          <div style="font-size: 0.9em; font-weight: bold; color: #f8fafc;">${email}</div>
-        </div>
+        <div style="font-size: 0.9em; font-weight: bold; color: #f8fafc;">${email}</div>
       </div>
     </div>
   `).join('');
@@ -62,8 +60,11 @@ window.loginWithAccount = function(email) {
 };
 
 function showMainPortal() {
-  document.body.style.background = "#f8fafc";
-  document.body.style.display = "block";
+  const body = document.getElementById("appBody");
+  if (body) {
+    body.style.background = "#f8fafc";
+    body.style.display = "block";
+  }
   document.getElementById("landingPage").style.display = "none";
   document.getElementById("mainPortal").style.display = "block";
   document.getElementById("userDisplay").innerText = currentUser.email;
@@ -163,12 +164,12 @@ window.speakWord = function(text) {
   }
 };
 
-// 🎨 テキスト装飾（ハイライト含む）確実化処理
+// 🎨 テキスト装飾機能（選択範囲にマーカー・色付け）
 window.applyStyle = function(command, value = null) {
   document.execCommand(command, false, value);
 };
 
-// 🤖 AI取得 & スぺルチェック提案機能
+// 🤖 AI自動解析 & 辞書機能
 async function fetchAIContent(word) {
   try {
     const res = await fetch(WORKER_URL, {
@@ -176,12 +177,55 @@ async function fetchAIContent(word) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "word", word: word })
     });
-    if (res.ok) return await res.json();
-  } catch (e) {}
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {
+    console.error("AI解析エラー:", e);
+  }
   return { meanings: [`【訳】 ${word}`], examples: [], details: "", suggestion: null };
 }
 
-// 💡 提案された単語への置換処理
+// 🤖 AI質問（「類義語は？」「対義語は？」など自由質問）機能
+window.askAIQuestion = async function(folderId, wIdx) {
+  const f = folders.find(x => x.id === folderId);
+  if (!f || !f.words[wIdx]) return;
+
+  const qInput = document.getElementById(`aiQuery_${folderId}_${wIdx}`);
+  const question = qInput ? qInput.value.trim() : "";
+  if (!question) return;
+
+  const targetWord = f.words[wIdx].word;
+  const ansEl = document.getElementById(`aiAns_${folderId}_${wIdx}`);
+  if (ansEl) ansEl.innerText = "🤖 AI回答生成中...";
+
+  try {
+    const res = await fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "ask",
+        word: targetWord,
+        question: question
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const answerText = data.answer || data.result || "回答が得られませんでした";
+      f.words[wIdx].aiAnswer = answerText;
+      saveUserData();
+      render();
+      return;
+    }
+  } catch (e) {
+    console.error("AI質問エラー:", e);
+  }
+
+  if (ansEl) ansEl.innerText = "⚠️ AIの回答取得に失敗しました。";
+};
+
+// 💡 修正提案の適用
 window.applyCorrection = function(folderId, wIdx, correctedWord) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wIdx]) {
@@ -324,7 +368,7 @@ function render(){
 
   folders.forEach((folder) => {
     const div = document.createElement("div");
-    div.style.cssText = "background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; margin-bottom: 16px;";
+    div.style.cssText = "background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);";
 
     const wordsHtml = folder.words.map((w, wIdx) => {
       const meaningText = (w.meanings || []).join('<br>');
@@ -341,9 +385,9 @@ function render(){
         </div>
       `).join('');
 
-      // 🔍 スペルミス提案の表示
+      // 💡 もしかして（スペル提案）のHTML
       const suggestionHtml = w.suggestion ? `
-        <div style="margin-top:4px; font-size:0.82em; color:#d97706; background:#fef3c7; padding:4px 8px; border-radius:4px; display:flex; align-items:center; gap:6px;">
+        <div style="margin-top:6px; font-size:0.82em; color:#d97706; background:#fef3c7; padding:4px 8px; border-radius:4px; display:flex; align-items:center; justify-content:space-between;">
           <span>💡 もしかして: <b>${w.suggestion}</b> ?</span>
           <button onclick="applyCorrection(${folder.id}, ${wIdx}, '${w.suggestion}')" style="background:#d97706; color:white; border:none; padding:2px 6px; border-radius:3px; font-size:0.85em; cursor:pointer;">修正する</button>
         </div>
@@ -394,6 +438,15 @@ function render(){
           <div style="margin-top:6px; font-size:0.82em; color:#475569; background:#f1f5f9; padding:6px 8px; border-radius:4px;">
             💡 <b>メモ:</b> 
             <input value="${w.details || ''}" placeholder="補足メモを入力..." onchange="updateWordField(${folder.id}, ${wIdx}, 'details', this.value)" style="width:80%; border:none; background:transparent; font-size:1em; outline:none; color:#475569;">
+          </div>
+
+          <div style="margin-top:8px; background:#f0f9ff; padding:8px; border-radius:6px; border:1px solid #bae6fd;">
+            <div style="font-size:0.8em; font-weight:bold; color:#0284c7; margin-bottom:4px;">🤖 AIに質問する (例: 類義語は？ / 違いは？)</div>
+            <div style="display:flex; gap:6px;">
+              <input id="aiQuery_${folder.id}_${wIdx}" placeholder="例: 類義語や対義語を教えて" onkeydown="if(event.key==='Enter'){ askAIQuestion(${folder.id}, ${wIdx}); }" style="flex:1; padding:6px; font-size:0.85em; border:1px solid #7dd3fc; border-radius:4px; outline:none;">
+              <button onclick="askAIQuestion(${folder.id}, ${wIdx})" style="background:#0284c7; color:white; border:none; padding:6px 10px; border-radius:4px; font-size:0.8em; cursor:pointer; font-weight:bold;">送信</button>
+            </div>
+            <div id="aiAns_${folder.id}_${wIdx}" style="margin-top:6px; font-size:0.85em; color:#0369a1; white-space:pre-wrap;">${w.aiAnswer || ''}</div>
           </div>
         </div>
       `;
