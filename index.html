@@ -43,8 +43,8 @@
         <button onclick="createNewChatSession()" style="background: #0284c7; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.85em;">＋ 新しいチャット</button>
         
         <div style="display: flex; gap: 6px; align-items: center; flex: 1; justify-content: flex-end;">
-          <select id="chatSessionSelect" onchange="switchChatSession(this.value)" style="padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.85em; max-width: 160px;"></select>
-          <input id="chatTitleInput" placeholder="チャット名" onchange="updateChatTitle(this.value)" style="padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.85em; width: 110px;" title="ここを書き換えてEnterでチャット名を変更">
+          <select id="chatSessionSelect" onchange="switchChatSession(this.value)" style="padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.85em; max-width: 150px;"></select>
+          <input id="chatTitleInput" placeholder="チャット名" onchange="updateChatTitle(this.value)" style="padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.85em; width: 100px;" title="チャット名">
           <button onclick="moveChatSession(-1)" title="上のチャットに入れ替え" style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 4px 8px; border-radius: 4px; cursor: pointer;">▲</button>
           <button onclick="moveChatSession(1)" title="下のチャットに入れ替え" style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 4px 8px; border-radius: 4px; cursor: pointer;">▼</button>
           <button onclick="deleteCurrentChatSession()" title="このチャットを削除" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">🗑️</button>
