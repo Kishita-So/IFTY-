@@ -1,10 +1,22 @@
 // --- 🔐 状態・データ管理 ---
 let currentUser = null;
 let folders = [];
-let authMode = "login";
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
-// ローカルストレージを使用したデータ管理
+// 登録済みアカウント一覧を取得/保存
+function getSavedAccounts() {
+  const saved = localStorage.getItem("app_registered_accounts");
+  return saved ? JSON.parse(saved) : ["16011264@kago.ed.jp", "humbleflail205@gmail.com"];
+}
+
+function saveSavedAccount(email) {
+  let accounts = getSavedAccounts();
+  if (!accounts.includes(email)) {
+    accounts.push(email);
+    localStorage.setItem("app_registered_accounts", JSON.stringify(accounts));
+  }
+}
+
 function getStorageKey(email) {
   return "user_data_" + email.toLowerCase().trim();
 }
@@ -23,23 +35,44 @@ function loadUserData(email) {
   }
 }
 
+// 🌐 ログインアカウント一覧の画面描画（Google風）
+function renderAccountList() {
+  const listEl = document.getElementById("accountList");
+  if (!listEl) return;
+  
+  const accounts = getSavedAccounts();
+  listEl.innerHTML = accounts.map(email => `
+    <div onclick="loginWithAccount('${email}')" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #334155; border-radius: 8px; cursor: pointer; transition: background 0.2s;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 36px; height: 36px; border-radius: 50%; background: #0284c7; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+          ${email.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <div style="font-size: 0.9em; font-weight: bold; color: #f8fafc;">${email}</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.loginWithAccount = function(email) {
+  currentUser = { email: email };
+  loadUserData(email);
+  showMainPortal();
+};
+
+function showMainPortal() {
+  document.body.style.background = "#f8fafc";
+  document.body.style.display = "block";
+  document.getElementById("landingPage").style.display = "none";
+  document.getElementById("mainPortal").style.display = "block";
+  document.getElementById("userDisplay").innerText = currentUser.email;
+  hideAuthModal();
+  render();
+}
+
 // 🔐 モーダル & 認証機能
 window.showAuthModal = function(mode) {
-  authMode = mode;
-  const modalTitle = document.getElementById("modalTitle");
-  const authSubmitBtn = document.getElementById("authSubmitBtn");
-  const authGuide = document.getElementById("authGuide");
-
-  if (modalTitle) modalTitle.innerText = mode === "login" ? "ログイン" : "新規アカウント登録";
-  if (authSubmitBtn) authSubmitBtn.innerText = mode === "login" ? "ログイン" : "登録する";
-  
-  if (authGuide) {
-    authGuide.style.display = mode === "register" ? "block" : "none";
-    if (mode === "register") {
-      authGuide.innerText = "※お使いのメールアドレスと任意のパスワードを設定してください。";
-    }
-  }
-
   const modal = document.getElementById("authModal");
   if (modal) modal.style.display = "flex";
 };
@@ -72,19 +105,10 @@ window.handleAuthSubmit = function() {
 
   if (!email || !password) return alert("メールアドレスとパスワードを入力してください");
 
+  saveSavedAccount(email);
   currentUser = { email: email };
   loadUserData(email);
-
-  const landingEl = document.getElementById("landingPage");
-  const portalEl = document.getElementById("mainPortal");
-  const userDisp = document.getElementById("userDisplay");
-
-  if (landingEl) landingEl.style.display = "none";
-  if (portalEl) portalEl.style.display = "block";
-  if (userDisp) userDisp.innerText = email;
-
-  hideAuthModal();
-  render();
+  showMainPortal();
 };
 
 window.logout = function() {
@@ -102,14 +126,12 @@ window.transferAccountData = function() {
   const newEmail = newEmailInput ? newEmailInput.value.trim() : "";
 
   if (!newEmail) return alert("新しいメールアドレスを入力してください");
-  if (newEmail.toLowerCase() === currentUser.email.toLowerCase()) {
-    return alert("現在のメールアドレスと同じです");
-  }
+  if (newEmail.toLowerCase() === currentUser.email.toLowerCase()) return alert("現在のメールアドレスと同じです");
 
   if (confirm(`現在のデータ（単語帳）を「${newEmail}」へ移動させますか？`)) {
-    // 旧キーを削除し新キーへ保存
     localStorage.removeItem(getStorageKey(currentUser.email));
     currentUser.email = newEmail;
+    saveSavedAccount(newEmail);
     saveUserData();
 
     document.getElementById("userDisplay").innerText = newEmail;
@@ -121,11 +143,9 @@ window.transferAccountData = function() {
 
 window.changePassword = function() {
   const passInput = document.getElementById("changePassInput");
-  const newPass = passInput ? passInput.value : "";
-  if (!newPass) return alert("新しいパスワードを入力してください");
-
+  if (!passInput || !passInput.value) return alert("新しいパスワードを入力してください");
   alert("パスワードの変更が完了しました。");
-  if (passInput) passInput.value = "";
+  passInput.value = "";
   window.showAccountSettings();
 };
 
@@ -177,7 +197,35 @@ window.addWord = async function(folderId, word){
 window.addBlankWord = function(folderId) {
   const folder = folders.find(f => f.id === folderId);
   if (folder) {
-    folder.words.push({ word: "", meanings: [""], examples: [], details: "" });
+    folder.words.push({ word: "", meanings: [""], examples: [{ en: "", jp: "" }], details: "" });
+    saveUserData();
+    render();
+  }
+};
+
+// 💬 例文機能
+window.addExample = function(folderId, wIdx) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words[wIdx]) {
+    if (!f.words[wIdx].examples) f.words[wIdx].examples = [];
+    f.words[wIdx].examples.push({ en: "", jp: "" });
+    saveUserData();
+    render();
+  }
+};
+
+window.updateExampleField = function(folderId, wIdx, exIdx, field, value) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words[wIdx] && f.words[wIdx].examples[exIdx]) {
+    f.words[wIdx].examples[exIdx][field] = value;
+    saveUserData();
+  }
+};
+
+window.deleteExample = function(folderId, wIdx, exIdx) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words[wIdx] && f.words[wIdx].examples) {
+    f.words[wIdx].examples.splice(exIdx, 1);
     saveUserData();
     render();
   }
@@ -218,7 +266,6 @@ window.deleteWord = function(folderId, index) {
   if (f) { f.words.splice(index, 1); saveUserData(); render(); }
 };
 
-// ↕️ 単語の上下移動
 window.moveWordPosition = function(folderId, index, direction) {
   const folder = folders.find(f => f.id === folderId);
   if (!folder) return;
@@ -233,7 +280,6 @@ window.moveWordPosition = function(folderId, index, direction) {
   render();
 };
 
-// 📁 フォルダ間移動
 window.moveWordToFolder = function(fromFolderId, wIdx, toFolderId) {
   const targetFolderId = Number(toFolderId);
   if (!targetFolderId || fromFolderId === targetFolderId) return;
@@ -273,6 +319,17 @@ function render(){
       const meaningText = (w.meanings || []).join('<br>');
       const folderOptions = folders.map(f => `<option value="${f.id}" ${f.id === folder.id ? 'disabled' : ''}>${f.name}</option>`).join('');
 
+      // 💬 例文リストのHTML生成
+      const examplesList = (w.examples || []).map((ex, exIdx) => `
+        <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+          <div style="flex:1;">
+            <input value="${ex.en || ''}" placeholder="英語例文を入力..." onchange="updateExampleField(${folder.id}, ${wIdx}, ${exIdx}, 'en', this.value)" style="width:100%; font-size:0.88em; color:#0284c7; border:none; border-bottom:1px solid #cbd5e1; outline:none; background:transparent;">
+            <input value="${ex.jp || ''}" placeholder="日本語訳を入力..." onchange="updateExampleField(${folder.id}, ${wIdx}, ${exIdx}, 'jp', this.value)" style="width:100%; font-size:0.85em; color:#64748b; border:none; border-bottom:1px dashed #cbd5e1; outline:none; background:transparent; margin-top:2px;">
+          </div>
+          <button onclick="deleteExample(${folder.id}, ${wIdx}, ${exIdx})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:0.9em;">🗑️</button>
+        </div>
+      `).join('');
+
       return `
         <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:5px solid #e11d48; padding:12px; margin-top:10px; border-radius:6px;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
@@ -304,6 +361,19 @@ function render(){
           <div style="margin-top:4px; background:#fff5f5; padding:8px; border-radius:4px; font-size:0.95em; border:1px solid #ffe4e6;">
             <div contenteditable="true" onblur="updateWordField(${folder.id}, ${wIdx}, 'meanings', this.innerHTML)" style="width:100%; outline:none;">${meaningText}</div>
           </div>
+
+          <div style="margin-top:8px; background:#f8fafc; padding:8px; border-radius:4px; border:1px solid #f1f5f9;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <span style="font-size:0.85em; font-weight:bold; color:#475569;">💬 例文</span>
+              <button onclick="addExample(${folder.id}, ${wIdx})" style="background:#0284c7; color:white; border:none; padding:2px 6px; border-radius:3px; font-size:0.75em; cursor:pointer;">+ 例文追加</button>
+            </div>
+            ${examplesList}
+          </div>
+
+          <div style="margin-top:6px; font-size:0.82em; color:#475569; background:#f1f5f9; padding:6px 8px; border-radius:4px;">
+            💡 <b>メモ:</b> 
+            <input value="${w.details || ''}" placeholder="補足メモを入力..." onchange="updateWordField(${folder.id}, ${wIdx}, 'details', this.value)" style="width:80%; border:none; background:transparent; font-size:1em; outline:none; color:#475569;">
+          </div>
         </div>
       `;
     }).join("");
@@ -330,17 +400,19 @@ function render(){
   });
 }
 
-// ⌨️ 全体キーイベント（Enter連携）
+// 初期起動時処理
+window.onload = function() {
+  renderAccountList();
+};
+
+// 全体キーイベント
 document.addEventListener("keydown", function(e) {
   if (e.key === "Enter") {
-    // ログインモーダル
     const modal = document.getElementById("authModal");
     if (modal && modal.style.display === "flex") {
       window.handleAuthSubmit();
       return;
     }
-
-    // フォルダ作成入力欄
     const folderInput = document.getElementById("folderName");
     if (document.activeElement === folderInput) {
       window.createFolder();
