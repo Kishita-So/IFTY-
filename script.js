@@ -5,10 +5,10 @@ let currentSessionId = null;
 let currentView = "vocab"; 
 let selectedImageBase64 = null;
 
-const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
+const WORKER_URL = "[https://ifty.humbleflail205.workers.dev](https://ifty.humbleflail205.workers.dev)";
 
 function getStorageKey(email) {
-  return "user_data_grok_v2_" + email.toLowerCase().trim();
+  return "user_data_grok_v3_" + email.toLowerCase().trim();
 }
 
 function saveUserData() {
@@ -147,7 +147,7 @@ window.clearSelectedImage = function() {
   document.getElementById("imagePreviewContainer").style.display = "none";
 };
 
-// AIチャット送信
+// AIチャット送信処理
 window.sendChatMessage = async function() {
   const inputEl = document.getElementById("chatInput");
   const text = inputEl ? inputEl.value.trim() : "";
@@ -185,17 +185,17 @@ window.sendChatMessage = async function() {
       }
       session.messages[session.messages.length - 1].text = data.reply || "完了しました。";
     } else {
-      session.messages[session.messages.length - 1].text = "⚠️ サーバー応答エラー";
+      session.messages[session.messages.length - 1].text = "⚠️ サーバー応答エラー（ステータス: " + res.status + "）";
     }
   } catch(e) {
-    session.messages[session.messages.length - 1].text = "⚠️ 通信エラーが発生しました。";
+    session.messages[session.messages.length - 1].text = "⚠️ 通信エラー: " + e.message;
   }
 
   saveUserData();
   render();
 };
 
-// 単語帳への個別追加 (Worker経由)
+// 単語の個別追加 ＆ 意味・例文の自動取得
 window.addWordToFolder = async function(folderId, word) {
   const clean = word.trim();
   if (!clean) return;
