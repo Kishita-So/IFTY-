@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { 
   getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, 
-  signOut, onAuthStateChanged 
+  signOut, onAuthStateChanged, sendPasswordResetEmail 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { 
   getFirestore, doc, setDoc, getDoc 
@@ -62,8 +62,29 @@ onAuthStateChanged(auth, async (user) => {
 
 window.showAuthModal = function(mode) {
   authMode = mode;
-  document.getElementById("modalTitle").innerText = mode === "login" ? "ログイン" : "新規アカウント登録";
-  document.getElementById("authSubmitBtn").innerText = mode === "login" ? "ログイン" : "登録する";
+  const modalTitle = document.getElementById("modalTitle");
+  const authSubmitBtn = document.getElementById("authSubmitBtn");
+  const authGuide = document.getElementById("authGuide");
+  const resetPassBtn = document.getElementById("resetPassBtn");
+
+  if (modalTitle) modalTitle.innerText = mode === "login" ? "ログイン" : "新規アカウント登録";
+  if (authSubmitBtn) authSubmitBtn.innerText = mode === "login" ? "ログイン" : "登録する";
+  
+  // 新規登録時の分かりやすい案内表示
+  if (authGuide) {
+    if (mode === "register") {
+      authGuide.style.display = "block";
+      authGuide.innerText = "※このアプリで今後使用するパスワードを新規作成して入力してください。";
+    } else {
+      authGuide.style.display = "none";
+    }
+  }
+
+  // パスワード忘れた用ボタンの表示切り替え（ログイン時のみ表示）
+  if (resetPassBtn) {
+    resetPassBtn.style.display = mode === "login" ? "block" : "none";
+  }
+
   document.getElementById("authModal").style.display = "flex";
 };
 
@@ -72,7 +93,7 @@ window.hideAuthModal = function() {
 };
 
 window.handleAuthSubmit = async function() {
-  const email = document.getElementById("authEmail").value;
+  const email = document.getElementById("authEmail").value.trim();
   const password = document.getElementById("authPassword").value;
   if (!email || !password) return alert("メールアドレスとパスワードを入力してください");
 
@@ -87,6 +108,34 @@ window.handleAuthSubmit = async function() {
     alert("エラー: " + e.message);
   }
 };
+
+// ❓ パスワード再設定メール送信機能
+window.handleResetPassword = async function() {
+  const email = document.getElementById("authEmail").value.trim();
+  if (!email) return alert("パスワード再設定用メールを送信するため、まずメールアドレスを入力してください。");
+
+  try {
+    await sendPasswordResetEmail(auth, email);
+    alert("パスワード再設定用のメールを送信しました。\nメールの案内をご確認ください。");
+  } catch (e) {
+    alert("送信エラー: " + e.message);
+  }
+};
+
+// ログインモーダルのEnter確定イベントアタッチ
+setTimeout(() => {
+  const emailInput = document.getElementById("authEmail");
+  const passInput = document.getElementById("authPassword");
+
+  const checkEnter = (e) => {
+    if (e.key === "Enter") {
+      window.handleAuthSubmit();
+    }
+  };
+
+  if (emailInput) emailInput.onkeydown = checkEnter;
+  if (passInput) passInput.onkeydown = checkEnter;
+}, 500);
 
 window.logout = function() {
   signOut(auth);
@@ -117,20 +166,25 @@ async function loadUserData() {
   }
 }
 
-// --- 🔊 音声再生（0.5秒遅延して発音） ---
+// --- 🔊 音声再生 ---
 window.speakWord = function(text) {
   if (!text) return;
   if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel(); // 連続タップ時の重複防止
+    window.speechSynthesis.cancel();
     setTimeout(() => {
       const uttr = new SpeechSynthesisUtterance(text);
       uttr.lang = 'en-US';
       uttr.rate = 0.9;
       window.speechSynthesis.speak(uttr);
-    }, 500); // 500ms (0.5秒後)
+    }, 500);
   } else {
     alert("お使いのブラウザは音声読み上げに対応していません。");
   }
+};
+
+// --- 🎨 テキスト装飾機能 ---
+window.formatText = function(command, value = null) {
+  document.execCommand(command, false, value);
 };
 
 // --- 🤖 AIデータ取得 ---
@@ -175,7 +229,7 @@ window.askAIChat = async function(customQuery = null) {
   }
 };
 
-// 単語追加（AI検索付き）
+// 単語追加
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
   if(!cleanWord) return;
@@ -204,19 +258,28 @@ window.addBlankWord = async function(folderId) {
   }
 };
 
-// フォルダ操作
-const createBtn = document.getElementById("createFolderBtn");
-if (createBtn) {
-  createBtn.onclick = async () => {
-    const input = document.getElementById("folderName");
-    const name = input ? input.value.trim() : "";
-    if (!name) return;
-    folders.push({ id: Date.now(), name: name, isCollapsed: false, words: [] });
-    if (input) input.value = "";
-    await saveUserData();
-    render();
-  };
-}
+// フォルダ作成
+window.createFolder = async function() {
+  const input = document.getElementById("folderName");
+  const name = input ? input.value.trim() : "";
+  if (!name) return;
+  folders.push({ id: Date.now(), name: name, isCollapsed: false, words: [] });
+  if (input) input.value = "";
+  await saveUserData();
+  render();
+};
+
+setTimeout(() => {
+  const folderInput = document.getElementById("folderName");
+  const createBtn = document.getElementById("createFolderBtn");
+  
+  if (createBtn) createBtn.onclick = window.createFolder;
+  if (folderInput) {
+    folderInput.onkeydown = (e) => {
+      if (e.key === 'Enter') window.createFolder();
+    };
+  }
+}, 500);
 
 window.toggleFolder = async function(folderId) {
   const f = folders.find(x => x.id === folderId);
@@ -257,6 +320,33 @@ window.moveWord = async function(fromFolderId, wIdx, toFolderId) {
   if (srcFolder && destFolder) {
     const [movedWord] = srcFolder.words.splice(wIdx, 1);
     destFolder.words.push(movedWord);
+    await saveUserData();
+    render();
+  }
+};
+
+window.addExample = async function(folderId, wIdx) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words[wIdx]) {
+    if (!f.words[wIdx].examples) f.words[wIdx].examples = [];
+    f.words[wIdx].examples.push({ en: "", jp: "" });
+    await saveUserData();
+    render();
+  }
+};
+
+window.updateExampleField = async function(folderId, wIdx, exIdx, field, value) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words[wIdx] && f.words[wIdx].examples[exIdx]) {
+    f.words[wIdx].examples[exIdx][field] = value;
+    await saveUserData();
+  }
+};
+
+window.deleteExample = async function(folderId, wIdx, exIdx) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words[wIdx] && f.words[wIdx].examples) {
+    f.words[wIdx].examples.splice(exIdx, 1);
     await saveUserData();
     render();
   }
@@ -331,7 +421,16 @@ function render(){
                 </div>
               </div>
               
-              <div style="margin-top:8px; background:#fff5f5; padding:8px; border-radius:4px; font-size:0.95em; border:1px solid #ffe4e6; line-height:1.5;">
+              <div style="margin-top:8px; display:flex; gap:4px; align-items:center; background:#f8fafc; padding:4px 8px; border-radius:4px; border:1px solid #e2e8f0; font-size:0.75em;">
+                <span style="color:#64748b; margin-right:4px;">文字色:</span>
+                <button onmousedown="event.preventDefault(); formatText('foreColor', '#e11d48');" style="background:#e11d48; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">赤</button>
+                <button onmousedown="event.preventDefault(); formatText('foreColor', '#0284c7');" style="background:#0284c7; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">青</button>
+                <button onmousedown="event.preventDefault(); formatText('hiliteColor', '#fef08a');" style="background:#fef08a; color:#0f172a; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">黄ハイライト</button>
+                <button onmousedown="event.preventDefault(); formatText('bold');" style="background:#cbd5e1; color:#0f172a; border:none; border-radius:3px; padding:2px 6px; cursor:pointer; font-weight:bold;">B</button>
+                <button onmousedown="event.preventDefault(); formatText('removeFormat');" style="background:#e2e8f0; color:#475569; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">🧹 リセット</button>
+              </div>
+
+              <div style="margin-top:4px; background:#fff5f5; padding:8px; border-radius:4px; font-size:0.95em; border:1px solid #ffe4e6; line-height:1.5;">
                 <div 
                   contenteditable="true" 
                   onblur="updateWordField(${folder.id}, ${wIdx}, 'meanings', this.innerHTML)" 
@@ -339,16 +438,21 @@ function render(){
                 >${(w.meanings || []).join('<br>')}</div>
               </div>
 
-              ${(w.examples && w.examples.length > 0) ? `
-                <div style="margin-top:8px; background:#f8fafc; padding:8px; border-radius:4px; font-size:0.88em; border:1px solid #f1f5f9;">
-                  ${w.examples.map(ex => `
-                    <div style="margin-bottom:4px;">
-                      <div style="color:#0284c7; font-weight:500;">💬 ${ex.en || ''}</div>
-                      <div style="color:#64748b;">${ex.jp || ''}</div>
-                    </div>
-                  `).join('')}
+              <div style="margin-top:8px; background:#f8fafc; padding:8px; border-radius:4px; border:1px solid #f1f5f9;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                  <span style="font-size:0.85em; font-weight:bold; color:#475569;">💬 例文</span>
+                  <button onclick="addExample(${folder.id}, ${wIdx})" style="background:#0284c7; color:white; border:none; padding:2px 6px; border-radius:3px; font-size:0.75em; cursor:pointer;">+ 例文追加</button>
                 </div>
-              ` : ''}
+                ${(w.examples || []).map((ex, exIdx) => `
+                  <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+                    <div style="flex:1;">
+                      <input value="${ex.en || ''}" placeholder="英語例文を入力..." onchange="updateExampleField(${folder.id}, ${wIdx}, ${exIdx}, 'en', this.value)" style="width:100%; font-size:0.88em; color:#0284c7; border:none; border-bottom:1px solid #cbd5e1; outline:none; background:transparent;">
+                      <input value="${ex.jp || ''}" placeholder="日本語訳を入力..." onchange="updateExampleField(${folder.id}, ${wIdx}, ${exIdx}, 'jp', this.value)" style="width:100%; font-size:0.85em; color:#64748b; border:none; border-bottom:1px dashed #cbd5e1; outline:none; background:transparent; margin-top:2px;">
+                    </div>
+                    <button onclick="deleteExample(${folder.id}, ${wIdx}, ${exIdx})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:0.9em;">🗑️</button>
+                  </div>
+                `).join('')}
+              </div>
 
               <div style="margin-top:6px; font-size:0.82em; color:#475569; background:#f1f5f9; padding:6px 8px; border-radius:4px;">
                 💡 <b>解説:</b> 
