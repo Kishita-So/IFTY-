@@ -28,7 +28,7 @@ let currentUser = null;
 let folders = [];
 let authMode = "login";
 
-// --- 🎮 画面切り替え制御 (home or vocab) ---
+// --- 🎮 画面切り替え制御 ---
 window.showView = function(viewName) {
   const homeEl = document.getElementById("viewHome");
   const vocabEl = document.getElementById("viewVocab");
@@ -48,7 +48,7 @@ onAuthStateChanged(auth, async (user) => {
     if (portalEl) portalEl.style.display = "block";
     if (userDisp) userDisp.innerText = user.email || "ログイン中";
     
-    showView("home"); // ログイン直後はメインメニューを表示
+    showView("home");
     await loadUserData();
   } else {
     currentUser = null;
@@ -117,6 +117,20 @@ async function loadUserData() {
   }
 }
 
+// --- 🔊 音声再生 ---
+window.speakWord = function(text) {
+  if (!text) return;
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const uttr = new SpeechSynthesisUtterance(text);
+    uttr.lang = 'en-US';
+    uttr.rate = 0.9;
+    window.speechSynthesis.speak(uttr);
+  } else {
+    alert("お使いのブラウザは音声読み上げに対応していません。");
+  }
+};
+
 // --- 🤖 AIデータ取得 ---
 async function fetchAIContent(word) {
   try {
@@ -128,9 +142,9 @@ async function fetchAIContent(word) {
     if (res.ok) return await res.json();
   } catch (e) {}
   return { 
-    meanings: [`【訳】 <span style="color:#e11d48; font-weight:bold;">${word}</span>`], 
+    meanings: [`【訳】 ${word}`], 
     examples: [],
-    details: "詳細情報を取得できませんでした。"
+    details: ""
   };
 }
 
@@ -159,7 +173,7 @@ window.askAIChat = async function(customQuery = null) {
   }
 };
 
-// 単語追加
+// 単語追加（AI検索付き）
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
   if(!cleanWord) return;
@@ -173,22 +187,22 @@ window.addWord = async function(folderId, word){
   }
 };
 
-// 白紙追加
+// 白紙追加（プレースホルダー表示用に中身を空にして追加）
 window.addBlankWord = async function(folderId) {
   const folder = folders.find(f => f.id === folderId);
   if (folder) {
     folder.words.push({
-      word: "New Word",
-      meanings: ["【名詞】 ここに意味を入力"],
-      examples: [{ en: "Sample sentence.", jp: "サンプル例文です。" }],
-      details: "ここに補足・語源などを入力できます。"
+      word: "",
+      meanings: [""],
+      examples: [],
+      details: ""
     });
     await saveUserData();
     render();
   }
 };
 
-// フォルダ作成・操作
+// フォルダ操作
 const createBtn = document.getElementById("createFolderBtn");
 if (createBtn) {
   createBtn.onclick = async () => {
@@ -208,10 +222,21 @@ window.toggleFolder = async function(folderId) {
 };
 
 window.deleteFolder = async function(folderId) {
-  if (confirm("フォルダを削除しますか？")) {
+  if (confirm("フォルダを削除しますか？（中の単語も消去されます）")) {
     folders = folders.filter(f => f.id !== folderId);
     await saveUserData();
     render();
+  }
+};
+
+window.clearFolderWords = async function(folderId) {
+  if (confirm("このフォルダ内の単語をすべて削除しますか？")) {
+    const f = folders.find(x => x.id === folderId);
+    if (f) {
+      f.words = [];
+      await saveUserData();
+      render();
+    }
   }
 };
 
@@ -220,7 +245,21 @@ window.deleteWord = async function(folderId, index) {
   if (f) { f.words.splice(index, 1); await saveUserData(); render(); }
 };
 
-// 意味・例文の編集機能
+window.moveWord = async function(fromFolderId, wIdx, toFolderId) {
+  const targetFolderId = Number(toFolderId);
+  if (!targetFolderId || fromFolderId === targetFolderId) return;
+
+  const srcFolder = folders.find(f => f.id === fromFolderId);
+  const destFolder = folders.find(f => f.id === targetFolderId);
+
+  if (srcFolder && destFolder) {
+    const [movedWord] = srcFolder.words.splice(wIdx, 1);
+    destFolder.words.push(movedWord);
+    await saveUserData();
+    render();
+  }
+};
+
 window.updateWordField = async function(folderId, wIdx, field, value) {
   const f = folders.find(x => x.id === folderId);
   if (f && f.words[wIdx]) {
@@ -231,7 +270,7 @@ window.updateWordField = async function(folderId, wIdx, field, value) {
   }
 };
 
-// 🎨 画面描画（全機能統合レンダリング）
+// 🎨 画面描画
 function render(){
   const foldersEl = document.getElementById("folders");
   if (!foldersEl) return;
@@ -243,7 +282,7 @@ function render(){
   chatBox.innerHTML = `
     <h3 style="margin:0 0 8px 0; color:#166534; font-size:1.05em;">🤖 AI英語相談室</h3>
     <div style="display:flex; gap:6px; margin-bottom:8px;">
-      <input id="aiChatInput" placeholder="質問を入力 (例: enthusiasticとexuberantの違いは？)" style="flex:1; padding:8px; border:1px solid #86efac; border-radius:4px;">
+      <input id="aiChatInput" placeholder="質問を入力 (例: enthusiasticとexuberantの違いは？)" onkeydown="if(event.key==='Enter') askAIChat();" style="flex:1; padding:8px; border:1px solid #86efac; border-radius:4px;">
       <button onclick="askAIChat()" style="background:#15803d; color:white; border:none; padding:8px 16px; border-radius:4px; cursor:pointer; font-weight:bold;">質問</button>
     </div>
     <div id="aiChatResult" style="display:none; background:white; padding:10px; border-radius:6px; border:1px solid #cbd5e1; font-size:0.9em; line-height:1.6;"></div>
@@ -260,7 +299,10 @@ function render(){
         <div style="cursor:pointer;" onclick="toggleFolder(${folder.id})">
           <h2 style="margin:0; font-size:1.1em; color:#0f172a;">📁 ${folder.name} (${folder.words.length}語) ${folder.isCollapsed ? '▶' : '▼'}</h2>
         </div>
-        <button onclick="deleteFolder(${folder.id})" style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:0.8em; cursor:pointer;">削除</button>
+        <div>
+          <button onclick="clearFolderWords(${folder.id})" style="background:#f59e0b; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:0.8em; cursor:pointer; margin-right:4px;">🧹 一掃</button>
+          <button onclick="deleteFolder(${folder.id})" style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:0.8em; cursor:pointer;">削除</button>
+        </div>
       </div>
 
       ${!folder.isCollapsed ? `
@@ -272,13 +314,23 @@ function render(){
 
           ${folder.words.map((w, wIdx) => `
             <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:5px solid #e11d48; padding:12px; margin-top:10px; border-radius:6px;">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <input value="${w.word || ''}" onchange="updateWordField(${folder.id}, ${wIdx}, 'word', this.value)" style="font-size:1.2em; font-weight:bold; border:none; border-bottom:1px transparent #cbd5e1; outline:none; color:#0f172a; width:70%;">
-                <button onclick="deleteWord(${folder.id}, ${wIdx})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:1.1em;">🗑️</button>
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                <div style="display:flex; align-items:center; gap:6px; flex:1;">
+                  <button onclick="speakWord('${w.word}')" title="発音を聞く" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:50%; width:32px; height:32px; cursor:pointer; font-size:1em; display:flex; align-items:center; justify-content:center;">🔊</button>
+                  <input value="${w.word || ''}" placeholder="単語を入力..." onkeydown="if(event.key==='Enter') this.blur();" onchange="updateWordField(${folder.id}, ${wIdx}, 'word', this.value)" style="font-size:1.2em; font-weight:bold; border:none; outline:none; color:#0f172a; width:100%;">
+                </div>
+
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <select onchange="moveWord(${folder.id}, ${wIdx}, this.value)" style="font-size:0.8em; padding:4px; border-radius:4px; border:1px solid #cbd5e1; background:#f8fafc;">
+                    <option value="">移動...</option>
+                    ${folders.map(f => `<option value="${f.id}" ${f.id === folder.id ? 'disabled' : ''}>${f.name}</option>`).join('')}
+                  </select>
+                  <button onclick="deleteWord(${folder.id}, ${wIdx})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:1.1em;">🗑️</button>
+                </div>
               </div>
               
-              <div style="margin-top:8px; background:#fff5f5; padding:8px; border-radius:4px; font-size:0.95em; border:1px solid #ffe4e6;">
-                <textarea onchange="updateWordField(${folder.id}, ${wIdx}, 'meanings', this.value)" style="width:100%; border:none; background:transparent; font-size:1em; resize:vertical; outline:none; font-family:sans-serif;" rows="${(w.meanings || []).length || 1}">${(w.meanings || []).join("\n")}</textarea>
+              <div style="margin-top:8px; background:#fff5f5; padding:8px; border-radius:4px; font-size:0.95em; border:1px solid #ffe4e6; line-height:1.5;">
+                <textarea placeholder="【品詞】 ここに意味を入力..." onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); this.blur(); }" onchange="updateWordField(${folder.id}, ${wIdx}, 'meanings', this.value)" style="width:100%; border:none; background:transparent; font-size:1em; resize:vertical; outline:none; font-family:sans-serif;" rows="${(w.meanings && w.meanings.join('\n') !== '') ? w.meanings.length : 1}">${(w.meanings || []).join("\n")}</textarea>
               </div>
 
               ${(w.examples && w.examples.length > 0) ? `
@@ -292,11 +344,10 @@ function render(){
                 </div>
               ` : ''}
 
-              ${w.details ? `
-                <div style="margin-top:6px; font-size:0.82em; color:#475569; background:#f1f5f9; padding:6px 8px; border-radius:4px;">
-                  💡 <b>解説:</b> ${w.details}
-                </div>
-              ` : ''}
+              <div style="margin-top:6px; font-size:0.82em; color:#475569; background:#f1f5f9; padding:6px 8px; border-radius:4px;">
+                💡 <b>解説:</b> 
+                <input value="${w.details || ''}" placeholder="補足やメモを入力..." onkeydown="if(event.key==='Enter') this.blur();" onchange="updateWordField(${folder.id}, ${wIdx}, 'details', this.value)" style="width:80%; border:none; background:transparent; font-size:1em; outline:none; color:#475569;">
+              </div>
             </div>
           `).join("")}
         </div>
