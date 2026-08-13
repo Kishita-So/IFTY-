@@ -35,7 +35,7 @@ function loadUserData(email) {
   }
 }
 
-// 🌐 ログインアカウント一覧の画面描画（Google風）
+// 🌐 Google風 アカウント選択画面描画
 function renderAccountList() {
   const listEl = document.getElementById("accountList");
   if (!listEl) return;
@@ -163,12 +163,12 @@ window.speakWord = function(text) {
   }
 };
 
-// 🎨 テキスト装飾機能
+// 🎨 テキスト装飾（ハイライト含む）確実化処理
 window.applyStyle = function(command, value = null) {
   document.execCommand(command, false, value);
 };
 
-// 🤖 AI取得
+// 🤖 AI取得 & スぺルチェック提案機能
 async function fetchAIContent(word) {
   try {
     const res = await fetch(WORKER_URL, {
@@ -178,8 +178,19 @@ async function fetchAIContent(word) {
     });
     if (res.ok) return await res.json();
   } catch (e) {}
-  return { meanings: [`【訳】 ${word}`], examples: [], details: "" };
+  return { meanings: [`【訳】 ${word}`], examples: [], details: "", suggestion: null };
 }
+
+// 💡 提案された単語への置換処理
+window.applyCorrection = function(folderId, wIdx, correctedWord) {
+  const f = folders.find(x => x.id === folderId);
+  if (f && f.words[wIdx]) {
+    f.words[wIdx].word = correctedWord;
+    delete f.words[wIdx].suggestion;
+    saveUserData();
+    render();
+  }
+};
 
 window.addWord = async function(folderId, word){
   const cleanWord = word.trim();
@@ -319,7 +330,7 @@ function render(){
       const meaningText = (w.meanings || []).join('<br>');
       const folderOptions = folders.map(f => `<option value="${f.id}" ${f.id === folder.id ? 'disabled' : ''}>${f.name}</option>`).join('');
 
-      // 💬 例文リストのHTML生成
+      // 💬 例文リストのHTML
       const examplesList = (w.examples || []).map((ex, exIdx) => `
         <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
           <div style="flex:1;">
@@ -329,6 +340,14 @@ function render(){
           <button onclick="deleteExample(${folder.id}, ${wIdx}, ${exIdx})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:0.9em;">🗑️</button>
         </div>
       `).join('');
+
+      // 🔍 スペルミス提案の表示
+      const suggestionHtml = w.suggestion ? `
+        <div style="margin-top:4px; font-size:0.82em; color:#d97706; background:#fef3c7; padding:4px 8px; border-radius:4px; display:flex; align-items:center; gap:6px;">
+          <span>💡 もしかして: <b>${w.suggestion}</b> ?</span>
+          <button onclick="applyCorrection(${folder.id}, ${wIdx}, '${w.suggestion}')" style="background:#d97706; color:white; border:none; padding:2px 6px; border-radius:3px; font-size:0.85em; cursor:pointer;">修正する</button>
+        </div>
+      ` : '';
 
       return `
         <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:5px solid #e11d48; padding:12px; margin-top:10px; border-radius:6px;">
@@ -348,11 +367,13 @@ function render(){
               <button onclick="deleteWord(${folder.id}, ${wIdx})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:1.1em;">🗑️</button>
             </div>
           </div>
+
+          ${suggestionHtml}
           
           <div style="margin-top:8px; display:flex; gap:4px; align-items:center; background:#f8fafc; padding:4px 8px; border-radius:4px; font-size:0.75em;">
             <span style="color:#64748b;">装飾:</span>
-            <button onmousedown="event.preventDefault(); applyStyle('foreColor', '#e11d48');" style="background:#e11d48; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">赤</button>
-            <button onmousedown="event.preventDefault(); applyStyle('foreColor', '#0284c7');" style="background:#0284c7; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">青</button>
+            <button onmousedown="event.preventDefault(); applyStyle('foreColor', '#e11d48');" style="background:#e11d48; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">赤文字</button>
+            <button onmousedown="event.preventDefault(); applyStyle('foreColor', '#0284c7');" style="background:#0284c7; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">青文字</button>
             <button onmousedown="event.preventDefault(); applyStyle('hiliteColor', '#fef08a');" style="background:#fef08a; color:#0f172a; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">黄ハイライト</button>
             <button onmousedown="event.preventDefault(); applyStyle('bold');" style="background:#cbd5e1; color:#0f172a; border:none; border-radius:3px; padding:2px 6px; cursor:pointer; font-weight:bold;">B</button>
             <button onmousedown="event.preventDefault(); applyStyle('removeFormat');" style="background:#e2e8f0; color:#475569; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">リセット</button>
@@ -400,7 +421,7 @@ function render(){
   });
 }
 
-// 初期起動時処理
+// 初期起動処理
 window.onload = function() {
   renderAccountList();
 };
