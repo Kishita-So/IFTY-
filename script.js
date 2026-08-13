@@ -1,4 +1,4 @@
-// --- 🔐 ログイン状態の模倣・画面表示管理 ---
+// --- 🔐 状態管理 ---
 let currentUser = null;
 let folders = [];
 let authMode = "login";
@@ -24,11 +24,9 @@ window.showAuthModal = function(mode) {
   if (authSubmitBtn) authSubmitBtn.innerText = mode === "login" ? "ログイン" : "登録する";
   
   if (authGuide) {
+    authGuide.style.display = mode === "register" ? "block" : "none";
     if (mode === "register") {
-      authGuide.style.display = "block";
       authGuide.innerText = "※このアプリで今後使用するパスワードを新規作成して入力してください。";
-    } else {
-      authGuide.style.display = "none";
     }
   }
 
@@ -108,8 +106,8 @@ window.speakWord = function(text) {
   }
 };
 
-// --- 🎨 テキスト装飾機能 ---
-window.formatText = function(command, value = null) {
+// --- 🎨 テキスト装飾機能（選択範囲に確実に適用） ---
+window.applyStyle = function(command, value = null) {
   document.execCommand(command, false, value);
 };
 
@@ -211,7 +209,22 @@ window.deleteWord = function(folderId, index) {
   if (f) { f.words.splice(index, 1); render(); }
 };
 
-window.moveWord = function(fromFolderId, wIdx, toFolderId) {
+// ↕️ 単語の上下移動
+window.moveWordPosition = function(folderId, index, direction) {
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder) return;
+
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= folder.words.length) return;
+
+  const temp = folder.words[index];
+  folder.words[index] = folder.words[targetIndex];
+  folder.words[targetIndex] = temp;
+  render();
+};
+
+// 📁 単語を別フォルダへ移動（大規模移動対応）
+window.moveWordToFolder = function(fromFolderId, wIdx, toFolderId) {
   const targetFolderId = Number(toFolderId);
   if (!targetFolderId || fromFolderId === targetFolderId) return;
 
@@ -304,9 +317,11 @@ function render(){
               <input value="${w.word || ''}" placeholder="単語を入力..." onkeydown="if(event.key==='Enter') this.blur();" onchange="updateWordField(${folder.id}, ${wIdx}, 'word', this.value)" style="font-size:1.2em; font-weight:bold; border:none; outline:none; color:#0f172a; width:100%;">
             </div>
 
-            <div style="display:flex; align-items:center; gap:6px;">
-              <select onchange="moveWord(${folder.id}, ${wIdx}, this.value)" style="font-size:0.8em; padding:4px; border-radius:4px; border:1px solid #cbd5e1; background:#f8fafc;">
-                <option value="">移動...</option>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <button onclick="moveWordPosition(${folder.id}, ${wIdx}, -1)" ${wIdx === 0 ? 'disabled style="opacity:0.3;"' : ''} style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:4px; padding:2px 6px; cursor:pointer;">▲</button>
+              <button onclick="moveWordPosition(${folder.id}, ${wIdx}, 1)" ${wIdx === folder.words.length - 1 ? 'disabled style="opacity:0.3;"' : ''} style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:4px; padding:2px 6px; cursor:pointer;">▼</button>
+              <select onchange="moveWordToFolder(${folder.id}, ${wIdx}, this.value)" style="font-size:0.8em; padding:4px; border-radius:4px; border:1px solid #cbd5e1; background:#f8fafc;">
+                <option value="">フォルダ移動...</option>
                 ${folderOptions}
               </select>
               <button onclick="deleteWord(${folder.id}, ${wIdx})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:1.1em;">🗑️</button>
@@ -314,12 +329,12 @@ function render(){
           </div>
           
           <div style="margin-top:8px; display:flex; gap:4px; align-items:center; background:#f8fafc; padding:4px 8px; border-radius:4px; border:1px solid #e2e8f0; font-size:0.75em;">
-            <span style="color:#64748b; margin-right:4px;">文字色:</span>
-            <button onmousedown="event.preventDefault(); formatText('foreColor', '#e11d48');" style="background:#e11d48; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">赤</button>
-            <button onmousedown="event.preventDefault(); formatText('foreColor', '#0284c7');" style="background:#0284c7; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">青</button>
-            <button onmousedown="event.preventDefault(); formatText('hiliteColor', '#fef08a');" style="background:#fef08a; color:#0f172a; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">黄ハイライト</button>
-            <button onmousedown="event.preventDefault(); formatText('bold');" style="background:#cbd5e1; color:#0f172a; border:none; border-radius:3px; padding:2px 6px; cursor:pointer; font-weight:bold;">B</button>
-            <button onmousedown="event.preventDefault(); formatText('removeFormat');" style="background:#e2e8f0; color:#475569; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">🧹 リセット</button>
+            <span style="color:#64748b; margin-right:4px;">装飾:</span>
+            <button onmousedown="event.preventDefault(); applyStyle('foreColor', '#e11d48');" style="background:#e11d48; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">赤文字</button>
+            <button onmousedown="event.preventDefault(); applyStyle('foreColor', '#0284c7');" style="background:#0284c7; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">青文字</button>
+            <button onmousedown="event.preventDefault(); applyStyle('hiliteColor', '#fef08a');" style="background:#fef08a; color:#0f172a; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">黄ハイライト</button>
+            <button onmousedown="event.preventDefault(); applyStyle('bold');" style="background:#cbd5e1; color:#0f172a; border:none; border-radius:3px; padding:2px 6px; cursor:pointer; font-weight:bold;">B</button>
+            <button onmousedown="event.preventDefault(); applyStyle('removeFormat');" style="background:#e2e8f0; color:#475569; border:none; border-radius:3px; padding:2px 6px; cursor:pointer;">🧹 リセット</button>
           </div>
 
           <div style="margin-top:4px; background:#fff5f5; padding:8px; border-radius:4px; font-size:0.95em; border:1px solid #ffe4e6; line-height:1.5;">
@@ -370,12 +385,20 @@ function render(){
   });
 }
 
-// ⌨️ Enterキーでのログインイベントバインド
+// ⌨️ キーボードイベントハンドラー（Enterでのフォルダ作成・ログイン対応）
 document.addEventListener("keydown", function(e) {
   if (e.key === "Enter") {
+    // ログインモーダルが開いている場合
     const modal = document.getElementById("authModal");
     if (modal && modal.style.display === "flex") {
       window.handleAuthSubmit();
+      return;
+    }
+
+    // フォルダ作成入力欄にフォーカスがある場合
+    const folderInput = document.getElementById("folderName");
+    if (document.activeElement === folderInput) {
+      window.createFolder();
     }
   }
 });
