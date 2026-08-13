@@ -6,11 +6,12 @@ let currentSessionId = null;
 let currentView = "vocab"; 
 let selectedImageBase64 = null;
 
+// Grok対応のWorker URL
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
 // --- データ読み書き ---
 function getStorageKey(email) {
-  return "user_data_v5_" + email.toLowerCase().trim();
+  return "user_data_grok_v1_" + email.toLowerCase().trim();
 }
 
 function saveUserData() {
@@ -70,7 +71,7 @@ window.createNewChatSession = function(shouldRender = true) {
   const newSession = {
     id: Date.now(),
     title: "新しいチャット " + (chatSessions.length + 1),
-    messages: [{ role: "ai", text: "こんにちは！単語帳の編集指示や、写真の読み込み、単語に関する質問ができます。" }]
+    messages: [{ role: "ai", text: "こんにちは！Grokアシスタントです。単語帳の編集指示や単語に関する質問ができます。" }]
   };
   chatSessions.unshift(newSession);
   currentSessionId = newSession.id;
@@ -157,7 +158,7 @@ window.clearSelectedImage = function() {
   document.getElementById("imagePreviewContainer").style.display = "none";
 };
 
-// --- AI送信・単語追加・Worker連携 ---
+// --- Grok連携 AI送信・単語追加処理 ---
 window.sendChatMessage = async function() {
   const inputEl = document.getElementById("chatInput");
   const text = inputEl ? inputEl.value.trim() : "";
@@ -174,7 +175,7 @@ window.sendChatMessage = async function() {
   clearSelectedImage();
   renderChatArea();
 
-  session.messages.push({ role: "ai", text: "🤖 考え中..." });
+  session.messages.push({ role: "ai", text: "🤖 Grokが考えています..." });
   renderChatArea();
 
   try {
@@ -197,17 +198,17 @@ window.sendChatMessage = async function() {
       }
       session.messages[session.messages.length - 1].text = data.reply || "処理が完了しました。";
     } else {
-      session.messages[session.messages.length - 1].text = "⚠️ 応答の取得に失敗しました。";
+      session.messages[session.messages.length - 1].text = "⚠️ Grok応答の取得に失敗しました。";
     }
   } catch(e) {
-    session.messages[session.messages.length - 1].text = "⚠️ エラーが発生しました。";
+    session.messages[session.messages.length - 1].text = "⚠️ 通信エラーが発生しました。";
   }
 
   saveUserData();
   render();
 };
 
-// --- 単語帳の高度な操作機能（以前の機能を完全復元） ---
+// --- 単語帳の高度な操作・装飾機能 ---
 window.addWordToFolder = async function(folderId, word) {
   const clean = word.trim();
   if (!clean) return;
@@ -316,6 +317,31 @@ window.moveWordToFolder = function(fromFolderId, wIdx, toFolderIdStr) {
   render();
 };
 
+// 単語の文字装飾ヘルパー（赤字・青字など）
+window.formatWordText = function(folderId, wIdx, color) {
+  const selection = window.getSelection();
+  if (!selection.rangeCount) return;
+  const range = selection.getRangeAt(0);
+  const selectedText = range.toString();
+  if (!selectedText) return;
+
+  let styledHtml = selectedText;
+  if (color === 'red') styledHtml = `<span style="color: red; font-weight: bold;">${selectedText}</span>`;
+  if (color === 'blue') styledHtml = `<span style="color: blue; font-weight: bold;">${selectedText}</span>`;
+  if (color === 'yellow') styledHtml = `<span style="background-color: #fef08a; padding: 0 2px;">${selectedText}</span>`;
+  if (color === 'bold') styledHtml = `<b>${selectedText}</b>`;
+
+  const span = document.createElement('span');
+  span.innerHTML = styledHtml;
+  range.deleteContents();
+  range.insertNode(span);
+
+  const editableDiv = document.getElementById(`meaning_${folderId}_${wIdx}`);
+  if (editableDiv) {
+    updateWordField(folderId, wIdx, 'meanings', [editableDiv.innerHTML]);
+  }
+};
+
 // --- レンダリング処理 ---
 function renderChatArea() {
   const selectEl = document.getElementById("chatSessionSelect");
@@ -401,15 +427,34 @@ function renderFolders() {
                 <button onclick="deleteWord(${f.id}, ${wIdx})" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.1em;">🗑️</button>
               </div>
             </div>
+
+            <div style="display: flex; gap: 4px; margin-bottom: 4px; font-size: 0.75em; align-items: center;">
+              <span style="color:#64748b;">装飾:</span>
+              <button onclick="formatWordText(${f.id}, ${wIdx}, 'red')" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; border-radius:3px; padding:1px 6px; cursor:pointer;">赤字</button>
+              <button onclick="formatWordText(${f.id}, ${wIdx}, 'blue')" style="background:#dbeafe; color:#1d4ed8; border:1px solid #93c5fd; border-radius:3px; padding:1px 6px; cursor:pointer;">青字</button>
+              <button onclick="formatWordText(${f.id}, ${wIdx}, 'yellow')" style="background:#fef08a; color:#854d0e; border:1px solid #fde047; border-radius:3px; padding:1px 6px; cursor:pointer;">黄ハイライト</button>
+              <button onclick="formatWordText(${f.id}, ${wIdx}, 'bold')" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:3px; padding:1px 6px; cursor:pointer;">B</button>
+            </div>
             
-            <div style="background: #fff1f2; padding: 8px; border-radius: 6px; border: 1px solid #fecdd3; font-size: 0.9em; margin-bottom: 6px;" contenteditable="true" onblur="updateWordField(${f.id}, ${wIdx}, 'meanings', [this.innerText])">
+            <div id="meaning_${f.id}_${wIdx}" style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.9em; margin-bottom: 8px;" contenteditable="true" onblur="updateWordField(${f.id}, ${wIdx}, 'meanings', [this.innerHTML])">
               ${w.meanings ? w.meanings[0] : ''}
             </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; margin-bottom: 4px;">
               <span style="font-size: 0.85em; color: #64748b;">例文</span>
               <button onclick="addExample(${f.id}, ${wIdx})" style="background: #0284c7; color: white; border: none; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">＋ 例文追加</button>
             </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              ${(w.examples || []).map((ex, eIdx) => `
+                <div style="background: #ffffff; padding: 6px; border-radius: 4px; border: 1px solid #e2e8f0; font-size: 0.85em; position: relative;">
+                  <div contenteditable="true" onblur="updateExampleField(${f.id}, ${wIdx}, ${eIdx}, 'en', this.innerText)" style="color: #2563eb; outline: none; margin-bottom: 2px;">${ex.en}</div>
+                  <div contenteditable="true" onblur="updateExampleField(${f.id}, ${wIdx}, ${eIdx}, 'ja', this.innerText)" style="color: #475569; outline: none;">${ex.ja}</div>
+                  <button onclick="deleteExample(${f.id}, ${wIdx}, ${eIdx})" style="position: absolute; top: 4px; right: 4px; background: none; border: none; color: #ef4444; cursor: pointer; font-size: 0.8em;">🗑️</button>
+                </div>
+              `).join('')}
+            </div>
+
           </div>
         `).join('')}
       </div>
