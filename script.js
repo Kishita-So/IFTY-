@@ -8,7 +8,7 @@ let selectedImageBase64 = null;
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
 function getStorageKey(email) {
-  return "user_data_grok_v4_" + email.toLowerCase().trim();
+  return "user_data_grok_v5_" + email.toLowerCase().trim();
 }
 
 function saveUserData() {
@@ -266,11 +266,13 @@ window.addExample = function(folderId, wIdx) {
   }
 };
 
-window.updateWordMeanings = function(folderId, wIdx, textValue) {
+// プレーンテキストのみを抽出して保存する関数（HTMLタグを完全に排除）
+window.updateWordMeanings = function(folderId, wIdx, rawText) {
   const folder = folders.find(f => f.id === folderId);
   if (folder && folder.words[wIdx]) {
-    // タグを除去してプレーンな行ごとに分割保存
-    folder.words[wIdx].meanings = textValue.split('\n').map(line => line.trim()).filter(Boolean);
+    // タグが含まれていたら完全に除去する
+    const cleaned = rawText.replace(/<[^>]*>?/gm, '');
+    folder.words[wIdx].meanings = cleaned.split('\n').map(line => line.trim()).filter(Boolean);
     saveUserData();
   }
 };
@@ -316,30 +318,6 @@ window.moveWordToFolder = function(fromFolderId, wIdx, toFolderIdStr) {
   toFolder.words.push(wordObj);
   saveUserData();
   render();
-};
-
-window.formatWordText = function(folderId, wIdx, color) {
-  const selection = window.getSelection();
-  if (!selection.rangeCount) return;
-  const range = selection.getRangeAt(0);
-  const selectedText = range.toString();
-  if (!selectedText) return;
-
-  let styledHtml = selectedText;
-  if (color === 'red') styledHtml = `<span style="color: red; font-weight: bold;">${selectedText}</span>`;
-  if (color === 'blue') styledHtml = `<span style="color: blue; font-weight: bold;">${selectedText}</span>`;
-  if (color === 'yellow') styledHtml = `<span style="background-color: #fef08a; padding: 0 2px;">${selectedText}</span>`;
-  if (color === 'bold') styledHtml = `<b>${selectedText}</b>`;
-
-  const span = document.createElement('span');
-  span.innerHTML = styledHtml;
-  range.deleteContents();
-  range.insertNode(span);
-
-  const editableDiv = document.getElementById(`meaning_${folderId}_${wIdx}`);
-  if (editableDiv) {
-    updateWordMeanings(folderId, wIdx, editableDiv.innerText);
-  }
 };
 
 function renderChatArea() {
@@ -408,7 +386,12 @@ function renderFolders() {
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 10px;">
-        ${(f.words || []).map((w, wIdx) => `
+        ${(f.words || []).map((w, wIdx) => {
+          // 既存データに混入しているHTMLタグを完全に安全なプレーンテキストに置換して表示
+          const rawMeanings = Array.isArray(w.meanings) ? w.meanings.join("\n") : (w.meanings || '');
+          const safeMeaningsText = rawMeanings.replace(/<[^>]*>?/gm, '');
+
+          return `
           <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
               <div style="display: flex; align-items: center; gap: 6px;">
@@ -425,18 +408,8 @@ function renderFolders() {
                 <button onclick="deleteWord(${f.id}, ${wIdx})" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.1em;">🗑️</button>
               </div>
             </div>
-
-            <div style="display: flex; gap: 4px; margin-bottom: 4px; font-size: 0.75em; align-items: center;">
-              <span style="color:#64748b;">装飾:</span>
-              <button onclick="formatWordText(${f.id}, ${wIdx}, 'red')" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; border-radius:3px; padding:1px 6px; cursor:pointer;">赤字</button>
-              <button onclick="formatWordText(${f.id}, ${wIdx}, 'blue')" style="background:#dbeafe; color:#1d4ed8; border:1px solid #93c5fd; border-radius:3px; padding:1px 6px; cursor:pointer;">青字</button>
-              <button onclick="formatWordText(${f.id}, ${wIdx}, 'yellow')" style="background:#fef08a; color:#854d0e; border:1px solid #fde047; border-radius:3px; padding:1px 6px; cursor:pointer;">黄ハイライト</button>
-              <button onclick="formatWordText(${f.id}, ${wIdx}, 'bold')" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:3px; padding:1px 6px; cursor:pointer;">B</button>
-            </div>
             
-            <div id="meaning_${f.id}_${wIdx}" style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.9em; margin-bottom: 8px; line-height: 1.5;" contenteditable="true" onblur="updateWordMeanings(${f.id}, ${wIdx}, this.innerText)">
-              ${Array.isArray(w.meanings) ? w.meanings.join("\n") : (w.meanings || '')}
-            </div>
+            <div id="meaning_${f.id}_${wIdx}" style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.9em; margin-bottom: 8px; line-height: 1.5; outline: none;" contenteditable="true" onblur="updateWordMeanings(${f.id}, ${wIdx}, this.innerText)">${safeMeaningsText}</div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; margin-bottom: 4px;">
               <span style="font-size: 0.85em; color: #64748b;">例文</span>
@@ -457,7 +430,7 @@ function renderFolders() {
             </div>
 
           </div>
-        `).join('')}
+        `;}).join('')}
       </div>
     </div>
   `).join('');
