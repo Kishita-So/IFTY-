@@ -147,6 +147,19 @@ window.clearSelectedImage = function() {
   document.getElementById("imagePreviewContainer").style.display = "none";
 };
 
+// 🔊 音声読み上げ機能（発音・英文）
+window.speakText = function(text, lang = 'en-US') {
+  if (!('speechSynthesis' in window)) {
+    alert("お使いのブラウザは音声読み上げに対応していません。");
+    return;
+  }
+  window.speechSynthesis.cancel(); // 連続クリック時の重複防止
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = lang;
+  utterance.rate = 0.9; // 少し聞き取りやすい速度
+  window.speechSynthesis.speak(utterance);
+};
+
 // AIチャット送信処理
 window.sendChatMessage = async function() {
   const inputEl = document.getElementById("chatInput");
@@ -195,7 +208,7 @@ window.sendChatMessage = async function() {
   render();
 };
 
-// 単語の個別追加 ＆ 意味・例文の自動取得
+// 単語の個別追加 ＆ 意味・例文の自動取得＋0.5秒後の自動発音
 window.addWordToFolder = async function(folderId, word) {
   const clean = word.trim();
   if (!clean) return;
@@ -224,6 +237,11 @@ window.addWordToFolder = async function(folderId, word) {
   folder.words.push({ word: clean, ...aiData });
   saveUserData();
   render();
+
+  // ⏱️ 追加完了から0.5秒後に自動で発音
+  setTimeout(() => {
+    speakText(clean, 'en-US');
+  }, 500);
 };
 
 window.deleteWord = function(folderId, wIdx) {
@@ -324,7 +342,8 @@ window.formatWordText = function(folderId, wIdx, color) {
 
   const editableDiv = document.getElementById(`meaning_${folderId}_${wIdx}`);
   if (editableDiv) {
-    updateWordField(folderId, wIdx, 'meanings', [editableDiv.innerHTML]);
+    const meaningsArray = Array.from(editableDiv.children).map(child => child.outerHTML).join("<br>") || editableDiv.innerHTML;
+    updateWordField(folderId, wIdx, 'meanings', [meaningsArray]);
   }
 };
 
@@ -397,7 +416,10 @@ function renderFolders() {
         ${(f.words || []).map((w, wIdx) => `
           <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <b style="font-size: 1.1em; color: #0f172a;">${w.word}</b>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <b style="font-size: 1.1em; color: #0f172a;">${w.word}</b>
+                <button onclick="speakText('${w.word}', 'en-US')" style="background: #e2e8f0; border: none; border-radius: 4px; padding: 2px 6px; font-size: 0.8em; cursor: pointer;" title="発音を聞く">🔊</button>
+              </div>
               <div style="display: flex; gap: 4px; align-items: center;">
                 <button onclick="moveWord(${f.id}, ${wIdx}, -1)" style="background:#f1f5f9; border:1px solid #cbd5e1; padding:2px 6px; border-radius:4px; cursor:pointer;">▲</button>
                 <button onclick="moveWord(${f.id}, ${wIdx}, 1)" style="background:#f1f5f9; border:1px solid #cbd5e1; padding:2px 6px; border-radius:4px; cursor:pointer;">▼</button>
@@ -417,8 +439,8 @@ function renderFolders() {
               <button onclick="formatWordText(${f.id}, ${wIdx}, 'bold')" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:3px; padding:1px 6px; cursor:pointer;">B</button>
             </div>
             
-            <div id="meaning_${f.id}_${wIdx}" style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.9em; margin-bottom: 8px;" contenteditable="true" onblur="updateWordField(${f.id}, ${wIdx}, 'meanings', [this.innerHTML])">
-              ${w.meanings ? w.meanings[0] : ''}
+            <div id="meaning_${f.id}_${wIdx}" style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.9em; margin-bottom: 8px; line-height: 1.5;" contenteditable="true" onblur="updateWordField(${f.id}, ${wIdx}, 'meanings', [this.innerHTML])">
+              ${Array.isArray(w.meanings) ? w.meanings.join("<br>") : (w.meanings || '')}
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; margin-bottom: 4px;">
@@ -429,7 +451,10 @@ function renderFolders() {
             <div style="display: flex; flex-direction: column; gap: 4px;">
               ${(w.examples || []).map((ex, eIdx) => `
                 <div style="background: #ffffff; padding: 6px; border-radius: 4px; border: 1px solid #e2e8f0; font-size: 0.85em; position: relative;">
-                  <div contenteditable="true" onblur="updateExampleField(${f.id}, ${wIdx}, ${eIdx}, 'en', this.innerText)" style="color: #2563eb; outline: none; margin-bottom: 2px;">${ex.en}</div>
+                  <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
+                    <div contenteditable="true" onblur="updateExampleField(${f.id}, ${wIdx}, ${eIdx}, 'en', this.innerText)" style="color: #2563eb; outline: none; flex: 1;">${ex.en}</div>
+                    <button onclick="speakText('${ex.en.replace(/'/g, "\\'")}', 'en-US')" style="background: #f1f5f9; border: none; border-radius: 4px; padding: 2px 5px; font-size: 0.75em; cursor: pointer;" title="英文を読み上げる">🔊</button>
+                  </div>
                   <div contenteditable="true" onblur="updateExampleField(${f.id}, ${wIdx}, ${eIdx}, 'ja', this.innerText)" style="color: #475569; outline: none;">${ex.ja}</div>
                   <button onclick="deleteExample(${f.id}, ${wIdx}, ${eIdx})" style="position: absolute; top: 4px; right: 4px; background: none; border: none; color: #ef4444; cursor: pointer; font-size: 0.8em;">🗑️</button>
                 </div>
