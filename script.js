@@ -8,7 +8,7 @@ let selectedImageBase64 = null;
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
 function getStorageKey(email) {
-  return "user_data_grok_v7_" + email.toLowerCase().trim();
+  return "user_data_grok_v8_" + email.toLowerCase().trim();
 }
 
 function saveUserData() {
@@ -235,7 +235,6 @@ window.addWordToFolder = async function(folderId, word) {
   saveUserData();
   render();
 
-  // ⏱️ 追加完了から0.5秒後に自動で発音
   speakText(clean, 'en-US', 500);
 };
 
@@ -459,7 +458,7 @@ function renderFolders() {
 }
 
 window.loginWithAccount = function(email) {
-  const cleanEmail = email.trim();
+  const cleanEmail = email ? email.trim() : "";
   if (!cleanEmail) {
     alert("有効なメールアドレスを入力してください。");
     return;
@@ -480,19 +479,11 @@ window.createFolder = function() {
 };
 
 window.onload = function() {
-  // 固定アカウントのクイックログインボタン＋任意のメールアドレスで自由にログインできるフォームを追加
   const accountListEl = document.getElementById("accountList");
   if (accountListEl) {
-    const quickAccounts = ["16011264@kago.ed.jp", "humbleflail205@gmail.com"];
-    
     accountListEl.innerHTML = `
       <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 320px; margin: 0 auto;">
-        <div style="font-size: 0.9em; color: #94a3b8; text-align: center; margin-bottom: 4px;">クイックログイン</div>
-        ${quickAccounts.map(a => `<div onclick="loginWithAccount('${a}')" style="padding:10px; background:#334155; border-radius:6px; cursor:pointer; color:white; font-weight:500; text-align:center; font-size:0.9em;">${a}</div>`).join('')}
-        
-        <div style="border-top: 1px solid #475569; margin: 12px 0;"></div>
-        
-        <div style="font-size: 0.9em; color: #94a3b8; text-align: center; margin-bottom: 4px;">新しいメールアドレスで始める</div>
+        <div style="font-size: 0.9em; color: #94a3b8; text-align: center; margin-bottom: 4px;">メールアドレスでログイン</div>
         <div style="display: flex; gap: 6px;">
           <input type="email" id="customEmailInput" placeholder="your_email@example.com" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #475569; background: #1e293b; color: white; font-size: 0.9em;" onkeydown="if(event.key==='Enter'){ loginWithAccount(document.getElementById('customEmailInput').value); }">
           <button onclick="loginWithAccount(document.getElementById('customEmailInput').value)" style="background: #0284c7; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9em;">ログイン</button>
