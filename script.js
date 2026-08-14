@@ -8,7 +8,7 @@ let selectedImageBase64 = null;
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
 function getStorageKey(email) {
-  return "user_data_grok_v10_" + email.toLowerCase().trim();
+  return "user_data_grok_v12_" + email.toLowerCase().trim();
 }
 
 function saveUserData() {
@@ -334,6 +334,172 @@ window.moveWordToFolder = function(fromFolderId, wIdx, toFolderIdStr) {
   render();
 };
 
+// --- フラッシュカード機能 ---
+let flashcardList = [];
+let currentFlashcardIndex = 0;
+let isCardFlipped = false;
+
+window.openMenuModal = function() {
+  let modal = document.getElementById("appMenuModal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "appMenuModal";
+    modal.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 10000;";
+    modal.innerHTML = `
+      <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); text-align: center;">
+        <h3 style="margin-top: 0; color: #0f172a; margin-bottom: 16px;">メニュー</h3>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button onclick="startFlashcards('all')" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">📇 フラッシュカード (全単語)</button>
+          <button onclick="startFlashcards('checked_folders')" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">📇 フラッシュカード (チェックしたフォルダ)</button>
+          <button onclick="startFlashcards('checked_words')" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">📇 フラッシュカード (チェックした単語)</button>
+          <button onclick="closeMenuModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; margin-top: 8px;">閉じる</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  } else {
+    modal.style.display = "flex";
+  }
+};
+
+window.closeMenuModal = function() {
+  const modal = document.getElementById("appMenuModal");
+  if (modal) modal.style.display = "none";
+};
+
+window.startFlashcards = function(mode) {
+  closeMenuModal();
+  flashcardList = [];
+
+  if (mode === 'all') {
+    folders.forEach(f => {
+      if (f.words) {
+        f.words.forEach(w => flashcardList.push(w));
+      }
+    });
+  } else if (mode === 'checked_folders') {
+    folders.forEach(f => {
+      if (f.checked && f.words) {
+        f.words.forEach(w => flashcardList.push(w));
+      }
+    });
+  } else if (mode === 'checked_words') {
+    folders.forEach(f => {
+      if (f.words) {
+        f.words.forEach(w => {
+          if (w.checked) flashcardList.push(w);
+        });
+      }
+    });
+  }
+
+  if (flashcardList.length === 0) {
+    alert("対象となる単語がありません。チェックを入れるか、単語を追加してください。");
+    return;
+  }
+
+  currentFlashcardIndex = 0;
+  isCardFlipped = false;
+  renderFlashcardModal();
+};
+
+window.renderFlashcardModal = function() {
+  let modal = document.getElementById("flashcardModal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "flashcardModal";
+    modal.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 10001;";
+    document.body.appendChild(modal);
+  } else {
+    modal.style.display = "flex";
+  }
+
+  const currentWord = flashcardList[currentFlashcardIndex];
+  const meaningsText = Array.isArray(currentWord.meanings) ? currentWord.meanings.join("<br>") : (currentWord.meanings || '');
+
+  modal.innerHTML = `
+    <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 4px 16px rgba(0,0,0,0.3); text-align: center; position: relative;">
+      <div style="position: absolute; top: 12px; left: 16px; font-size: 0.85em; color: #64748b;">${currentFlashcardIndex + 1} / ${flashcardList.length}</div>
+      <button onclick="closeFlashcardModal()" style="position: absolute; top: 10px; right: 12px; background: none; border: none; font-size: 1.2em; cursor: pointer; color: #64748b;">✕</button>
+      
+      <div onclick="toggleCardFlip()" style="margin: 30px 0; padding: 30px 20px; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 10px; cursor: pointer; min-height: 120px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <div style="font-size: 1.6em; font-weight: bold; color: #0f172a; margin-bottom: 10px;">${currentWord.word}</div>
+        <button onclick="event.stopPropagation(); speakText('${currentWord.word}', 'en-US', 100)" style="background: #e2e8f0; border: none; border-radius: 4px; padding: 4px 10px; font-size: 0.85em; cursor: pointer; margin-bottom: 10px;">🔊 発音</button>
+        <div style="font-size: 1.05em; color: #334155; line-height: 1.5; display: ${isCardFlipped ? 'block' : 'none'}; border-top: 1px solid #e2e8f0; padding-top: 10px; width: 100%; text-align: left;">${meaningsText}</div>
+        <div style="font-size: 0.8em; color: #94a3b8; margin-top: 10px;">${isCardFlipped ? '(クリックで隠す)' : '(クリックして意味を表示)'}</div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; gap: 10px;">
+        <button onclick="prevFlashcard()" style="flex: 1; padding: 10px; background: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;" ${currentFlashcardIndex === 0 ? 'opacity: 0.5; cursor: not-allowed;' : ''}>◀ 前へ</button>
+        <button onclick="nextFlashcard()" style="flex: 1; padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;" ${currentFlashcardIndex === flashcardList.length - 1 ? 'opacity: 0.5; cursor: not-allowed;' : ''}>次へ ▶</button>
+      </div>
+    </div>
+  `;
+};
+
+window.toggleCardFlip = function() {
+  isCardFlipped = !isCardFlipped;
+  renderFlashcardModal();
+};
+
+window.prevFlashcard = function() {
+  if (currentFlashcardIndex > 0) {
+    currentFlashcardIndex--;
+    isCardFlipped = false;
+    renderFlashcardModal();
+  }
+};
+
+window.nextFlashcard = function() {
+  if (currentFlashcardIndex < flashcardList.length - 1) {
+    currentFlashcardIndex++;
+    isCardFlipped = false;
+    renderFlashcardModal();
+  }
+};
+
+window.closeFlashcardModal = function() {
+  const modal = document.getElementById("flashcardModal");
+  if (modal) modal.style.display = "none";
+};
+
+// --- フローティングメニュー・AIボタンの設置管理 ---
+function ensureFloatingButtons() {
+  let container = document.getElementById("floatingButtonsContainer");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "floatingButtonsContainer";
+    container.style.cssText = "position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 9999;";
+    document.body.appendChild(container);
+  }
+
+  // AIボタンが存在しない、またはコンテナに移動させる
+  let aiBtn = document.getElementById("floatingAiBtn");
+  if (!aiBtn) {
+    aiBtn = document.createElement("button");
+    aiBtn.id = "floatingAiBtn";
+    aiBtn.innerText = "💬";
+    aiBtn.onclick = toggleViewMode;
+    aiBtn.style.cssText = "width: 50px; height: 50px; border-radius: 50%; background: #0284c7; color: white; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center;";
+  }
+
+  // メニューボタンの作成（AIボタンの上）
+  let menuBtn = document.getElementById("floatingMenuBtn");
+  if (!menuBtn) {
+    menuBtn = document.createElement("button");
+    menuBtn.id = "floatingMenuBtn";
+    menuBtn.innerText = "≡";
+    menuBtn.onclick = openMenuModal;
+    menuBtn.style.cssText = "width: 50px; height: 50px; border-radius: 50%; background: #0f172a; color: white; border: none; font-size: 22px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center;";
+  }
+
+  container.innerHTML = "";
+  if (currentUser) {
+    container.appendChild(menuBtn);
+    container.appendChild(aiBtn);
+  }
+}
+
 function renderChatArea() {
   const selectEl = document.getElementById("chatSessionSelect");
   const titleInput = document.getElementById("chatTitleInput");
@@ -367,20 +533,18 @@ function renderChatArea() {
 function render() {
   const landingPage = document.getElementById("landingPage");
   const mainPortal = document.getElementById("mainPortal");
-  const floatingAiBtn = document.getElementById("floatingAiBtn");
   const userDisplay = document.getElementById("userDisplay");
+
+  ensureFloatingButtons();
 
   if (currentUser) {
     if (landingPage) landingPage.style.display = "none";
     if (mainPortal) mainPortal.style.display = "block";
-    if (floatingAiBtn) floatingAiBtn.style.display = "flex";
     if (userDisplay) userDisplay.innerText = currentUser.email;
   } else {
     if (landingPage) landingPage.style.display = "block";
     if (mainPortal) mainPortal.style.display = "none";
-    if (floatingAiBtn) floatingAiBtn.style.display = "none";
     
-    // ログイン画面のHTMLが消えてしまわないよう確実に再描画
     setupLoginUI();
     return;
   }
@@ -490,18 +654,21 @@ window.createFolder = function() {
 };
 
 function setupLoginUI() {
-  const accountListEl = document.getElementById("accountList");
-  if (accountListEl) {
-    accountListEl.innerHTML = `
-      <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 320px; margin: 0 auto;">
-        <div style="font-size: 0.9em; color: #94a3b8; text-align: center; margin-bottom: 4px;">メールアドレスでログイン</div>
-        <div style="display: flex; gap: 6px;">
-          <input type="email" id="customEmailInput" placeholder="your_email@example.com" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #475569; background: #1e293b; color: white; font-size: 0.9em;" onkeydown="if(event.key==='Enter'){ loginWithAccount(document.getElementById('customEmailInput').value); }">
-          <button onclick="loginWithAccount(document.getElementById('customEmailInput').value)" style="background: #0284c7; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9em;">ログイン</button>
+  const landingPage = document.getElementById("landingPage");
+  if (!landingPage) return;
+
+  landingPage.innerHTML = `
+    <div style="display: flex; justify-content: center; align-items: center; min-height: 80vh; padding: 20px;">
+      <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; width: 100%; max-width: 380px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-align: center;">
+        <h2 style="color: #38bdf8; margin-top: 0; margin-bottom: 8px; font-size: 1.4em;">単語帳アプリ</h2>
+        <p style="color: #94a3b8; font-size: 0.9em; margin-bottom: 20px;">メールアドレスを入力してログインしてください</p>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <input type="email" id="customEmailInput" placeholder="your_email@example.com" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: white; font-size: 0.95em; box-sizing: border-box;" onkeydown="if(event.key==='Enter'){ loginWithAccount(document.getElementById('customEmailInput').value); }">
+          <button onclick="loginWithAccount(document.getElementById('customEmailInput').value)" style="background: #0284c7; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.95em; width: 100%;">ログイン</button>
         </div>
       </div>
-    `;
-  }
+    </div>
+  `;
 }
 
 window.onload = function() {
