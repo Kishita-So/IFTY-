@@ -62,76 +62,6 @@ window.toggleViewMode = function() {
   render();
 };
 
-// 🎓 学習メニューの展開・閉じる切り替え
-window.toggleStudyMenu = function() {
-  let menu = document.getElementById("studyMenuPopup");
-  if (!menu) {
-    // メニューがまだ存在しない場合は動的に生成してDOMに追加
-    menu = document.createElement("div");
-    menu.id = "studyMenuPopup";
-    menu.style.cssText = "position: fixed; bottom: 85px; right: 20px; background: white; border: 1px solid #cbd5e1; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 12px; display: flex; flex-direction: column; gap: 8px; z-index: 1000; min-width: 200px;";
-    
-    // フォルダのオプションを動的に作成
-    const folderOptionsHtml = folders.map(f => `
-      <div onclick="startFlashcards('folder', ${f.id})" style="padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.85em; color: #334155; background: #f8fafc;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f8fafc'">
-        📁 ${f.name} のみ
-      </div>
-    `).join('');
-
-    menu.innerHTML = `
-      <div style="font-size: 0.85em; font-weight: bold; color: #64748b; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin-bottom: 2px;">🎓 フラッシュカード開始</div>
-      <div onclick="startFlashcards('all')" style="padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.9em; color: #0f172a; font-weight: 500;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
-        📚 すべての単語から出題
-      </div>
-      <div onclick="startFlashcards('checked')" style="padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.9em; color: #0f172a; font-weight: 500;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
-        ☑️ チェックした単語から出題
-      </div>
-      <div style="font-size: 0.85em; font-weight: bold; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 2px;">📁 フォルダ別</div>
-      ${folderOptionsHtml.length > 0 ? folderOptionsHtml : '<div style="font-size: 0.8em; color: #94a3b8; padding: 4px;">フォルダがありません</div>'}
-    `;
-    document.body.appendChild(menu);
-  } else {
-    menu.style.display = menu.style.display === "none" ? "flex" : "none";
-  }
-};
-
-// 🎓 フラッシュカードを開始する処理（モードに応じた単語の抽出）
-window.startFlashcards = function(mode, targetId = null) {
-  // メニューを非表示にする
-  const menu = document.getElementById("studyMenuPopup");
-  if (menu) menu.style.display = "none";
-
-  let targetWords = [];
-
-  if (mode === 'all') {
-    folders.forEach(f => {
-      if (f.words) targetWords.push(...f.words);
-    });
-  } else if (mode === 'checked') {
-    folders.forEach(f => {
-      if (f.words) {
-        // フォルダ自体にチェックがあるか、または単語個別にチェックがあるもの
-        const filtered = f.words.filter(w => w.checked === true);
-        targetWords.push(...filtered);
-      }
-    });
-  } else if (mode === 'folder') {
-    const folder = folders.find(f => f.id === targetId);
-    if (folder && folder.words) {
-      targetWords = [...folder.words];
-    }
-  }
-
-  if (targetWords.length === 0) {
-    alert("出題対象となる単語が見つかりませんでした。（チェックがついているか確認してください）");
-    return;
-  }
-
-  // ここにフラッシュカード画面を起動するロジックを繋げます
-  alert(`フラッシュカードを開始します！ 対象単語数: ${targetWords.length}語`);
-  console.log("出題単語一覧:", targetWords);
-};
-
 window.createNewChatSession = function(shouldRender = true) {
   const newSession = {
     id: Date.now(),
@@ -419,4 +349,166 @@ function renderChatArea() {
     titleInput.value = session.title;
   }
 
-  const msgsEl
+  const msgsEl = document.getElementById("chatMessages");
+  if (!msgsEl) return;
+
+  msgsEl.innerHTML = session.messages.map((m, mIdx) => `
+    <div style="align-self: ${m.role === 'user' ? 'flex-end' : 'flex-start'}; max-width: 85%; background: ${m.role === 'user' ? '#e0f2fe' : '#ffffff'}; color: #0f172a; padding: 10px 14px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 0.9em; position: relative;">
+      ${m.image ? `<img src="${m.image}" style="max-width: 100%; border-radius: 6px; margin-bottom: 6px;"><br>` : ''}
+      <div contenteditable="true" onblur="updateMessageText(${mIdx}, this.innerText)" style="outline: none; white-space: pre-wrap; margin-bottom: 4px;">${m.text}</div>
+      <div style="display: flex; justify-content: flex-end; gap: 4px; margin-top: 4px; border-top: 1px solid #f1f5f9; padding-top: 4px;">
+        <button onclick='copyMessageText(${JSON.stringify(m.text)})' style="background: none; border: none; cursor: pointer; font-size: 0.75em; color: #64748b;">📋 コピー</button>
+      </div>
+    </div>
+  `).join('');
+  msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+
+function render() {
+  const landingPage = document.getElementById("landingPage");
+  const mainPortal = document.getElementById("mainPortal");
+  const floatingAiBtn = document.getElementById("floatingAiBtn");
+  const userDisplay = document.getElementById("userDisplay");
+
+  if (currentUser) {
+    if (landingPage) landingPage.style.display = "none";
+    if (mainPortal) mainPortal.style.display = "block";
+    if (floatingAiBtn) floatingAiBtn.style.display = "flex";
+    if (userDisplay) userDisplay.innerText = currentUser.email;
+  } else {
+    if (landingPage) landingPage.style.display = "block";
+    if (mainPortal) mainPortal.style.display = "none";
+    if (floatingAiBtn) floatingAiBtn.style.display = "none";
+    
+    // ログイン画面のHTMLが消えてしまわないよう確実に再描画
+    setupLoginUI();
+    return;
+  }
+
+  if (currentView === "chat") {
+    renderChatArea();
+  } else {
+    renderFolders();
+  }
+}
+
+function renderFolders() {
+  const foldersEl = document.getElementById("folders");
+  if (!foldersEl) return;
+
+  foldersEl.innerHTML = folders.map(f => {
+    const isFolderChecked = f.checked === true;
+    return `
+    <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" ${isFolderChecked ? 'checked' : ''} onchange="toggleFolderCheck(${f.id}, this.checked)" style="width: 18px; height: 18px; cursor: pointer;" title="フォルダ全体を選択/解除">
+          <h3 style="margin:0;">📁 ${f.name} (${f.words ? f.words.length : 0}語)</h3>
+        </div>
+        <button onclick="deleteFolder(${f.id})" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">削除</button>
+      </div>
+
+      <div style="display: flex; gap: 6px; margin-bottom: 14px;">
+        <input placeholder="単語を入力してEnter" onkeydown="if(event.key==='Enter'){ addWordToFolder(${f.id}, this.value); this.value=''; }" style="flex:1; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.95em;">
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        ${(f.words || []).map((w, wIdx) => {
+          const rawMeanings = Array.isArray(w.meanings) ? w.meanings.join("\n") : (w.meanings || '');
+          const safeMeaningsText = rawMeanings.replace(/<[^>]*>?/gm, '');
+          const isWordChecked = w.checked === true;
+
+          return `
+          <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" ${isWordChecked ? 'checked' : ''} onchange="toggleWordCheck(${f.id}, ${wIdx}, this.checked)" style="width: 16px; height: 16px; cursor: pointer;" title="単語を選択/解除">
+                <b style="font-size: 1.1em; color: #0f172a;">${w.word}</b>
+                <button onclick="speakText('${w.word}', 'en-US', 500)" style="background: #e2e8f0; border: none; border-radius: 4px; padding: 2px 6px; font-size: 0.8em; cursor: pointer;" title="発音を聞く">🔊</button>
+              </div>
+              <div style="display: flex; gap: 4px; align-items: center;">
+                <button onclick="moveWord(${f.id}, ${wIdx}, -1)" style="background:#f1f5f9; border:1px solid #cbd5e1; padding:2px 6px; border-radius:4px; cursor:pointer;">▲</button>
+                <button onclick="moveWord(${f.id}, ${wIdx}, 1)" style="background:#f1f5f9; border:1px solid #cbd5e1; padding:2px 6px; border-radius:4px; cursor:pointer;">▼</button>
+                <select onchange="moveWordToFolder(${f.id}, ${wIdx}, this.value)" style="padding:2px; font-size:0.8em; border-radius:4px;">
+                  <option value="">移動...</option>
+                  ${folders.map(ot => `<option value="${ot.id}">${ot.name}</option>`).join('')}
+                </select>
+                <button onclick="deleteWord(${f.id}, ${wIdx})" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.1em;">🗑️</button>
+              </div>
+            </div>
+            
+            <div id="meaning_${f.id}_${wIdx}" style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.9em; margin-bottom: 8px; line-height: 1.5; outline: none;" contenteditable="true" onblur="updateWordMeanings(${f.id}, ${wIdx}, this.innerText)">${safeMeaningsText}</div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; margin-bottom: 4px;">
+              <span style="font-size: 0.85em; color: #64748b;">例文</span>
+              <button onclick="addExample(${f.id}, ${wIdx})" style="background: #0284c7; color: white; border: none; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">＋ 例文追加</button>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              ${(w.examples || []).map((ex, eIdx) => `
+                <div style="background: #ffffff; padding: 6px 28px 6px 6px; border-radius: 4px; border: 1px solid #e2e8f0; font-size: 0.85em; position: relative;">
+                  <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
+                    <div contenteditable="true" onblur="updateExampleField(${f.id}, ${wIdx}, ${eIdx}, 'en', this.innerText)" style="color: #2563eb; outline: none; flex: 1;">${ex.en}</div>
+                    <button onclick="speakText('${ex.en.replace(/'/g, "\\'")}', 'en-US', 500)" style="background: #f1f5f9; border: none; border-radius: 4px; padding: 2px 5px; font-size: 0.75em; cursor: pointer;" title="英文を読み上げる">🔊</button>
+                  </div>
+                  <div contenteditable="true" onblur="updateExampleField(${f.id}, ${wIdx}, ${eIdx}, 'ja', this.innerText)" style="color: #475569; outline: none;">${ex.ja}</div>
+                  <button onclick="deleteExample(${f.id}, ${wIdx}, ${eIdx})" style="position: absolute; top: 6px; right: 6px; background: none; border: none; color: #ef4444; cursor: pointer; font-size: 0.9em; padding: 4px;" title="例文を削除">🗑️</button>
+                </div>
+              `).join('')}
+            </div>
+
+          </div>
+        `;}).join('')}
+      </div>
+    </div>
+  `;}).join('');
+}
+
+window.loginWithAccount = function(email) {
+  const cleanEmail = email ? email.trim() : "";
+  if (!cleanEmail) {
+    alert("有効なメールアドレスを入力してください。");
+    return;
+  }
+  currentUser = { email: cleanEmail };
+  localStorage.setItem("last_logged_in_email", cleanEmail);
+  loadUserData(cleanEmail);
+  render();
+};
+
+window.logout = function() { 
+  localStorage.removeItem("last_logged_in_email");
+  location.reload(); 
+};
+
+window.createFolder = function() {
+  const el = document.getElementById("folderName");
+  if (el && el.value.trim()) {
+    folders.push({ id: Date.now(), name: el.value.trim(), words: [], checked: false });
+    el.value = ""; saveUserData(); render();
+  }
+};
+
+function setupLoginUI() {
+  const accountListEl = document.getElementById("accountList");
+  if (accountListEl) {
+    accountListEl.innerHTML = `
+      <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 320px; margin: 0 auto;">
+        <div style="font-size: 0.9em; color: #94a3b8; text-align: center; margin-bottom: 4px;">メールアドレスでログイン</div>
+        <div style="display: flex; gap: 6px;">
+          <input type="email" id="customEmailInput" placeholder="your_email@example.com" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #475569; background: #1e293b; color: white; font-size: 0.9em;" onkeydown="if(event.key==='Enter'){ loginWithAccount(document.getElementById('customEmailInput').value); }">
+          <button onclick="loginWithAccount(document.getElementById('customEmailInput').value)" style="background: #0284c7; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9em;">ログイン</button>
+        </div>
+      </div>
+    `;
+  }
+}
+
+window.onload = function() {
+  const lastEmail = localStorage.getItem("last_logged_in_email");
+  if (lastEmail) {
+    loginWithAccount(lastEmail);
+    return;
+  }
+  setupLoginUI();
+};
