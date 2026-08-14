@@ -8,7 +8,7 @@ let selectedImageBase64 = null;
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
 function getStorageKey(email) {
-  return "user_data_grok_v3_" + email.toLowerCase().trim();
+  return "user_data_grok_v4_" + email.toLowerCase().trim();
 }
 
 function saveUserData() {
@@ -147,20 +147,18 @@ window.clearSelectedImage = function() {
   document.getElementById("imagePreviewContainer").style.display = "none";
 };
 
-// 🔊 音声読み上げ機能（発音・英文）
-window.speakText = function(text, lang = 'en-US') {
-  if (!('speechSynthesis' in window)) {
-    alert("お使いのブラウザは音声読み上げに対応していません。");
-    return;
-  }
-  window.speechSynthesis.cancel(); // 連続クリック時の重複防止
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = lang;
-  utterance.rate = 0.9; // 少し聞き取りやすい速度
-  window.speechSynthesis.speak(utterance);
+// 🔊 音声読み上げ機能（0.5秒後の自動遅延対応）
+window.speakText = function(text, lang = 'en-US', delay = 0) {
+  if (!('speechSynthesis' in window)) return;
+  setTimeout(() => {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    utterance.rate = 0.9;
+    window.speechSynthesis.speak(utterance);
+  }, delay);
 };
 
-// AIチャット送信処理
 window.sendChatMessage = async function() {
   const inputEl = document.getElementById("chatInput");
   const text = inputEl ? inputEl.value.trim() : "";
@@ -208,7 +206,6 @@ window.sendChatMessage = async function() {
   render();
 };
 
-// 単語の個別追加 ＆ 意味・例文の自動取得＋0.5秒後の自動発音
 window.addWordToFolder = async function(folderId, word) {
   const clean = word.trim();
   if (!clean) return;
@@ -226,7 +223,7 @@ window.addWordToFolder = async function(folderId, word) {
     if (res.ok) {
       const data = await res.json();
       aiData = { 
-        meanings: data.meanings || aiData.meanings, 
+        meanings: Array.isArray(data.meanings) ? data.meanings : [data.meanings || ''], 
         examples: data.examples || [], 
         details: data.details || "" 
       };
@@ -239,9 +236,7 @@ window.addWordToFolder = async function(folderId, word) {
   render();
 
   // ⏱️ 追加完了から0.5秒後に自動で発音
-  setTimeout(() => {
-    speakText(clean, 'en-US');
-  }, 500);
+  speakText(clean, 'en-US', 500);
 };
 
 window.deleteWord = function(folderId, wIdx) {
@@ -271,10 +266,11 @@ window.addExample = function(folderId, wIdx) {
   }
 };
 
-window.updateWordField = function(folderId, wIdx, field, val) {
+window.updateWordMeanings = function(folderId, wIdx, textValue) {
   const folder = folders.find(f => f.id === folderId);
   if (folder && folder.words[wIdx]) {
-    folder.words[wIdx][field] = val;
+    // タグを除去してプレーンな行ごとに分割保存
+    folder.words[wIdx].meanings = textValue.split('\n').map(line => line.trim()).filter(Boolean);
     saveUserData();
   }
 };
@@ -342,8 +338,7 @@ window.formatWordText = function(folderId, wIdx, color) {
 
   const editableDiv = document.getElementById(`meaning_${folderId}_${wIdx}`);
   if (editableDiv) {
-    const meaningsArray = Array.from(editableDiv.children).map(child => child.outerHTML).join("<br>") || editableDiv.innerHTML;
-    updateWordField(folderId, wIdx, 'meanings', [meaningsArray]);
+    updateWordMeanings(folderId, wIdx, editableDiv.innerText);
   }
 };
 
@@ -418,7 +413,7 @@ function renderFolders() {
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
               <div style="display: flex; align-items: center; gap: 6px;">
                 <b style="font-size: 1.1em; color: #0f172a;">${w.word}</b>
-                <button onclick="speakText('${w.word}', 'en-US')" style="background: #e2e8f0; border: none; border-radius: 4px; padding: 2px 6px; font-size: 0.8em; cursor: pointer;" title="発音を聞く">🔊</button>
+                <button onclick="speakText('${w.word}', 'en-US', 500)" style="background: #e2e8f0; border: none; border-radius: 4px; padding: 2px 6px; font-size: 0.8em; cursor: pointer;" title="発音を聞く">🔊</button>
               </div>
               <div style="display: flex; gap: 4px; align-items: center;">
                 <button onclick="moveWord(${f.id}, ${wIdx}, -1)" style="background:#f1f5f9; border:1px solid #cbd5e1; padding:2px 6px; border-radius:4px; cursor:pointer;">▲</button>
@@ -439,8 +434,8 @@ function renderFolders() {
               <button onclick="formatWordText(${f.id}, ${wIdx}, 'bold')" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:3px; padding:1px 6px; cursor:pointer;">B</button>
             </div>
             
-            <div id="meaning_${f.id}_${wIdx}" style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.9em; margin-bottom: 8px; line-height: 1.5;" contenteditable="true" onblur="updateWordField(${f.id}, ${wIdx}, 'meanings', [this.innerHTML])">
-              ${Array.isArray(w.meanings) ? w.meanings.join("<br>") : (w.meanings || '')}
+            <div id="meaning_${f.id}_${wIdx}" style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.9em; margin-bottom: 8px; line-height: 1.5;" contenteditable="true" onblur="updateWordMeanings(${f.id}, ${wIdx}, this.innerText)">
+              ${Array.isArray(w.meanings) ? w.meanings.join("\n") : (w.meanings || '')}
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; margin-bottom: 4px;">
@@ -450,13 +445,13 @@ function renderFolders() {
 
             <div style="display: flex; flex-direction: column; gap: 4px;">
               ${(w.examples || []).map((ex, eIdx) => `
-                <div style="background: #ffffff; padding: 6px; border-radius: 4px; border: 1px solid #e2e8f0; font-size: 0.85em; position: relative;">
+                <div style="background: #ffffff; padding: 6px 28px 6px 6px; border-radius: 4px; border: 1px solid #e2e8f0; font-size: 0.85em; position: relative;">
                   <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
                     <div contenteditable="true" onblur="updateExampleField(${f.id}, ${wIdx}, ${eIdx}, 'en', this.innerText)" style="color: #2563eb; outline: none; flex: 1;">${ex.en}</div>
-                    <button onclick="speakText('${ex.en.replace(/'/g, "\\'")}', 'en-US')" style="background: #f1f5f9; border: none; border-radius: 4px; padding: 2px 5px; font-size: 0.75em; cursor: pointer;" title="英文を読み上げる">🔊</button>
+                    <button onclick="speakText('${ex.en.replace(/'/g, "\\'")}', 'en-US', 500)" style="background: #f1f5f9; border: none; border-radius: 4px; padding: 2px 5px; font-size: 0.75em; cursor: pointer;" title="英文を読み上げる">🔊</button>
                   </div>
                   <div contenteditable="true" onblur="updateExampleField(${f.id}, ${wIdx}, ${eIdx}, 'ja', this.innerText)" style="color: #475569; outline: none;">${ex.ja}</div>
-                  <button onclick="deleteExample(${f.id}, ${wIdx}, ${eIdx})" style="position: absolute; top: 4px; right: 4px; background: none; border: none; color: #ef4444; cursor: pointer; font-size: 0.8em;">🗑️</button>
+                  <button onclick="deleteExample(${f.id}, ${wIdx}, ${eIdx})" style="position: absolute; top: 6px; right: 6px; background: none; border: none; color: #ef4444; cursor: pointer; font-size: 0.9em; padding: 4px;" title="例文を削除">🗑️</button>
                 </div>
               `).join('')}
             </div>
