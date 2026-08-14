@@ -8,7 +8,7 @@ let selectedImageBase64 = null;
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
 function getStorageKey(email) {
-  return "user_data_grok_v8_" + email.toLowerCase().trim();
+  return "user_data_grok_v9_" + email.toLowerCase().trim();
 }
 
 function saveUserData() {
@@ -147,7 +147,6 @@ window.clearSelectedImage = function() {
   document.getElementById("imagePreviewContainer").style.display = "none";
 };
 
-// 🔊 音声読み上げ機能（0.5秒後の自動遅延対応）
 window.speakText = function(text, lang = 'en-US', delay = 0) {
   if (!('speechSynthesis' in window)) return;
   setTimeout(() => {
@@ -231,7 +230,8 @@ window.addWordToFolder = async function(folderId, word) {
   } catch(e) {}
 
   if (!folder.words) folder.words = [];
-  folder.words.push({ word: clean, checked: true, ...aiData });
+  // 🌟 追加された単語は初期状態でチェックオフ (checked: false)
+  folder.words.push({ word: clean, checked: false, ...aiData });
   saveUserData();
   render();
 
@@ -390,7 +390,7 @@ function renderFolders() {
   if (!foldersEl) return;
 
   foldersEl.innerHTML = folders.map(f => {
-    const isFolderChecked = f.checked !== false;
+    const isFolderChecked = f.checked === true; // デフォルトオフ
     return `
     <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -409,7 +409,7 @@ function renderFolders() {
         ${(f.words || []).map((w, wIdx) => {
           const rawMeanings = Array.isArray(w.meanings) ? w.meanings.join("\n") : (w.meanings || '');
           const safeMeaningsText = rawMeanings.replace(/<[^>]*>?/gm, '');
-          const isWordChecked = w.checked !== false;
+          const isWordChecked = w.checked === true; // デフォルトオフ
 
           return `
           <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px;">
@@ -464,21 +464,35 @@ window.loginWithAccount = function(email) {
     return;
   }
   currentUser = { email: cleanEmail };
+  // 🌟 ログインしたメールアドレスをブラウザに保存（次回自動ログイン用）
+  localStorage.setItem("last_logged_in_email", cleanEmail);
   loadUserData(cleanEmail);
   render();
 };
 
-window.logout = function() { location.reload(); };
+window.logout = function() { 
+  // 🌟 ログアウト時は記憶をクリアして再読み込み
+  localStorage.removeItem("last_logged_in_email");
+  location.reload(); 
+};
 
 window.createFolder = function() {
   const el = document.getElementById("folderName");
   if (el && el.value.trim()) {
-    folders.push({ id: Date.now(), name: el.value.trim(), words: [], checked: true });
+    // 🌟 新規フォルダも初期状態でチェックオフ (checked: false)
+    folders.push({ id: Date.now(), name: el.value.trim(), words: [], checked: false });
     el.value = ""; saveUserData(); render();
   }
 };
 
 window.onload = function() {
+  // 🌟 前回ログインしたメールアドレスがあれば、自動でログイン処理を実行
+  const lastEmail = localStorage.getItem("last_logged_in_email");
+  if (lastEmail) {
+    loginWithAccount(lastEmail);
+    return;
+  }
+
   const accountListEl = document.getElementById("accountList");
   if (accountListEl) {
     accountListEl.innerHTML = `
