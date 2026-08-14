@@ -8,7 +8,7 @@ let selectedImageBase64 = null;
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
 function getStorageKey(email) {
-  return "user_data_grok_v5_" + email.toLowerCase().trim();
+  return "user_data_grok_v7_" + email.toLowerCase().trim();
 }
 
 function saveUserData() {
@@ -231,7 +231,7 @@ window.addWordToFolder = async function(folderId, word) {
   } catch(e) {}
 
   if (!folder.words) folder.words = [];
-  folder.words.push({ word: clean, ...aiData });
+  folder.words.push({ word: clean, checked: true, ...aiData });
   saveUserData();
   render();
 
@@ -256,6 +256,24 @@ window.deleteFolder = function(folderId) {
   }
 };
 
+window.toggleWordCheck = function(folderId, wIdx, isChecked) {
+  const folder = folders.find(f => f.id === folderId);
+  if (folder && folder.words[wIdx]) {
+    folder.words[wIdx].checked = isChecked;
+    saveUserData();
+  }
+};
+
+window.toggleFolderCheck = function(folderId, isChecked) {
+  const folder = folders.find(f => f.id === folderId);
+  if (folder && folder.words) {
+    folder.checked = isChecked;
+    folder.words.forEach(w => w.checked = isChecked);
+    saveUserData();
+    render();
+  }
+};
+
 window.addExample = function(folderId, wIdx) {
   const folder = folders.find(f => f.id === folderId);
   if (folder && folder.words[wIdx]) {
@@ -266,11 +284,9 @@ window.addExample = function(folderId, wIdx) {
   }
 };
 
-// プレーンテキストのみを抽出して保存する関数（HTMLタグを完全に排除）
 window.updateWordMeanings = function(folderId, wIdx, rawText) {
   const folder = folders.find(f => f.id === folderId);
   if (folder && folder.words[wIdx]) {
-    // タグが含まれていたら完全に除去する
     const cleaned = rawText.replace(/<[^>]*>?/gm, '');
     folder.words[wIdx].meanings = cleaned.split('\n').map(line => line.trim()).filter(Boolean);
     saveUserData();
@@ -374,10 +390,15 @@ function renderFolders() {
   const foldersEl = document.getElementById("folders");
   if (!foldersEl) return;
 
-  foldersEl.innerHTML = folders.map(f => `
+  foldersEl.innerHTML = folders.map(f => {
+    const isFolderChecked = f.checked !== false;
+    return `
     <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <h3 style="margin:0;">📁 ${f.name} (${f.words ? f.words.length : 0}語)</h3>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" ${isFolderChecked ? 'checked' : ''} onchange="toggleFolderCheck(${f.id}, this.checked)" style="width: 18px; height: 18px; cursor: pointer;" title="フォルダ全体を選択/解除">
+          <h3 style="margin:0;">📁 ${f.name} (${f.words ? f.words.length : 0}語)</h3>
+        </div>
         <button onclick="deleteFolder(${f.id})" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">削除</button>
       </div>
 
@@ -387,14 +408,15 @@ function renderFolders() {
 
       <div style="display: flex; flex-direction: column; gap: 10px;">
         ${(f.words || []).map((w, wIdx) => {
-          // 既存データに混入しているHTMLタグを完全に安全なプレーンテキストに置換して表示
           const rawMeanings = Array.isArray(w.meanings) ? w.meanings.join("\n") : (w.meanings || '');
           const safeMeaningsText = rawMeanings.replace(/<[^>]*>?/gm, '');
+          const isWordChecked = w.checked !== false;
 
           return `
           <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <div style="display: flex; align-items: center; gap: 6px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" ${isWordChecked ? 'checked' : ''} onchange="toggleWordCheck(${f.id}, ${wIdx}, this.checked)" style="width: 16px; height: 16px; cursor: pointer;" title="単語を選択/解除">
                 <b style="font-size: 1.1em; color: #0f172a;">${w.word}</b>
                 <button onclick="speakText('${w.word}', 'en-US', 500)" style="background: #e2e8f0; border: none; border-radius: 4px; padding: 2px 6px; font-size: 0.8em; cursor: pointer;" title="発音を聞く">🔊</button>
               </div>
@@ -433,27 +455,49 @@ function renderFolders() {
         `;}).join('')}
       </div>
     </div>
-  `).join('');
+  `;}).join('');
 }
 
 window.loginWithAccount = function(email) {
-  currentUser = { email: email };
-  loadUserData(email);
+  const cleanEmail = email.trim();
+  if (!cleanEmail) {
+    alert("有効なメールアドレスを入力してください。");
+    return;
+  }
+  currentUser = { email: cleanEmail };
+  loadUserData(cleanEmail);
   render();
 };
+
 window.logout = function() { location.reload(); };
 
 window.createFolder = function() {
   const el = document.getElementById("folderName");
   if (el && el.value.trim()) {
-    folders.push({ id: Date.now(), name: el.value.trim(), words: [] });
+    folders.push({ id: Date.now(), name: el.value.trim(), words: [], checked: true });
     el.value = ""; saveUserData(); render();
   }
 };
 
 window.onload = function() {
-  const accounts = ["16011264@kago.ed.jp", "humbleflail205@gmail.com"];
-  document.getElementById("accountList").innerHTML = accounts.map(a => 
-    `<div onclick="loginWithAccount('${a}')" style="padding:12px; background:#334155; border-radius:8px; cursor:pointer; color:white; font-weight:500; text-align:center;">${a}</div>`
-  ).join('');
+  // 固定アカウントのクイックログインボタン＋任意のメールアドレスで自由にログインできるフォームを追加
+  const accountListEl = document.getElementById("accountList");
+  if (accountListEl) {
+    const quickAccounts = ["16011264@kago.ed.jp", "humbleflail205@gmail.com"];
+    
+    accountListEl.innerHTML = `
+      <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 320px; margin: 0 auto;">
+        <div style="font-size: 0.9em; color: #94a3b8; text-align: center; margin-bottom: 4px;">クイックログイン</div>
+        ${quickAccounts.map(a => `<div onclick="loginWithAccount('${a}')" style="padding:10px; background:#334155; border-radius:6px; cursor:pointer; color:white; font-weight:500; text-align:center; font-size:0.9em;">${a}</div>`).join('')}
+        
+        <div style="border-top: 1px solid #475569; margin: 12px 0;"></div>
+        
+        <div style="font-size: 0.9em; color: #94a3b8; text-align: center; margin-bottom: 4px;">新しいメールアドレスで始める</div>
+        <div style="display: flex; gap: 6px;">
+          <input type="email" id="customEmailInput" placeholder="your_email@example.com" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #475569; background: #1e293b; color: white; font-size: 0.9em;" onkeydown="if(event.key==='Enter'){ loginWithAccount(document.getElementById('customEmailInput').value); }">
+          <button onclick="loginWithAccount(document.getElementById('customEmailInput').value)" style="background: #0284c7; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9em;">ログイン</button>
+        </div>
+      </div>
+    `;
+  }
 };
