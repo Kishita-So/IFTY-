@@ -8,7 +8,7 @@ let selectedImageBase64 = null;
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
 function getStorageKey(email) {
-  return "user_data_grok_v14_" + email.toLowerCase().trim();
+  return "user_data_grok_v15_" + email.toLowerCase().trim();
 }
 
 function saveUserData() {
@@ -43,7 +43,41 @@ function loadUserData(email) {
   }
 }
 
+// --- DOM自動生成・画面管理 ---
+function ensureAppStructure() {
+  if (!document.getElementById("aiChatPage")) {
+    const aiChatDiv = document.createElement("div");
+    aiChatDiv.id = "aiChatPage";
+    aiChatDiv.style.cssText = "display: none; flex-direction: column; height: calc(100vh - 80px); max-width: 800px; margin: 0 auto; padding: 10px; box-sizing: border-box;";
+    aiChatDiv.innerHTML = `
+      <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px; background: #1e293b; padding: 10px; border-radius: 8px;">
+        <select id="chatSessionSelect" onchange="switchChatSession(this.value)" style="padding: 6px; border-radius: 6px; background: #0f172a; color: white; border: 1px solid #475569; flex: 1;"></select>
+        <input type="text" id="chatTitleInput" onblur="updateChatTitle(this.value)" placeholder="チャットタイトル" style="padding: 6px; border-radius: 6px; background: #0f172a; color: white; border: 1px solid #475569; width: 120px;">
+        <button onclick="createNewChatSession()" style="padding: 6px 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">＋ 新規</button>
+        <button onclick="moveChatSession(-1)" style="padding: 6px 8px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer;" title="左に移動">◀</button>
+        <button onclick="moveChatSession(1)" style="padding: 6px 8px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer;" title="右に移動">▶</button>
+        <button onclick="deleteCurrentChatSession()" style="padding: 6px 8px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer;" title="削除">🗑️</button>
+      </div>
+      <div id="chatMessages" style="flex: 1; overflow-y: auto; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px;"></div>
+      <div id="imagePreviewContainer" style="display: none; align-items: center; gap: 8px; margin-bottom: 6px;">
+        <img id="imagePreview" src="" style="max-height: 60px; border-radius: 4px; border: 1px solid #cbd5e1;">
+        <button onclick="clearSelectedImage()" style="background: #ef4444; color: white; border: none; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 0.8em;">画像を削除</button>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <label style="background: #334155; color: white; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9em;">
+          📷 画像 <input type="file" id="imageInput" accept="image/*" onchange="handleImageSelect(event)" style="display: none;">
+        </label>
+        <textarea id="chatInput" placeholder="AIにメッセージや単語の作成を指示..." rows="1" style="flex: 1; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; resize: none; font-size: 0.95em;" onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); sendChatMessage(); }"></textarea>
+        <button onclick="sendChatMessage()" style="background: #0284c7; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold;">送信</button>
+      </div>
+    `;
+    const mainPortal = document.getElementById("mainPortal") || document.body;
+    mainPortal.appendChild(aiChatDiv);
+  }
+}
+
 window.toggleViewMode = function() {
+  ensureAppStructure();
   const vocabPage = document.getElementById("vocabPage");
   const aiChatPage = document.getElementById("aiChatPage");
   const btn = document.getElementById("floatingAiBtn");
@@ -53,6 +87,7 @@ window.toggleViewMode = function() {
     if (vocabPage) vocabPage.style.display = "none";
     if (aiChatPage) aiChatPage.style.display = "flex";
     if (btn) btn.innerText = "📚"; 
+    renderChatArea();
   } else {
     currentView = "vocab";
     if (vocabPage) vocabPage.style.display = "block";
@@ -71,7 +106,7 @@ window.createNewChatSession = function(shouldRender = true) {
   chatSessions.unshift(newSession);
   currentSessionId = newSession.id;
   saveUserData();
-  if (shouldRender) render();
+  if (shouldRender) renderChatArea();
 };
 
 window.switchChatSession = function(id) {
@@ -135,16 +170,20 @@ window.handleImageSelect = function(event) {
   const reader = new FileReader();
   reader.onload = function(e) {
     selectedImageBase64 = e.target.result;
-    document.getElementById("imagePreview").src = selectedImageBase64;
-    document.getElementById("imagePreviewContainer").style.display = "flex";
+    const preview = document.getElementById("imagePreview");
+    const container = document.getElementById("imagePreviewContainer");
+    if (preview) preview.src = selectedImageBase64;
+    if (container) container.style.display = "flex";
   };
   reader.readAsDataURL(file);
 };
 
 window.clearSelectedImage = function() {
   selectedImageBase64 = null;
-  document.getElementById("imageInput").value = "";
-  document.getElementById("imagePreviewContainer").style.display = "none";
+  const imgInput = document.getElementById("imageInput");
+  const container = document.getElementById("imagePreviewContainer");
+  if (imgInput) imgInput.value = "";
+  if (container) container.style.display = "none";
 };
 
 window.speakText = function(text, lang = 'en-US', delay = 0) {
@@ -167,7 +206,7 @@ window.sendChatMessage = async function() {
   if (!session) return;
 
   session.messages.push({ role: "user", text: text, image: selectedImageBase64 });
-  inputEl.value = "";
+  if (inputEl) inputEl.value = "";
   const currentImg = selectedImageBase64;
   clearSelectedImage();
   renderChatArea();
@@ -529,7 +568,6 @@ function ensureFloatingButtons() {
   if (!container) {
     container = document.createElement("div");
     container.id = "floatingButtonsContainer";
-    // 左下に配置 (bottom: 20px; left: 20px;)
     container.style.cssText = "position: fixed; bottom: 20px; left: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 9999;";
     document.body.appendChild(container);
   }
@@ -556,7 +594,6 @@ function ensureFloatingButtons() {
 
   container.innerHTML = "";
   if (currentUser) {
-    // 左下でAIボタンの上にメニュー、またはメニューの上にAIボタン（お好みで。ここではメニューを上、AIを下に配置）
     container.appendChild(menuBtn);
     container.appendChild(aiBtn);
   }
@@ -593,6 +630,7 @@ function renderChatArea() {
 }
 
 function render() {
+  ensureAppStructure();
   const landingPage = document.getElementById("landingPage");
   const mainPortal = document.getElementById("mainPortal");
   const userDisplay = document.getElementById("userDisplay");
@@ -606,7 +644,6 @@ function render() {
   } else {
     if (landingPage) landingPage.style.display = "block";
     if (mainPortal) mainPortal.style.display = "none";
-    
     setupLoginUI();
     return;
   }
@@ -663,7 +700,7 @@ function renderFolders() {
               </div>
             </div>
             
-            , <div id="meaning_${f.id}_${wIdx}" style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.9em; margin-bottom: 8px; line-height: 1.5; outline: none;" contenteditable="true" onblur="updateWordMeanings(${f.id}, ${wIdx}, this.innerText)">${safeMeaningsText}</div>
+            <div id="meaning_${f.id}_${wIdx}" style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.9em; margin-bottom: 8px; line-height: 1.5; outline: none;" contenteditable="true" onblur="updateWordMeanings(${f.id}, ${wIdx}, this.innerText)">${safeMeaningsText}</div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; margin-bottom: 4px;">
               <span style="font-size: 0.85em; color: #64748b;">例文</span>
@@ -734,6 +771,7 @@ function setupLoginUI() {
 }
 
 window.onload = function() {
+  ensureAppStructure();
   const lastEmail = localStorage.getItem("last_logged_in_email");
   if (lastEmail) {
     loginWithAccount(lastEmail);
