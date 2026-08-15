@@ -8,7 +8,7 @@ let selectedImageBase64 = null;
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
 function getStorageKey(email) {
-  return "user_data_allia_v18_" + email.toLowerCase().trim();
+  return "user_data_allia_v19_" + email.toLowerCase().trim();
 }
 
 function saveUserData() {
@@ -408,19 +408,33 @@ window.openMenuModal = function() {
     <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 340px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); text-align: center;">
       <h3 style="margin-top: 0; color: #0f172a; margin-bottom: 16px;">メニュー</h3>
       <div style="display: flex; flex-direction: column; gap: 10px;">
-        <button onclick="${currentView === 'chat' ? 'switchToVocabView()' : 'switchToChatView()'}" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-bottom: 6px;">${currentView === 'chat' ? '📚 単語帳画面を開く' : '🤖 ALLIAを開く'}</button>
+        <button onclick="${currentView === 'chat' ? 'switchToVocabView()' : 'switchToChatView()'}" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-bottom: 4px;">${currentView === 'chat' ? '📚 単語帳画面に戻る' : '🤖 ALLIAを開く'}</button>
+        <button onclick="openFlashcardSubMenu()" style="padding: 10px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-bottom: 4px;">📇 フラッシュカード</button>
         <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 2px 0;">
         ${hasSavedSession ? `<button onclick="resumeFlashcards()" style="padding: 10px; background: #16a34a; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">▶ 続きから再開 (${currentFlashcardIndex + 1}/${flashcardList.length})</button>` : ''}
-        <div style="font-size: 0.9em; font-weight: bold; color: #475569; text-align: left; margin-top: 4px;">📇 フラッシュカード新規開始</div>
-        <button onclick="startFlashcards('all', false)" style="padding: 10px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">全単語 (順番通り)</button>
-        <button onclick="startFlashcards('all', true)" style="padding: 10px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">全単語 (ランダム)</button>
-        <button onclick="startFlashcards('checked_folders', true)" style="padding: 10px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">チェックしたフォルダ (ランダム可)</button>
-        <button onclick="startFlashcards('checked_words', true)" style="padding: 10px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">チェックした単語 (ランダム可)</button>
-        <button onclick="closeMenuModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; margin-top: 8px;">閉じる</button>
+        <button onclick="closeMenuModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; margin-top: 4px;">閉じる</button>
       </div>
     </div>
   `;
   modal.style.display = "flex";
+};
+
+window.openFlashcardSubMenu = function() {
+  let modal = document.getElementById("appMenuModal");
+  if (!modal) return;
+
+  modal.innerHTML = `
+    <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 340px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); text-align: center;">
+      <h3 style="margin-top: 0; color: #0f172a; margin-bottom: 16px;">📇 フラッシュカード</h3>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button onclick="startFlashcards('all', false)" style="padding: 10px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">全単語 (順番通り)</button>
+        <button onclick="startFlashcards('all', true)" style="padding: 10px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">全単語 (ランダム)</button>
+        <button onclick="startFlashcards('checked_folders', true)" style="padding: 10px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">チェックしたフォルダ (ランダム可)</button>
+        <button onclick="startFlashcards('checked_words', true)" style="padding: 10px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">チェックした単語 (ランダム可)</button>
+        <button onclick="openMenuModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; margin-top: 6px;">◀ 戻る</button>
+      </div>
+    </div>
+  `;
 };
 
 window.closeMenuModal = function() {
