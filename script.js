@@ -8,7 +8,7 @@ let selectedImageBase64 = null;
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
 function getStorageKey(email) {
-  return "user_data_allia_v20_" + email.toLowerCase().trim();
+  return "user_data_allia_v21_" + email.toLowerCase().trim();
 }
 
 function saveUserData() {
@@ -64,8 +64,8 @@ function ensureAppStructure() {
         <button onclick="clearSelectedImage()" style="background: #ef4444; color: white; border: none; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 0.8em;">画像を削除</button>
       </div>
       <div style="display: flex; gap: 8px; align-items: center;">
-        <label style="background: #334155; color: white; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9em;">
-          📁 画像 <input type="file" id="imageInput" accept="image/*" onchange="handleImageSelect(event)" style="display: none;">
+        <label style="background: #334155; color: white; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9em; display: flex; align-items: center; justify-content: center;">
+          📁<input type="file" id="imageInput" accept="image/*" onchange="handleImageSelect(event)" style="display: none;">
         </label>
         <textarea id="chatInput" placeholder="ALLIAに質問、または「〇〇な単語を追加して」..." rows="1" style="flex: 1; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; resize: none; font-size: 0.95em;" onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); sendChatMessage(); }"></textarea>
         <button onclick="sendChatMessage()" style="background: #0284c7; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold;">送信</button>
@@ -386,7 +386,7 @@ window.moveWordToFolder = function(fromFolderId, wIdx, toFolderIdStr) {
   render();
 };
 
-// --- フラッシュカード機能（中断・再開対応） ---
+// --- フラッシュカード機能 ---
 let flashcardList = [];
 let currentFlashcardIndex = 0;
 let isCardFlipped = false;
@@ -592,7 +592,7 @@ window.closeFlashcardModal = function() {
   if (modal) modal.style.display = "none";
 };
 
-// --- 左下のフローティングボタン管理（メニュー ＆ AIチャットボタン） ---
+// --- 左下のフローティングボタン管理 ---
 function ensureFloatingButtons() {
   let container = document.getElementById("floatingButtonsContainer");
   if (!container) {
