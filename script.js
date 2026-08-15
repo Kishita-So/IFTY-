@@ -8,7 +8,7 @@ let selectedImageBase64 = null;
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
 function getStorageKey(email) {
-  return "user_data_grok_v15_" + email.toLowerCase().trim();
+  return "user_data_grok_v16_" + email.toLowerCase().trim();
 }
 
 function saveUserData() {
