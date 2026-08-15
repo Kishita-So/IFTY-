@@ -8,7 +8,7 @@ let selectedImageBase64 = null;
 const WORKER_URL = "https://ifty.humbleflail205.workers.dev";
 
 function getStorageKey(email) {
-  return "user_data_grok_v13_" + email.toLowerCase().trim();
+  return "user_data_grok_v14_" + email.toLowerCase().trim();
 }
 
 function saveUserData() {
@@ -50,13 +50,13 @@ window.toggleViewMode = function() {
 
   if (currentView === "vocab") {
     currentView = "chat";
-    vocabPage.style.display = "none";
-    aiChatPage.style.display = "flex";
+    if (vocabPage) vocabPage.style.display = "none";
+    if (aiChatPage) aiChatPage.style.display = "flex";
     if (btn) btn.innerText = "📚"; 
   } else {
     currentView = "vocab";
-    vocabPage.style.display = "block";
-    aiChatPage.style.display = "none";
+    if (vocabPage) vocabPage.style.display = "block";
+    if (aiChatPage) aiChatPage.style.display = "none";
     if (btn) btn.innerText = "💬"; 
   }
   render();
@@ -304,7 +304,6 @@ window.deleteExample = function(folderId, wIdx, eIdx) {
   if (folder && folder.words[wIdx] && folder.words[wIdx].examples) {
     folder.words[wIdx].examples.splice(eIdx, 1);
     saveUserData();
-    render();
   }
 };
 
@@ -334,7 +333,7 @@ window.moveWordToFolder = function(fromFolderId, wIdx, toFolderIdStr) {
   render();
 };
 
-// --- フラッシュカード機能（ランダム・定着/未定着・2周目対応） ---
+// --- フラッシュカード機能（中断・再開対応） ---
 let flashcardList = [];
 let currentFlashcardIndex = 0;
 let isCardFlipped = false;
@@ -349,11 +348,15 @@ window.openMenuModal = function() {
     modal.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 10000;";
     document.body.appendChild(modal);
   }
+  
+  const hasSavedSession = flashcardList.length > 0 && currentFlashcardIndex < flashcardList.length;
+
   modal.innerHTML = `
     <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 340px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); text-align: center;">
       <h3 style="margin-top: 0; color: #0f172a; margin-bottom: 16px;">メニュー</h3>
       <div style="display: flex; flex-direction: column; gap: 10px;">
-        <div style="font-size: 0.9em; font-weight: bold; color: #475569; text-align: left;">📇 フラッシュカード範囲</div>
+        ${hasSavedSession ? `<button onclick="resumeFlashcards()" style="padding: 10px; background: #16a34a; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">▶ 続きから再開 (${currentFlashcardIndex + 1}/${flashcardList.length})</button>` : ''}
+        <div style="font-size: 0.9em; font-weight: bold; color: #475569; text-align: left; margin-top: 4px;">📇 フラッシュカード新規開始</div>
         <button onclick="startFlashcards('all', false)" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">全単語 (順番通り)</button>
         <button onclick="startFlashcards('all', true)" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">全単語 (ランダム)</button>
         <button onclick="startFlashcards('checked_folders', true)" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">チェックしたフォルダ (ランダム可)</button>
@@ -368,6 +371,15 @@ window.openMenuModal = function() {
 window.closeMenuModal = function() {
   const modal = document.getElementById("appMenuModal");
   if (modal) modal.style.display = "none";
+};
+
+window.resumeFlashcards = function() {
+  closeMenuModal();
+  if (flashcardList.length === 0) {
+    alert("再開できるセッションがありません。");
+    return;
+  }
+  renderFlashcardModal();
 };
 
 window.startFlashcards = function(mode, random = false) {
@@ -405,14 +417,12 @@ function loadFlashcardItems(mode, random) {
       }
     });
   } else if (mode === 'unfixed_only') {
-    // 未定着の語だけ
     if (window._lastUnfixedList && window._lastUnfixedList.length > 0) {
       list = window._lastUnfixedList;
     }
   }
 
   if (random) {
-    // Fisher-Yates shuffle
     for (let i = list.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [list[i], list[j]] = [list[j], list[i]];
@@ -432,7 +442,6 @@ window.renderFlashcardModal = function() {
     modal.style.display = "flex";
   }
 
-  // 全カード終了時の処理
   if (currentFlashcardIndex >= flashcardList.length) {
     const unfixedItems = flashcardList.filter(w => w.mastery === 'unfixed');
     window._lastUnfixedList = unfixedItems;
@@ -457,7 +466,7 @@ window.renderFlashcardModal = function() {
   modal.innerHTML = `
     <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 4px 16px rgba(0,0,0,0.3); text-align: center; position: relative;">
       <div style="position: absolute; top: 12px; left: 16px; font-size: 0.85em; color: #64748b;">${currentFlashcardIndex + 1} / ${flashcardList.length}</div>
-      <button onclick="closeFlashcardModal()" style="position: absolute; top: 10px; right: 12px; background: none; border: none; font-size: 1.2em; cursor: pointer; color: #64748b;">✕</button>
+      <button onclick="closeFlashcardModal()" style="position: absolute; top: 10px; right: 12px; background: none; border: none; font-size: 1.2em; cursor: pointer; color: #64748b;" title="中断して閉じる">✕</button>
       
       <div onclick="toggleCardFlip()" style="margin: 30px 0 20px 0; padding: 25px 20px; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 10px; cursor: pointer; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
         <div style="font-size: 1.6em; font-weight: bold; color: #0f172a; margin-bottom: 8px;">${currentWord.word}</div>
@@ -514,13 +523,14 @@ window.closeFlashcardModal = function() {
   if (modal) modal.style.display = "none";
 };
 
-// --- フローティングボタン管理（メニュー ＆ AIチャットボタン） ---
+// --- 左下のフローティングボタン管理（メニュー ＆ AIチャットボタン） ---
 function ensureFloatingButtons() {
   let container = document.getElementById("floatingButtonsContainer");
   if (!container) {
     container = document.createElement("div");
     container.id = "floatingButtonsContainer";
-    container.style.cssText = "position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 9999;";
+    // 左下に配置 (bottom: 20px; left: 20px;)
+    container.style.cssText = "position: fixed; bottom: 20px; left: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 9999;";
     document.body.appendChild(container);
   }
 
@@ -546,6 +556,7 @@ function ensureFloatingButtons() {
 
   container.innerHTML = "";
   if (currentUser) {
+    // 左下でAIボタンの上にメニュー、またはメニューの上にAIボタン（お好みで。ここではメニューを上、AIを下に配置）
     container.appendChild(menuBtn);
     container.appendChild(aiBtn);
   }
@@ -652,7 +663,7 @@ function renderFolders() {
               </div>
             </div>
             
-            <div id="meaning_${f.id}_${wIdx}" style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.9em; margin-bottom: 8px; line-height: 1.5; outline: none;" contenteditable="true" onblur="updateWordMeanings(${f.id}, ${wIdx}, this.innerText)">${safeMeaningsText}</div>
+            , <div id="meaning_${f.id}_${wIdx}" style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.9em; margin-bottom: 8px; line-height: 1.5; outline: none;" contenteditable="true" onblur="updateWordMeanings(${f.id}, ${wIdx}, this.innerText)">${safeMeaningsText}</div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; margin-bottom: 4px;">
               <span style="font-size: 0.85em; color: #64748b;">例文</span>
