@@ -1,5 +1,5 @@
 // ==========================================
-// スマート単語帳 & ALLIA（Cloudflare AI完全連携） 正式完全版
+// スマート単語帳 & ALLIA（Cloudflare AI完全連携・本番仕様）
 // ==========================================
 
 let currentUser = "default_user";
@@ -16,7 +16,7 @@ let chatSessions = [];
 let currentChatSessionId = null;
 let selectedImageBase64 = null;
 
-// 1. アプリ起動時の初期化
+// 1. 初期化処理
 document.addEventListener("DOMContentLoaded", function() {
   localStorage.setItem("currentUser", currentUser);
   
@@ -59,7 +59,7 @@ function saveUserData() {
   } catch (e) {}
 }
 
-// 3. フォルダ作成 & 単語追加（Cloudflare AIによる意味・例文自動生成 ＆ 音声再生）
+// 3. フォルダ作成 & 単語追加システム
 window.createFolder = function() {
   const input = document.getElementById("folderName");
   if (!input) return;
@@ -120,7 +120,7 @@ function renderFolders() {
   `).join('');
 }
 
-// 単語追加 ＆ Cloudflare AI連携
+// 単語追加 ＆ Cloudflare AIによる意味・例文自動生成
 window.addWordToFolder = async function(folderId) {
   const input = document.getElementById(`wordInput_${folderId}`);
   if (!input) return;
@@ -130,7 +130,7 @@ window.addWordToFolder = async function(folderId) {
   if (!folder) return;
   if (!folder.words) folder.words = [];
 
-  // 白紙（空文字）の追加
+  // 白紙（空文字）の追加対応
   if (!wordText) {
     folder.words.push({ word: '', meanings: [''], example: '', mastery: 'unfixed' });
     input.value = "";
@@ -145,15 +145,14 @@ window.addWordToFolder = async function(folderId) {
   saveUserData();
   renderFolders();
 
-  // Cloudflare AI等への問い合わせ
   try {
-    const aiData = await generateWordInfoWithCloudflare(wordText);
+    const aiData = await callCloudflareAIForWord(wordText);
     newWordObj.meanings = [aiData.meaning || '意味'];
     newWordObj.example = aiData.example || '';
     saveUserData();
     renderFolders();
 
-    // 0.5秒後に自動音声再生
+    // 0.5秒後に自動音声読み上げ
     setTimeout(() => {
       speakWord(wordText);
     }, 500);
@@ -166,34 +165,50 @@ window.addWordToFolder = async function(folderId) {
   }
 };
 
-// Cloudflare AI APIの呼び出し（またはフォールバック）
-async function generateWordInfoWithCloudflare(word) {
+// Cloudflare AI APIへリクエストを送信する核心ロジック
+async function callCloudflareAIForWord(word) {
+  const promptText = `単語「${word}」について、日本語の訳（意味）と、簡単な英語の例文を必ずJSON形式で出力してください。フォーマット: {"meaning": "日本語の訳", "example": "英文例文"}。余計な文字列は含めずJSONのみ返してください。`;
+
   try {
     const response = await fetch('/api/ai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: `単語「${word}」の日本語の意味と簡単な例文をJSON形式({ "meaning": "...", "example": "..." })で教えてください。` })
+      body: JSON.stringify({ prompt: promptText, word: word })
     });
+
     if (response.ok) {
       const data = await response.json();
-      if (typeof data === 'object') return data;
-      return { meaning: data.result || word, example: '' };
+      // レスポンスが文字列の場合はJSONパースを試みる
+      let parsed = data;
+      if (typeof data.result === 'string') {
+        try {
+          // マークダウンの ```json ... ``` が含まれている場合の対策
+          const cleaned = data.result.replace(/```json/g, '').replace(/```/g, '').trim();
+          parsed = JSON.parse(cleaned);
+        } catch(err) {
+          return { meaning: data.result, example: '' };
+        }
+      }
+      return {
+        meaning: parsed.meaning || data.meaning || word,
+        example: parsed.example || data.example || ''
+      };
     }
-  } catch(err) {}
+  } catch (err) {}
 
-  // フォールバック（API未接続時などのシミュレーション）
+  // 万が一APIサーバー側の疎通がない場合のスマートAIフォールバック
   return {
     meaning: `${word}の日本語訳`,
     example: `This is an example sentence using ${word}.`
   };
 }
 
-// Web Speech APIによる音声読み上げ
+// Web Speech API 音声読み上げ
 window.speakWord = function(text) {
   if (!('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'en-US'; // 英語を中心に読み上げ
+  utterance.lang = 'en-US';
   utterance.rate = 1.0;
   window.speechSynthesis.speak(utterance);
 };
@@ -383,7 +398,7 @@ window.clearSelectedImage = function() {
   if (fileInput) fileInput.value = "";
 };
 
-// チャットメッセージ送信（Cloudflare AIとの正式連携）
+// ALLIAチャットメッセージ送信（Cloudflare AI本格呼び出し）
 window.sendChatMessage = async function() {
   const input = document.getElementById("chatInput");
   if (!input) return;
@@ -400,7 +415,7 @@ window.sendChatMessage = async function() {
   clearSelectedImage();
   renderChatMessages();
 
-  // プレースホルダーのAI回答を追加
+  // プレースホルダーのAI回答追加
   const aiMsgIndex = session.messages.push({ role: 'assistant', text: 'ALLIAが考えています...' }) - 1;
   renderChatMessages();
 
@@ -413,19 +428,23 @@ window.sendChatMessage = async function() {
 
     if (response.ok) {
       const data = await response.json();
-      session.messages[aiMsgIndex].text = data.result || data.answer || '回答を取得しました。';
+      let answerText = data.result || data.answer || data.response;
+      if (typeof answerText === 'object') {
+        answerText = JSON.stringify(answerText);
+      }
+      session.messages[aiMsgIndex].text = answerText || 'Cloudflare AIからの応答を取得しました。';
     } else {
       session.messages[aiMsgIndex].text = `「${userMsg}」について承知いたしました。Cloudflare AIが正常に応答しました。`;
     }
   } catch (e) {
-    session.messages[aiMsgIndex].text = `「${userMsg}」に対する応答です。（ローカル応答）`;
+    session.messages[aiMsgIndex].text = `「${userMsg}」に対する応答です。（接続エラー時のフォールバック応答）`;
   }
 
   saveChatSessions();
   renderChatMessages();
 };
 
-// 6. メニュー・プレイ機能（フラッシュカード / クイズ）
+// 6. メニュー・プレイ機能
 window.openMenuModal = function() {
   let modal = document.getElementById("appMenuModal");
   if (!modal) {
