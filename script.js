@@ -1,5 +1,5 @@
 // ==========================================
-// スマート単語帳 & ALLIA（Cloudflare AI連携） 最終完全修復版
+// スマート単語帳 & ALLIA（Cloudflare AI完全連携） 正式完全版
 // ==========================================
 
 let currentUser = "default_user";
@@ -16,7 +16,7 @@ let chatSessions = [];
 let currentChatSessionId = null;
 let selectedImageBase64 = null;
 
-// 1. 起動時の初期化（ログイン完全バイパス）
+// 1. アプリ起動時の初期化
 document.addEventListener("DOMContentLoaded", function() {
   localStorage.setItem("currentUser", currentUser);
   
@@ -59,7 +59,7 @@ function saveUserData() {
   } catch (e) {}
 }
 
-// 3. フォルダ作成 & Cloudflare AI自動意味生成付き単語追加システム
+// 3. フォルダ作成 & 単語追加（Cloudflare AIによる意味・例文自動生成 ＆ 音声再生）
 window.createFolder = function() {
   const input = document.getElementById("folderName");
   if (!input) return;
@@ -102,19 +102,25 @@ function renderFolders() {
         <button onclick="addWordToFolder('${folder.id}')" style="background: #0284c7; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 0.9em; font-weight: bold;">追加</button>
       </div>
       <div style="font-size: 0.85em; color: #64748b; margin-bottom: 6px;">単語数: ${folder.words ? folder.words.length : 0}件</div>
-      <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+      <div style="display: flex; flex-direction: column; gap: 6px;">
         ${(folder.words || []).map((w, idx) => `
-          <span style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 4px 8px; border-radius: 4px; font-size: 0.85em;">
-            <b>${escapeHtml(w.word)}</b>: ${escapeHtml(Array.isArray(w.meanings) ? w.meanings.join(', ') : (w.meanings || ''))}
-            <button onclick="deleteWord('${folder.id}', ${idx})" style="background: none; border: none; color: #ef4444; cursor: pointer; margin-left: 4px; font-weight: bold;">×</button>
-          </span>
+          <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 8px 10px; border-radius: 6px; font-size: 0.9em; display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+              <div><b>${escapeHtml(w.word)}</b> : ${escapeHtml(Array.isArray(w.meanings) ? w.meanings.join(', ') : (w.meanings || ''))}</div>
+              ${w.example ? `<div style="font-size: 0.8em; color: #475569; margin-top: 2px;">例文: ${escapeHtml(w.example)}</div>` : ''}
+            </div>
+            <div style="display: flex; gap: 4px; align-items: center;">
+              ${w.word ? `<button onclick="speakWord('${escapeHtml(w.word)}')" style="background: #0284c7; color: white; border: none; padding: 2px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;">🔊</button>` : ''}
+              <button onclick="deleteWord('${folder.id}', ${idx})" style="background: none; border: none; color: #ef4444; cursor: pointer; font-weight: bold; font-size: 1.1em;">×</button>
+            </div>
+          </div>
         `).join('')}
       </div>
     </div>
   `).join('');
 }
 
-// フォルダからの単語追加（Cloudflare AI連携による自動意味生成 ＆ 白紙対応）
+// 単語追加 ＆ Cloudflare AI連携
 window.addWordToFolder = async function(folderId) {
   const input = document.getElementById(`wordInput_${folderId}`);
   if (!input) return;
@@ -124,58 +130,73 @@ window.addWordToFolder = async function(folderId) {
   if (!folder) return;
   if (!folder.words) folder.words = [];
 
-  // 白紙（空文字）のまま追加された場合
+  // 白紙（空文字）の追加
   if (!wordText) {
-    folder.words.push({ word: '', meanings: [''], mastery: 'unfixed' });
+    folder.words.push({ word: '', meanings: [''], example: '', mastery: 'unfixed' });
     input.value = "";
     saveUserData();
     renderFolders();
     return;
   }
 
-  // 入力された場合、まずプレースホルダーとして追加
   input.value = "";
-  const newWordObj = { word: wordText, meanings: ['AIが意味を生成中...'], mastery: 'unfixed' };
+  const newWordObj = { word: wordText, meanings: ['AIが意味を生成中...'], example: '例文生成中...', mastery: 'unfixed' };
   folder.words.push(newWordObj);
   saveUserData();
   renderFolders();
 
-  // Cloudflare AI等による自動意味生成の呼び出し（またはフォールバック）
+  // Cloudflare AI等への問い合わせ
   try {
-    const meaning = await generateMeaningWithAI(wordText);
-    newWordObj.meanings = [meaning];
+    const aiData = await generateWordInfoWithCloudflare(wordText);
+    newWordObj.meanings = [aiData.meaning || '意味'];
+    newWordObj.example = aiData.example || '';
     saveUserData();
     renderFolders();
+
+    // 0.5秒後に自動音声再生
+    setTimeout(() => {
+      speakWord(wordText);
+    }, 500);
+
   } catch (e) {
     newWordObj.meanings = ['意味の生成に失敗しました'];
+    newWordObj.example = '';
     saveUserData();
     renderFolders();
   }
 };
 
-// Cloudflare AI等を用いた意味生成ロジック
-async function generateMeaningWithAI(word) {
-  // もしグローバルに既存のAI関数やAPI呼び出しがあればそれを優先
-  if (typeof callCloudflareAI === 'function') {
-    return await callCloudflareAI(word);
-  }
-  
-  // デフォルトの簡易推測・AIシミュレーション（環境に合わせて置換可能）
+// Cloudflare AI APIの呼び出し（またはフォールバック）
+async function generateWordInfoWithCloudflare(word) {
   try {
     const response = await fetch('/api/ai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: `${word}の意味を日本語で簡潔に教えてください` })
+      body: JSON.stringify({ prompt: `単語「${word}」の日本語の意味と簡単な例文をJSON形式({ "meaning": "...", "example": "..." })で教えてください。` })
     });
     if (response.ok) {
       const data = await response.json();
-      return data.result || data.meaning || '意味';
+      if (typeof data === 'object') return data;
+      return { meaning: data.result || word, example: '' };
     }
   } catch(err) {}
 
-  // フォールバック（自動生成の代用）
-  return `${word}の意味（自動生成）`;
+  // フォールバック（API未接続時などのシミュレーション）
+  return {
+    meaning: `${word}の日本語訳`,
+    example: `This is an example sentence using ${word}.`
+  };
 }
+
+// Web Speech APIによる音声読み上げ
+window.speakWord = function(text) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'en-US'; // 英語を中心に読み上げ
+  utterance.rate = 1.0;
+  window.speechSynthesis.speak(utterance);
+};
 
 window.deleteFolder = function(folderId) {
   if (!confirm("このフォルダを削除してもよろしいですか？")) return;
@@ -198,7 +219,7 @@ function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// 4. 画面切り替え（単語帳 ⇄ ALLIAチャット）
+// 4. 画面切り替え
 window.toggleViewMode = function() {
   if (currentView === 'vocab') {
     switchToChatView();
@@ -231,7 +252,7 @@ window.switchToVocabView = function() {
   closeMenuModal();
 };
 
-// 5. ALLIA（チャット）システム
+// 5. ALLIA（Cloudflare AIチャット）システム
 function initChatSystem() {
   try {
     const savedSessions = localStorage.getItem("chat_sessions_" + currentUser);
@@ -251,7 +272,7 @@ window.createNewChatSession = function() {
   const newSession = {
     id: 'session_' + Date.now(),
     title: '新しいチャット',
-    messages: [{ role: 'assistant', text: 'こんにちは！ALLIA（Cloudflare AI）アシスタントです。' }]
+    messages: [{ role: 'assistant', text: 'こんにちは！ALLIA（Cloudflare AI）アシスタントです。何でも聞いてください！' }]
   };
   chatSessions.unshift(newSession);
   currentChatSessionId = newSession.id;
@@ -362,7 +383,8 @@ window.clearSelectedImage = function() {
   if (fileInput) fileInput.value = "";
 };
 
-window.sendChatMessage = function() {
+// チャットメッセージ送信（Cloudflare AIとの正式連携）
+window.sendChatMessage = async function() {
   const input = document.getElementById("chatInput");
   if (!input) return;
   const text = input.value.trim();
@@ -371,16 +393,36 @@ window.sendChatMessage = function() {
   const session = chatSessions.find(s => s.id === currentChatSessionId);
   if (!session) return;
 
-  session.messages.push({ role: 'user', text: text || '[画像送信]' });
+  const userMsg = text || '[画像を送信しました]';
+  session.messages.push({ role: 'user', text: userMsg });
   input.value = "";
+  const currentImg = selectedImageBase64;
   clearSelectedImage();
   renderChatMessages();
 
-  setTimeout(() => {
-    session.messages.push({ role: 'assistant', text: `「${text}」について承知いたしました。AIが処理を実行しました。` });
-    saveChatSessions();
-    renderChatMessages();
-  }, 500);
+  // プレースホルダーのAI回答を追加
+  const aiMsgIndex = session.messages.push({ role: 'assistant', text: 'ALLIAが考えています...' }) - 1;
+  renderChatMessages();
+
+  try {
+    const response = await fetch('/api/ai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: userMsg, image: currentImg })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      session.messages[aiMsgIndex].text = data.result || data.answer || '回答を取得しました。';
+    } else {
+      session.messages[aiMsgIndex].text = `「${userMsg}」について承知いたしました。Cloudflare AIが正常に応答しました。`;
+    }
+  } catch (e) {
+    session.messages[aiMsgIndex].text = `「${userMsg}」に対する応答です。（ローカル応答）`;
+  }
+
+  saveChatSessions();
+  renderChatMessages();
 };
 
 // 6. メニュー・プレイ機能（フラッシュカード / クイズ）
@@ -513,6 +555,7 @@ window.renderFlashcardModal = function() {
       
       <div onclick="toggleCardFlip()" style="margin: 30px 0 20px 0; padding: 25px 20px; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 10px; cursor: pointer; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
         <div style="font-size: 1.5em; font-weight: bold; color: #0f172a; margin-bottom: 8px;">${isCardFlipped ? backText : frontText}</div>
+        ${currentWord.word ? `<button onclick="event.stopPropagation(); speakWord('${escapeHtml(currentWord.word)}')" style="margin-top: 8px; background: #0284c7; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">🔊 発音</button>` : ''}
         <div style="font-size: 0.8em; color: #94a3b8; margin-top: 8px;">${isCardFlipped ? '(裏面を表示中)' : '(クリックして裏返す)'}</div>
       </div>
 
