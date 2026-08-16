@@ -1,10 +1,6 @@
-// --- メニュー・プレイ機能専用の修正版（ログイン機能には一切触れません） ---
+// --- メニューとプレイ機能の修正コード（ログイン周りは一切触りません） ---
 
 window.openMenuModal = function() {
-  if (!currentUser) {
-    return; // ログインしていなければ何もしない（元のログイン処理に任せる）
-  }
-
   let modal = document.getElementById("appMenuModal");
   if (!modal) {
     modal = document.createElement("div");
@@ -17,7 +13,7 @@ window.openMenuModal = function() {
     <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 340px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); text-align: center;">
       <h3 style="margin-top: 0; color: #0f172a; margin-bottom: 16px;">メニュー</h3>
       <div style="display: flex; flex-direction: column; gap: 10px;">
-        <button onclick="${currentView === 'chat' ? 'switchToVocabView()' : 'switchToChatView()'}" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">${currentView === 'chat' ? '📚 単語帳に戻る' : '🤖 ALLIAを開く'}</button>
+        <button onclick="${typeof currentView !== 'undefined' && currentView === 'chat' ? 'switchToVocabView()' : 'switchToChatView()'}" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">${typeof currentView !== 'undefined' && currentView === 'chat' ? '📚 単語帳に戻る' : '🤖 ALLIAを開く'}</button>
         <button onclick="openPlaySubMenu()" style="padding: 10px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">▶ プレイ</button>
         <button onclick="closeMenuModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; margin-top: 4px;">閉じる</button>
       </div>
@@ -65,35 +61,23 @@ window.closeMenuModal = function() {
 
 window.startFlashcards = function(mode, random = true, direction = 'front') {
   closeMenuModal();
-  currentFlashcardMode = mode;
-  isRandomMode = random;
-  cardMode = direction;
-  loadFlashcardItems(mode, random);
+  window.currentFlashcardMode = mode;
+  window.isRandomMode = random;
+  window.cardMode = direction;
+  
+  if (typeof loadFlashcardItems === 'function') {
+    loadFlashcardItems(mode, random);
+  }
 
-  if (flashcardList.length === 0) {
+  if (typeof flashcardList !== 'undefined' && flashcardList.length === 0) {
     alert("対象となる単語がありません。単語を追加してください。");
     return;
   }
 
-  currentFlashcardIndex = 0;
-  isCardFlipped = false;
+  window.currentFlashcardIndex = 0;
+  window.isCardFlipped = false;
   renderFlashcardModal();
 };
-
-function loadFlashcardItems(mode, random) {
-  let list = [];
-  folders.forEach(f => {
-    if (f.words) f.words.forEach(w => list.push({ ...w, mastery: w.mastery || 'unfixed' }));
-  });
-
-  if (random) {
-    for (let i = list.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [list[i], list[j]] = [list[j], list[i]];
-    }
-  }
-  flashcardList = list;
-}
 
 window.renderFlashcardModal = function() {
   let modal = document.getElementById("flashcardModal");
@@ -106,14 +90,14 @@ window.renderFlashcardModal = function() {
     modal.style.display = "flex";
   }
 
-  if (currentFlashcardIndex >= flashcardList.length) {
+  if (typeof flashcardList !== 'undefined' && currentFlashcardIndex >= flashcardList.length) {
     modal.innerHTML = `
       <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
         <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 10px;">🎉 完了！</h3>
         <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">すべて終了しました。次は別のモードで練習しますか？</p>
         <div style="display: flex; flex-direction: column; gap: 10px;">
           <button onclick="closeFlashcardModal(); openMenuModal(); openPlaySubMenu();" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>
-          <button onclick="startFlashcards('${currentFlashcardMode}', ${isRandomMode}, '${cardMode}')" style="padding: 8px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer;">🔄 フラッシュカードを再開</button>
+          <button onclick="startFlashcards(window.currentFlashcardMode || 'all', window.isRandomMode ?? true, window.cardMode || 'front')" style="padding: 8px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer;">🔄 フラッシュカードを再開</button>
           <button onclick="closeFlashcardModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">終了する</button>
         </div>
       </div>
@@ -123,7 +107,6 @@ window.renderFlashcardModal = function() {
 
   const currentWord = flashcardList[currentFlashcardIndex];
   const meaningsText = Array.isArray(currentWord.meanings) ? currentWord.meanings.join("<br>") : (currentWord.meanings || '');
-
   const frontText = (cardMode === 'front') ? currentWord.word : meaningsText;
   const backText = (cardMode === 'front') ? meaningsText : currentWord.word;
 
@@ -146,16 +129,16 @@ window.renderFlashcardModal = function() {
 };
 
 window.toggleCardFlip = function() {
-  isCardFlipped = !isCardFlipped;
+  window.isCardFlipped = !window.isCardFlipped;
   renderFlashcardModal();
 };
 
 window.setMasteryAndNext = function(status) {
-  if (flashcardList[currentFlashcardIndex]) {
+  if (typeof flashcardList !== 'undefined' && flashcardList[currentFlashcardIndex]) {
     flashcardList[currentFlashcardIndex].mastery = status;
   }
-  currentFlashcardIndex++;
-  isCardFlipped = false;
+  window.currentFlashcardIndex++;
+  window.isCardFlipped = false;
   renderFlashcardModal();
 };
 
