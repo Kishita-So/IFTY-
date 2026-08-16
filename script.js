@@ -1,16 +1,22 @@
 // ==========================================
-// 完全版 スマート単語帳 & ALLIA（Cloudflare Workers / Grok連携）
+// 完全版 スマート単語帳 & ALLIA（Cloudflare Workers / Groq連携）
 // ==========================================
 
 let currentUser = "default_user";
 let currentView = "vocab"; // 'vocab' or 'chat'
 let folders = [];
+
+// フラッシュカード用の状態変数
 let flashcardList = [];
+let flashcardOriginalList = [];
 let currentFlashcardIndex = 0;
 let isCardFlipped = false;
-let currentFlashcardMode = 'all';
-let isRandomMode = true;
-let cardMode = 'front';
+let flashcardSettings = {
+  target: 'all', // 'all', 'checked_folders', 'checked_words'
+  order: 'random', // 'random', 'sequential'
+  direction: 'front' // 'front' (単語→意味), 'back' (意味→単語)
+};
+let isFlashcardPaused = false;
 
 let chatSessions = [];
 let currentChatSessionId = null;
@@ -45,7 +51,7 @@ function loadUserData(username) {
     if (saved) {
       folders = JSON.parse(saved);
     } else {
-      folders = []; // 最初はフォルダは何もない状態
+      folders = [];
     }
   } catch (e) {
     folders = [];
@@ -59,7 +65,7 @@ function saveUserData() {
   } catch (e) {}
 }
 
-// 3. フォルダ管理 & 操作（折りたたみ・上下移動・全消し）
+// 3. フォルダ管理 & チェック機能・操作
 window.createFolder = function() {
   const input = document.getElementById("folderName");
   if (!input) return;
@@ -72,6 +78,7 @@ window.createFolder = function() {
   folders.push({
     id: 'folder_' + Date.now(),
     name: name,
+    checked: false,
     collapsed: false,
     words: []
   });
@@ -79,6 +86,22 @@ window.createFolder = function() {
   input.value = "";
   saveUserData();
   renderFolders();
+};
+
+window.toggleFolderCheck = function(folderId) {
+  const folder = folders.find(f => f.id === folderId);
+  if (folder) {
+    folder.checked = !folder.checked;
+    saveUserData();
+  }
+};
+
+window.toggleWordCheck = function(folderId, wordIndex) {
+  const folder = folders.find(f => f.id === folderId);
+  if (folder && folder.words && folder.words[wordIndex]) {
+    folder.words[wordIndex].checked = !folder.words[wordIndex].checked;
+    saveUserData();
+  }
 };
 
 window.toggleFolderCollapse = function(folderId) {
@@ -122,9 +145,10 @@ function renderFolders() {
   container.innerHTML = folders.map((folder, fIndex) => `
     <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${folder.collapsed ? '0' : '8px'};">
-        <div style="display: flex; align-items: center; gap: 8px; cursor: pointer;" onclick="toggleFolderCollapse('${folder.id}')">
-          <span style="font-size: 0.9em; color: #64748b;">${folder.collapsed ? '▶' : '▼'}</span>
-          <h3 style="margin: 0; color: #0f172a; font-size: 1.1em;">📁 ${escapeHtml(folder.name)} (${folder.words ? folder.words.length : 0}件)</h3>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" ${folder.checked ? 'checked' : ''} onchange="toggleFolderCheck('${folder.id}')" title="フォルダを選択" style="width: 16px; height: 16px; cursor: pointer;">
+          <span style="font-size: 0.9em; color: #64748b; cursor: pointer;" onclick="toggleFolderCollapse('${folder.id}')">${folder.collapsed ? '▶' : '▼'}</span>
+          <h3 style="margin: 0; color: #0f172a; font-size: 1.1em; cursor: pointer;" onclick="toggleFolderCollapse('${folder.id}')">📁 ${escapeHtml(folder.name)} (${folder.words ? folder.words.length : 0}件)</h3>
         </div>
         <div style="display: flex; gap: 4px; align-items: center;">
           <button onclick="moveFolder(${fIndex}, -1)" title="上に移動" style="background: #e2e8f0; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">⬆️</button>
@@ -143,19 +167,22 @@ function renderFolders() {
           ${(folder.words || []).map((w, wIndex) => `
             <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; font-size: 0.9em;">
               <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <div>
-                  <div style="font-size: 1.05em;"><b>${escapeHtml(w.word)}</b> <span style="font-size: 0.85em; color: #475569;">${escapeHtml(Array.isArray(w.meanings) ? w.meanings.join(' / ') : (w.meanings || ''))}</span></div>
-                  ${w.examples && w.examples.length > 0 ? `
-                    <div style="margin-top: 4px; font-size: 0.85em; color: #334155;">
-                      ${w.examples.map((ex, exIdx) => `
-                        <div style="margin-bottom: 2px; display: flex; align-items: center; gap: 6px;">
-                          <span>• ${escapeHtml(ex.en)} (${escapeHtml(ex.ja)})</span>
-                          <button onclick="speakWord('${escapeHtml(ex.en.replace(/'/g, "\\'"))}')" style="background: #0284c7; color: white; border: none; padding: 1px 4px; border-radius: 3px; font-size: 0.7em; cursor: pointer;" title="例文を発音">🔊</button>
-                        </div>
-                      `).join('')}
-                    </div>
-                  ` : (w.example ? `<div style="font-size: 0.85em; color: #334155; margin-top: 2px;">例文: ${escapeHtml(w.example)} <button onclick="speakWord('${escapeHtml(w.example.replace(/'/g, "\\'"))}')" style="background: #0284c7; color: white; border: none; padding: 1px 4px; border-radius: 3px; font-size: 0.7em; cursor: pointer;">🔊</button></div>` : '')}
-                  ${w.details ? `<div style="font-size: 0.8em; color: #0284c7; margin-top: 3px;">💡 ${escapeHtml(w.details)}</div>` : ''}
+                <div style="display: flex; align-items: flex-start; gap: 8px; flex: 1;">
+                  <input type="checkbox" ${w.checked ? 'checked' : ''} onchange="toggleWordCheck('${folder.id}', ${wIndex})" title="単語を選択" style="margin-top: 4px; width: 15px; height: 15px; cursor: pointer;">
+                  <div>
+                    <div style="font-size: 1.05em;"><b>${escapeHtml(w.word)}</b> <span style="font-size: 0.85em; color: #475569;">${escapeHtml(Array.isArray(w.meanings) ? w.meanings.join(' / ') : (w.meanings || ''))}</span></div>
+                    ${w.examples && w.examples.length > 0 ? `
+                      <div style="margin-top: 4px; font-size: 0.85em; color: #334155;">
+                        ${w.examples.map((ex) => `
+                          <div style="margin-bottom: 2px; display: flex; align-items: center; gap: 6px;">
+                            <span>• ${escapeHtml(ex.en)} (${escapeHtml(ex.ja)})</span>
+                            <button onclick="speakWord('${escapeHtml(ex.en.replace(/'/g, "\\'"))}')" style="background: #0284c7; color: white; border: none; padding: 1px 4px; border-radius: 3px; font-size: 0.7em; cursor: pointer;" title="例文を発音">🔊</button>
+                          </div>
+                        `).join('')}
+                      </div>
+                    ` : (w.example ? `<div style="font-size: 0.85em; color: #334155; margin-top: 2px;">例文: ${escapeHtml(w.example)} <button onclick="speakWord('${escapeHtml(w.example.replace(/'/g, "\\'"))}')" style="background: #0284c7; color: white; border: none; padding: 1px 4px; border-radius: 3px; font-size: 0.7em; cursor: pointer;">🔊</button></div>` : '')}
+                    ${w.details ? `<div style="font-size: 0.8em; color: #0284c7; margin-top: 3px;">💡 ${escapeHtml(w.details)}</div>` : ''}
+                  </div>
                 </div>
                 <div style="display: flex; gap: 3px; align-items: center;">
                   ${w.word ? `<button onclick="speakWord('${escapeHtml(w.word)}')" style="background: #0284c7; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="単語を発音">🔊</button>` : ''}
@@ -184,7 +211,7 @@ window.addWordToFolder = async function(folderId) {
   if (!folder.words) folder.words = [];
 
   if (!wordText) {
-    folder.words.push({ word: '', meanings: [''], examples: [], details: '', mastery: 'unfixed' });
+    folder.words.push({ word: '', checked: false, meanings: [''], examples: [], details: '', mastery: 'unfixed' });
     input.value = "";
     saveUserData();
     renderFolders();
@@ -194,6 +221,7 @@ window.addWordToFolder = async function(folderId) {
   input.value = "";
   const newWordObj = { 
     word: wordText, 
+    checked: false,
     meanings: ['意味を生成中...'], 
     examples: [], 
     details: 'AIが情報を生成しています...', 
@@ -203,7 +231,6 @@ window.addWordToFolder = async function(folderId) {
   saveUserData();
   renderFolders();
 
-  // Cloudflare Workersへ type: "word" でリクエスト送信
   try {
     const response = await fetch(WORKER_URL, {
       method: 'POST',
@@ -233,7 +260,6 @@ window.addWordToFolder = async function(folderId) {
   saveUserData();
   renderFolders();
 
-  // 0.5秒後の音声自動再生
   setTimeout(() => {
     speakWord(wordText);
   }, 500);
@@ -333,7 +359,6 @@ function generateSmartWordData(word) {
   return { meaning: `${word}の意味`, example: `This is an example sentence using ${word}.` };
 }
 
-// Web Speech APIによる音声読み上げ
 window.speakWord = function(text) {
   if (!('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
@@ -578,7 +603,7 @@ window.sendChatMessage = async function() {
   renderChatMessages();
 };
 
-// 7. メニュー・プレイ機能
+// 7. 右下ボタンからのメインメニュー（「ALLIAを開く」「プレイ」）
 window.openMenuModal = function() {
   let modal = document.getElementById("appMenuModal");
   if (!modal) {
@@ -592,8 +617,8 @@ window.openMenuModal = function() {
     <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 340px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); text-align: center;">
       <h3 style="margin-top: 0; color: #0f172a; margin-bottom: 16px;">メニュー</h3>
       <div style="display: flex; flex-direction: column; gap: 10px;">
-        <button onclick="${currentView === 'chat' ? 'switchToVocabView()' : 'switchToChatView()'}" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">${currentView === 'chat' ? '📚 単語帳に戻る' : '🤖 ALLIAを開く'}</button>
-        <button onclick="openPlaySubMenu()" style="padding: 10px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">▶ プレイ</button>
+        <button onclick="${currentView === 'chat' ? 'switchToVocabView()' : 'switchToChatView()'}" style="padding: 12px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em;">${currentView === 'chat' ? '📚 単語帳に戻る' : '🤖 ALLIAを開く'}</button>
+        <button onclick="openPlaySubMenu()" style="padding: 12px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em;">▶ プレイ</button>
         <button onclick="closeMenuModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; margin-top: 4px;">閉じる</button>
       </div>
     </div>
@@ -609,64 +634,105 @@ window.openPlaySubMenu = function() {
     <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 340px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); text-align: center;">
       <h3 style="margin-top: 0; color: #0f172a; margin-bottom: 16px;">🎮 プレイモード選択</h3>
       <div style="display: flex; flex-direction: column; gap: 10px;">
-        <button onclick="openFlashcardDirectionMenu()" style="padding: 10px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">📇 フラッシュカード</button>
-        <button onclick="startQuiz()" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">📝 クイズ</button>
+        <button onclick="openFlashcardConfigModal()" style="padding: 12px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em;">📇 フラッシュカード</button>
         <button onclick="openMenuModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; margin-top: 6px;">◀ 戻る</button>
       </div>
     </div>
   `;
 };
 
-window.openFlashcardDirectionMenu = function() {
+// 8. フラッシュカードの設定・詳細オプション
+window.openFlashcardConfigModal = function() {
   let modal = document.getElementById("appMenuModal");
   if (!modal) return;
 
   modal.innerHTML = `
-    <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 340px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); text-align: center;">
-      <h3 style="margin-top: 0; color: #0f172a; margin-bottom: 16px;">📇 フラッシュカード設定</h3>
-      <div style="display: flex; flex-direction: column; gap: 10px;">
-        <button onclick="startFlashcards('all', true, 'front')" style="padding: 10px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">表面：単語 / 裏面：意味</button>
-        <button onclick="startFlashcards('all', true, 'back')" style="padding: 10px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">表面：意味 / 裏面：単語</button>
-        <button onclick="openPlaySubMenu()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; margin-top: 6px;">◀ 戻る</button>
+    <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 380px; box-shadow: 0 4px 16px rgba(0,0,0,0.3); text-align: left;">
+      <h3 style="margin-top: 0; color: #0f172a; margin-bottom: 14px; text-align: center;">📇 フラッシュカード設定</h3>
+      
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 0.85em; font-weight: bold; color: #475569;">対象選択:</label>
+        <select id="fcTarget" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; margin-top: 4px; font-size: 0.9em;">
+          <option value="all">全ての単語</option>
+          <option value="checked_folders">チェックしたフォルダの単語</option>
+          <option value="checked_words">チェックした単語のみ</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 0.85em; font-weight: bold; color: #475569;">順番:</label>
+        <select id="fcOrder" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; margin-top: 4px; font-size: 0.9em;">
+          <option value="random">ランダム</option>
+          <option value="sequential">上から順</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="font-size: 0.85em; font-weight: bold; color: #475569;">カードの表面:</label>
+        <select id="fcDirection" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; margin-top: 4px; font-size: 0.9em;">
+          <option value="front">表面：単語 / 裏面：意味</option>
+          <option value="back">表面：意味 / 裏面：単語</option>
+        </select>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button onclick="startFlashcardsFromConfig()" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em;">スタート</button>
+        <button onclick="openPlaySubMenu()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">◀ 戻る</button>
       </div>
     </div>
   `;
 };
 
-window.closeMenuModal = function() {
-  const modal = document.getElementById("appMenuModal");
-  if (modal) modal.style.display = "none";
-};
+window.startFlashcardsFromConfig = function() {
+  flashcardSettings.target = document.getElementById("fcTarget").value;
+  flashcardSettings.order = document.getElementById("fcOrder").value;
+  flashcardSettings.direction = document.getElementById("fcDirection").value;
 
-window.startFlashcards = function(mode, random = true, direction = 'front') {
   closeMenuModal();
-  currentFlashcardMode = mode;
-  isRandomMode = random;
-  cardMode = direction;
-  loadFlashcardItems(mode, random);
+  prepareFlashcardList();
 
   if (flashcardList.length === 0) {
-    alert("対象となる単語がありません。単語を追加してください。");
+    alert("対象となる単語が選択されていません。単語やフォルダにチェックを入れるか、単語を追加してください。");
+    openPlaySubMenu();
     return;
   }
 
   currentFlashcardIndex = 0;
   isCardFlipped = false;
+  isFlashcardPaused = false;
   renderFlashcardModal();
 };
 
-function loadFlashcardItems(mode, random) {
+function prepareFlashcardList() {
   let list = [];
-  folders.forEach(f => {
-    if (f.words) f.words.forEach(w => list.push({ ...w, mastery: w.mastery || 'unfixed' }));
-  });
+  if (flashcardSettings.target === 'all') {
+    folders.forEach(f => {
+      if (f.words) f.words.forEach(w => list.push({ ...w, mastery: w.mastery || 'unfixed' }));
+    });
+  } else if (flashcardSettings.target === 'checked_folders') {
+    folders.forEach(f => {
+      if (f.checked && f.words) {
+        f.words.forEach(w => list.push({ ...w, mastery: w.mastery || 'unfixed' }));
+      }
+    });
+  } else if (flashcardSettings.target === 'checked_words') {
+    folders.forEach(f => {
+      if (f.words) {
+        f.words.forEach(w => {
+          if (w.checked) list.push({ ...w, mastery: w.mastery || 'unfixed' });
+        });
+      }
+    });
+  }
 
-  if (random) {
+  if (flashcardSettings.order === 'random') {
     for (let i = list.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [list[i], list[j]] = [list[j], list[i]];
     }
   }
+
+  flashcardOriginalList = [...list];
   flashcardList = list;
 }
 
@@ -681,13 +747,29 @@ window.renderFlashcardModal = function() {
     modal.style.display = "flex";
   }
 
+  if (isFlashcardPaused) {
+    modal.innerHTML = `
+      <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 360px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
+        <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 15px;">⏸️ 一時中断中</h3>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button onclick="resumeFlashcards()" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">▶ 再開する</button>
+          <button onclick="restartFlashcards()" style="padding: 10px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🔄 最初からやり直す</button>
+          <button onclick="openFlashcardConfigModal(); isFlashcardPaused = false;" style="padding: 10px; background: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">⚙️ 設定し直し</button>
+          <button onclick="closeFlashcardModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">終了する</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
   if (currentFlashcardIndex >= flashcardList.length) {
     modal.innerHTML = `
       <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
         <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 10px;">🎉 完了！</h3>
         <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">すべてのカードを終了しました。</p>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-          <button onclick="closeFlashcardModal(); openMenuModal(); openPlaySubMenu();" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>
+          <button onclick="restartFlashcards()" style="padding: 10px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🔄 もう一度プレイ</button>
+          <button onclick="closeFlashcardModal(); openMenuModal(); openPlaySubMenu();" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ プレイメニューへ</button>
           <button onclick="closeFlashcardModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">閉じる</button>
         </div>
       </div>
@@ -697,23 +779,30 @@ window.renderFlashcardModal = function() {
 
   const currentWord = flashcardList[currentFlashcardIndex];
   const meaningsText = Array.isArray(currentWord.meanings) ? currentWord.meanings.join("<br>") : (currentWord.meanings || '');
-  const frontText = (cardMode === 'front') ? currentWord.word : meaningsText;
-  const backText = (cardMode === 'front') ? meaningsText : currentWord.word;
+  const frontText = (flashcardSettings.direction === 'front') ? currentWord.word : meaningsText;
+  const backText = (flashcardSettings.direction === 'front') ? meaningsText : currentWord.word;
 
   modal.innerHTML = `
     <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 4px 16px rgba(0,0,0,0.3); text-align: center; position: relative;">
-      <div style="position: absolute; top: 12px; left: 16px; font-size: 0.85em; color: #64748b;">${currentFlashcardIndex + 1} / ${flashcardList.length}</div>
-      <button onclick="closeFlashcardModal()" style="position: absolute; top: 10px; right: 12px; background: none; border: none; font-size: 1.2em; cursor: pointer; color: #64748b;">✕</button>
-      
-      <div onclick="toggleCardFlip()" style="margin: 30px 0 20px 0; padding: 25px 20px; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 10px; cursor: pointer; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
-        <div style="font-size: 1.5em; font-weight: bold; color: #0f172a; margin-bottom: 8px;">${isCardFlipped ? backText : frontText}</div>
-        ${currentWord.word ? `<button onclick="event.stopPropagation(); speakWord('${escapeHtml(currentWord.word)}')" style="margin-top: 8px; background: #0284c7; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">🔊 発音</button>` : ''}
-        <div style="font-size: 0.8em; color: #94a3b8; margin-top: 8px;">${isCardFlipped ? '(裏面)' : '(クリックして裏返す)'}</div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <span style="font-size: 0.85em; color: #64748b;">${currentFlashcardIndex + 1} / ${flashcardList.length}</span>
+        <button onclick="pauseFlashcards()" style="background: #e2e8f0; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; cursor: pointer; font-weight: bold; color: #334155;">⏸ 一時中断</button>
       </div>
 
-      <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-        <button onclick="setMasteryAndNext('unfixed')" style="flex: 1; padding: 10px; background: #f43f5e; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9em;">❌ 未定着</button>
-        <button onclick="setMasteryAndNext('fixed')" style="flex: 1; padding: 10px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9em;">⭕ 定着</button>
+      <div onclick="toggleCardFlip()" style="margin: 10px 0 16px 0; padding: 25px 20px; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 10px; cursor: pointer; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <div style="font-size: 1.4em; font-weight: bold; color: #0f172a; margin-bottom: 8px;">${isCardFlipped ? backText : frontText}</div>
+        ${currentWord.word ? `<button onclick="event.stopPropagation(); speakWord('${escapeHtml(currentWord.word)}')" style="margin-top: 6px; background: #0284c7; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-size: 0.8em; cursor: pointer;">🔊 発音</button>` : ''}
+        <div style="font-size: 0.8em; color: #94a3b8; margin-top: 6px;">${isCardFlipped ? '(裏面)' : '(クリックして裏返す)'}</div>
+      </div>
+
+      <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+        <button onclick="flashcardAction('unfixed')" style="flex: 1; padding: 9px; background: #f43f5e; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85em;">❌ 未定着</button>
+        <button onclick="flashcardAction('fixed')" style="flex: 1; padding: 9px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85em;">⭕ 覚えた</button>
+      </div>
+
+      <div style="display: flex; gap: 6px;">
+        <button onclick="flashcardPrev()" style="flex: 1; padding: 8px; background: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85em;" ${currentFlashcardIndex === 0 ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>⬅️ 1つ戻る</button>
+        <button onclick="flashcardSkip()" style="flex: 1; padding: 8px; background: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85em;">⏩ スキップ</button>
       </div>
     </div>
   `;
@@ -724,7 +813,7 @@ window.toggleCardFlip = function() {
   renderFlashcardModal();
 };
 
-window.setMasteryAndNext = function(status) {
+window.flashcardAction = function(status) {
   if (flashcardList[currentFlashcardIndex]) {
     flashcardList[currentFlashcardIndex].mastery = status;
   }
@@ -733,30 +822,48 @@ window.setMasteryAndNext = function(status) {
   renderFlashcardModal();
 };
 
+window.flashcardPrev = function() {
+  if (currentFlashcardIndex > 0) {
+    currentFlashcardIndex--;
+    isCardFlipped = false;
+    renderFlashcardModal();
+  }
+};
+
+window.flashcardSkip = function() {
+  currentFlashcardIndex++;
+  isCardFlipped = false;
+  renderFlashcardModal();
+};
+
+window.pauseFlashcards = function() {
+  isFlashcardPaused = true;
+  renderFlashcardModal();
+};
+
+window.resumeFlashcards = function() {
+  isFlashcardPaused = false;
+  renderFlashcardModal();
+};
+
+window.restartFlashcards = function() {
+  isFlashcardPaused = false;
+  currentFlashcardIndex = 0;
+  isCardFlipped = false;
+  flashcardList = [...flashcardOriginalList];
+  if (flashcardSettings.order === 'random') {
+    for (let i = flashcardList.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [flashcardList[i], flashcardList[j]] = [flashcardList[j], flashcardList[i]];
+    }
+  }
+  renderFlashcardModal();
+};
+
 window.closeFlashcardModal = function() {
   const modal = document.getElementById("flashcardModal");
   if (modal) modal.style.display = "none";
-};
-
-window.startQuiz = function() {
-  closeMenuModal();
-  let modal = document.getElementById("flashcardModal");
-  if (!modal) {
-    modal = document.createElement("div");
-    modal.id = "flashcardModal";
-    modal.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 10001;";
-    document.body.appendChild(modal);
-  } else {
-    modal.style.display = "flex";
-  }
-
-  modal.innerHTML = `
-    <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
-      <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 10px;">📝 クイズモード</h3>
-      <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">クイズ機能は現在準備中です！</p>
-      <button onclick="closeFlashcardModal()" style="padding: 10px 20px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">閉じる</button>
-    </div>
-  `;
+  isFlashcardPaused = false;
 };
 
 window.logout = function() {
