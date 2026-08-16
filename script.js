@@ -1,6 +1,90 @@
-// --- メニューとプレイ機能の修正コード（ログイン周りは一切触りません） ---
+// --- ログイン画面の復旧 ＆ メニュー・プレイ機能の完全版 ---
 
+// 1. ログインUI（アカウント選択画面）の描画
+function setupLoginUI() {
+  const modalMenu = document.getElementById("appMenuModal");
+  if (modalMenu) modalMenu.style.display = "none";
+  
+  const flashModal = document.getElementById("flashcardModal");
+  if (flashModal) flashModal.style.display = "none";
+
+  const landingPage = document.getElementById("landingPage") || document.body;
+  
+  landingPage.innerHTML = `
+    <div id="loginOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; display: flex; justify-content: center; align-items: center; z-index: 20000;">
+      <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.4);">
+        <h2 style="color: #38bdf8; margin-top: 0; margin-bottom: 8px;">単語帳</h2>
+        <p style="color: #94a3b8; font-size: 0.9em; margin-bottom: 16px;">アカウントを選択してください</p>
+        
+        <div id="accountSelectionArea" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; margin-bottom: 16px; text-align: left;">
+          <!-- 登録済みアカウントのボタンがここに動的に表示されます -->
+        </div>
+
+        <div style="border-top: 1px solid #334155; padding-top: 14px;">
+          <input type="email" id="customEmailInput" placeholder="メールアドレスを入力" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: white; box-sizing: border-box; margin-bottom: 8px;" onkeydown="if(event.key==='Enter'){ loginWithAccount(document.getElementById('customEmailInput').value); }">
+          <button onclick="loginWithAccount(document.getElementById('customEmailInput').value)" style="width: 100%; background: #0284c7; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-weight: bold;">新規 / 別のメールでログイン</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  const mainPortal = document.getElementById("mainPortal");
+  if (mainPortal) mainPortal.style.display = "none";
+
+  renderAccountButtons();
+}
+
+// アカウントボタンを動的に生成する関数
+function renderAccountButtons() {
+  const area = document.getElementById("accountSelectionArea");
+  if (!area) return;
+  
+  area.innerHTML = "";
+  let accounts = [];
+
+  try {
+    // LocalStorageから既存のアカウント情報を探索
+    for (let i = 0; i < localStorage.length; i++) {
+      let key = localStorage.key(i);
+      if (key && (key.includes("@") || key.startsWith("vocab_user_"))) {
+        let email = key.replace("vocab_user_", "");
+        if (!accounts.includes(email)) accounts.push(email);
+      }
+    }
+    // 保存済みのアカウント一覧配列があればそれも結合
+    let saved = localStorage.getItem("app_accounts");
+    if (saved) {
+      let parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        accounts = Array.from(new Set([...accounts, ...parsed]));
+      }
+    }
+  } catch (e) {
+    console.error(e);
+  }
+
+  if (accounts.length === 0) {
+    area.innerHTML = `<p style="color: #64748b; font-size: 0.85em; text-align: center; margin: 5px 0;">保存されたアカウントはありません</p>`;
+    return;
+  }
+
+  accounts.forEach(email => {
+    let btn = document.createElement("button");
+    btn.style.cssText = "width: 100%; padding: 10px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; display: flex; justify-content: space-between; align-items: center;";
+    btn.innerHTML = `<span>👤 ${email}</span> <span style="font-size: 0.8em; color: #38bdf8;">選択 ➔</span>`;
+    btn.onclick = () => loginWithAccount(email);
+    area.appendChild(btn);
+  });
+}
+
+
+// 2. メニュー画面を開く
 window.openMenuModal = function() {
+  if (typeof currentUser === 'undefined' || !currentUser) {
+    setupLoginUI();
+    return;
+  }
+
   let modal = document.getElementById("appMenuModal");
   if (!modal) {
     modal = document.createElement("div");
@@ -22,6 +106,8 @@ window.openMenuModal = function() {
   modal.style.display = "flex";
 };
 
+
+// 3. プレイのサブメニュー（フラッシュカード / クイズ）
 window.openPlaySubMenu = function() {
   let modal = document.getElementById("appMenuModal");
   if (!modal) return;
@@ -38,6 +124,8 @@ window.openPlaySubMenu = function() {
   `;
 };
 
+
+// 4. フラッシュカードの表裏選択メニュー
 window.openFlashcardDirectionMenu = function() {
   let modal = document.getElementById("appMenuModal");
   if (!modal) return;
@@ -59,6 +147,8 @@ window.closeMenuModal = function() {
   if (modal) modal.style.display = "none";
 };
 
+
+// 5. フラッシュカード開始・終了処理
 window.startFlashcards = function(mode, random = true, direction = 'front') {
   closeMenuModal();
   window.currentFlashcardMode = mode;
@@ -90,6 +180,7 @@ window.renderFlashcardModal = function() {
     modal.style.display = "flex";
   }
 
+  // フラッシュカード終了時：「他のモードでプレイ」を表示
   if (typeof flashcardList !== 'undefined' && currentFlashcardIndex >= flashcardList.length) {
     modal.innerHTML = `
       <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
@@ -147,6 +238,8 @@ window.closeFlashcardModal = function() {
   if (modal) modal.style.display = "none";
 };
 
+
+// 6. クイズ画面（準備中）
 window.startQuiz = function() {
   closeMenuModal();
   let modal = document.getElementById("flashcardModal");
