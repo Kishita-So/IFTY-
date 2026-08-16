@@ -1,5 +1,5 @@
 // ==========================================
-// スマート単語帳 & ALLIA AIアシスタント 完全統合スクリプト
+// スマート単語帳 & ALLIA AIアシスタント 最終完全修復スクリプト
 // ==========================================
 
 let currentUser = "default_user";
@@ -12,14 +12,13 @@ let currentFlashcardMode = 'all';
 let isRandomMode = true;
 let cardMode = 'front';
 
-// チャット用の変数（必要に応じて連動）
+// ALLIAチャット用セッション・状態管理
 let chatSessions = [];
 let currentChatSessionId = null;
 let selectedImageBase64 = null;
 
-// アプリ起動時の初期化
+// 1. アプリ起動時の自動初期化（ログインを完全バイパスして全機能を使用可能に）
 document.addEventListener("DOMContentLoaded", function() {
-  // 1. ログイン画面を強制バイパスし、常にデフォルトユーザーとして即座にメイン画面を表示
   localStorage.setItem("currentUser", currentUser);
   
   const landingPage = document.getElementById("landingPage");
@@ -34,18 +33,22 @@ document.addEventListener("DOMContentLoaded", function() {
   const floatingAiBtn = document.getElementById("floatingAiBtn");
   if (floatingAiBtn) floatingAiBtn.style.display = "flex";
 
-  // 2. データのロードと初期描画
+  // データのロードと初期化
   loadUserData(currentUser);
+  initChatSystem();
 });
 
-// ユーザーデータの読み込み
+// 2. ユーザーデータの管理
 function loadUserData(username) {
   try {
     const saved = localStorage.getItem("vocab_user_" + username);
     if (saved) {
       folders = JSON.parse(saved);
     } else {
-      folders = [];
+      // 初期サンプルフォルダ
+      folders = [
+        { id: 'folder_sample', name: '基本の単語', words: [{ word: 'Apple', meanings: ['りんご'], mastery: 'unfixed' }] }
+      ];
     }
   } catch (e) {
     console.error("データ読み込みエラー:", e);
@@ -54,7 +57,6 @@ function loadUserData(username) {
   renderFolders();
 }
 
-// データの保存
 function saveUserData() {
   try {
     localStorage.setItem("vocab_user_" + currentUser, JSON.stringify(folders));
@@ -63,9 +65,7 @@ function saveUserData() {
   }
 }
 
-// -------------------------------------------------------------
-// フォルダ・単語帳機能
-// -------------------------------------------------------------
+// 3. フォルダ・単語追加機能
 window.createFolder = function() {
   const input = document.getElementById("folderName");
   if (!input) return;
@@ -99,9 +99,20 @@ function renderFolders() {
     <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
         <h3 style="margin: 0; color: #0f172a; font-size: 1.1em;">📁 ${escapeHtml(folder.name)}</h3>
-        <button onclick="deleteFolder('${folder.id}')" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">削除</button>
+        <div>
+          <button onclick="addWordPrompt('${folder.id}')" style="background: #0284c7; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8em; margin-right: 4px;">＋ 単語追加</button>
+          <button onclick="deleteFolder('${folder.id}')" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">削除</button>
+        </div>
       </div>
-      <div style="font-size: 0.85em; color: #64748b;">単語数: ${folder.words ? folder.words.length : 0}件</div>
+      <div style="font-size: 0.85em; color: #64748b; margin-bottom: 8px;">単語数: ${folder.words ? folder.words.length : 0}件</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+        ${(folder.words || []).map((w, idx) => `
+          <span style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 4px 8px; border-radius: 4px; font-size: 0.85em;">
+            <b>${escapeHtml(w.word)}</b>: ${escapeHtml(Array.isArray(w.meanings) ? w.meanings.join(', ') : w.meanings)}
+            <button onclick="deleteWord('${folder.id}', ${idx})" style="background: none; border: none; color: #ef4444; cursor: pointer; margin-left: 4px; font-weight: bold;">×</button>
+          </span>
+        `).join('')}
+      </div>
     </div>
   `).join('');
 }
@@ -113,13 +124,35 @@ window.deleteFolder = function(folderId) {
   renderFolders();
 };
 
+window.addWordPrompt = function(folderId) {
+  const word = prompt("追加する単語を入力してください:");
+  if (!word) return;
+  const meaning = prompt("その意味（訳）を入力してください:");
+  if (!meaning) return;
+
+  const folder = folders.find(f => f.id === folderId);
+  if (folder) {
+    if (!folder.words) folder.words = [];
+    folder.words.push({ word: word.trim(), meanings: [meaning.trim()], mastery: 'unfixed' });
+    saveUserData();
+    renderFolders();
+  }
+};
+
+window.deleteWord = function(folderId, wordIndex) {
+  const folder = folders.find(f => f.id === folderId);
+  if (folder && folder.words) {
+    folder.words.splice(wordIndex, 1);
+    saveUserData();
+    renderFolders();
+  }
+};
+
 function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// -------------------------------------------------------------
-// 画面切り替え（単語帳 ⇄ ALLIAチャット）
-// -------------------------------------------------------------
+// 4. 画面切り替え（単語帳 ⇄ ALLIAチャット）
 window.toggleViewMode = function() {
   if (currentView === 'vocab') {
     switchToChatView();
@@ -152,9 +185,183 @@ window.switchToVocabView = function() {
   closeMenuModal();
 };
 
-// -------------------------------------------------------------
-// メニュー・プレイ機能（フラッシュカード / クイズ）
-// -------------------------------------------------------------
+// 5. ALLIA（チャット）セッション・メッセージ機能
+function initChatSystem() {
+  try {
+    const savedSessions = localStorage.getItem("chat_sessions_" + currentUser);
+    if (savedSessions) {
+      chatSessions = JSON.parse(savedSessions);
+    }
+  } catch(e) {
+    chatSessions = [];
+  }
+
+  if (chatSessions.length === 0) {
+    createNewChatSession();
+  } else {
+    currentChatSessionId = chatSessions[0].id;
+    updateChatSessionSelect();
+    renderChatMessages();
+  }
+}
+
+window.createNewChatSession = function() {
+  const newSession = {
+    id: 'session_' + Date.now(),
+    title: '新しいチャット',
+    messages: [
+      { role: 'assistant', text: 'こんにちは！ALLIA AIアシスタントです。単語の追加や質問をどうぞ！' }
+    ]
+  };
+  chatSessions.unshift(newSession);
+  currentChatSessionId = newSession.id;
+  saveChatSessions();
+  updateChatSessionSelect();
+  renderChatMessages();
+};
+
+window.switchChatSession = function(sessionId) {
+  currentChatSessionId = sessionId;
+  renderChatMessages();
+  const session = chatSessions.find(s => s.id === sessionId);
+  const titleInput = document.getElementById("chatTitleInput");
+  if (titleInput && session) titleInput.value = session.title;
+};
+
+window.updateChatTitle = function(newTitle) {
+  const session = chatSessions.find(s => s.id === currentChatSessionId);
+  if (session) {
+    session.title = newTitle;
+    saveChatSessions();
+    updateChatSessionSelect();
+  }
+};
+
+window.moveChatSession = function(direction) {
+  const index = chatSessions.findIndex(s => s.id === currentChatSessionId);
+  if (index === -1) return;
+  const newIndex = index + direction;
+  if (newIndex >= 0 && newIndex < chatSessions.length) {
+    const temp = chatSessions[index];
+    chatSessions[index] = chatSessions[newIndex];
+    chatSessions[newIndex] = temp;
+    saveChatSessions();
+    updateChatSessionSelect();
+  }
+};
+
+window.deleteCurrentChatSession = function() {
+  if (chatSessions.length <= 1) {
+    alert("最後のチャットセッションは削除できません。");
+    return;
+  }
+  if (!confirm("このチャットを削除しますか？")) return;
+  chatSessions = chatSessions.filter(s => s.id !== currentChatSessionId);
+  currentChatSessionId = chatSessions[0].id;
+  saveChatSessions();
+  updateChatSessionSelect();
+  renderChatMessages();
+};
+
+function saveChatSessions() {
+  try {
+    localStorage.setItem("chat_sessions_" + currentUser, JSON.stringify(chatSessions));
+  } catch(e) {}
+}
+
+function updateChatSessionSelect() {
+  const select = document.getElementById("chatSessionSelect");
+  if (!select) return;
+  select.innerHTML = chatSessions.map(s => `
+    <option value="${s.id}" ${s.id === currentChatSessionId ? 'selected' : ''}>${escapeHtml(s.title)}</option>
+  `).join('');
+
+  const session = chatSessions.find(s => s.id === currentChatSessionId);
+  const titleInput = document.getElementById("chatTitleInput");
+  if (titleInput && session) titleInput.value = session.title;
+}
+
+function renderChatMessages() {
+  const container = document.getElementById("chatMessages");
+  if (!container) return;
+
+  const session = chatSessions.find(s => s.id === currentChatSessionId);
+  if (!session || !session.messages) {
+    container.innerHTML = "";
+    return;
+  }
+
+  container.innerHTML = session.messages.map(m => `
+    <div style="display: flex; justify-content: ${m.role === 'user' ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
+      <div style="background: ${m.role === 'user' ? '#0284c7' : '#e2e8f0'}; color: ${m.role === 'user' ? 'white' : '#0f172a'}; padding: 10px 14px; border-radius: 8px; max-width: 80%; word-break: break-all; font-size: 0.95em;">
+        ${escapeHtml(m.text)}
+      </div>
+    </div>
+  `).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+window.handleImageSelect = function(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    selectedImageBase64 = e.target.result;
+    const previewContainer = document.getElementById("imagePreviewContainer");
+    const previewImg = document.getElementById("imagePreview");
+    if (previewContainer && previewImg) {
+      previewImg.src = selectedImageBase64;
+      previewContainer.style.display = "flex";
+    }
+  };
+  reader.readAsDataURL(file);
+};
+
+window.clearSelectedImage = function() {
+  selectedImageBase64 = null;
+  const previewContainer = document.getElementById("imagePreviewContainer");
+  if (previewContainer) previewContainer.style.display = "none";
+  const fileInput = document.getElementById("imageInput");
+  if (fileInput) fileInput.value = "";
+};
+
+window.sendChatMessage = function() {
+  const input = document.getElementById("chatInput");
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text && !selectedImageBase64) return;
+
+  const session = chatSessions.find(s => s.id === currentChatSessionId);
+  if (!session) return;
+
+  // ユーザーメッセージ追加
+  session.messages.push({ role: 'user', text: text || '[画像送信]' });
+  input.value = "";
+  clearSelectedImage();
+  renderChatMessages();
+
+  // AIからの自動応答＆単語自動追加の検出シミュレーション
+  setTimeout(() => {
+    let reply = "ご質問ありがとうございます！ALLIAがお答えします。";
+    if (text.includes("単語を追加") || text.includes("追加して")) {
+      reply = "了解しました！指定された単語を自動的にフォルダに追加しました。";
+      // デモとして最初のフォルダに単語を追加
+      if (folders.length > 0) {
+        folders[0].words.push({ word: 'AI Sample', meanings: [text], mastery: 'unfixed' });
+        saveUserData();
+        renderFolders();
+      }
+    } else {
+      reply = `「${text}」について承知いたしました。何か他にお手伝いできることはありますか？`;
+    }
+
+    session.messages.push({ role: 'assistant', text: reply });
+    saveChatSessions();
+    renderChatMessages();
+  }, 600);
+};
+
+// 6. メニュー・プレイ機能（フラッシュカード / クイズ）
 window.openMenuModal = function() {
   let modal = document.getElementById("appMenuModal");
   if (!modal) {
@@ -335,7 +542,6 @@ window.startQuiz = function() {
   `;
 };
 
-// ログアウト（必要時）
 window.logout = function() {
   localStorage.removeItem("currentUser");
   location.reload();
