@@ -1,5 +1,5 @@
 // ==========================================
-// 完全版 スマート単語帳 & ALLIA（Cloudflare Workers / Groq連携）
+// 完全版 スマート単語帳 & ALLIA（Cloudflare Workers / Grok連携）
 // ==========================================
 
 let currentUser = "default_user";
@@ -38,19 +38,17 @@ document.addEventListener("DOMContentLoaded", function() {
   initChatSystem();
 });
 
-// 2. ユーザーデータ管理
+// 2. ユーザーデータ管理（最初はフォルダなし）
 function loadUserData(username) {
   try {
     const saved = localStorage.getItem("vocab_user_" + username);
     if (saved) {
       folders = JSON.parse(saved);
     } else {
-      folders = [
-        { id: 'folder_default', name: 'マイスペース', words: [] }
-      ];
+      folders = []; // 最初はフォルダは何もない状態
     }
   } catch (e) {
-    folders = [{ id: 'folder_default', name: 'マイスペース', words: [] }];
+    folders = [];
   }
   renderFolders();
 }
@@ -61,7 +59,7 @@ function saveUserData() {
   } catch (e) {}
 }
 
-// 3. フォルダ管理 & 単語追加
+// 3. フォルダ管理 & 操作（折りたたみ・上下移動・全消し）
 window.createFolder = function() {
   const input = document.getElementById("folderName");
   if (!input) return;
@@ -74,6 +72,7 @@ window.createFolder = function() {
   folders.push({
     id: 'folder_' + Date.now(),
     name: name,
+    collapsed: false,
     words: []
   });
   
@@ -82,48 +81,99 @@ window.createFolder = function() {
   renderFolders();
 };
 
+window.toggleFolderCollapse = function(folderId) {
+  const folder = folders.find(f => f.id === folderId);
+  if (folder) {
+    folder.collapsed = !folder.collapsed;
+    saveUserData();
+    renderFolders();
+  }
+};
+
+window.moveFolder = function(index, direction) {
+  const newIndex = index + direction;
+  if (newIndex < 0 || newIndex >= folders.length) return;
+  const temp = folders[index];
+  folders[index] = folders[newIndex];
+  folders[newIndex] = temp;
+  saveUserData();
+  renderFolders();
+};
+
+window.clearFolderWords = function(folderId) {
+  if (!confirm("このフォルダ内の単語をすべて削除しますか？")) return;
+  const folder = folders.find(f => f.id === folderId);
+  if (folder) {
+    folder.words = [];
+    saveUserData();
+    renderFolders();
+  }
+};
+
 function renderFolders() {
   const container = document.getElementById("folders");
   if (!container) return;
 
   if (folders.length === 0) {
-    container.innerHTML = `<p style="color: #94a3b8; text-align: center; padding: 20px;">フォルダがありません。</p>`;
+    container.innerHTML = `<p style="color: #94a3b8; text-align: center; padding: 30px; background: white; border-radius: 8px; border: 1px dashed #cbd5e1;">フォルダがありません。下のフォームからフォルダを作成してください。</p>`;
     return;
   }
 
-  container.innerHTML = folders.map(folder => `
+  container.innerHTML = folders.map((folder, fIndex) => `
     <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <h3 style="margin: 0; color: #0f172a; font-size: 1.1em;">📁 ${escapeHtml(folder.name)}</h3>
-        <div>
-          <button onclick="deleteFolder('${folder.id}')" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">削除</button>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${folder.collapsed ? '0' : '8px'};">
+        <div style="display: flex; align-items: center; gap: 8px; cursor: pointer;" onclick="toggleFolderCollapse('${folder.id}')">
+          <span style="font-size: 0.9em; color: #64748b;">${folder.collapsed ? '▶' : '▼'}</span>
+          <h3 style="margin: 0; color: #0f172a; font-size: 1.1em;">📁 ${escapeHtml(folder.name)} (${folder.words ? folder.words.length : 0}件)</h3>
+        </div>
+        <div style="display: flex; gap: 4px; align-items: center;">
+          <button onclick="moveFolder(${fIndex}, -1)" title="上に移動" style="background: #e2e8f0; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">⬆️</button>
+          <button onclick="moveFolder(${fIndex}, 1)" title="下に移動" style="background: #e2e8f0; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">⬇️</button>
+          <button onclick="clearFolderWords('${folder.id}')" title="全消し" style="background: #f59e0b; color: white; border: none; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75em;">全消し</button>
+          <button onclick="deleteFolder('${folder.id}')" title="削除" style="background: #ef4444; color: white; border: none; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75em;">削除</button>
         </div>
       </div>
-      <div style="display: flex; gap: 6px; margin-bottom: 10px;">
-        <input id="wordInput_${folder.id}" placeholder="単語を入力（Enterまたは追加でAIが自動生成）" onkeydown="if(event.key==='Enter'){ addWordToFolder('${folder.id}'); }" style="flex: 1; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.9em;">
-        <button onclick="addWordToFolder('${folder.id}')" style="background: #0284c7; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 0.9em; font-weight: bold;">追加</button>
-      </div>
-      <div style="font-size: 0.85em; color: #64748b; margin-bottom: 6px;">単語数: ${folder.words ? folder.words.length : 0}件</div>
-      <div style="display: flex; flex-direction: column; gap: 6px;">
-        ${(folder.words || []).map((w, idx) => `
-          <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 8px 10px; border-radius: 6px; font-size: 0.9em; display: flex; justify-content: space-between; align-items: flex-start;">
-            <div>
-              <div><b>${escapeHtml(w.word)}</b> : ${escapeHtml(Array.isArray(w.meanings) ? w.meanings.join(' / ') : (w.meanings || ''))}</div>
-              ${w.example ? `<div style="font-size: 0.8em; color: #475569; margin-top: 2px;">例文: ${escapeHtml(w.example)}</div>` : ''}
-              ${w.details ? `<div style="font-size: 0.75em; color: #0284c7; margin-top: 2px;">💡 ${escapeHtml(w.details)}</div>` : ''}
+
+      ${folder.collapsed ? '' : `
+        <div style="display: flex; gap: 6px; margin-bottom: 10px; margin-top: 8px;">
+          <input id="wordInput_${folder.id}" placeholder="単語を入力（Enterまたは追加でAI自動生成）" onkeydown="if(event.key==='Enter'){ addWordToFolder('${folder.id}'); }" style="flex: 1; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.9em;">
+          <button onclick="addWordToFolder('${folder.id}')" style="background: #0284c7; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 0.9em; font-weight: bold;">追加</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          ${(folder.words || []).map((w, wIndex) => `
+            <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; font-size: 0.9em;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                  <div style="font-size: 1.05em;"><b>${escapeHtml(w.word)}</b> <span style="font-size: 0.85em; color: #475569;">${escapeHtml(Array.isArray(w.meanings) ? w.meanings.join(' / ') : (w.meanings || ''))}</span></div>
+                  ${w.examples && w.examples.length > 0 ? `
+                    <div style="margin-top: 4px; font-size: 0.85em; color: #334155;">
+                      ${w.examples.map((ex, exIdx) => `
+                        <div style="margin-bottom: 2px; display: flex; align-items: center; gap: 6px;">
+                          <span>• ${escapeHtml(ex.en)} (${escapeHtml(ex.ja)})</span>
+                          <button onclick="speakWord('${escapeHtml(ex.en.replace(/'/g, "\\'"))}')" style="background: #0284c7; color: white; border: none; padding: 1px 4px; border-radius: 3px; font-size: 0.7em; cursor: pointer;" title="例文を発音">🔊</button>
+                        </div>
+                      `).join('')}
+                    </div>
+                  ` : (w.example ? `<div style="font-size: 0.85em; color: #334155; margin-top: 2px;">例文: ${escapeHtml(w.example)} <button onclick="speakWord('${escapeHtml(w.example.replace(/'/g, "\\'"))}')" style="background: #0284c7; color: white; border: none; padding: 1px 4px; border-radius: 3px; font-size: 0.7em; cursor: pointer;">🔊</button></div>` : '')}
+                  ${w.details ? `<div style="font-size: 0.8em; color: #0284c7; margin-top: 3px;">💡 ${escapeHtml(w.details)}</div>` : ''}
+                </div>
+                <div style="display: flex; gap: 3px; align-items: center;">
+                  ${w.word ? `<button onclick="speakWord('${escapeHtml(w.word)}')" style="background: #0284c7; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="単語を発音">🔊</button>` : ''}
+                  <button onclick="openEditWordModal('${folder.id}', ${wIndex})" style="background: #64748b; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="編集">編集</button>
+                  <button onclick="moveWordWithinFolder('${folder.id}', ${wIndex}, -1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="上へ">⬆️</button>
+                  <button onclick="moveWordWithinFolder('${folder.id}', ${wIndex}, 1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="下へ">⬇️</button>
+                  <button onclick="deleteWord('${folder.id}', ${wIndex})" style="background: none; border: none; color: #ef4444; cursor: pointer; font-weight: bold; font-size: 1.1em;" title="削除">×</button>
+                </div>
+              </div>
             </div>
-            <div style="display: flex; gap: 4px; align-items: center;">
-              ${w.word ? `<button onclick="speakWord('${escapeHtml(w.word)}')" style="background: #0284c7; color: white; border: none; padding: 2px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;">🔊</button>` : ''}
-              <button onclick="deleteWord('${folder.id}', ${idx})" style="background: none; border: none; color: #ef4444; cursor: pointer; font-weight: bold; font-size: 1.1em;">×</button>
-            </div>
-          </div>
-        `).join('')}
-      </div>
+          `).join('')}
+        </div>
+      `}
     </div>
   `).join('');
 }
 
-// 4. 単語追加 & Cloudflare Workers 連携 ＆ 0.5秒後音声自動再生
+// 4. 単語の追加・編集・移動機能 & Cloudflare連携
 window.addWordToFolder = async function(folderId) {
   const input = document.getElementById(`wordInput_${folderId}`);
   if (!input) return;
@@ -134,7 +184,7 @@ window.addWordToFolder = async function(folderId) {
   if (!folder.words) folder.words = [];
 
   if (!wordText) {
-    folder.words.push({ word: '', meanings: [''], example: '', details: '', mastery: 'unfixed' });
+    folder.words.push({ word: '', meanings: [''], examples: [], details: '', mastery: 'unfixed' });
     input.value = "";
     saveUserData();
     renderFolders();
@@ -142,12 +192,18 @@ window.addWordToFolder = async function(folderId) {
   }
 
   input.value = "";
-  const newWordObj = { word: wordText, meanings: ['意味を生成中...'], example: '例文生成中...', details: '', mastery: 'unfixed' };
+  const newWordObj = { 
+    word: wordText, 
+    meanings: ['意味を生成中...'], 
+    examples: [], 
+    details: 'AIが情報を生成しています...', 
+    mastery: 'unfixed' 
+  };
   folder.words.push(newWordObj);
   saveUserData();
   renderFolders();
 
-  // Cloudflare Workers へ type: "word" でリクエスト送信
+  // Cloudflare Workersへ type: "word" でリクエスト送信
   try {
     const response = await fetch(WORKER_URL, {
       method: 'POST',
@@ -161,40 +217,120 @@ window.addWordToFolder = async function(folderId) {
     if (response.ok) {
       const data = await response.json();
       newWordObj.meanings = data.meanings || [wordText];
-      if (data.examples && data.examples.length > 0) {
-        newWordObj.example = `${data.examples[0].en} (${data.examples[0].ja})`;
-      } else {
-        newWordObj.example = "";
-      }
+      newWordObj.examples = data.examples || [];
       newWordObj.details = data.details || "";
     } else {
       const fallback = generateSmartWordData(wordText);
       newWordObj.meanings = [fallback.meaning];
-      newWordObj.example = fallback.example;
+      newWordObj.examples = [{ en: fallback.example, ja: "例文の和訳" }];
     }
   } catch (e) {
     const fallback = generateSmartWordData(wordText);
     newWordObj.meanings = [fallback.meaning];
-    newWordObj.example = fallback.example;
+    newWordObj.examples = [{ en: fallback.example, ja: "例文の和訳" }];
   }
 
   saveUserData();
   renderFolders();
 
-  // 【要望対応】追加から正確に「0.5秒後」に音声自動再生
+  // 0.5秒後の音声自動再生
   setTimeout(() => {
     speakWord(wordText);
   }, 500);
 };
 
+window.moveWordWithinFolder = function(folderId, wordIndex, direction) {
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder || !folder.words) return;
+  const newIndex = wordIndex + direction;
+  if (newIndex < 0 || newIndex >= folder.words.length) return;
+  const temp = folder.words[wordIndex];
+  folder.words[wordIndex] = folder.words[newIndex];
+  folder.words[newIndex] = temp;
+  saveUserData();
+  renderFolders();
+};
+
+window.openEditWordModal = function(folderId, wordIndex) {
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder || !folder.words[wordIndex]) return;
+  const w = folder.words[wordIndex];
+
+  let modal = document.getElementById("editWordModal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "editWordModal";
+    modal.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 10005;";
+    document.body.appendChild(modal);
+  }
+
+  const meaningsStr = Array.isArray(w.meanings) ? w.meanings.join('\n') : (w.meanings || '');
+  const examplesStr = w.examples ? w.examples.map(ex => `${ex.en} | ${ex.ja}`).join('\n') : (w.example || '');
+
+  modal.innerHTML = `
+    <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 420px; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
+      <h3 style="margin-top: 0; color: #0f172a; margin-bottom: 12px;">✏️ 単語の編集</h3>
+      <div style="display: flex; flex-direction: column; gap: 10px; text-align: left;">
+        <div>
+          <label style="font-size: 0.85em; font-weight: bold; color: #475569;">単語</label>
+          <input id="editWordText" value="${escapeHtml(w.word)}" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+        </div>
+        <div>
+          <label style="font-size: 0.85em; font-weight: bold; color: #475569;">意味・活用・派生語（改行区切り）</label>
+          <textarea id="editMeaningsText" rows="4" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 0.9em;">${escapeHtml(meaningsStr)}</textarea>
+        </div>
+        <div>
+          <label style="font-size: 0.85em; font-weight: bold; color: #475569;">例文 (英語 | 和訳 を改行区切り)</label>
+          <textarea id="editExamplesText" rows="3" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 0.9em;">${escapeHtml(examplesStr)}</textarea>
+        </div>
+        <div>
+          <label style="font-size: 0.85em; font-weight: bold; color: #475569;">詳細・コツ</label>
+          <input id="editDetailsText" value="${escapeHtml(w.details || '')}" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+          <button onclick="saveEditedWord('${folder.id}', ${wordIndex})" style="flex: 1; padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">保存</button>
+          <button onclick="closeEditWordModal()" style="padding: 10px 16px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">キャンセル</button>
+        </div>
+      </div>
+    </div>
+  `;
+  modal.style.display = "flex";
+};
+
+window.saveEditedWord = function(folderId, wordIndex) {
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder || !folder.words[wordIndex]) return;
+
+  const wordVal = document.getElementById("editWordText").value.trim();
+  const meaningsVal = document.getElementById("editMeaningsText").value.split('\n').map(s => s.trim()).filter(Boolean);
+  const examplesRaw = document.getElementById("editExamplesText").value.split('\n').map(s => s.trim()).filter(Boolean);
+  const detailsVal = document.getElementById("editDetailsText").value.trim();
+
+  const newExamples = examplesRaw.map(line => {
+    const parts = line.split('|');
+    return {
+      en: parts[0] ? parts[0].trim() : line,
+      ja: parts[1] ? parts[1].trim() : ''
+    };
+  });
+
+  folder.words[wordIndex].word = wordVal;
+  folder.words[wordIndex].meanings = meaningsVal;
+  folder.words[wordIndex].examples = newExamples;
+  folder.words[wordIndex].details = detailsVal;
+
+  saveUserData();
+  renderFolders();
+  closeEditWordModal();
+};
+
+window.closeEditWordModal = function() {
+  const modal = document.getElementById("editWordModal");
+  if (modal) modal.style.display = "none";
+};
+
 function generateSmartWordData(word) {
-  const lower = word.toLowerCase().trim();
-  const dict = {
-    "kill": { meaning: "殺す、台無しにする", example: "He tried to kill time before the meeting." },
-    "ask": { meaning: "尋ねる、頼む", example: "Let me ask you a question." },
-    "slow": { meaning: "遅い、のろい", example: "The internet connection is very slow today." }
-  };
-  return dict[lower] || { meaning: `${word}の意味`, example: `This is an example sentence using ${word}.` };
+  return { meaning: `${word}の意味`, example: `This is an example sentence using ${word}.` };
 }
 
 // Web Speech APIによる音声読み上げ
@@ -392,7 +528,6 @@ window.clearSelectedImage = function() {
   if (fileInput) fileInput.value = "";
 };
 
-// チャットメッセージ送信（Cloudflare Workers へ type: "agent_chat" で送信）
 window.sendChatMessage = async function() {
   const input = document.getElementById("chatInput");
   if (!input) return;
