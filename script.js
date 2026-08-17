@@ -1,20 +1,19 @@
 // ==========================================
-// 完全版 スマート単語帳 & ALLIA（意味生成バグ修正・プレイメニュー完全対応）
+// 完全版 スマート単語帳 & ALLIA（ボタン強制上書き・データ自動修復対応）
 // ==========================================
 
 let currentUser = "default_user";
-let currentView = "vocab"; // 'vocab' or 'chat'
+let currentView = "vocab"; 
 let folders = [];
 
-// フラッシュカード用の状態変数
 let flashcardList = [];
 let flashcardOriginalList = [];
 let currentFlashcardIndex = 0;
 let isCardFlipped = false;
 let flashcardSettings = {
-  target: 'all', // 'all', 'checked_folders', 'checked_words'
-  order: 'random', // 'random', 'sequential'
-  direction: 'front' // 'front' (単語→意味), 'back' (意味→単語)
+  target: 'all',
+  order: 'random',
+  direction: 'front'
 };
 let isFlashcardPaused = false;
 
@@ -24,7 +23,6 @@ let selectedImageBase64 = null;
 
 const WORKER_URL = 'https://ifty.humbleflail205.workers.dev/';
 
-// 1. 初期化処理
 document.addEventListener("DOMContentLoaded", function() {
   localStorage.setItem("currentUser", currentUser);
   
@@ -37,25 +35,45 @@ document.addEventListener("DOMContentLoaded", function() {
   const userDisplay = document.getElementById("userDisplay");
   if (userDisplay) userDisplay.textContent = currentUser;
 
-  // 右下のボタンを必ずメニュー（≡）として機能させる設定
-  const floatingAiBtn = document.getElementById("floatingAiBtn");
-  if (floatingAiBtn) {
-    floatingAiBtn.style.display = "flex";
-    floatingAiBtn.onclick = openMenuModal; 
-    floatingAiBtn.textContent = "≡"; 
-    floatingAiBtn.title = "メニュー（プレイ・ALLIA）";
-  }
+  // 既存の右下ボタンを完全に削除し、メニューボタンを強制生成する
+  const oldBtn = document.getElementById("floatingAiBtn");
+  if (oldBtn) oldBtn.remove();
+
+  const newFloatingBtn = document.createElement("button");
+  newFloatingBtn.id = "floatingAiBtn";
+  newFloatingBtn.textContent = "≡";
+  newFloatingBtn.title = "メニュー（プレイ・ALLIA）";
+  newFloatingBtn.style.cssText = "position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; background: #0284c7; color: white; border: none; border-radius: 50%; font-size: 24px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; z-index: 99999;";
+  newFloatingBtn.onclick = openMenuModal;
+  document.body.appendChild(newFloatingBtn);
 
   loadUserData(currentUser);
   initChatSystem();
 });
 
-// 2. ユーザーデータ管理
 function loadUserData(username) {
   try {
     const saved = localStorage.getItem("vocab_user_" + username);
     if (saved) {
       folders = JSON.parse(saved);
+      // バグったデータの自動クレンジング（意味がおかしくなっているものを修復）
+      folders.forEach(f => {
+        if (f.words) {
+          f.words.forEach(w => {
+            if (typeof w.meanings === 'string') {
+              w.meanings = [w.meanings];
+            }
+            if (!Array.isArray(w.meanings) || w.meanings.length === 0) {
+              w.meanings = [`${w.word}の意味`];
+            }
+            // flee fleece のような誤生成の修正
+            if (w.word && w.meanings.length === 1 && w.meanings[0] === w.word) {
+              w.meanings = [`${w.word}の意味（再生成してください）`];
+            }
+          });
+        }
+      });
+      saveUserData();
     } else {
       folders = [];
     }
@@ -71,7 +89,6 @@ function saveUserData() {
   } catch (e) {}
 }
 
-// 3. フォルダ管理 & チェック機能
 window.createFolder = function() {
   const input = document.getElementById("folderName");
   if (!input) return;
@@ -144,7 +161,7 @@ function renderFolders() {
   if (!container) return;
 
   if (folders.length === 0) {
-    container.innerHTML = `<p style="color: #94a3b8; text-align: center; padding: 30px; background: white; border-radius: 8px; border: 1px dashed #cbd5e1;">フォルダがありません。下のフォームからフォルダを作成してください。</p>`;
+    container.innerHTML = `<p style="color: #94a3b8; text-align: center; padding: 30px; background: white; border-radius: 8px; border: 1px dashed #cbd5e1;">フォルダがありません。上のフォームからフォルダを作成してください。</p>`;
     return;
   }
 
@@ -186,7 +203,7 @@ function renderFolders() {
                           </div>
                         `).join('')}
                       </div>
-                    ` : (w.example ? `<div style="font-size: 0.85em; color: #334155; margin-top: 2px;">例文: ${escapeHtml(w.example)} <button onclick="speakWord('${escapeHtml(w.example.replace(/'/g, "\\'"))}')" style="background: #0284c7; color: white; border: none; padding: 1px 4px; border-radius: 3px; font-size: 0.7em; cursor: pointer;">🔊</button></div>` : '')}
+                    ` : ''}
                     ${w.details ? `<div style="font-size: 0.8em; color: #0284c7; margin-top: 3px;">💡 ${escapeHtml(w.details)}</div>` : ''}
                   </div>
                 </div>
@@ -206,7 +223,6 @@ function renderFolders() {
   `).join('');
 }
 
-// 4. 単語追加・編集処理（意味が崩れないよう調整）
 window.addWordToFolder = async function(folderId) {
   const input = document.getElementById(`wordInput_${folderId}`);
   if (!input) return;
@@ -246,7 +262,6 @@ window.addWordToFolder = async function(folderId) {
     
     if (response.ok) {
       const data = await response.json();
-      // 配列でない場合や不適切な場合のフォールバック対策
       if (Array.isArray(data.meanings) && data.meanings.length > 0) {
         newWordObj.meanings = data.meanings;
       } else if (typeof data.meanings === 'string') {
@@ -390,7 +405,6 @@ function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// 5. 画面切り替え（単語帳 ⇔ ALLIAチャット）
 window.toggleViewMode = function() {
   if (currentView === 'vocab') {
     switchToChatView();
@@ -419,7 +433,6 @@ window.switchToVocabView = function() {
   closeMenuModal();
 };
 
-// 6. ALLIAチャットシステム
 function initChatSystem() {
   try {
     const savedSessions = localStorage.getItem("chat_sessions_" + currentUser);
@@ -600,13 +613,12 @@ window.sendChatMessage = async function() {
   renderChatMessages();
 };
 
-// 7. 右下メニューモーダル（「ALLIAを開く」「プレイ」）
 window.openMenuModal = function() {
   let modal = document.getElementById("appMenuModal");
   if (!modal) {
     modal = document.createElement("div");
     modal.id = "appMenuModal";
-    modal.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 10000;";
+    modal.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 100000;";
     document.body.appendChild(modal);
   }
   
@@ -643,7 +655,6 @@ window.openPlaySubMenu = function() {
   `;
 };
 
-// 8. フラッシュカードの設定・詳細オプション
 window.openFlashcardConfigModal = function() {
   let modal = document.getElementById("appMenuModal");
   if (!modal) return;
@@ -744,7 +755,7 @@ window.renderFlashcardModal = function() {
   if (!modal) {
     modal = document.createElement("div");
     modal.id = "flashcardModal";
-    modal.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 10001;";
+    modal.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 100001;";
     document.body.appendChild(modal);
   } else {
     modal.style.display = "flex";
