@@ -1,5 +1,5 @@
 // ==========================================
-// 完全版 スマート単語帳 & ALLIA（ボタン強制上書き・データ自動修復対応）
+// 完全版 スマート単語帳 & ALLIA（データ自動正規化・エラー耐性強化版）
 // ==========================================
 
 let currentUser = "default_user";
@@ -56,7 +56,7 @@ function loadUserData(username) {
     const saved = localStorage.getItem("vocab_user_" + username);
     if (saved) {
       folders = JSON.parse(saved);
-      // バグったデータの自動クレンジング（意味がおかしくなっているものを修復）
+      // データの自動クレンジング（意味の構造化・バグデータの修復）
       folders.forEach(f => {
         if (f.words) {
           f.words.forEach(w => {
@@ -66,7 +66,6 @@ function loadUserData(username) {
             if (!Array.isArray(w.meanings) || w.meanings.length === 0) {
               w.meanings = [`${w.word}の意味`];
             }
-            // flee fleece のような誤生成の修正
             if (w.word && w.meanings.length === 1 && w.meanings[0] === w.word) {
               w.meanings = [`${w.word}の意味（再生成してください）`];
             }
@@ -223,10 +222,9 @@ function renderFolders() {
   `).join('');
 }
 
-window.addWordToFolder = async function(folderId) {
+window.addWordToFolder = async function(folderId, directWord = null) {
   const input = document.getElementById(`wordInput_${folderId}`);
-  if (!input) return;
-  const wordText = input.value.trim();
+  const wordText = directWord ? directWord : (input ? input.value.trim() : "");
   
   const folder = folders.find(f => f.id === folderId);
   if (!folder) return;
@@ -234,13 +232,13 @@ window.addWordToFolder = async function(folderId) {
 
   if (!wordText) {
     folder.words.push({ word: '', checked: false, meanings: [''], examples: [], details: '', mastery: 'unfixed' });
-    input.value = "";
+    if (input) input.value = "";
     saveUserData();
     renderFolders();
     return;
   }
 
-  input.value = "";
+  if (input) input.value = "";
   const newWordObj = { 
     word: wordText, 
     checked: false,
@@ -262,22 +260,28 @@ window.addWordToFolder = async function(folderId) {
     
     if (response.ok) {
       const data = await response.json();
-      if (Array.isArray(data.meanings) && data.meanings.length > 0) {
-        newWordObj.meanings = data.meanings;
+      
+      let parsedMeanings = [];
+      if (Array.isArray(data.meanings)) {
+        parsedMeanings = data.meanings.map(m => String(m).trim()).filter(Boolean);
       } else if (typeof data.meanings === 'string') {
-        newWordObj.meanings = [data.meanings];
-      } else {
-        newWordObj.meanings = [`${wordText}の意味`];
+        parsedMeanings = data.meanings.split(/[\n,\/]/).map(s => s.trim()).filter(Boolean);
       }
-      newWordObj.examples = data.examples || [];
+      
+      if (parsedMeanings.length === 0 || (parsedMeanings.length === 1 && parsedMeanings[0].toLowerCase() === wordText.toLowerCase())) {
+        parsedMeanings = [`${wordText}の日本語訳`];
+      }
+
+      newWordObj.meanings = parsedMeanings;
+      newWordObj.examples = Array.isArray(data.examples) ? data.examples : [];
       newWordObj.details = data.details || "";
     } else {
       newWordObj.meanings = [`${wordText}の意味`];
-      newWordObj.examples = [{ en: `This is ${wordText}.`, ja: "例文の和訳" }];
+      newWordObj.examples = [{ en: `This is ${wordText}.`, ja: `${wordText}です。` }];
     }
   } catch (e) {
     newWordObj.meanings = [`${wordText}の意味`];
-    newWordObj.examples = [{ en: `This is ${wordText}.`, ja: "例文の和訳" }];
+    newWordObj.examples = [{ en: `This is ${wordText}.`, ja: `${wordText}です。` }];
   }
 
   saveUserData();
