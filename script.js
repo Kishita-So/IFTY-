@@ -1,5 +1,5 @@
 // ==========================================
-// 完全版 スマート単語帳 & ALLIA（Cloudflare Workers / Groq連携）
+// 完全版 スマート単語帳 & ALLIA（フラッシュカード・チェック機能完全対応）
 // ==========================================
 
 let currentUser = "default_user";
@@ -38,13 +38,17 @@ document.addEventListener("DOMContentLoaded", function() {
   if (userDisplay) userDisplay.textContent = currentUser;
 
   const floatingAiBtn = document.getElementById("floatingAiBtn");
-  if (floatingAiBtn) floatingAiBtn.style.display = "flex";
+  if (floatingAiBtn) {
+    floatingAiBtn.style.display = "flex";
+    floatingAiBtn.onclick = openMenuModal; // 右下ボタンでメニューを開く
+    floatingAiBtn.textContent = "≡"; // メニューアイコン
+  }
 
   loadUserData(currentUser);
   initChatSystem();
 });
 
-// 2. ユーザーデータ管理（最初はフォルダなし）
+// 2. ユーザーデータ管理
 function loadUserData(username) {
   try {
     const saved = localStorage.getItem("vocab_user_" + username);
@@ -65,7 +69,7 @@ function saveUserData() {
   } catch (e) {}
 }
 
-// 3. フォルダ管理 & チェック機能・操作
+// 3. フォルダ管理 & チェック機能
 window.createFolder = function() {
   const input = document.getElementById("folderName");
   if (!input) return;
@@ -146,7 +150,7 @@ function renderFolders() {
     <div style="background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${folder.collapsed ? '0' : '8px'};">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <input type="checkbox" ${folder.checked ? 'checked' : ''} onchange="toggleFolderCheck('${folder.id}')" title="フォルダを選択" style="width: 16px; height: 16px; cursor: pointer;">
+          <input type="checkbox" ${folder.checked ? 'checked' : ''} onchange="toggleFolderCheck('${folder.id}')" title="フラッシュカード用チェック" style="width: 16px; height: 16px; cursor: pointer;">
           <span style="font-size: 0.9em; color: #64748b; cursor: pointer;" onclick="toggleFolderCollapse('${folder.id}')">${folder.collapsed ? '▶' : '▼'}</span>
           <h3 style="margin: 0; color: #0f172a; font-size: 1.1em; cursor: pointer;" onclick="toggleFolderCollapse('${folder.id}')">📁 ${escapeHtml(folder.name)} (${folder.words ? folder.words.length : 0}件)</h3>
         </div>
@@ -168,7 +172,7 @@ function renderFolders() {
             <div style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; font-size: 0.9em;">
               <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                 <div style="display: flex; align-items: flex-start; gap: 8px; flex: 1;">
-                  <input type="checkbox" ${w.checked ? 'checked' : ''} onchange="toggleWordCheck('${folder.id}', ${wIndex})" title="単語を選択" style="margin-top: 4px; width: 15px; height: 15px; cursor: pointer;">
+                  <input type="checkbox" ${w.checked ? 'checked' : ''} onchange="toggleWordCheck('${folder.id}', ${wIndex})" title="フラッシュカード用チェック" style="margin-top: 4px; width: 15px; height: 15px; cursor: pointer;">
                   <div>
                     <div style="font-size: 1.05em;"><b>${escapeHtml(w.word)}</b> <span style="font-size: 0.85em; color: #475569;">${escapeHtml(Array.isArray(w.meanings) ? w.meanings.join(' / ') : (w.meanings || ''))}</span></div>
                     ${w.examples && w.examples.length > 0 ? `
@@ -176,7 +180,7 @@ function renderFolders() {
                         ${w.examples.map((ex) => `
                           <div style="margin-bottom: 2px; display: flex; align-items: center; gap: 6px;">
                             <span>• ${escapeHtml(ex.en)} (${escapeHtml(ex.ja)})</span>
-                            <button onclick="speakWord('${escapeHtml(ex.en.replace(/'/g, "\\'"))}')" style="background: #0284c7; color: white; border: none; padding: 1px 4px; border-radius: 3px; font-size: 0.7em; cursor: pointer;" title="例文を発音">🔊</button>
+                            <button onclick="speakWord('${escapeHtml(ex.en.replace(/'/g, "\\'"))}')" style="background: #0284c7; color: white; border: none; padding: 1px 4px; border-radius: 3px; font-size: 0.7em; cursor: pointer;" title="発音">🔊</button>
                           </div>
                         `).join('')}
                       </div>
@@ -186,7 +190,7 @@ function renderFolders() {
                 </div>
                 <div style="display: flex; gap: 3px; align-items: center;">
                   ${w.word ? `<button onclick="speakWord('${escapeHtml(w.word)}')" style="background: #0284c7; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="単語を発音">🔊</button>` : ''}
-                  <button onclick="openEditWordModal('${folder.id}', ${wIndex})" style="background: #64748b; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="編集">編集</button>
+                  <button onclick="openEditWordModal('${folder.id}', ${wIndex})" style="background: #64748b; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;">編集</button>
                   <button onclick="moveWordWithinFolder('${folder.id}', ${wIndex}, -1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="上へ">⬆️</button>
                   <button onclick="moveWordWithinFolder('${folder.id}', ${wIndex}, 1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="下へ">⬇️</button>
                   <button onclick="deleteWord('${folder.id}', ${wIndex})" style="background: none; border: none; color: #ef4444; cursor: pointer; font-weight: bold; font-size: 1.1em;" title="削除">×</button>
@@ -200,7 +204,7 @@ function renderFolders() {
   `).join('');
 }
 
-// 4. 単語の追加・編集・移動機能 & Cloudflare連携
+// 4. 単語追加・編集処理
 window.addWordToFolder = async function(folderId) {
   const input = document.getElementById(`wordInput_${folderId}`);
   if (!input) return;
@@ -235,10 +239,7 @@ window.addWordToFolder = async function(folderId) {
     const response = await fetch(WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: "word",
-        word: wordText
-      })
+      body: JSON.stringify({ type: "word", word: wordText })
     });
     
     if (response.ok) {
@@ -247,22 +248,17 @@ window.addWordToFolder = async function(folderId) {
       newWordObj.examples = data.examples || [];
       newWordObj.details = data.details || "";
     } else {
-      const fallback = generateSmartWordData(wordText);
-      newWordObj.meanings = [fallback.meaning];
-      newWordObj.examples = [{ en: fallback.example, ja: "例文の和訳" }];
+      newWordObj.meanings = [`${wordText}の意味`];
+      newWordObj.examples = [{ en: `This is ${wordText}.`, ja: "例文の和訳" }];
     }
   } catch (e) {
-    const fallback = generateSmartWordData(wordText);
-    newWordObj.meanings = [fallback.meaning];
-    newWordObj.examples = [{ en: fallback.example, ja: "例文の和訳" }];
+    newWordObj.meanings = [`${wordText}の意味`];
+    newWordObj.examples = [{ en: `This is ${wordText}.`, ja: "例文の和訳" }];
   }
 
   saveUserData();
   renderFolders();
-
-  setTimeout(() => {
-    speakWord(wordText);
-  }, 500);
+  setTimeout(() => speakWord(wordText), 500);
 };
 
 window.moveWordWithinFolder = function(folderId, wordIndex, direction) {
@@ -291,7 +287,7 @@ window.openEditWordModal = function(folderId, wordIndex) {
   }
 
   const meaningsStr = Array.isArray(w.meanings) ? w.meanings.join('\n') : (w.meanings || '');
-  const examplesStr = w.examples ? w.examples.map(ex => `${ex.en} | ${ex.ja}`).join('\n') : (w.example || '');
+  const examplesStr = w.examples ? w.examples.map(ex => `${ex.en} | ${ex.ja}`).join('\n') : '';
 
   modal.innerHTML = `
     <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 420px; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
@@ -302,11 +298,11 @@ window.openEditWordModal = function(folderId, wordIndex) {
           <input id="editWordText" value="${escapeHtml(w.word)}" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
         </div>
         <div>
-          <label style="font-size: 0.85em; font-weight: bold; color: #475569;">意味・活用・派生語（改行区切り）</label>
+          <label style="font-size: 0.85em; font-weight: bold; color: #475569;">意味（改行区切り）</label>
           <textarea id="editMeaningsText" rows="4" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 0.9em;">${escapeHtml(meaningsStr)}</textarea>
         </div>
         <div>
-          <label style="font-size: 0.85em; font-weight: bold; color: #475569;">例文 (英語 | 和訳 を改行区切り)</label>
+          <label style="font-size: 0.85em; font-weight: bold; color: #475569;">例文 (英語 | 和訳を改行)</label>
           <textarea id="editExamplesText" rows="3" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 0.9em;">${escapeHtml(examplesStr)}</textarea>
         </div>
         <div>
@@ -355,10 +351,6 @@ window.closeEditWordModal = function() {
   if (modal) modal.style.display = "none";
 };
 
-function generateSmartWordData(word) {
-  return { meaning: `${word}の意味`, example: `This is an example sentence using ${word}.` };
-}
-
 window.speakWord = function(text) {
   if (!('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
@@ -402,11 +394,9 @@ window.switchToChatView = function() {
   currentView = 'chat';
   const vocabPage = document.getElementById("vocabPage");
   const aiChatPage = document.getElementById("aiChatPage");
-  const btn = document.getElementById("floatingAiBtn");
   
   if (vocabPage) vocabPage.style.display = "none";
   if (aiChatPage) aiChatPage.style.display = "flex";
-  if (btn) btn.textContent = "📚";
   closeMenuModal();
 };
 
@@ -414,11 +404,9 @@ window.switchToVocabView = function() {
   currentView = 'vocab';
   const vocabPage = document.getElementById("vocabPage");
   const aiChatPage = document.getElementById("aiChatPage");
-  const btn = document.getElementById("floatingAiBtn");
   
   if (vocabPage) vocabPage.style.display = "block";
   if (aiChatPage) aiChatPage.style.display = "none";
-  if (btn) btn.textContent = "💬";
   closeMenuModal();
 };
 
@@ -442,7 +430,7 @@ window.createNewChatSession = function() {
   const newSession = {
     id: 'session_' + Date.now(),
     title: '新しいチャット',
-    messages: [{ role: 'assistant', text: 'こんにちは！ALLIA（Cloudflare AI / Grok）アシスタントです。何でも聞いてください！' }]
+    messages: [{ role: 'assistant', text: 'こんにちは！ALLIAアシスタントです。何でも聞いてください！' }]
   };
   chatSessions.unshift(newSession);
   currentChatSessionId = newSession.id;
@@ -603,7 +591,7 @@ window.sendChatMessage = async function() {
   renderChatMessages();
 };
 
-// 7. 右下ボタンからのメインメニュー（「ALLIAを開く」「プレイ」）
+// 7. 右下メニューモーダル（「ALLIAを開く」「プレイ」）
 window.openMenuModal = function() {
   let modal = document.getElementById("appMenuModal");
   if (!modal) {
@@ -624,6 +612,11 @@ window.openMenuModal = function() {
     </div>
   `;
   modal.style.display = "flex";
+};
+
+window.closeMenuModal = function() {
+  const modal = document.getElementById("appMenuModal");
+  if (modal) modal.style.display = "none";
 };
 
 window.openPlaySubMenu = function() {
@@ -694,6 +687,7 @@ window.startFlashcardsFromConfig = function() {
   if (flashcardList.length === 0) {
     alert("対象となる単語が選択されていません。単語やフォルダにチェックを入れるか、単語を追加してください。");
     openPlaySubMenu();
+    openMenuModal();
     return;
   }
 
@@ -754,7 +748,7 @@ window.renderFlashcardModal = function() {
         <div style="display: flex; flex-direction: column; gap: 10px;">
           <button onclick="resumeFlashcards()" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">▶ 再開する</button>
           <button onclick="restartFlashcards()" style="padding: 10px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🔄 最初からやり直す</button>
-          <button onclick="openFlashcardConfigModal(); isFlashcardPaused = false;" style="padding: 10px; background: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">⚙️ 設定し直し</button>
+          <button onclick="closeFlashcardModal(); openMenuModal(); openPlaySubMenu(); openFlashcardConfigModal();" style="padding: 10px; background: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">⚙️ 設定し直し</button>
           <button onclick="closeFlashcardModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">終了する</button>
         </div>
       </div>
