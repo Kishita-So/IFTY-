@@ -1,5 +1,5 @@
 // ==========================================
-// 完全版 スマート単語帳 & ALLIA（データ自動正規化・エラー耐性強化版）
+// スマート単語帳 & ALLIA（全機能統合・完全版 script.js）
 // ==========================================
 
 let currentUser = "default_user";
@@ -35,7 +35,6 @@ document.addEventListener("DOMContentLoaded", function() {
   const userDisplay = document.getElementById("userDisplay");
   if (userDisplay) userDisplay.textContent = currentUser;
 
-  // 既存の右下ボタンを完全に削除し、メニューボタンを強制生成する
   const oldBtn = document.getElementById("floatingAiBtn");
   if (oldBtn) oldBtn.remove();
 
@@ -56,7 +55,6 @@ function loadUserData(username) {
     const saved = localStorage.getItem("vocab_user_" + username);
     if (saved) {
       folders = JSON.parse(saved);
-      // データの自動クレンジング（意味の構造化・バグデータの修復）
       folders.forEach(f => {
         if (f.words) {
           f.words.forEach(w => {
@@ -65,9 +63,6 @@ function loadUserData(username) {
             }
             if (!Array.isArray(w.meanings) || w.meanings.length === 0) {
               w.meanings = [`${w.word}の意味`];
-            }
-            if (w.word && w.meanings.length === 1 && w.meanings[0] === w.word) {
-              w.meanings = [`${w.word}の意味（再生成してください）`];
             }
           });
         }
