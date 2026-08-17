@@ -1,5 +1,5 @@
 // ==========================================
-// 完全版 スマート単語帳 & ALLIA（フラッシュカード・チェック機能完全対応）
+// 完全版 スマート単語帳 & ALLIA（意味生成バグ修正・プレイメニュー完全対応）
 // ==========================================
 
 let currentUser = "default_user";
@@ -37,11 +37,13 @@ document.addEventListener("DOMContentLoaded", function() {
   const userDisplay = document.getElementById("userDisplay");
   if (userDisplay) userDisplay.textContent = currentUser;
 
+  // 右下のボタンを必ずメニュー（≡）として機能させる設定
   const floatingAiBtn = document.getElementById("floatingAiBtn");
   if (floatingAiBtn) {
     floatingAiBtn.style.display = "flex";
-    floatingAiBtn.onclick = openMenuModal; // 右下ボタンでメニューを開く
-    floatingAiBtn.textContent = "≡"; // メニューアイコン
+    floatingAiBtn.onclick = openMenuModal; 
+    floatingAiBtn.textContent = "≡"; 
+    floatingAiBtn.title = "メニュー（プレイ・ALLIA）";
   }
 
   loadUserData(currentUser);
@@ -204,7 +206,7 @@ function renderFolders() {
   `).join('');
 }
 
-// 4. 単語追加・編集処理
+// 4. 単語追加・編集処理（意味が崩れないよう調整）
 window.addWordToFolder = async function(folderId) {
   const input = document.getElementById(`wordInput_${folderId}`);
   if (!input) return;
@@ -244,7 +246,14 @@ window.addWordToFolder = async function(folderId) {
     
     if (response.ok) {
       const data = await response.json();
-      newWordObj.meanings = data.meanings || [wordText];
+      // 配列でない場合や不適切な場合のフォールバック対策
+      if (Array.isArray(data.meanings) && data.meanings.length > 0) {
+        newWordObj.meanings = data.meanings;
+      } else if (typeof data.meanings === 'string') {
+        newWordObj.meanings = [data.meanings];
+      } else {
+        newWordObj.meanings = [`${wordText}の意味`];
+      }
       newWordObj.examples = data.examples || [];
       newWordObj.details = data.details || "";
     } else {
