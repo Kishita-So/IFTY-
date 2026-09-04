@@ -1821,4 +1821,2546 @@ function(
   let modal =
     document.getElementById(
       "editWordModal"
-   
+    );
+
+  if (!modal) {
+
+    modal =
+      document.createElement(
+        "div"
+      );
+
+    modal.id =
+      "editWordModal";
+
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10005;
+    `;
+
+    document.body.appendChild(
+      modal
+    );
+  }
+
+  const meaningsStr =
+    Array.isArray(
+      w.meanings
+    )
+      ? w.meanings.join(
+          '\n'
+        )
+      : (
+          w.meanings ||
+          ''
+        );
+
+  const examplesStr =
+    w.examples
+      ? w.examples
+          .map(
+            ex =>
+              `${
+                ex.en ||
+                ''
+              } | ${
+                ex.ja ||
+                ''
+              }`
+          )
+          .join(
+            '\n'
+          )
+      : '';
+
+  const derivativesStr =
+    Array.isArray(
+      w.derivatives
+    )
+      ? w.derivatives.join(
+          '\n'
+        )
+      : (
+          w.derivatives ||
+          ''
+        );
+
+  modal.innerHTML = `
+    <div style="
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 420px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    ">
+
+      <h3 style="
+        margin-top: 0;
+        color: #0f172a;
+        margin-bottom: 12px;
+      ">
+        ✏️ 単語の編集
+      </h3>
+
+      <div style="
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        text-align: left;
+      ">
+
+        <div>
+
+          <label style="
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #475569;
+          ">
+            単語
+          </label>
+
+          <input
+            id="
+              editWordText
+            "
+            value="
+              ${escapeHtml(
+                w.word
+              )}
+            "
+            style="
+              width: 100%;
+              padding: 8px;
+              border: 1px solid #cbd5e1;
+              border-radius: 4px;
+              box-sizing: border-box;
+            "
+          >
+        </div>
+
+        <div>
+
+          <label style="
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #475569;
+          ">
+            発音記号
+          </label>
+
+          <input
+            id="
+              editPronunciationText
+            "
+            value="
+              ${escapeHtml(
+                w.pronunciation ||
+                ''
+              )}
+            "
+            placeholder="/.../"
+            style="
+              width: 100%;
+              padding: 8px;
+              border: 1px solid #cbd5e1;
+              border-radius: 4px;
+              box-sizing: border-box;
+            "
+          >
+        </div>
+
+        <div>
+
+          <label style="
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #475569;
+          ">
+            品詞
+          </label>
+
+          <input
+            id="
+              editPartOfSpeechText
+            "
+            value="
+              ${escapeHtml(
+                w.partOfSpeech ||
+                ''
+              )}
+            "
+            placeholder="
+              動詞・名詞など
+            "
+            style="
+              width: 100%;
+              padding: 8px;
+              border: 1px solid #cbd5e1;
+              border-radius: 4px;
+              box-sizing: border-box;
+            "
+          >
+        </div>
+
+        <div>
+
+          <label style="
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #475569;
+          ">
+            自他動詞・可算不可算
+          </label>
+
+          <input
+            id="
+              editUsageText
+            "
+            value="
+              ${escapeHtml(
+                [
+                  w.transitivity,
+                  w.countability
+                ]
+                  .filter(
+                    Boolean
+                  )
+                  .join(
+                    ' / '
+                  )
+              )}
+            "
+            placeholder="
+              他動詞 / 可算
+            "
+            style="
+              width: 100%;
+              padding: 8px;
+              border: 1px solid #cbd5e1;
+              border-radius: 4px;
+              box-sizing: border-box;
+            "
+          >
+        </div>
+
+        <div>
+
+          <label style="
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #475569;
+          ">
+            意味（改行区切り）
+          </label>
+
+          <textarea
+            id="
+              editMeaningsText
+            "
+            rows="4"
+            style="
+              width: 100%;
+              padding: 8px;
+              border: 1px solid #cbd5e1;
+              border-radius: 4px;
+              box-sizing: border-box;
+              font-size: 0.9em;
+            "
+          >${escapeHtml(
+            meaningsStr
+          )}</textarea>
+
+        </div>
+
+        <div>
+
+          <label style="
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #475569;
+          ">
+            活用
+          </label>
+
+          <input
+            id="
+              editFormsText
+            "
+            value="
+              ${escapeHtml(
+                [
+                  w.forms &&
+                  w.forms.past
+                    ? `過去:${w.forms.past}`
+                    : '',
+
+                  w.forms &&
+                  w.forms.pastParticiple
+                    ? `過去分詞:${w.forms.pastParticiple}`
+                    : '',
+
+                  w.forms &&
+                  w.forms.ing
+                    ? `ing:${w.forms.ing}`
+                    : '',
+
+                  w.forms &&
+                  w.forms.thirdPerson
+                    ? `三単現:${w.forms.thirdPerson}`
+                    : ''
+                ]
+                  .filter(
+                    Boolean
+                  )
+                  .join(
+                    ' / '
+                  )
+              )}
+            "
+            placeholder="
+              過去 / 過去分詞 / -ing / 三単現
+            "
+            style="
+              width: 100%;
+              padding: 8px;
+              border: 1px solid #cbd5e1;
+              border-radius: 4px;
+              box-sizing: border-box;
+            "
+          >
+
+        </div>
+
+        <div>
+
+          <label style="
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #475569;
+          ">
+            例文（英語 | 和訳）
+          </label>
+
+          <textarea
+            id="
+              editExamplesText
+            "
+            rows="4"
+            style="
+              width: 100%;
+              padding: 8px;
+              border: 1px solid #cbd5e1;
+              border-radius: 4px;
+              box-sizing: border-box;
+              font-size: 0.9em;
+            "
+          >${escapeHtml(
+            examplesStr
+          )}</textarea>
+
+        </div>
+
+        <div>
+
+          <label style="
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #475569;
+          ">
+            派生語（改行区切り）
+          </label>
+
+          <textarea
+            id="
+              editDerivativesText
+            "
+            rows="2"
+            style="
+              width: 100%;
+              padding: 8px;
+              border: 1px solid #cbd5e1;
+              border-radius: 4px;
+              box-sizing: border-box;
+              font-size: 0.9em;
+            "
+          >${escapeHtml(
+            derivativesStr
+          )}</textarea>
+
+        </div>
+
+        <div>
+
+          <label style="
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #475569;
+          ">
+            💡 補足
+          </label>
+
+          <input
+            id="
+              editDetailsText
+            "
+            value="
+              ${escapeHtml(
+                w.details ||
+                ''
+              )}
+            "
+            style="
+              width: 100%;
+              padding: 8px;
+              border: 1px solid #cbd5e1;
+              border-radius: 4px;
+              box-sizing: border-box;
+            "
+          >
+
+        </div>
+
+        <div style="
+          display: flex;
+          gap: 10px;
+          margin-top: 10px;
+        ">
+
+          <button
+            onclick="
+              saveEditedWord(
+                '${folder.id}',
+                ${wordIndex}
+              )
+            "
+            style="
+              flex: 1;
+              padding: 10px;
+              background: #0284c7;
+              color: white;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+              font-weight: bold;
+            "
+          >
+            保存
+          </button>
+
+          <button
+            onclick="
+              closeEditWordModal()
+            "
+            style="
+              padding: 10px 16px;
+              background: #e2e8f0;
+              color: #334155;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+            "
+          >
+            キャンセル
+          </button>
+
+        </div>
+      </div>
+    </div>
+  `;
+
+  modal.style.display =
+    "flex";
+};
+
+
+window.saveEditedWord =
+function(
+  folderId,
+  wordIndex
+) {
+
+  const folder =
+    folders.find(
+      f =>
+        f.id ===
+        folderId
+    );
+
+  if (
+    !folder ||
+    !folder.words[
+      wordIndex
+    ]
+  ) {
+    return;
+  }
+
+  const wordVal =
+    document
+      .getElementById(
+        "editWordText"
+      )
+      .value
+      .trim();
+
+  const pronunciationVal =
+    document
+      .getElementById(
+        "editPronunciationText"
+      )
+      .value
+      .trim();
+
+  const partOfSpeechVal =
+    document
+      .getElementById(
+        "editPartOfSpeechText"
+      )
+      .value
+      .trim();
+
+  const usageVal =
+    document
+      .getElementById(
+        "editUsageText"
+      )
+      .value
+      .trim();
+
+  const meaningsVal =
+    document
+      .getElementById(
+        "editMeaningsText"
+      )
+      .value
+      .split(
+        '\n'
+      )
+      .map(
+        s =>
+          s.trim()
+      )
+      .filter(
+        Boolean
+      );
+
+  const examplesRaw =
+    document
+      .getElementById(
+        "editExamplesText"
+      )
+      .value
+      .split(
+        '\n'
+      )
+      .map(
+        s =>
+          s.trim()
+      )
+      .filter(
+        Boolean
+      );
+
+  const derivativesVal =
+    document
+      .getElementById(
+        "editDerivativesText"
+      )
+      .value
+      .split(
+        '\n'
+      )
+      .map(
+        s =>
+          s.trim()
+      )
+      .filter(
+        Boolean
+      );
+
+  const detailsVal =
+    document
+      .getElementById(
+        "editDetailsText"
+      )
+      .value
+      .trim();
+
+  const newExamples =
+    examplesRaw.map(
+      line => {
+
+        const parts =
+          line.split(
+            '|'
+          );
+
+        return {
+          en:
+            parts[0]
+              ? parts[0].trim()
+              : line,
+
+          ja:
+            parts[1]
+              ? parts[1].trim()
+              : ''
+        };
+      }
+    );
+
+  const word =
+    folder.words[
+      wordIndex
+    ];
+
+  word.word =
+    wordVal;
+
+  word.pronunciation =
+    pronunciationVal;
+
+  word.partOfSpeech =
+    partOfSpeechVal;
+
+  word.meanings =
+    meaningsVal;
+
+  word.examples =
+    newExamples;
+
+  word.derivatives =
+    derivativesVal;
+
+  word.details =
+    detailsVal;
+
+  if (usageVal) {
+
+    const usageParts =
+      usageVal
+        .split(
+          '/'
+        )
+        .map(
+          s =>
+            s.trim()
+        );
+
+    word.transitivity =
+      usageParts[0] ||
+      '';
+
+    word.countability =
+      usageParts[1] ||
+      '';
+  }
+
+  saveUserData();
+
+  renderFolders();
+
+  closeEditWordModal();
+};
+
+
+window.closeEditWordModal =
+function() {
+
+  const modal =
+    document.getElementById(
+      "editWordModal"
+    );
+
+  if (modal) {
+
+    modal.style.display =
+      "none";
+  }
+};
+
+
+function generateSmartWordData(
+  word
+) {
+
+  return {
+    meaning:
+      `${word}の意味`,
+
+    example:
+      `This is an example sentence using ${word}.`
+  };
+}
+
+
+// ==========================================
+// Web Speech API
+// ==========================================
+
+window.speakWord =
+function(
+  text
+) {
+
+  if (
+    !(
+      'speechSynthesis'
+      in window
+    )
+  ) {
+    return;
+  }
+
+  window
+    .speechSynthesis
+    .cancel();
+
+  const utterance =
+    new SpeechSynthesisUtterance(
+      text
+    );
+
+  utterance.lang =
+    'en-US';
+
+  utterance.rate =
+    1.0;
+
+  window
+    .speechSynthesis
+    .speak(
+      utterance
+    );
+};
+
+
+window.deleteFolder =
+function(
+  folderId
+) {
+
+  if (
+    !confirm(
+      "このフォルダを削除しますか？"
+    )
+  ) {
+    return;
+  }
+
+  folders =
+    folders.filter(
+      f =>
+        f.id !==
+        folderId
+    );
+
+  delete pendingSpellingSuggestions[
+    folderId
+  ];
+
+  saveUserData();
+
+  renderFolders();
+};
+
+
+window.deleteWord =
+function(
+  folderId,
+  wordIndex
+) {
+
+  const folder =
+    folders.find(
+      f =>
+        f.id ===
+        folderId
+    );
+
+  if (
+    folder &&
+    folder.words
+  ) {
+
+    folder.words.splice(
+      wordIndex,
+      1
+    );
+
+    saveUserData();
+
+    renderFolders();
+  }
+};
+
+
+function escapeHtml(
+  str
+) {
+
+  if (!str) {
+    return '';
+  }
+
+  return String(
+    str
+  )
+    .replace(
+      /&/g,
+      '&amp;'
+    )
+    .replace(
+      /</g,
+      '&lt;'
+    )
+    .replace(
+      />/g,
+      '&gt;'
+    )
+    .replace(
+      /"/g,
+      '&quot;'
+    );
+}
+
+
+// ==========================================
+// 5. 画面切り替え
+// ==========================================
+
+window.toggleViewMode =
+function() {
+
+  if (
+    currentView ===
+    'vocab'
+  ) {
+
+    switchToChatView();
+
+  } else {
+
+    switchToVocabView();
+  }
+};
+
+
+window.switchToChatView =
+function() {
+
+  currentView =
+    'chat';
+
+  const vocabPage =
+    document.getElementById(
+      "vocabPage"
+    );
+
+  const aiChatPage =
+    document.getElementById(
+      "aiChatPage"
+    );
+
+  const btn =
+    document.getElementById(
+      "floatingAiBtn"
+    );
+
+  if (vocabPage) {
+
+    vocabPage.style.display =
+      "none";
+  }
+
+  if (aiChatPage) {
+
+    aiChatPage.style.display =
+      "flex";
+  }
+
+  if (btn) {
+
+    btn.textContent =
+      "📚";
+  }
+
+  closeMenuModal();
+};
+
+
+window.switchToVocabView =
+function() {
+
+  currentView =
+    'vocab';
+
+  const vocabPage =
+    document.getElementById(
+      "vocabPage"
+    );
+
+  const aiChatPage =
+    document.getElementById(
+      "aiChatPage"
+    );
+
+  const btn =
+    document.getElementById(
+      "floatingAiBtn"
+    );
+
+  if (vocabPage) {
+
+    vocabPage.style.display =
+      "block";
+  }
+
+  if (aiChatPage) {
+
+    aiChatPage.style.display =
+      "none";
+  }
+
+  if (btn) {
+
+    btn.textContent =
+      "💬";
+  }
+
+  closeMenuModal();
+};
+
+
+// ==========================================
+// 6. ALLIAチャットシステム
+// ==========================================
+
+function initChatSystem() {
+
+  try {
+
+    const savedSessions =
+      localStorage.getItem(
+        "chat_sessions_" +
+        currentUser
+      );
+
+    if (savedSessions) {
+
+      chatSessions =
+        JSON.parse(
+          savedSessions
+        );
+    }
+
+  } catch(e) {
+
+    chatSessions =
+      [];
+  }
+
+  if (
+    chatSessions.length ===
+    0
+  ) {
+
+    createNewChatSession();
+
+  } else {
+
+    currentChatSessionId =
+      chatSessions[0].id;
+
+    updateChatSessionSelect();
+
+    renderChatMessages();
+  }
+};
+
+
+window.createNewChatSession =
+function() {
+
+  const newSession = {
+
+    id:
+      'session_' +
+      Date.now(),
+
+    title:
+      'ALLIA',
+
+    messages: [
+      {
+        role:
+          'assistant',
+
+        text:
+          'こんにちは！ALLIAアシスタントです。何でも聞いてください！'
+      }
+    ]
+  };
+
+  chatSessions.unshift(
+    newSession
+  );
+
+  currentChatSessionId =
+    newSession.id;
+
+  saveChatSessions();
+
+  updateChatSessionSelect();
+
+  renderChatMessages();
+};
+
+
+window.switchChatSession =
+function(
+  sessionId
+) {
+
+  currentChatSessionId =
+    sessionId;
+
+  renderChatMessages();
+
+  const session =
+    chatSessions.find(
+      s =>
+        s.id ===
+        sessionId
+    );
+
+  const titleInput =
+    document.getElementById(
+      "chatTitleInput"
+    );
+
+  if (
+    titleInput &&
+    session
+  ) {
+
+    titleInput.value =
+      session.title;
+  }
+};
+
+
+window.updateChatTitle =
+function(
+  newTitle
+) {
+
+  const session =
+    chatSessions.find(
+      s =>
+        s.id ===
+        currentChatSessionId
+    );
+
+  if (session) {
+
+    session.title =
+      newTitle.trim() ||
+      "ALLIA";
+
+    saveChatSessions();
+
+    updateChatSessionSelect();
+  }
+};
+
+
+window.moveChatSession =
+function(
+  direction
+) {
+
+  const index =
+    chatSessions.findIndex(
+      s =>
+        s.id ===
+        currentChatSessionId
+    );
+
+  if (
+    index ===
+    -1
+  ) {
+    return;
+  }
+
+  const newIndex =
+    index +
+    direction;
+
+  if (
+    newIndex >=
+      0 &&
+    newIndex <
+      chatSessions.length
+  ) {
+
+    const temp =
+      chatSessions[
+        index
+      ];
+
+    chatSessions[
+      index
+    ] =
+      chatSessions[
+        newIndex
+      ];
+
+    chatSessions[
+      newIndex
+    ] =
+      temp;
+
+    saveChatSessions();
+
+    updateChatSessionSelect();
+  }
+};
+
+
+window.deleteCurrentChatSession =
+function() {
+
+  if (
+    chatSessions.length <=
+    1
+  ) {
+
+    alert(
+      "最後のチャットセッションは削除できません。"
+    );
+
+    return;
+  }
+
+  if (
+    !confirm(
+      "このチャットを削除しますか？"
+    )
+  ) {
+    return;
+  }
+
+  chatSessions =
+    chatSessions.filter(
+      s =>
+        s.id !==
+        currentChatSessionId
+    );
+
+  currentChatSessionId =
+    chatSessions[0].id;
+
+  saveChatSessions();
+
+  updateChatSessionSelect();
+
+  renderChatMessages();
+};
+
+
+function saveChatSessions() {
+
+  try {
+
+    localStorage.setItem(
+      "chat_sessions_" +
+      currentUser,
+
+      JSON.stringify(
+        chatSessions
+      )
+    );
+
+  } catch(e) {}
+}
+
+
+function updateChatSessionSelect() {
+
+  const select =
+    document.getElementById(
+      "chatSessionSelect"
+    );
+
+  if (!select) {
+    return;
+  }
+
+  select.innerHTML =
+    chatSessions
+      .map(
+        s => `
+      <option
+        value="${s.id}"
+        ${
+          s.id ===
+          currentChatSessionId
+            ? 'selected'
+            : ''
+        }
+      >
+        ${
+          escapeHtml(
+            s.title ===
+              '新しいチャット'
+              ? 'ALLIA'
+              : (
+                  s.title ||
+                  'ALLIA'
+                )
+          )
+        }
+      </option>
+    `
+      )
+      .join('');
+
+  const session =
+    chatSessions.find(
+      s =>
+        s.id ===
+        currentChatSessionId
+    );
+
+  const titleInput =
+    document.getElementById(
+      "chatTitleInput"
+    );
+
+  if (
+    titleInput &&
+    session
+  ) {
+
+    titleInput.value =
+      session.title ===
+        '新しいチャット'
+        ? 'ALLIA'
+        : session.title;
+  }
+}
+
+
+function renderChatMessages() {
+
+  const container =
+    document.getElementById(
+      "chatMessages"
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const session =
+    chatSessions.find(
+      s =>
+        s.id ===
+        currentChatSessionId
+    );
+
+  if (
+    !session ||
+    !session.messages
+  ) {
+
+    container.innerHTML =
+      "";
+
+    return;
+  }
+
+  container.innerHTML =
+    session.messages
+      .map(
+        m => `
+      <div style="
+        display: flex;
+        justify-content:
+          ${
+            m.role ===
+            'user'
+              ? 'flex-end'
+              : 'flex-start'
+          };
+        margin-bottom: 8px;
+      ">
+
+        <div style="
+          background:
+            ${
+              m.role ===
+              'user'
+                ? '#0284c7'
+                : '#e2e8f0'
+            };
+
+          color:
+            ${
+              m.role ===
+              'user'
+                ? 'white'
+                : '#0f172a'
+            };
+
+          padding: 10px 14px;
+          border-radius: 8px;
+          max-width: 80%;
+          word-break: break-word;
+          white-space: pre-wrap;
+          font-size: 0.95em;
+          line-height: 1.5;
+        ">
+          ${
+            escapeHtml(
+              m.text
+            )
+          }
+        </div>
+
+      </div>
+    `
+      )
+      .join('');
+
+  container.scrollTop =
+    container.scrollHeight;
+};
+
+
+window.handleImageSelect =
+function(
+  event
+) {
+
+  const file =
+    event.target.files[0];
+
+  if (!file) {
+    return;
+  }
+
+  const reader =
+    new FileReader();
+
+  reader.onload =
+  function(
+    e
+  ) {
+
+    selectedImageBase64 =
+      e.target.result;
+
+    const previewContainer =
+      document.getElementById(
+        "imagePreviewContainer"
+      );
+
+    const previewImg =
+      document.getElementById(
+        "imagePreview"
+      );
+
+    if (
+      previewContainer &&
+      previewImg
+    ) {
+
+      previewImg.src =
+        selectedImageBase64;
+
+      previewContainer.style.display =
+        "flex";
+    }
+  };
+
+  reader.readAsDataURL(
+    file
+  );
+};
+
+
+window.clearSelectedImage =
+function() {
+
+  selectedImageBase64 =
+    null;
+
+  const previewContainer =
+    document.getElementById(
+      "imagePreviewContainer"
+    );
+
+  if (previewContainer) {
+
+    previewContainer.style.display =
+      "none";
+  }
+
+  const fileInput =
+    document.getElementById(
+      "imageInput"
+    );
+
+  if (fileInput) {
+
+    fileInput.value =
+      "";
+  }
+};
+
+
+// ==========================================
+// ALLIA送信
+// ==========================================
+
+window.sendChatMessage =
+async function() {
+
+  const input =
+    document.getElementById(
+      "chatInput"
+    );
+
+  if (!input) {
+    return;
+  }
+
+  const text =
+    input.value.trim();
+
+  if (
+    !text &&
+    !selectedImageBase64
+  ) {
+    return;
+  }
+
+  const session =
+    chatSessions.find(
+      s =>
+        s.id ===
+        currentChatSessionId
+    );
+
+  if (!session) {
+    return;
+  }
+
+  const userMsg =
+    text ||
+    '[画像を送信しました]';
+
+  // 現在の発言を追加する前の履歴を取得
+  const history =
+    session.messages
+      .filter(
+        m =>
+          m.role ===
+            'user' ||
+          m.role ===
+            'assistant'
+      )
+      .slice(
+        -12
+      )
+      .map(
+        m => ({
+          role:
+            m.role,
+
+          content:
+            m.text
+        })
+      );
+
+  session.messages.push({
+    role:
+      'user',
+
+    text:
+      userMsg
+  });
+
+  input.value =
+    "";
+
+  const currentImg =
+    selectedImageBase64;
+
+  clearSelectedImage();
+
+  renderChatMessages();
+
+  let replyText =
+    "処理を実行しました。";
+
+  try {
+
+    const response =
+      await fetch(
+        WORKER_URL,
+        {
+          method:
+            'POST',
+
+          headers: {
+            'Content-Type':
+              'application/json'
+          },
+
+          body:
+            JSON.stringify({
+
+              type:
+                "agent_chat",
+
+              prompt:
+                userMsg,
+
+              history:
+                history,
+
+              currentFolders:
+                folders,
+
+              image:
+                currentImg
+
+            })
+        }
+      );
+
+    if (
+      response.ok
+    ) {
+
+      const data =
+        await response.json();
+
+      replyText =
+        data.reply ||
+        data.content ||
+        data.message ||
+        "応答を取得しました。";
+
+      if (
+        data.updatedFolders
+      ) {
+
+        folders =
+          data.updatedFolders;
+
+        saveUserData();
+
+        renderFolders();
+      }
+
+    } else {
+
+      replyText =
+        "AIからの応答に失敗しました。";
+    }
+
+  } catch (e) {
+
+    replyText =
+      "通信エラーが発生しました: " +
+      e.message;
+  }
+
+  session.messages.push({
+    role:
+      'assistant',
+
+    text:
+      replyText
+  });
+
+  saveChatSessions();
+
+  renderChatMessages();
+};
+
+
+// ==========================================
+// 7. メニュー
+// ==========================================
+
+window.openMenuModal =
+function() {
+
+  let modal =
+    document.getElementById(
+      "appMenuModal"
+    );
+
+  if (!modal) {
+
+    modal =
+      document.createElement(
+        "div"
+      );
+
+    modal.id =
+      "appMenuModal";
+
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+    `;
+
+    document.body.appendChild(
+      modal
+    );
+  }
+
+  modal.innerHTML = `
+
+    <div style="
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 340px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      text-align: center;
+    ">
+
+      <h3 style="
+        margin-top: 0;
+        color: #0f172a;
+        margin-bottom: 16px;
+      ">
+        メニュー
+      </h3>
+
+      <div style="
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      ">
+
+        <button
+          onclick="${
+            currentView ===
+              'chat'
+              ? 'switchToVocabView()'
+              : 'switchToChatView()'
+          }"
+          style="
+            padding: 10px;
+            background: #0284c7;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+          "
+        >
+          ${
+            currentView ===
+              'chat'
+              ? '📚 単語帳に戻る'
+              : '🤖 ALLIAを開く'
+          }
+        </button>
+
+        <button
+          onclick="
+            openPlaySubMenu()
+          "
+          style="
+            padding: 10px;
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+          "
+        >
+          ▶ プレイ
+        </button>
+
+        <button
+          onclick="
+            closeMenuModal()
+          "
+          style="
+            padding: 8px;
+            background: #e2e8f0;
+            color: #334155;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 4px;
+          "
+        >
+          閉じる
+        </button>
+
+      </div>
+    </div>
+  `;
+
+  modal.style.display =
+    "flex";
+};
+
+
+window.openPlaySubMenu =
+function() {
+
+  const modal =
+    document.getElementById(
+      "appMenuModal"
+    );
+
+  if (!modal) {
+    return;
+  }
+
+  modal.innerHTML = `
+
+    <div style="
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 340px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      text-align: center;
+    ">
+
+      <h3 style="
+        margin-top: 0;
+        color: #0f172a;
+        margin-bottom: 16px;
+      ">
+        🎮 プレイモード選択
+      </h3>
+
+      <div style="
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      ">
+
+        <button
+          onclick="
+            openFlashcardDirectionMenu()
+          "
+          style="
+            padding: 10px;
+            background: #334155;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+          "
+        >
+          📇 フラッシュカード
+        </button>
+
+        <button
+          onclick="
+            startQuiz()
+          "
+          style="
+            padding: 10px;
+            background: #0284c7;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+          "
+        >
+          📝 クイズ
+        </button>
+
+        <button
+          onclick="
+            openMenuModal()
+          "
+          style="
+            padding: 8px;
+            background: #e2e8f0;
+            color: #334155;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 6px;
+          "
+        >
+          ◀ 戻る
+        </button>
+
+      </div>
+    </div>
+  `;
+};
+
+
+window.openFlashcardDirectionMenu =
+function() {
+
+  const modal =
+    document.getElementById(
+      "appMenuModal"
+    );
+
+  if (!modal) {
+    return;
+  }
+
+  modal.innerHTML = `
+
+    <div style="
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 340px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      text-align: center;
+    ">
+
+      <h3 style="
+        margin-top: 0;
+        color: #0f172a;
+        margin-bottom: 16px;
+      ">
+        📇 フラッシュカード設定
+      </h3>
+
+      <div style="
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      ">
+
+        <button
+          onclick="
+            startFlashcards(
+              'all',
+              true,
+              'front'
+            )
+          "
+          style="
+            padding: 10px;
+            background: #334155;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+          "
+        >
+          表面：単語 / 裏面：意味
+        </button>
+
+        <button
+          onclick="
+            startFlashcards(
+              'all',
+              true,
+              'back'
+            )
+          "
+          style="
+            padding: 10px;
+            background: #334155;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+          "
+        >
+          表面：意味 / 裏面：単語
+        </button>
+
+        <button
+          onclick="
+            openPlaySubMenu()
+          "
+          style="
+            padding: 8px;
+            background: #e2e8f0;
+            color: #334155;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 6px;
+          "
+        >
+          ◀ 戻る
+        </button>
+
+      </div>
+    </div>
+  `;
+};
+
+
+window.closeMenuModal =
+function() {
+
+  const modal =
+    document.getElementById(
+      "appMenuModal"
+    );
+
+  if (modal) {
+
+    modal.style.display =
+      "none";
+  }
+};
+
+
+// ==========================================
+// フラッシュカード
+// ==========================================
+
+window.startFlashcards =
+function(
+  mode,
+  random = true,
+  direction = 'front'
+) {
+
+  closeMenuModal();
+
+  currentFlashcardMode =
+    mode;
+
+  isRandomMode =
+    random;
+
+  cardMode =
+    direction;
+
+  loadFlashcardItems(
+    mode,
+    random
+  );
+
+  if (
+    flashcardList.length ===
+    0
+  ) {
+
+    alert(
+      "対象となる単語がありません。単語を追加してください。"
+    );
+
+    return;
+  }
+
+  currentFlashcardIndex =
+    0;
+
+  isCardFlipped =
+    false;
+
+  renderFlashcardModal();
+};
+
+
+function loadFlashcardItems(
+  mode,
+  random
+) {
+
+  let list = [];
+
+  folders.forEach(
+    f => {
+
+      if (f.words) {
+
+        f.words.forEach(
+          w => {
+
+            list.push({
+              ...w,
+
+              mastery:
+                w.mastery ||
+                'unfixed'
+            });
+          }
+        );
+      }
+    }
+  );
+
+  if (random) {
+
+    for (
+      let i =
+        list.length - 1;
+
+      i > 0;
+
+      i--
+    ) {
+
+      const j =
+        Math.floor(
+          Math.random() *
+          (
+            i + 1
+          )
+        );
+
+      [
+        list[i],
+        list[j]
+      ] = [
+        list[j],
+        list[i]
+      ];
+    }
+  }
+
+  flashcardList =
+    list;
+}
+
+
+window.renderFlashcardModal =
+function() {
+
+  let modal =
+    document.getElementById(
+      "flashcardModal"
+    );
+
+  if (!modal) {
+
+    modal =
+      document.createElement(
+        "div"
+      );
+
+    modal.id =
+      "flashcardModal";
+
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10001;
+    `;
+
+    document.body.appendChild(
+      modal
+    );
+
+  } else {
+
+    modal.style.display =
+      "flex";
+  }
+
+  if (
+    currentFlashcardIndex >=
+    flashcardList.length
+  ) {
+
+    modal.innerHTML = `
+
+      <div style="
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 380px;
+        text-align: center;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      ">
+
+        <h3 style="
+          color: #0f172a;
+          margin-top: 0;
+          margin-bottom: 10px;
+        ">
+          🎉 完了！
+        </h3>
+
+        <p style="
+          color: #475569;
+          font-size: 0.95em;
+          margin-bottom: 20px;
+        ">
+          すべてのカードを終了しました。
+        </p>
+
+        <div style="
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        ">
+
+          <button
+            onclick="
+              closeFlashcardModal();
+              openMenuModal();
+              openPlaySubMenu();
+            "
+            style="
+              padding: 10px;
+              background: #0284c7;
+              color: white;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+              font-weight: bold;
+            "
+          >
+            ➡️ 他のモードでプレイ
+          </button>
+
+          <button
+            onclick="
+              closeFlashcardModal()
+            "
+            style="
+              padding: 8px;
+              background: #e2e8f0;
+              color: #334155;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+            "
+          >
+            閉じる
+          </button>
+
+        </div>
+      </div>
+    `;
+
+    return;
+  }
+
+  const currentWord =
+    flashcardList[
+      currentFlashcardIndex
+    ];
+
+  const meaningsText =
+    Array.isArray(
+      currentWord.meanings
+    )
+      ? currentWord.meanings
+          .map(
+            m =>
+              escapeHtml(
+                m
+              )
+          )
+          .join(
+            "<br>"
+          )
+      : escapeHtml(
+          currentWord.meanings ||
+          ''
+        );
+
+  const frontText =
+    cardMode ===
+    'front'
+      ? escapeHtml(
+          currentWord.word
+        )
+      : meaningsText;
+
+  const backText =
+    cardMode ===
+    'front'
+      ? meaningsText
+      : escapeHtml(
+          currentWord.word
+        );
+
+  modal.innerHTML = `
+
+    <div style="
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      text-align: center;
+      position: relative;
+    ">
+
+      <div style="
+        position: absolute;
+        top: 12px;
+        left: 16px;
+        font-size: 0.85em;
+        color: #64748b;
+      ">
+        ${
+          currentFlashcardIndex +
+          1
+        }
+        /
+        ${
+          flashcardList.length
+        }
+      </div>
+
+      <button
+        onclick="
+          closeFlashcardModal()
+        "
+        style="
+          position: absolute;
+          top: 10px;
+          right: 12px;
+          background: none;
+          border: none;
+          font-size: 1.2em;
+          cursor: pointer;
+          color: #64748b;
+        "
+      >
+        ✕
+      </button>
+
+      <div
+        onclick="
+          toggleCardFlip()
+        "
+        style="
+          margin: 30px 0 20px 0;
+          padding: 25px 20px;
+          background: #f8fafc;
+          border: 2px dashed #cbd5e1;
+          border-radius: 10px;
+          cursor: pointer;
+          min-height: 110px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+        "
+      >
+
+        <div style="
+          font-size: 1.5em;
+          font-weight: bold;
+          color: #0f172a;
+          margin-bottom: 8px;
+        ">
+          ${
+            isCardFlipped
+              ? backText
+              : frontText
+          }
+        </div>
+
+        ${
+          currentWord.word
+            ? `
+              <button
+                onclick="
+                  event.stopPropagation();
+                  speakWord(
+                    '${escapeHtml(
+                      String(
+                        currentWord.word
+                      )
+                      .replace(
+                        /'/g,
+                        "\\'"
+                      )
+                    )}'
+                  )
+                "
+                style="
+                  margin-top: 8px;
+                  background: #0284c7;
+                  color: white;
+                  border: none;
+                  padding: 4px 10px;
+                  border-radius: 4px;
+                  font-size: 0.8em;
+                  cursor: pointer;
+                "
+              >
+                🔊 発音
+              </button>
+            `
+            : ''
+        }
+
+        <div style="
+          font-size: 0.8em;
+          color: #94a3b8;
+          margin-top: 8px;
+        ">
+          ${
+            isCardFlipped
+              ? '(裏面)'
+              : '(クリックして裏返す)'
+          }
+        </div>
+
+      </div>
+
+      <div style="
+        display: flex;
+        gap: 10px;
+        margin-bottom: 12px;
+      ">
+
+        <button
+          onclick="
+            setMasteryAndNext(
+              'unfixed'
+            )
+          "
+          style="
+            flex: 1;
+            padding: 10px;
+            background: #f43f5e;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9em;
+          "
+        >
+          ❌ 未定着
+        </button>
+
+        <button
+          onclick="
+            setMasteryAndNext(
+              'fixed'
+            )
+          "
+          style="
+            flex: 1;
+            padding: 10px;
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9em;
+          "
+        >
+          ⭕ 定着
+        </button>
+
+      </div>
+    </div>
+  `;
+};
+
+
+window.toggleCardFlip =
+function() {
+
+  isCardFlipped =
+    !isCardFlipped;
+
+  renderFlashcardModal();
+};
+
+
+window.setMasteryAndNext =
+function(
+  status
+) {
+
+  if (
+    flashcardList[
+      currentFlashcardIndex
+    ]
+  ) {
+
+    flashcardList[
+      currentFlashcardIndex
+    ].mastery =
+      status;
+  }
+
+  currentFlashcardIndex++;
+
+  isCardFlipped =
+    false;
+
+  renderFlashcardModal();
+};
+
+
+window.closeFlashcardModal =
+function() {
+
+  const modal =
+    document.getElementById(
+      "flashcardModal"
+    );
+
+  if (modal) {
+
+    modal.style.display =
+      "none";
+  }
+};
+
+
+window.startQuiz =
+function() {
+
+  closeMenuModal();
+
+  let modal =
+    document.getElementById(
+      "flashcardModal"
+    );
+
+  if (!modal) {
+
+    modal =
+      document.createElement(
+        "div"
+      );
+
+    modal.id =
+      "flashcardModal";
+
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10001;
+    `;
+
+    document.body.appendChild(
+      modal
+    );
+
+  } else {
+
+    modal.style.display =
+      "flex";
+  }
+
+  modal.innerHTML = `
+
+    <div style="
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 380px;
+      text-align: center;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    ">
+
+      <h3 style="
+        color: #0f172a;
+        margin-top: 0;
+        margin-bottom: 10px;
+      ">
+        📝 クイズモード
+      </h3>
+
+      <p style="
+        color: #475569;
+        font-size: 0.95em;
+        margin-bottom: 20px;
+      ">
+        クイズ機能は現在準備中です！
+      </p>
+
+      <button
+        onclick="
+          closeFlashcardModal()
+        "
+        style="
+          padding: 10px 20px;
+          background: #0284c7;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: bold;
+        "
+      >
+        閉じる
+      </button>
+
+    </div>
+  `;
+};
+
+
+window.logout =
+function() {
+
+  localStorage.removeItem(
+    "currentUser"
+  );
+
+  location.reload();
+};
