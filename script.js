@@ -1,4 +1,4 @@
-// ==========================================
+// ★★★ IFTY 最新版 2026-09-06：実践・複数選択・ALLIA実践編集対応 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -16,6 +16,20 @@ let chatSessions = [];
 let currentChatSessionId = null;
 let selectedImageBase64 = null;
 let pendingSpellingSuggestions = {};
+
+// 選択状態（フォルダ・単語）
+let selectedFolderIds = new Set();
+let selectedWordIds = new Set();
+
+// 実践データ。今後モジュールを増やしても ALLIA に丸ごと渡せる構造。
+let practiceData = {
+  schemaVersion: 1,
+  modules: {
+    flashcards: { sets: [] }
+  }
+};
+
+let currentPracticeSetId = null;
 
 const WORKER_URL = 'https://ifty.humbleflail205.workers.dev/';
 
@@ -61,31 +75,80 @@ document.addEventListener("DOMContentLoaded", function() {
   if (floatingAiBtn) floatingAiBtn.style.display = "flex";
 
   loadUserData(currentUser);
+  loadPracticeData(currentUser);
   initChatSystem();
   applyAlliaBranding();
 });
 
 // 2. ユーザーデータ管理
+function makeId(prefix) {
+  return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+}
+
+function normalizeFoldersData() {
+  if (!Array.isArray(folders)) folders = [];
+
+  folders.forEach(folder => {
+    if (!folder.id) folder.id = makeId('folder');
+    if (!Array.isArray(folder.words)) folder.words = [];
+    folder.words.forEach(word => {
+      if (!word.id) word.id = makeId('word');
+    });
+  });
+}
+
 function loadUserData(username) {
   try {
     const saved = localStorage.getItem("vocab_user_" + username);
-    if (saved) {
-      folders = JSON.parse(saved);
-    } else {
-      folders = [];
-    }
+    folders = saved ? JSON.parse(saved) : [];
   } catch (e) {
     folders = [];
   }
+
+  normalizeFoldersData();
+  saveUserData();
   renderFolders();
 }
 
 function saveUserData() {
   try {
-    localStorage.setItem(
-      "vocab_user_" + currentUser,
-      JSON.stringify(folders)
-    );
+    normalizeFoldersData();
+    localStorage.setItem("vocab_user_" + currentUser, JSON.stringify(folders));
+  } catch (e) {}
+}
+
+function normalizePracticeData() {
+  if (!practiceData || typeof practiceData !== 'object') practiceData = {};
+  if (!practiceData.schemaVersion) practiceData.schemaVersion = 1;
+  if (!practiceData.modules || typeof practiceData.modules !== 'object') practiceData.modules = {};
+  if (!practiceData.modules.flashcards || typeof practiceData.modules.flashcards !== 'object') {
+    practiceData.modules.flashcards = { sets: [] };
+  }
+  if (!Array.isArray(practiceData.modules.flashcards.sets)) practiceData.modules.flashcards.sets = [];
+
+  practiceData.modules.flashcards.sets.forEach(set => {
+    if (!set.id) set.id = makeId('flashset');
+    if (!set.name) set.name = 'フラッシュカード';
+    if (!Array.isArray(set.wordIds)) set.wordIds = [];
+    if (typeof set.random !== 'boolean') set.random = true;
+    if (!set.direction) set.direction = 'front';
+    if (!set.progress || typeof set.progress !== 'object') set.progress = null;
+  });
+}
+
+function loadPracticeData(username) {
+  try {
+    const saved = localStorage.getItem("practice_user_" + username);
+    if (saved) practiceData = JSON.parse(saved);
+  } catch (e) {}
+  normalizePracticeData();
+  savePracticeData();
+}
+
+function savePracticeData() {
+  try {
+    normalizePracticeData();
+    localStorage.setItem("practice_user_" + currentUser, JSON.stringify(practiceData));
   } catch (e) {}
 }
 
@@ -152,91 +215,72 @@ function renderFolders() {
   const container = document.getElementById("folders");
   if (!container) return;
 
+  normalizeFoldersData();
+
+  const selectedCount = selectedWordIds.size;
+  const folderOptions = folders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+
+  const selectionToolbar = `
+    <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:10px;margin-bottom:12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+      <b style="color:#334155;margin-right:4px;">選択: ${selectedCount}語</b>
+      <button onclick="selectAllWords()" style="background:#334155;color:white;border:none;border-radius:5px;padding:6px 9px;cursor:pointer;">全フォルダから全選択</button>
+      <button onclick="clearAllSelections()" style="background:#e2e8f0;color:#334155;border:none;border-radius:5px;padding:6px 9px;cursor:pointer;">選択全解除</button>
+      <button onclick="bulkDeleteSelectedWords()" ${selectedCount ? '' : 'disabled'} style="background:#ef4444;color:white;border:none;border-radius:5px;padding:6px 9px;cursor:${selectedCount ? 'pointer' : 'default'};opacity:${selectedCount ? '1' : '.45'};">選択語を一斉削除</button>
+      <select id="bulkMoveFolderSelect" ${selectedCount ? '' : 'disabled'} style="padding:6px;border:1px solid #cbd5e1;border-radius:5px;">${folderOptions}</select>
+      <button onclick="bulkMoveSelectedWords()" ${selectedCount ? '' : 'disabled'} style="background:#0284c7;color:white;border:none;border-radius:5px;padding:6px 9px;cursor:${selectedCount ? 'pointer' : 'default'};opacity:${selectedCount ? '1' : '.45'};">選択語を一斉移動</button>
+    </div>
+  `;
+
   if (folders.length === 0) {
-    container.innerHTML = `
-      <p style="
-        color: #94a3b8;
-        text-align: center;
-        padding: 30px;
-        background: white;
-        border-radius: 8px;
-        border: 1px dashed #cbd5e1;
-      ">
+    container.innerHTML = selectionToolbar + `
+      <p style="color:#94a3b8;text-align:center;padding:30px;background:white;border-radius:8px;border:1px dashed #cbd5e1;">
         フォルダがありません。下のフォームからフォルダを作成してください。
       </p>
     `;
     return;
   }
 
-  container.innerHTML = folders.map((folder, fIndex) => {
+  container.innerHTML = selectionToolbar + folders.map((folder, fIndex) => {
     const suggestion = pendingSpellingSuggestions[folder.id];
+    const words = folder.words || [];
+    const allWordsSelected = words.length > 0 && words.every(w => selectedWordIds.has(w.id));
+    const folderChecked = selectedFolderIds.has(folder.id);
 
     return `
-    <div style="
-      background: white;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 12px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    ">
-
-      <div style="
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: ${folder.collapsed ? '0' : '8px'};
-      ">
-
-        <div
-          style="display: flex; align-items: center; gap: 8px; cursor: pointer;"
-          onclick="toggleFolderCollapse('${folder.id}')"
-        >
-          <span style="font-size: 0.9em; color: #64748b;">
-            ${folder.collapsed ? '▶' : '▼'}
-          </span>
-
-          <h3 style="
-            margin: 0;
-            color: #0f172a;
-            font-size: 1.1em;
-          ">
-            📁 ${escapeHtml(folder.name)}
-            (${folder.words ? folder.words.length : 0}件)
-          </h3>
+    <div style="background:white;border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin-bottom:12px;box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${folder.collapsed ? '0' : '8px'};gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+          <input type="checkbox" ${folderChecked ? 'checked' : ''} onchange="toggleFolderSelection('${folder.id}', this.checked)" title="このフォルダを選択" style="width:18px;height:18px;flex:none;">
+          <div style="display:flex;align-items:center;gap:8px;cursor:pointer;min-width:0;" onclick="toggleFolderCollapse('${folder.id}')">
+            <span style="font-size:.9em;color:#64748b;">${folder.collapsed ? '▶' : '▼'}</span>
+            <h3 style="margin:0;color:#0f172a;font-size:1.1em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📁 ${escapeHtml(folder.name)} (${words.length}件)</h3>
+          </div>
         </div>
-
-        <div style="display: flex; gap: 4px; align-items: center;">
-          <button onclick="moveFolder(${fIndex}, -1)" title="上に移動" style="background: #e2e8f0; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">⬆️</button>
-          <button onclick="moveFolder(${fIndex}, 1)" title="下に移動" style="background: #e2e8f0; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">⬇️</button>
-          <button onclick="clearFolderWords('${folder.id}')" title="全消し" style="background: #f59e0b; color: white; border: none; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75em;">全消し</button>
-          <button onclick="deleteFolder('${folder.id}')" title="削除" style="background: #ef4444; color: white; border: none; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75em;">削除</button>
+        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+          <button onclick="selectAllWordsInFolder('${folder.id}')" title="フォルダ内全選択" style="background:${allWordsSelected ? '#10b981' : '#e2e8f0'};color:${allWordsSelected ? 'white' : '#334155'};border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:.75em;">全選択</button>
+          <button onclick="moveFolder(${fIndex}, -1)" title="上に移動" style="background:#e2e8f0;border:none;padding:2px 6px;border-radius:4px;cursor:pointer;font-size:.8em;">⬆️</button>
+          <button onclick="moveFolder(${fIndex}, 1)" title="下に移動" style="background:#e2e8f0;border:none;padding:2px 6px;border-radius:4px;cursor:pointer;font-size:.8em;">⬇️</button>
+          <button onclick="clearFolderWords('${folder.id}')" title="全消し" style="background:#f59e0b;color:white;border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:.75em;">全消し</button>
+          <button onclick="deleteFolder('${folder.id}')" title="削除" style="background:#ef4444;color:white;border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:.75em;">削除</button>
         </div>
       </div>
 
       ${folder.collapsed ? '' : `
-        <div style="display: flex; gap: 6px; margin-bottom: 10px; margin-top: 8px;">
-          <input
-            id="wordInput_${folder.id}"
-            placeholder="単語を入力（Enterまたは追加でAI自動生成）"
-            onkeydown="if(event.key==='Enter'){event.preventDefault(); addWordToFolder('${folder.id}');}"
-            style="flex: 1; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.9em;"
-          >
-
-          <button
-            onclick="addWordToFolder('${folder.id}')"
-            style="background: #0284c7; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 0.9em; font-weight: bold;"
-          >追加</button>
+        <div style="display:flex;gap:6px;margin-bottom:10px;margin-top:8px;">
+          <input id="wordInput_${folder.id}" placeholder="単語を入力（Enterまたは追加でAI自動生成）" onkeydown="if(event.key==='Enter'){event.preventDefault(); addWordToFolder('${folder.id}');}" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:4px;font-size:.9em;min-width:0;">
+          <button onclick="addWordToFolder('${folder.id}')" style="background:#0284c7;color:white;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:.9em;font-weight:bold;">追加</button>
         </div>
-
         ${suggestion ? renderSpellingSuggestion(folder.id, suggestion) : ''}
-
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          ${(folder.words || []).map((w, wIndex) => renderWordItem(w, folder.id, wIndex)).join('')}
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${words.map((w, wIndex) => `
+            <div style="display:flex;align-items:flex-start;gap:8px;">
+              <input type="checkbox" ${selectedWordIds.has(w.id) ? 'checked' : ''} onchange="toggleWordSelection('${w.id}', this.checked)" title="この単語を選択" style="width:18px;height:18px;margin-top:14px;flex:none;">
+              <div style="flex:1;min-width:0;">${renderWordItem(w, folder.id, wIndex)}</div>
+            </div>
+          `).join('')}
         </div>
       `}
-    </div>
-    `;
+    </div>`;
   }).join('');
 }
 
@@ -404,6 +448,7 @@ async function generateAndAddWord(folderId, wordText) {
   if (!folder.words) folder.words = [];
 
   const newWordObj = {
+    id: makeId('word'),
     word: wordText,
     meanings: ['生成中...'],
     examples: [],
@@ -602,6 +647,9 @@ window.speakWord = function(text) {
 
 window.deleteFolder = function(folderId) {
   if (!confirm("このフォルダを削除しますか？")) return;
+  const removedFolder = folders.find(f => f.id === folderId);
+  if (removedFolder) (removedFolder.words || []).forEach(w => selectedWordIds.delete(w.id));
+  selectedFolderIds.delete(folderId);
   folders = folders.filter(f => f.id !== folderId);
   delete pendingSpellingSuggestions[folderId];
   saveUserData();
@@ -611,6 +659,8 @@ window.deleteFolder = function(folderId) {
 window.deleteWord = function(folderId, wordIndex) {
   const folder = folders.find(f => f.id === folderId);
   if (folder && folder.words) {
+    const removed = folder.words[wordIndex];
+    if (removed && removed.id) selectedWordIds.delete(removed.id);
     folder.words.splice(wordIndex, 1);
     saveUserData();
     renderFolders();
@@ -625,6 +675,310 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+// ==========================================
+// 選択・一括操作
+// ==========================================
+window.toggleFolderSelection = function(folderId, checked) {
+  if (checked) selectedFolderIds.add(folderId);
+  else selectedFolderIds.delete(folderId);
+  renderFolders();
+};
+
+window.toggleWordSelection = function(wordId, checked) {
+  if (checked) selectedWordIds.add(wordId);
+  else selectedWordIds.delete(wordId);
+  renderFolders();
+};
+
+window.selectAllWords = function() {
+  folders.forEach(folder => (folder.words || []).forEach(word => selectedWordIds.add(word.id)));
+  renderFolders();
+};
+
+window.selectAllWordsInFolder = function(folderId) {
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder) return;
+  const words = folder.words || [];
+  const allSelected = words.length > 0 && words.every(w => selectedWordIds.has(w.id));
+  words.forEach(word => allSelected ? selectedWordIds.delete(word.id) : selectedWordIds.add(word.id));
+  renderFolders();
+};
+
+window.clearAllSelections = function() {
+  selectedFolderIds.clear();
+  selectedWordIds.clear();
+  renderFolders();
+};
+
+window.bulkDeleteSelectedWords = function() {
+  if (selectedWordIds.size === 0) return;
+  if (!confirm(`選択した ${selectedWordIds.size} 語をすべて削除しますか？`)) return;
+  folders.forEach(folder => {
+    folder.words = (folder.words || []).filter(word => !selectedWordIds.has(word.id));
+  });
+  selectedWordIds.clear();
+  saveUserData();
+  renderFolders();
+};
+
+window.bulkMoveSelectedWords = function() {
+  if (selectedWordIds.size === 0) return;
+  const select = document.getElementById('bulkMoveFolderSelect');
+  if (!select || !select.value) return;
+  const destination = folders.find(f => f.id === select.value);
+  if (!destination) return;
+
+  const moving = [];
+  folders.forEach(folder => {
+    if (folder.id === destination.id) return;
+    const keep = [];
+    (folder.words || []).forEach(word => {
+      if (selectedWordIds.has(word.id)) moving.push(word);
+      else keep.push(word);
+    });
+    folder.words = keep;
+  });
+
+  const existingIds = new Set((destination.words || []).map(w => w.id));
+  moving.forEach(word => {
+    if (!existingIds.has(word.id)) destination.words.push(word);
+  });
+
+  selectedWordIds.clear();
+  saveUserData();
+  renderFolders();
+};
+
+function getWordById(wordId) {
+  for (const folder of folders) {
+    const word = (folder.words || []).find(w => w.id === wordId);
+    if (word) return { word, folder };
+  }
+  return null;
+}
+
+function collectWordIdsFromSelection() {
+  const ids = new Set(selectedWordIds);
+  folders.forEach(folder => {
+    if (selectedFolderIds.has(folder.id)) {
+      (folder.words || []).forEach(word => ids.add(word.id));
+    }
+  });
+  return [...ids];
+}
+
+// ==========================================
+// 実践 / フラッシュカードセット
+// ==========================================
+function getFlashcardSets() {
+  normalizePracticeData();
+  return practiceData.modules.flashcards.sets;
+}
+
+function getPracticeSet(setId) {
+  return getFlashcardSets().find(set => set.id === setId) || null;
+}
+
+window.openPracticeHome = function() {
+  closeMainLauncher();
+  let modal = document.getElementById('practiceModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'practiceModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;justify-content:center;align-items:center;padding:18px;box-sizing:border-box;z-index:10030;';
+    document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+  renderPracticeHome();
+};
+
+window.closePracticeModal = function() {
+  const modal = document.getElementById('practiceModal');
+  if (modal) modal.style.display = 'none';
+};
+
+function renderPracticeHome() {
+  const modal = document.getElementById('practiceModal');
+  if (!modal) return;
+  const sets = getFlashcardSets();
+  modal.innerHTML = `
+    <div style="background:white;border-radius:14px;width:min(760px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;">
+        <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">⚔️ 実践</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">実践モジュール</div></div>
+        <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
+      </div>
+      <div style="border:1px solid #cbd5e1;border-radius:10px;padding:14px;background:#f8fafc;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div><b style="color:#0f172a;">📇 フラッシュカード</b><div style="font-size:.82em;color:#64748b;margin-top:2px;">セットごとに保存・編集・再開できます</div></div>
+          <button onclick="createPracticeFlashcardSet()" style="background:#0284c7;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">＋ 新規セット</button>
+        </div>
+        <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+          ${sets.length ? sets.map((set, index) => `
+            <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+              <button onclick="openPracticeFlashcardSet('${set.id}')" style="background:none;border:none;padding:0;cursor:pointer;text-align:left;flex:1;min-width:170px;">
+                <div style="font-weight:bold;color:#0f172a;">${escapeHtml(set.name)}</div>
+                <div style="font-size:.8em;color:#64748b;margin-top:2px;">${set.wordIds.length}語${set.progress ? ` ・ ${set.progress.round || 1}周目を中断中` : ''}</div>
+              </button>
+              <div style="display:flex;gap:4px;">
+                <button onclick="movePracticeSet('${set.id}',-1)" style="border:none;background:#e2e8f0;border-radius:4px;padding:5px;cursor:pointer;">⬆️</button>
+                <button onclick="movePracticeSet('${set.id}',1)" style="border:none;background:#e2e8f0;border-radius:4px;padding:5px;cursor:pointer;">⬇️</button>
+                <button onclick="duplicatePracticeSet('${set.id}')" style="border:none;background:#e2e8f0;border-radius:4px;padding:5px;cursor:pointer;">複製</button>
+                <button onclick="deletePracticeSet('${set.id}')" style="border:none;background:#ef4444;color:white;border-radius:4px;padding:5px 7px;cursor:pointer;">削除</button>
+              </div>
+            </div>`).join('') : '<div style="color:#94a3b8;text-align:center;padding:16px;">まだセットがありません。</div>'}
+        </div>
+      </div>
+    </div>`;
+}
+
+window.createPracticeFlashcardSet = function() {
+  const name = prompt('フラッシュカードセット名を入力してください。', '新しいフラッシュカード');
+  if (!name || !name.trim()) return;
+  const set = { id: makeId('flashset'), name: name.trim(), wordIds: [], random: true, direction: 'front', progress: null };
+  getFlashcardSets().push(set);
+  savePracticeData();
+  openPracticeFlashcardSet(set.id);
+};
+
+window.renamePracticeSet = function(setId) {
+  const set = getPracticeSet(setId); if (!set) return;
+  const name = prompt('新しいセット名', set.name);
+  if (!name || !name.trim()) return;
+  set.name = name.trim(); savePracticeData(); openPracticeFlashcardSet(setId);
+};
+
+window.movePracticeSet = function(setId, direction) {
+  const sets = getFlashcardSets();
+  const i = sets.findIndex(s => s.id === setId); const ni = i + direction;
+  if (i < 0 || ni < 0 || ni >= sets.length) return;
+  [sets[i], sets[ni]] = [sets[ni], sets[i]];
+  savePracticeData(); renderPracticeHome();
+};
+
+window.duplicatePracticeSet = function(setId) {
+  const set = getPracticeSet(setId); if (!set) return;
+  getFlashcardSets().push({ ...JSON.parse(JSON.stringify(set)), id: makeId('flashset'), name: set.name + ' コピー', progress: null });
+  savePracticeData(); renderPracticeHome();
+};
+
+window.deletePracticeSet = function(setId) {
+  const set = getPracticeSet(setId); if (!set) return;
+  if (!confirm(`「${set.name}」を削除しますか？`)) return;
+  practiceData.modules.flashcards.sets = getFlashcardSets().filter(s => s.id !== setId);
+  savePracticeData(); renderPracticeHome();
+};
+
+window.openPracticeFlashcardSet = function(setId) {
+  currentPracticeSetId = setId;
+  const set = getPracticeSet(setId); if (!set) return;
+  const modal = document.getElementById('practiceModal'); if (!modal) return;
+  const available = set.wordIds.map(id => getWordById(id)).filter(Boolean);
+  modal.innerHTML = `
+    <div style="background:white;border-radius:14px;width:min(820px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <button onclick="renderPracticeHome()" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;">◀ 戻る</button>
+        <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        <div><h2 style="margin:0;color:#0f172a;font-size:1.25em;">📇 ${escapeHtml(set.name)}</h2><div style="font-size:.82em;color:#64748b;margin-top:3px;">${available.length}語</div></div>
+        <button onclick="renamePracticeSet('${set.id}')" style="border:none;background:#e2e8f0;border-radius:6px;padding:7px 10px;cursor:pointer;">名前変更</button>
+      </div>
+      <div style="margin-top:14px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
+        <b style="color:#334155;">単語を追加</b>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+          <button onclick="addSelectedWordsToPracticeSet('${set.id}')" style="border:none;background:#0284c7;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">チェックしたフォルダ・単語から追加</button>
+          <select id="practiceFolderSource" style="padding:7px;border:1px solid #cbd5e1;border-radius:5px;">${folders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('')}</select>
+          <button onclick="addFolderWordsToPracticeSet('${set.id}')" style="border:none;background:#334155;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">選択フォルダから追加</button>
+          <button onclick="addAllWordsToPracticeSet('${set.id}')" style="border:none;background:#334155;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">全単語を追加</button>
+          <button onclick="clearPracticeSetWords('${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">セットを空にする</button>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <label style="display:flex;align-items:center;gap:5px;color:#334155;"><input type="checkbox" ${set.random ? 'checked' : ''} onchange="setPracticeRandom('${set.id}',this.checked)"> ランダム順</label>
+        <select onchange="setPracticeDirection('${set.id}',this.value)" style="padding:7px;border:1px solid #cbd5e1;border-radius:5px;">
+          <option value="front" ${set.direction==='front'?'selected':''}>単語 → 意味</option>
+          <option value="back" ${set.direction==='back'?'selected':''}>意味 → 単語</option>
+        </select>
+        <button onclick="startPracticeSet('${set.id}', false)" ${available.length ? '' : 'disabled'} style="background:#10b981;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${available.length?'pointer':'default'};opacity:${available.length?'1':'.45'};">▶ ${set.progress ? '続きから' : '開始'}</button>
+        <button onclick="startPracticeSet('${set.id}', true)" ${available.length ? '' : 'disabled'} style="background:#ef4444;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${available.length?'pointer':'default'};opacity:${available.length?'1':'.45'};">↻ 最初から</button>
+      </div>
+      <div style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px;max-height:38vh;overflow:auto;">
+        ${available.length ? available.map(({word}) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px solid #f1f5f9;"><span><b>${escapeHtml(word.word)}</b>　<span style="color:#64748b;font-size:.88em;">${escapeHtml((word.meanings||[]).join(' / '))}</span></span><button onclick="removeWordFromPracticeSet('${set.id}','${word.id}')" style="border:none;background:none;color:#ef4444;cursor:pointer;">削除</button></div>`).join('') : '<div style="color:#94a3b8;text-align:center;padding:16px;">単語を追加してください。</div>'}
+      </div>
+    </div>`;
+}
+
+function uniqueExistingWordIds(ids) {
+  const out = [];
+  const seen = new Set();
+  ids.forEach(id => { if (!seen.has(id) && getWordById(id)) { seen.add(id); out.push(id); } });
+  return out;
+}
+
+function addIdsToSet(set, ids) {
+  set.wordIds = uniqueExistingWordIds([...(set.wordIds || []), ...ids]);
+  set.progress = null;
+  savePracticeData();
+  openPracticeFlashcardSet(set.id);
+}
+
+window.addSelectedWordsToPracticeSet = function(setId) { const set=getPracticeSet(setId); if(set) addIdsToSet(set, collectWordIdsFromSelection()); };
+window.addFolderWordsToPracticeSet = function(setId) { const set=getPracticeSet(setId); const sel=document.getElementById('practiceFolderSource'); const f=folders.find(x=>sel&&x.id===sel.value); if(set&&f) addIdsToSet(set,(f.words||[]).map(w=>w.id)); };
+window.addAllWordsToPracticeSet = function(setId) { const set=getPracticeSet(setId); if(set) addIdsToSet(set,folders.flatMap(f=>(f.words||[]).map(w=>w.id))); };
+window.removeWordFromPracticeSet = function(setId,wordId) { const set=getPracticeSet(setId); if(!set)return; set.wordIds=(set.wordIds||[]).filter(id=>id!==wordId); set.progress=null; savePracticeData(); openPracticeFlashcardSet(setId); };
+window.clearPracticeSetWords = function(setId) { const set=getPracticeSet(setId); if(!set)return; if(!confirm('このセットの単語をすべて外しますか？'))return; set.wordIds=[]; set.progress=null; savePracticeData(); openPracticeFlashcardSet(setId); };
+window.setPracticeRandom = function(setId,val) { const set=getPracticeSet(setId); if(set){ set.random=!!val; set.progress=null; savePracticeData(); } };
+window.setPracticeDirection = function(setId,val) { const set=getPracticeSet(setId); if(set){ set.direction=val; set.progress=null; savePracticeData(); } };
+
+function shuffleArray(arr) {
+  const copy=[...arr]; for(let i=copy.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [copy[i],copy[j]]=[copy[j],copy[i]]; } return copy;
+}
+
+window.startPracticeSet = function(setId, restart=false) {
+  const set=getPracticeSet(setId); if(!set)return;
+  const validIds=uniqueExistingWordIds(set.wordIds||[]); if(!validIds.length){ alert('このセットに利用できる単語がありません。'); return; }
+  if(restart || !set.progress){
+    set.progress={ round:1, queue:set.random?shuffleArray(validIds):[...validIds], index:0, missed:[], showingBack:false };
+  } else {
+    set.progress.queue=uniqueExistingWordIds(set.progress.queue||[]);
+    set.progress.missed=uniqueExistingWordIds(set.progress.missed||[]);
+    if(set.progress.index>=set.progress.queue.length) set.progress.index=0;
+  }
+  savePracticeData(); renderPracticePlayer(setId);
+};
+
+function renderPracticePlayer(setId) {
+  const set=getPracticeSet(setId); if(!set||!set.progress)return;
+  const modal=document.getElementById('practiceModal'); if(!modal)return;
+  const p=set.progress;
+  if(p.index>=p.queue.length){
+    if(p.missed.length){
+      p.round += 1; p.queue=set.random?shuffleArray(uniqueExistingWordIds(p.missed)):uniqueExistingWordIds(p.missed); p.missed=[]; p.index=0; p.showingBack=false; savePracticeData();
+    } else {
+      set.progress=null; savePracticeData();
+      modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(520px,100%);padding:26px;text-align:center;"><h2 style="color:#0f172a;margin-top:0;">🎉 完了</h2><p style="color:#475569;">「${escapeHtml(set.name)}」をすべて覚えました。</p><div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;"><button onclick="startPracticeSet('${set.id}',true)" style="background:#0284c7;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">最初から</button><button onclick="openPracticeFlashcardSet('${set.id}')" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">セットへ戻る</button></div></div>`;
+      return;
+    }
+  }
+  const ref=getWordById(p.queue[p.index]); if(!ref){ p.index++; savePracticeData(); renderPracticePlayer(setId); return; }
+  const word=ref.word;
+  const meaning=escapeHtml((word.meanings||[]).join('<br>'));
+  const front=set.direction==='front' ? escapeHtml(word.word) : escapeHtml((word.meanings||[]).join(' / '));
+  const back=set.direction==='front' ? escapeHtml((word.meanings||[]).join(' / ')) : escapeHtml(word.word);
+  modal.innerHTML=`
+    <div style="background:white;border-radius:14px;width:min(620px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div style="color:#64748b;font-size:.88em;">${escapeHtml(set.name)} ・ ${p.round}周目 ・ ${p.index+1}/${p.queue.length}</div><button onclick="pausePracticeSet('${set.id}')" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;">⏸ 一時中断</button></div>
+      <button onclick="togglePracticeCard('${set.id}')" style="width:100%;min-height:210px;margin-top:16px;background:#f8fafc;border:2px solid #cbd5e1;border-radius:12px;padding:24px;cursor:pointer;color:#0f172a;font-size:1.5em;font-weight:bold;white-space:pre-wrap;">${p.showingBack?back:front}<div style="margin-top:14px;font-size:.5em;color:#94a3b8;font-weight:normal;">タップして裏返す</div></button>
+      <div style="display:flex;gap:10px;margin-top:14px;"><button onclick="answerPracticeCard('${set.id}',false)" style="flex:1;background:#ef4444;color:white;border:none;border-radius:7px;padding:12px;font-weight:bold;cursor:pointer;">覚えてない</button><button onclick="answerPracticeCard('${set.id}',true)" style="flex:1;background:#10b981;color:white;border:none;border-radius:7px;padding:12px;font-weight:bold;cursor:pointer;">覚えた</button></div>
+      <div style="display:flex;justify-content:center;margin-top:10px;"><button onclick="restartPracticeConfirm('${set.id}')" style="background:none;border:none;color:#64748b;cursor:pointer;">↻ 最初からやり直す</button></div>
+    </div>`;
+}
+
+window.togglePracticeCard = function(setId) { const set=getPracticeSet(setId); if(!set||!set.progress)return; set.progress.showingBack=!set.progress.showingBack; savePracticeData(); renderPracticePlayer(setId); };
+window.answerPracticeCard = function(setId, remembered) { const set=getPracticeSet(setId); if(!set||!set.progress)return; const p=set.progress; const id=p.queue[p.index]; if(!remembered && !p.missed.includes(id)) p.missed.push(id); p.index++; p.showingBack=false; savePracticeData(); renderPracticePlayer(setId); };
+window.pausePracticeSet = function(setId) { savePracticeData(); openPracticeFlashcardSet(setId); };
+window.restartPracticeConfirm = function(setId) { if(confirm('このセットを最初からやり直しますか？')) startPracticeSet(setId,true); };
 
 // 5. メイン機能ランチャー・画面切り替え
 window.toggleViewMode = function() {
@@ -701,7 +1055,7 @@ window.openMainLauncher = function() {
       </button>
 
       <button
-        disabled
+        onclick="closeMainLauncher(); openPracticeHome();"
         style="
           width: 100%;
           display: flex;
@@ -710,13 +1064,12 @@ window.openMainLauncher = function() {
           padding: 14px 16px;
           border: none;
           border-radius: 10px;
-          background: #e2e8f0;
-          color: #64748b;
-          cursor: default;
+          background: #7c3aed;
+          color: white;
+          cursor: pointer;
           font-size: 1em;
           font-weight: bold;
           text-align: left;
-          opacity: 0.8;
         "
       >
         <span style="font-size: 1.3em;">⚔️</span>
@@ -964,6 +1317,12 @@ window.sendChatMessage = async function() {
         prompt: userMsg,
         history,
         currentFolders: folders,
+        practiceData: practiceData,
+        practiceCapabilities: {
+          schemaVersion: 1,
+          note: "ALLIA may edit the entire practiceData object. Future practice modules are stored under practiceData.modules and should be preserved unless explicitly changed by the user.",
+          flashcards: ["create_set", "rename_set", "move_set", "duplicate_set", "delete_set", "add_words", "remove_words", "clear_set", "set_random", "set_direction"]
+        },
         image: currentImg
       })
     });
@@ -972,10 +1331,18 @@ window.sendChatMessage = async function() {
 
     if (response.ok) {
       replyText = data.reply || data.content || data.message || "応答を取得しました。";
-      if (data.updatedFolders) {
+      if (Array.isArray(data.updatedFolders)) {
         folders = data.updatedFolders;
+        normalizeFoldersData();
         saveUserData();
         renderFolders();
+      }
+      if (data.updatedPracticeData && typeof data.updatedPracticeData === 'object') {
+        practiceData = data.updatedPracticeData;
+        normalizePracticeData();
+        savePracticeData();
+        const practiceModal = document.getElementById('practiceModal');
+        if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
       }
     } else {
       replyText = data.error || data.details || "AIからの応答に失敗しました。";
