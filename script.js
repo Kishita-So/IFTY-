@@ -1,4 +1,4 @@
-// ★★★ IFTY 最新版 2026-09-06：実践・複数選択・ALLIA実践編集対応 ★★★
+// ★★★ IFTY 最新版 2026-09-06 Q2：クエスチョン拡張・リスニング/語法/類義語選別対応 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -30,6 +30,7 @@ let practiceData = {
 };
 
 let currentPracticeSetId = null;
+let currentQuizSetId = null;
 
 const WORKER_URL = 'https://ifty.humbleflail205.workers.dev/';
 
@@ -121,6 +122,7 @@ function normalizePracticeData() {
   if (!practiceData || typeof practiceData !== 'object') practiceData = {};
   if (!practiceData.schemaVersion) practiceData.schemaVersion = 1;
   if (!practiceData.modules || typeof practiceData.modules !== 'object') practiceData.modules = {};
+
   if (!practiceData.modules.flashcards || typeof practiceData.modules.flashcards !== 'object') {
     practiceData.modules.flashcards = { sets: [] };
   }
@@ -134,8 +136,29 @@ function normalizePracticeData() {
     if (!set.direction) set.direction = 'front';
     if (!set.progress || typeof set.progress !== 'object') set.progress = null;
   });
-}
 
+  if (!practiceData.modules.questions || typeof practiceData.modules.questions !== 'object') {
+    practiceData.modules.questions = { sets: [] };
+  }
+  if (!Array.isArray(practiceData.modules.questions.sets)) practiceData.modules.questions.sets = [];
+
+  practiceData.modules.questions.sets.forEach(set => {
+    if (!set.id) set.id = makeId('quizset');
+    if (!set.name) set.name = 'クイズフォルダ';
+    if (!Array.isArray(set.wordIds)) set.wordIds = [];
+    if (!['jp_to_en', 'en_to_jp', 'mixed'].includes(set.directionMode)) set.directionMode = 'mixed';
+    if (!set.types || typeof set.types !== 'object') set.types = {};
+    const defaults = { simple: true, written: false, example: false, knowledge: false, composition: false, translation: false, listening: false, usage_cloze: false, synonym_choice: false };
+    Object.keys(defaults).forEach(key => {
+      if (typeof set.types[key] !== 'boolean') set.types[key] = defaults[key];
+    });
+    if (!Object.values(set.types).some(Boolean)) set.types.simple = true;
+    if (typeof set.random !== 'boolean') set.random = true;
+    if (!set.progress || typeof set.progress !== 'object') set.progress = null;
+    if (!Array.isArray(set.reviewWordIds)) set.reviewWordIds = [];
+    if (!set.mistakeCounts || typeof set.mistakeCounts !== 'object') set.mistakeCounts = {};
+  });
+}
 function loadPracticeData(username) {
   try {
     const saved = localStorage.getItem("practice_user_" + username);
@@ -802,19 +825,21 @@ function renderPracticeHome() {
   const modal = document.getElementById('practiceModal');
   if (!modal) return;
   const sets = getFlashcardSets();
+  const quizSets = getQuizSets();
   modal.innerHTML = `
     <div style="background:white;border-radius:14px;width:min(760px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;">
         <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">⚔️ 実践</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">実践モジュール</div></div>
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
       </div>
+
       <div style="border:1px solid #cbd5e1;border-radius:10px;padding:14px;background:#f8fafc;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
           <div><b style="color:#0f172a;">📇 フラッシュカード</b><div style="font-size:.82em;color:#64748b;margin-top:2px;">セットごとに保存・編集・再開できます</div></div>
           <button onclick="createPracticeFlashcardSet()" style="background:#0284c7;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">＋ 新規セット</button>
         </div>
         <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
-          ${sets.length ? sets.map((set, index) => `
+          ${sets.length ? sets.map(set => `
             <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
               <button onclick="openPracticeFlashcardSet('${set.id}')" style="background:none;border:none;padding:0;cursor:pointer;text-align:left;flex:1;min-width:170px;">
                 <div style="font-weight:bold;color:#0f172a;">${escapeHtml(set.name)}</div>
@@ -829,18 +854,74 @@ function renderPracticeHome() {
             </div>`).join('') : '<div style="color:#94a3b8;text-align:center;padding:16px;">まだセットがありません。</div>'}
         </div>
       </div>
+
+      <div style="border:1px solid #c4b5fd;border-radius:10px;padding:14px;background:#faf5ff;margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div><b style="color:#581c87;">❓ クエスチョン</b><div style="font-size:.82em;color:#7e22ce;margin-top:2px;">ALLIA判定の記述式クイズをフォルダごとに作れます</div></div>
+          <button onclick="createQuizSet()" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">＋ クイズフォルダ</button>
+        </div>
+        <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+          ${quizSets.length ? quizSets.map(set => `
+            <div style="background:white;border:1px solid #ddd6fe;border-radius:8px;padding:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+              <button onclick="openQuizSet('${set.id}')" style="background:none;border:none;padding:0;cursor:pointer;text-align:left;flex:1;min-width:170px;">
+                <div style="font-weight:bold;color:#4c1d95;">${escapeHtml(set.name)}</div>
+                <div style="font-size:.8em;color:#7c3aed;margin-top:2px;">${set.wordIds.length}語 ・ 復習${set.reviewWordIds.length}語${set.progress ? ' ・ 中断中' : ''}</div>
+              </button>
+              <div style="display:flex;gap:4px;">
+                <button onclick="moveQuizSet('${set.id}',-1)" style="border:none;background:#ede9fe;border-radius:4px;padding:5px;cursor:pointer;">⬆️</button>
+                <button onclick="moveQuizSet('${set.id}',1)" style="border:none;background:#ede9fe;border-radius:4px;padding:5px;cursor:pointer;">⬇️</button>
+                <button onclick="duplicateQuizSet('${set.id}')" style="border:none;background:#ede9fe;border-radius:4px;padding:5px;cursor:pointer;">複製</button>
+                <button onclick="deleteQuizSet('${set.id}')" style="border:none;background:#ef4444;color:white;border-radius:4px;padding:5px 7px;cursor:pointer;">削除</button>
+              </div>
+            </div>`).join('') : '<div style="color:#a78bfa;text-align:center;padding:16px;">まだクイズフォルダがありません。</div>'}
+        </div>
+      </div>
     </div>`;
 }
 
-window.createPracticeFlashcardSet = function() {
-  const name = prompt('フラッシュカードセット名を入力してください。', '新しいフラッシュカード');
-  if (!name || !name.trim()) return;
-  const set = { id: makeId('flashset'), name: name.trim(), wordIds: [], random: true, direction: 'front', progress: null };
-  getFlashcardSets().push(set);
-  savePracticeData();
-  openPracticeFlashcardSet(set.id);
-};
+function openPracticeNamePrompt(title, defaultValue, onConfirm) {
+  let modal = document.getElementById('practiceNameModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'practiceNameModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.48);display:flex;justify-content:center;align-items:center;padding:18px;z-index:10060;';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div style="background:white;width:min(420px,100%);border-radius:12px;padding:18px;box-shadow:0 15px 40px rgba(0,0,0,.28);">
+      <h3 style="margin:0 0 10px;color:#0f172a;">${escapeHtml(title)}</h3>
+      <input id="practiceNameInput" value="${escapeHtml(defaultValue)}" style="width:100%;box-sizing:border-box;padding:10px;border:2px solid #93c5fd;border-radius:7px;font-size:1em;">
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+        <button id="practiceNameCancel" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:8px 12px;cursor:pointer;">キャンセル</button>
+        <button id="practiceNameConfirm" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">作成</button>
+      </div>
+    </div>`;
+  modal.style.display = 'flex';
+  const input = document.getElementById('practiceNameInput');
+  const cancel = document.getElementById('practiceNameCancel');
+  const confirmBtn = document.getElementById('practiceNameConfirm');
+  const finish = () => {
+    const value = input ? input.value.trim() : '';
+    if (!value) return;
+    modal.style.display = 'none';
+    onConfirm(value);
+  };
+  if (cancel) cancel.onclick = () => { modal.style.display = 'none'; };
+  if (confirmBtn) confirmBtn.onclick = finish;
+  if (input) {
+    input.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); finish(); } };
+    setTimeout(() => { input.focus(); input.select(); }, 30);
+  }
+}
 
+window.createPracticeFlashcardSet = function() {
+  openPracticeNamePrompt('フラッシュカードセット名を入力してください。', '新しいフラッシュカード', name => {
+    const set = { id: makeId('flashset'), name, wordIds: [], random: true, direction: 'front', progress: null };
+    getFlashcardSets().push(set);
+    savePracticeData();
+    openPracticeFlashcardSet(set.id);
+  });
+};
 window.renamePracticeSet = function(setId) {
   const set = getPracticeSet(setId); if (!set) return;
   const name = prompt('新しいセット名', set.name);
@@ -979,6 +1060,314 @@ window.togglePracticeCard = function(setId) { const set=getPracticeSet(setId); i
 window.answerPracticeCard = function(setId, remembered) { const set=getPracticeSet(setId); if(!set||!set.progress)return; const p=set.progress; const id=p.queue[p.index]; if(!remembered && !p.missed.includes(id)) p.missed.push(id); p.index++; p.showingBack=false; savePracticeData(); renderPracticePlayer(setId); };
 window.pausePracticeSet = function(setId) { savePracticeData(); openPracticeFlashcardSet(setId); };
 window.restartPracticeConfirm = function(setId) { if(confirm('このセットを最初からやり直しますか？')) startPracticeSet(setId,true); };
+
+
+// ==========================================
+// 実践 / クエスチョン
+// ==========================================
+function getQuizSets() {
+  normalizePracticeData();
+  return practiceData.modules.questions.sets;
+}
+
+function getQuizSet(setId) {
+  return getQuizSets().find(set => set.id === setId) || null;
+}
+
+function getEnabledQuizTypes(set) {
+  return Object.entries(set.types || {}).filter(([, enabled]) => enabled).map(([key]) => key);
+}
+
+function quizTypeLabel(type) {
+  return ({
+    simple: 'シンプル',
+    written: '記述',
+    example: '例文',
+    knowledge: '知識',
+    composition: '作文',
+    translation: '和訳',
+    listening: 'リスニング',
+    usage_cloze: '語法穴埋め',
+    synonym_choice: '類義語選別'
+  })[type] || type;
+}
+
+function quizDirectionLabel(mode) {
+  return ({ jp_to_en: '日英のみ', en_to_jp: '英日のみ', mixed: '混合' })[mode] || mode;
+}
+
+window.createQuizSet = function() {
+  openPracticeNamePrompt('クイズフォルダ名を入力してください。', '新しいクイズフォルダ', name => {
+    const set = {
+      id: makeId('quizset'),
+      name,
+      wordIds: [],
+      directionMode: 'mixed',
+      types: { simple: true, written: false, example: false, knowledge: false, composition: false, translation: false, listening: false, usage_cloze: false, synonym_choice: false },
+      random: true,
+      progress: null,
+      reviewWordIds: [],
+      mistakeCounts: {}
+    };
+    getQuizSets().push(set);
+    savePracticeData();
+    openQuizSet(set.id);
+  });
+};
+
+window.renameQuizSet = function(setId) {
+  const set = getQuizSet(setId); if (!set) return;
+  openPracticeNamePrompt('クイズフォルダ名を変更', set.name, name => {
+    set.name = name;
+    savePracticeData();
+    openQuizSet(setId);
+  });
+};
+
+window.moveQuizSet = function(setId, direction) {
+  const sets = getQuizSets();
+  const i = sets.findIndex(s => s.id === setId); const ni = i + direction;
+  if (i < 0 || ni < 0 || ni >= sets.length) return;
+  [sets[i], sets[ni]] = [sets[ni], sets[i]];
+  savePracticeData(); renderPracticeHome();
+};
+
+window.duplicateQuizSet = function(setId) {
+  const set = getQuizSet(setId); if (!set) return;
+  const copy = JSON.parse(JSON.stringify(set));
+  copy.id = makeId('quizset');
+  copy.name = set.name + ' コピー';
+  copy.progress = null;
+  getQuizSets().push(copy);
+  savePracticeData(); renderPracticeHome();
+};
+
+window.deleteQuizSet = function(setId) {
+  const set = getQuizSet(setId); if (!set) return;
+  if (!confirm(`「${set.name}」を削除しますか？`)) return;
+  practiceData.modules.questions.sets = getQuizSets().filter(s => s.id !== setId);
+  savePracticeData(); renderPracticeHome();
+};
+
+window.openQuizSet = function(setId) {
+  currentQuizSetId = setId;
+  const set = getQuizSet(setId); if (!set) return;
+  const modal = document.getElementById('practiceModal'); if (!modal) return;
+  const available = set.wordIds.map(id => getWordById(id)).filter(Boolean);
+  const typeCards = [
+    ['simple','シンプル','単に意味かスペルを答える'],
+    ['written','記述','スペル・意味を記述。複数の意味や表現をALLIAが判定'],
+    ['example','例文','英検大問1風の文脈穴埋め、または日本語文から語を答える'],
+    ['knowledge','知識','類義語・対義語・前置詞・語法・ニュアンスなどから出題'],
+    ['composition','作文','お題の語彙を使った短い英文を書く'],
+    ['translation','和訳','例文を和訳。日英設定では逆向きの英訳にも対応'],
+    ['listening','リスニング','単語音声→意味、英文例文音声→出てきた語、日本語音声→合う英単語。記述/選択をランダム出題'],
+    ['usage_cloze','語法穴埋め','前置詞・語形・コロケーション・定型表現の穴埋め'],
+    ['synonym_choice','類義語選別','似た語の中から文脈・ニュアンスに最も合う語を選ぶ']
+  ];
+  modal.innerHTML = `
+    <div style="background:white;border-radius:14px;width:min(880px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <button onclick="renderPracticeHome()" style="border:none;background:#ede9fe;color:#5b21b6;border-radius:6px;padding:7px 10px;cursor:pointer;">◀ 戻る</button>
+        <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        <div><h2 style="margin:0;color:#4c1d95;font-size:1.25em;">❓ ${escapeHtml(set.name)}</h2><div style="font-size:.82em;color:#7c3aed;margin-top:3px;">${available.length}語 ・ 復習対象 ${set.reviewWordIds.length}語</div></div>
+        <button onclick="renameQuizSet('${set.id}')" style="border:none;background:#ede9fe;color:#5b21b6;border-radius:6px;padding:7px 10px;cursor:pointer;">名前変更</button>
+      </div>
+
+      <div style="margin-top:14px;padding:12px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:8px;">
+        <b style="color:#581c87;">1. 出題方向</b>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:8px;">
+          ${[
+            ['jp_to_en','日英のみ','#0ea5e9'],
+            ['en_to_jp','英日のみ','#10b981'],
+            ['mixed','混合','#8b5cf6']
+          ].map(([value,label,color]) => `<label style="display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 6px;border-radius:8px;border:2px solid ${set.directionMode===value?color:'#e2e8f0'};background:${set.directionMode===value?color+'18':'white'};color:${set.directionMode===value?color:'#475569'};font-weight:bold;cursor:pointer;"><input type="radio" name="quizDirection_${set.id}" value="${value}" ${set.directionMode===value?'checked':''} onchange="setQuizDirection('${set.id}',this.value)" style="accent-color:${color};">${label}</label>`).join('')}
+        </div>
+      </div>
+
+      <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
+        <b style="color:#334155;">2. クイズ形式（複数選択可）</b>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin-top:9px;">
+          ${typeCards.map(([key,label,desc]) => `<label style="display:flex;gap:8px;align-items:flex-start;border:1px solid ${set.types[key]?'#a78bfa':'#e2e8f0'};background:${set.types[key]?'#f5f3ff':'white'};border-radius:8px;padding:9px;cursor:pointer;"><input type="checkbox" ${set.types[key]?'checked':''} onchange="setQuizType('${set.id}','${key}',this.checked)" style="width:18px;height:18px;accent-color:#7c3aed;flex:none;margin-top:2px;"><span><b style="color:#4c1d95;">${label}</b><div style="font-size:.78em;color:#64748b;margin-top:2px;line-height:1.35;">${desc}</div></span></label>`).join('')}
+        </div>
+      </div>
+
+      <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
+        <b style="color:#334155;">3. 単語を追加</b>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+          <button onclick="addSelectedWordsToQuizSet('${set.id}')" style="border:none;background:#7c3aed;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">チェックしたフォルダ・単語から追加</button>
+          <select id="quizFolderSource" style="padding:7px;border:1px solid #cbd5e1;border-radius:5px;">${folders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('')}</select>
+          <button onclick="addFolderWordsToQuizSet('${set.id}')" style="border:none;background:#5b21b6;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">選択フォルダから追加</button>
+          <button onclick="addAllWordsToQuizSet('${set.id}')" style="border:none;background:#5b21b6;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">全単語を追加</button>
+          <button onclick="clearQuizSetWords('${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">フォルダを空にする</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <label style="display:flex;align-items:center;gap:5px;color:#334155;"><input type="checkbox" ${set.random?'checked':''} onchange="setQuizRandom('${set.id}',this.checked)"> ランダム順</label>
+        <button onclick="startQuizSet('${set.id}',false,false)" ${available.length?'':'disabled'} style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${available.length?'pointer':'default'};opacity:${available.length?'1':'.45'};">▶ ${set.progress ? '続きから' : '開始'}</button>
+        <button onclick="startQuizSet('${set.id}',true,false)" ${available.length?'':'disabled'} style="background:#5b21b6;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${available.length?'pointer':'default'};opacity:${available.length?'1':'.45'};">↻ 最初から</button>
+        <button onclick="startQuizSet('${set.id}',true,true)" ${set.reviewWordIds.length?'':'disabled'} style="background:#ea580c;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${set.reviewWordIds.length?'pointer':'default'};opacity:${set.reviewWordIds.length?'1':'.45'};">🔥 間違いだけ復習 (${set.reviewWordIds.length})</button>
+        ${set.reviewWordIds.length ? `<button onclick="clearQuizReview('${set.id}')" style="background:#e2e8f0;color:#475569;border:none;border-radius:6px;padding:8px 10px;cursor:pointer;">復習記録を消す</button>` : ''}
+      </div>
+
+      <div style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px;max-height:32vh;overflow:auto;">
+        ${available.length ? available.map(({word}) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px solid #f1f5f9;"><span><b>${escapeHtml(word.word)}</b>　<span style="color:#64748b;font-size:.88em;">${escapeHtml((word.meanings||[]).join(' / '))}</span>${set.reviewWordIds.includes(word.id)?'<span style="margin-left:6px;color:#ea580c;font-size:.78em;font-weight:bold;">復習</span>':''}</span><button onclick="removeWordFromQuizSet('${set.id}','${word.id}')" style="border:none;background:none;color:#ef4444;cursor:pointer;">削除</button></div>`).join('') : '<div style="color:#94a3b8;text-align:center;padding:16px;">単語を追加してください。</div>'}
+      </div>
+    </div>`;
+};
+
+window.setQuizDirection = function(setId, value) {
+  const set=getQuizSet(setId); if(!set)return;
+  if(['jp_to_en','en_to_jp','mixed'].includes(value)) set.directionMode=value;
+  set.progress=null; savePracticeData(); openQuizSet(setId);
+};
+
+window.setQuizType = function(setId, type, checked) {
+  const set=getQuizSet(setId); if(!set || !(type in set.types))return;
+  set.types[type]=!!checked;
+  if(!Object.values(set.types).some(Boolean)) {
+    set.types[type]=true;
+    alert('クイズ形式は最低1つ選んでください。');
+  }
+  set.progress=null; savePracticeData(); openQuizSet(setId);
+};
+
+window.setQuizRandom = function(setId, value) { const set=getQuizSet(setId); if(set){ set.random=!!value; set.progress=null; savePracticeData(); } };
+
+function addIdsToQuizSet(set, ids) {
+  set.wordIds=uniqueExistingWordIds([...(set.wordIds||[]),...ids]);
+  set.progress=null; savePracticeData(); openQuizSet(set.id);
+}
+window.addSelectedWordsToQuizSet = function(setId){ const set=getQuizSet(setId); if(set)addIdsToQuizSet(set,collectWordIdsFromSelection()); };
+window.addFolderWordsToQuizSet = function(setId){ const set=getQuizSet(setId); const sel=document.getElementById('quizFolderSource'); const f=folders.find(x=>sel&&x.id===sel.value); if(set&&f)addIdsToQuizSet(set,(f.words||[]).map(w=>w.id)); };
+window.addAllWordsToQuizSet = function(setId){ const set=getQuizSet(setId); if(set)addIdsToQuizSet(set,folders.flatMap(f=>(f.words||[]).map(w=>w.id))); };
+window.removeWordFromQuizSet = function(setId,wordId){ const set=getQuizSet(setId); if(!set)return; set.wordIds=(set.wordIds||[]).filter(id=>id!==wordId); set.reviewWordIds=(set.reviewWordIds||[]).filter(id=>id!==wordId); delete set.mistakeCounts[wordId]; set.progress=null; savePracticeData(); openQuizSet(setId); };
+window.clearQuizSetWords = function(setId){ const set=getQuizSet(setId); if(!set)return; if(!confirm('このクイズフォルダの単語をすべて外しますか？'))return; set.wordIds=[]; set.reviewWordIds=[]; set.mistakeCounts={}; set.progress=null; savePracticeData(); openQuizSet(setId); };
+window.clearQuizReview = function(setId){ const set=getQuizSet(setId); if(!set)return; if(!confirm('間違い・復習記録を消しますか？'))return; set.reviewWordIds=[]; set.mistakeCounts={}; savePracticeData(); openQuizSet(setId); };
+
+function resolveQuizDirection(set) {
+  if(set.directionMode==='mixed') return Math.random()<0.5 ? 'jp_to_en' : 'en_to_jp';
+  return set.directionMode;
+}
+
+function chooseQuizType(set) {
+  const types=getEnabledQuizTypes(set);
+  return types[Math.floor(Math.random()*types.length)] || 'simple';
+}
+
+window.startQuizSet = function(setId, restart=false, reviewOnly=false) {
+  const set=getQuizSet(setId); if(!set)return;
+  let validIds=uniqueExistingWordIds(reviewOnly ? (set.reviewWordIds||[]) : (set.wordIds||[]));
+  if(!validIds.length){ alert(reviewOnly?'復習対象の単語がありません。':'このクイズフォルダに利用できる単語がありません。'); return; }
+  if(restart || !set.progress || !!set.progress.reviewOnly!==!!reviewOnly){
+    set.progress={ queue:set.random?shuffleArray(validIds):[...validIds], index:0, reviewOnly:!!reviewOnly, currentQuestion:null, correctCount:0, wrongCount:0 };
+  } else {
+    set.progress.queue=uniqueExistingWordIds(set.progress.queue||[]);
+    if(set.progress.index>=set.progress.queue.length) set.progress.index=0;
+  }
+  savePracticeData(); renderQuizPlayer(setId);
+};
+
+async function renderQuizPlayer(setId) {
+  const set=getQuizSet(setId); if(!set||!set.progress)return;
+  const modal=document.getElementById('practiceModal'); if(!modal)return;
+  const p=set.progress;
+  if(p.index>=p.queue.length){ renderQuizComplete(setId); return; }
+  const ref=getWordById(p.queue[p.index]);
+  if(!ref){ p.index++; p.currentQuestion=null; savePracticeData(); renderQuizPlayer(setId); return; }
+
+  if(!p.currentQuestion){
+    modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><div style="font-size:2em;">❓</div><h3 style="color:#4c1d95;">ALLIAが問題を作成中…</h3><div style="color:#64748b;">${p.index+1}/${p.queue.length}</div></div>`;
+    try {
+      const type=chooseQuizType(set);
+      const direction=resolveQuizDirection(set);
+      const candidateWords=shuffleArray((set.wordIds||[]).filter(id=>id!==ref.word.id)).slice(0,8).map(id=>{const x=getWordById(id);return x?x.word:null;}).filter(Boolean); const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_generate',quizType:type,direction,word:ref.word,candidateWords})});
+      const data=await response.json();
+      if(!response.ok) throw new Error(data.error||data.details||('HTTP '+response.status));
+      p.currentQuestion={...data,quizType:type,direction,wordId:ref.word.id};
+      savePracticeData();
+    } catch(error){
+      modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h3 style="color:#ef4444;">問題生成に失敗しました</h3><p style="color:#64748b;">${escapeHtml(String(error.message||error))}</p><button onclick="retryCurrentQuizQuestion('${set.id}')" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">再試行</button><button onclick="openQuizSet('${set.id}')" style="margin-left:8px;background:#e2e8f0;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">戻る</button></div>`;
+      return;
+    }
+  }
+
+  const q=p.currentQuestion;
+  modal.innerHTML=`
+    <div style="background:white;border-radius:14px;width:min(700px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div style="color:#7c3aed;font-size:.88em;font-weight:bold;">${escapeHtml(set.name)} ・ ${p.index+1}/${p.queue.length} ・ ${quizTypeLabel(q.quizType)} ・ ${quizDirectionLabel(q.direction==='jp_to_en'?'jp_to_en':'en_to_jp')}</div><button onclick="pauseQuizSet('${set.id}')" style="background:#ede9fe;color:#5b21b6;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;">⏸ 一時中断</button></div>
+      <div style="margin-top:15px;padding:18px;background:#faf5ff;border:2px solid #ddd6fe;border-radius:10px;color:#2e1065;line-height:1.65;font-size:1.08em;white-space:pre-wrap;">${escapeHtml(q.question||'')}</div>
+      ${q.audioText?`<div style="margin-top:10px;display:flex;justify-content:center;"><button onclick="speakQuizAudio('${set.id}')" style="background:#0ea5e9;color:white;border:none;border-radius:8px;padding:10px 16px;font-weight:bold;cursor:pointer;">🔊 音声を再生</button></div>`:''}
+      ${q.instruction?`<div style="margin-top:7px;color:#64748b;font-size:.82em;">${escapeHtml(q.instruction)}</div>`:''}
+      ${Array.isArray(q.options)&&q.options.length?`<div id="quizChoiceArea" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;">${q.options.map((option,i)=>`<label style="display:flex;gap:8px;align-items:center;border:2px solid #ddd6fe;background:white;border-radius:8px;padding:10px;cursor:pointer;"><input type="radio" name="quizChoice" value="${escapeHtml(option)}" style="accent-color:#7c3aed;"><span>${String.fromCharCode(65+i)}. ${escapeHtml(option)}</span></label>`).join('')}</div>`:`<textarea id="quizAnswerInput" rows="4" placeholder="答えを入力" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1em;resize:vertical;"></textarea>`}
+      <div style="display:flex;gap:8px;margin-top:10px;"><button onclick="submitQuizAnswer('${set.id}')" style="flex:1;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${Array.isArray(q.options)&&q.options.length?'回答する':'ALLIAに判定してもらう'}</button><button onclick="skipQuizQuestion('${set.id}')" style="background:#e2e8f0;color:#475569;border:none;border-radius:7px;padding:11px;cursor:pointer;">スキップ</button></div>
+      <div style="margin-top:9px;color:#94a3b8;font-size:.78em;text-align:center;">記述回答は表記ゆれ・複数の意味・自然さを含めてALLIAが判定します。リスニングは記述式と選択式の両方が出ます。</div>
+    </div>`;
+  const input=document.getElementById('quizAnswerInput'); if(input)setTimeout(()=>input.focus(),30); if(q.audioText)setTimeout(()=>window.speakQuizAudio(set.id),180);
+}
+
+window.retryCurrentQuizQuestion = function(setId){ const set=getQuizSet(setId); if(!set||!set.progress)return; set.progress.currentQuestion=null; savePracticeData(); renderQuizPlayer(setId); };
+window.speakQuizAudio = function(setId){ const set=getQuizSet(setId); const q=set&&set.progress&&set.progress.currentQuestion; if(!q||!q.audioText||!('speechSynthesis' in window))return; window.speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(q.audioText); u.lang=q.audioLang==='ja'?'ja-JP':'en-US'; u.rate=q.audioLang==='ja'?0.95:0.9; window.speechSynthesis.speak(u); };
+window.pauseQuizSet = function(setId){ savePracticeData(); openQuizSet(setId); };
+window.skipQuizQuestion = function(setId){ const set=getQuizSet(setId); if(!set||!set.progress)return; set.progress.index++; set.progress.currentQuestion=null; savePracticeData(); renderQuizPlayer(setId); };
+
+window.submitQuizAnswer = async function(setId) {
+  const set=getQuizSet(setId); if(!set||!set.progress||!set.progress.currentQuestion)return;
+  const p=set.progress, q=p.currentQuestion;
+  const input=document.getElementById('quizAnswerInput');
+  const checked=document.querySelector('input[name="quizChoice"]:checked');
+  const answer=checked?String(checked.value||'').trim():(input?input.value.trim():'');
+  if(!answer){ alert(Array.isArray(q.options)&&q.options.length?'選択肢を1つ選んでください。':'答えを入力してください。'); return; }
+  const ref=getWordById(q.wordId); if(!ref)return;
+  const modal=document.getElementById('practiceModal'); if(!modal)return;
+  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><h3 style="color:#4c1d95;">ALLIAが採点中…</h3></div>`;
+  try{
+    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_grade',quizType:q.quizType,direction:q.direction,question:q.question,referenceAnswer:q.referenceAnswer||'',userAnswer:answer,word:ref.word})});
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.error||data.details||('HTTP '+response.status));
+    const correct=data.correct===true;
+    if(correct){
+      p.correctCount=(p.correctCount||0)+1;
+      if(p.reviewOnly) set.reviewWordIds=(set.reviewWordIds||[]).filter(id=>id!==q.wordId);
+    }else{
+      p.wrongCount=(p.wrongCount||0)+1;
+      if(!set.reviewWordIds.includes(q.wordId))set.reviewWordIds.push(q.wordId);
+      set.mistakeCounts[q.wordId]=(Number(set.mistakeCounts[q.wordId])||0)+1;
+    }
+    savePracticeData();
+    renderQuizFeedback(setId, correct, data.feedback||'', data.modelAnswer||q.referenceAnswer||'', answer);
+  }catch(error){
+    modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h3 style="color:#ef4444;">採点に失敗しました</h3><p style="color:#64748b;">${escapeHtml(String(error.message||error))}</p><button onclick="renderQuizPlayer('${set.id}')" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">問題に戻る</button></div>`;
+  }
+};
+
+function renderQuizFeedback(setId, correct, feedback, modelAnswer, userAnswer) {
+  const set=getQuizSet(setId); if(!set||!set.progress)return;
+  const modal=document.getElementById('practiceModal'); if(!modal)return;
+  modal.innerHTML=`
+    <div style="background:white;border-radius:14px;width:min(650px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+      <h2 style="margin-top:0;color:${correct?'#059669':'#dc2626'};">${correct?'⭕ 正解':'❌ 不正解'}</h2>
+      <div style="padding:10px;background:#f8fafc;border-radius:8px;color:#334155;"><b>あなたの回答：</b>${escapeHtml(userAnswer)}</div>
+      ${modelAnswer?`<div style="padding:10px;background:#f5f3ff;border-radius:8px;color:#4c1d95;margin-top:8px;"><b>基準・模範：</b>${escapeHtml(modelAnswer)}</div>`:''}
+      <div style="margin-top:10px;line-height:1.55;color:#475569;white-space:pre-wrap;">${escapeHtml(feedback)}</div>
+      ${!correct?'<div style="margin-top:10px;color:#ea580c;font-size:.85em;font-weight:bold;">この単語は自動で「間違いだけ復習」に追加されました。</div>':''}
+      <button onclick="nextQuizQuestion('${set.id}')" style="width:100%;margin-top:14px;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">次へ</button>
+    </div>`;
+}
+
+window.nextQuizQuestion = function(setId){ const set=getQuizSet(setId); if(!set||!set.progress)return; set.progress.index++; set.progress.currentQuestion=null; savePracticeData(); renderQuizPlayer(setId); };
+
+function renderQuizComplete(setId) {
+  const set=getQuizSet(setId); if(!set||!set.progress)return;
+  const p=set.progress;
+  const modal=document.getElementById('practiceModal'); if(!modal)return;
+  const correct=p.correctCount||0, wrong=p.wrongCount||0;
+  set.progress=null; savePracticeData();
+  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(560px,100%);padding:26px;text-align:center;"><h2 style="color:#4c1d95;margin-top:0;">🎉 クイズ完了</h2><p style="color:#475569;">正解 ${correct} / 不正解 ${wrong}</p><p style="color:#ea580c;font-weight:bold;">復習対象：${set.reviewWordIds.length}語</p><div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;"><button onclick="startQuizSet('${set.id}',true,false)" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">最初から</button><button onclick="startQuizSet('${set.id}',true,true)" ${set.reviewWordIds.length?'':'disabled'} style="background:#ea580c;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;opacity:${set.reviewWordIds.length?'1':'.45'};">間違いだけ復習</button><button onclick="openQuizSet('${set.id}')" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">設定へ戻る</button></div></div>`;
+}
 
 // 5. メイン機能ランチャー・画面切り替え
 window.toggleViewMode = function() {
@@ -1321,6 +1710,16 @@ window.sendChatMessage = async function() {
         practiceCapabilities: {
           schemaVersion: 1,
           note: "ALLIA may edit the entire practiceData object. Future practice modules are stored under practiceData.modules and should be preserved unless explicitly changed by the user.",
+          questions: [
+            "create_quiz_folder",
+            "rename_quiz_folder",
+            "delete_quiz_folder",
+            "add_words",
+            "remove_words",
+            "set_direction",
+            "set_quiz_types",
+            "clear_review"
+          ],
           flashcards: ["create_set", "rename_set", "move_set", "duplicate_set", "delete_set", "add_words", "remove_words", "clear_set", "set_random", "set_direction"]
         },
         image: currentImg
