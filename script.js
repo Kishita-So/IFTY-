@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP5 2026-09-07：単語Enter送信時に即クリア・生成中の次入力保持 ★★★
+// ★★★ IFTY Q3 STEP6 2026-09-08：単語Enter後も入力欄フォーカス維持・連続入力対応 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -592,7 +592,7 @@ function renderFolders() {
           <input type="checkbox" ${folderChecked ? 'checked' : ''} onchange="toggleFolderSelection('${folder.id}', this.checked)" title="このフォルダを選択" style="width:18px;height:18px;flex:none;">
           <div style="display:flex;align-items:center;gap:8px;cursor:pointer;min-width:0;" onclick="toggleFolderCollapse('${folder.id}')">
             <span style="font-size:.9em;color:#64748b;">${folder.collapsed ? '▶' : '▼'}</span>
-            <h3 style="margin:0;color:#0f172a;font-size:1.1em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📁 ${escapeHtml(folder.name)} (${words.length}件)</h3>
+            <h3 style="margin:0;color:#0f172a;font-size:1.1em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📁 ${escapeHtml(folder.name)} (<span id="folderWordCount_${folder.id}">${words.length}件</span>)</h3>
           </div>
         </div>
         <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
@@ -609,14 +609,9 @@ function renderFolders() {
           <input id="wordInput_${folder.id}" value="${escapeHtml(wordInputDrafts[folder.id] || '')}" placeholder="単語を入力（Enterまたは追加でAI自動生成）" oninput="saveWordInputDraft('${folder.id}', this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); addWordToFolder('${folder.id}');}" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:4px;font-size:.9em;min-width:0;">
           <button onclick="addWordToFolder('${folder.id}')" style="background:#0284c7;color:white;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:.9em;font-weight:bold;">追加</button>
         </div>
-        ${suggestion ? renderSpellingSuggestion(folder.id, suggestion) : ''}
-        <div style="display:flex;flex-direction:column;gap:8px;">
-          ${words.map((w, wIndex) => `
-            <div style="display:flex;align-items:flex-start;gap:8px;">
-              <input type="checkbox" ${selectedWordIds.has(w.id) ? 'checked' : ''} onchange="toggleWordSelection('${w.id}', this.checked)" title="この単語を選択" style="width:18px;height:18px;margin-top:14px;flex:none;">
-              <div style="flex:1;min-width:0;">${renderWordItem(w, folder.id, wIndex)}</div>
-            </div>
-          `).join('')}
+        <div id="spellingSuggestion_${folder.id}">${suggestion ? renderSpellingSuggestion(folder.id, suggestion) : ''}</div>
+        <div id="wordList_${folder.id}" style="display:flex;flex-direction:column;gap:8px;">
+          ${renderFolderWordList(folder)}
         </div>
       `}
     </div>`;
@@ -626,6 +621,44 @@ function renderFolders() {
 window.saveWordInputDraft = function(folderId, value) {
   wordInputDrafts[folderId] = String(value ?? '');
 };
+
+function renderFolderWordList(folder) {
+  const words = folder && Array.isArray(folder.words) ? folder.words : [];
+  return words.map((w, wIndex) => `
+    <div style="display:flex;align-items:flex-start;gap:8px;">
+      <input type="checkbox" ${selectedWordIds.has(w.id) ? 'checked' : ''} onchange="toggleWordSelection('${w.id}', this.checked)" title="この単語を選択" style="width:18px;height:18px;margin-top:14px;flex:none;">
+      <div style="flex:1;min-width:0;">${renderWordItem(w, folder.id, wIndex)}</div>
+    </div>
+  `).join('');
+}
+
+function refreshFolderWordArea(folderId) {
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder) return;
+
+  const list = document.getElementById(`wordList_${folderId}`);
+  if (list) list.innerHTML = renderFolderWordList(folder);
+
+  const count = document.getElementById(`folderWordCount_${folderId}`);
+  if (count) count.textContent = `${Array.isArray(folder.words) ? folder.words.length : 0}件`;
+}
+
+function refreshSpellingSuggestion(folderId) {
+  const area = document.getElementById(`spellingSuggestion_${folderId}`);
+  if (!area) return;
+  const suggestion = pendingSpellingSuggestions[folderId];
+  area.innerHTML = suggestion ? renderSpellingSuggestion(folderId, suggestion) : '';
+}
+
+function keepWordInputFocused(folderId) {
+  const input = document.getElementById(`wordInput_${folderId}`);
+  if (!input) return;
+  try {
+    input.focus({ preventScroll: true });
+  } catch (_) {
+    input.focus();
+  }
+}
 
 function renderSpellingSuggestion(folderId, suggestion) {
   return `
@@ -645,7 +678,8 @@ window.acceptSpellingSuggestion = async function(folderId) {
   if (!suggestion) return;
   const word = suggestion.suggested;
   delete pendingSpellingSuggestions[folderId];
-  renderFolders();
+  refreshSpellingSuggestion(folderId);
+  keepWordInputFocused(folderId);
   await generateAndAddWord(folderId, word);
 };
 
@@ -654,13 +688,15 @@ window.keepOriginalSpelling = async function(folderId) {
   if (!suggestion) return;
   const word = suggestion.original;
   delete pendingSpellingSuggestions[folderId];
-  renderFolders();
+  refreshSpellingSuggestion(folderId);
+  keepWordInputFocused(folderId);
   await generateAndAddWord(folderId, word);
 };
 
 window.cancelSpellingSuggestion = function(folderId) {
   delete pendingSpellingSuggestions[folderId];
-  renderFolders();
+  refreshSpellingSuggestion(folderId);
+  keepWordInputFocused(folderId);
 };
 
 // 単語カード表示
@@ -756,7 +792,10 @@ window.addWordToFolder = async function(folderId) {
   // AI生成完了後の再描画でもその新しい入力だけを保持する。
   wordInputDrafts[folderId] = '';
   input.value = '';
+  // Enterで送信しても入力欄からフォーカスを外さず、iPadでそのまま次の単語を続けて入力できるようにする。
+  keepWordInputFocused(folderId);
   delete pendingSpellingSuggestions[folderId];
+  refreshSpellingSuggestion(folderId);
 
   try {
     const spellResponse = await fetch(WORKER_URL, {
@@ -778,7 +817,8 @@ window.addWordToFolder = async function(folderId) {
           original: wordText,
           suggested: String(spellData.suggestion).trim()
         };
-        renderFolders();
+        refreshSpellingSuggestion(folderId);
+        keepWordInputFocused(folderId);
         return;
       }
     }
@@ -807,7 +847,10 @@ async function generateAndAddWord(folderId, wordText) {
 
   folder.words.push(newWordObj);
   saveUserData();
-  renderFolders();
+  // 入力欄を含むフォルダ全体は再描画せず、単語一覧だけ更新する。
+  // これによりAI生成開始時にもiPadのキーボードと入力フォーカスを維持する。
+  refreshFolderWordArea(folderId);
+  keepWordInputFocused(folderId);
 
   try {
     const response = await fetch(WORKER_URL, {
@@ -849,7 +892,9 @@ async function generateAndAddWord(folderId, wordText) {
   }
 
   saveUserData();
-  renderFolders();
+  // AI生成完了時も入力欄自体は作り直さず、単語カード部分だけ更新する。
+  refreshFolderWordArea(folderId);
+  keepWordInputFocused(folderId);
 
   if (!newWordObj.meanings.includes("AI生成に失敗しました。もう一度お試しください。")) {
     setTimeout(() => speakWord(wordText), 300);
