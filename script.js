@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP2 2026-09-07：選択クイズ・シンプルALLIA復帰・画像読取修正 ★★★
+// ★★★ IFTY Q3 STEP4 2026-09-07：ALLIA採点Challenge・理由入力・誤答記録完全巻戻し ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -16,6 +16,7 @@ let chatSessions = [];
 let currentChatSessionId = null;
 let selectedImageBase64 = null;
 let pendingSpellingSuggestions = {};
+let wordInputDrafts = {};
 
 // 選択状態（フォルダ・単語）
 let selectedFolderIds = new Set();
@@ -605,7 +606,7 @@ function renderFolders() {
 
       ${folder.collapsed ? '' : `
         <div style="display:flex;gap:6px;margin-bottom:10px;margin-top:8px;">
-          <input id="wordInput_${folder.id}" placeholder="単語を入力（Enterまたは追加でAI自動生成）" onkeydown="if(event.key==='Enter'){event.preventDefault(); addWordToFolder('${folder.id}');}" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:4px;font-size:.9em;min-width:0;">
+          <input id="wordInput_${folder.id}" value="${escapeHtml(wordInputDrafts[folder.id] || '')}" placeholder="単語を入力（Enterまたは追加でAI自動生成）" oninput="saveWordInputDraft('${folder.id}', this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); addWordToFolder('${folder.id}');}" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:4px;font-size:.9em;min-width:0;">
           <button onclick="addWordToFolder('${folder.id}')" style="background:#0284c7;color:white;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:.9em;font-weight:bold;">追加</button>
         </div>
         ${suggestion ? renderSpellingSuggestion(folder.id, suggestion) : ''}
@@ -621,6 +622,10 @@ function renderFolders() {
     </div>`;
   }).join('');
 }
+
+window.saveWordInputDraft = function(folderId, value) {
+  wordInputDrafts[folderId] = String(value ?? '');
+};
 
 function renderSpellingSuggestion(folderId, suggestion) {
   return `
@@ -746,7 +751,7 @@ window.addWordToFolder = async function(folderId) {
   if (!folder.words) folder.words = [];
   if (!wordText) return;
 
-  input.value = "";
+  wordInputDrafts[folderId] = wordText;
   delete pendingSpellingSuggestions[folderId];
 
   try {
@@ -1656,7 +1661,7 @@ async function renderQuizPlayer(setId) {
       <div style="margin-top:15px;padding:18px;background:#faf5ff;border:2px solid #ddd6fe;border-radius:10px;color:#2e1065;line-height:1.65;font-size:1.08em;white-space:pre-wrap;">${escapeHtml(q.question||'')}</div>
       ${q.audioText?`<div style="margin-top:10px;display:flex;justify-content:center;"><button onclick="speakQuizAudio('${set.id}')" style="background:#0ea5e9;color:white;border:none;border-radius:8px;padding:10px 16px;font-weight:bold;cursor:pointer;">🔊 音声を再生</button></div>`:''}
       ${q.instruction?`<div style="margin-top:7px;color:#64748b;font-size:.82em;">${escapeHtml(q.instruction)}</div>`:''}
-      ${Array.isArray(q.options)&&q.options.length?`<div id="quizChoiceArea" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;">${q.options.map((option,i)=>`<label style="display:flex;gap:8px;align-items:center;border:2px solid #ddd6fe;background:white;border-radius:8px;padding:10px;cursor:pointer;"><input type="radio" name="quizChoice" value="${escapeHtml(option)}" style="accent-color:#7c3aed;"><span>${String.fromCharCode(65+i)}. ${escapeHtml(option)}</span></label>`).join('')}</div>`:`<textarea id="quizAnswerInput" rows="4" placeholder="答えを入力" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1em;resize:vertical;"></textarea>`}
+      ${Array.isArray(q.options)&&q.options.length?`<div id="quizChoiceArea" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;">${q.options.map((option,i)=>`<label style="display:flex;gap:8px;align-items:center;border:2px solid #ddd6fe;background:white;border-radius:8px;padding:10px;cursor:pointer;"><input type="radio" name="quizChoice" value="${escapeHtml(option)}" style="accent-color:#7c3aed;"><span>${String.fromCharCode(65+i)}. ${escapeHtml(option)}</span></label>`).join('')}</div>`:`<textarea id="quizAnswerInput" rows="4" placeholder="答えを入力（Enterで確定 / Shift+Enterで改行）" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1em;resize:vertical;"></textarea>`}
       <div style="display:flex;gap:8px;margin-top:10px;"><button onclick="submitQuizAnswer('${set.id}')" style="flex:1;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${q.localGrade?'端末内で判定':(Array.isArray(q.options)&&q.options.length?'回答する':'ALLIAに判定してもらう')}</button><button onclick="skipQuizQuestion('${set.id}')" style="background:#e2e8f0;color:#475569;border:none;border-radius:7px;padding:11px;cursor:pointer;">スキップ</button></div>
       <div style="margin-top:9px;color:#94a3b8;font-size:.78em;text-align:center;">「選択」だけは同じクイズフォルダの他の単語から4択を端末内生成・判定するためALLIAを使いません。シンプルを含む記述回答はALLIAが表記ゆれ・複数の意味・自然さを含めて判定します。リスニングは記述式と選択式の両方が出ます。</div>
     </div>`;
@@ -1681,14 +1686,27 @@ window.submitQuizAnswer = async function(setId) {
   if (q.localGrade) {
     const data = gradeLocalSelectionAnswer(q, answer);
     const correct = data.correct === true;
+    const wasInReviewBefore=(set.reviewWordIds||[]).includes(q.wordId);
+    const previousMistakeCount=Number(set.mistakeCounts[q.wordId])||0;
     if(correct){
       p.correctCount=(p.correctCount||0)+1;
       if(p.reviewOnly) set.reviewWordIds=(set.reviewWordIds||[]).filter(id=>id!==q.wordId);
     }else{
       p.wrongCount=(p.wrongCount||0)+1;
       if(!set.reviewWordIds.includes(q.wordId))set.reviewWordIds.push(q.wordId);
-      set.mistakeCounts[q.wordId]=(Number(set.mistakeCounts[q.wordId])||0)+1;
+      set.mistakeCounts[q.wordId]=previousMistakeCount+1;
     }
+    p.lastGrade={
+      wordId:q.wordId,
+      userAnswer:answer,
+      correct,
+      firstFeedback:data.feedback||'',
+      firstModelAnswer:data.modelAnswer||q.referenceAnswer||'',
+      wasInReviewBefore,
+      previousMistakeCount,
+      localGrade:true,
+      challenged:false
+    };
     savePracticeData();
     renderQuizFeedback(setId, correct, data.feedback||'', data.modelAnswer||q.referenceAnswer||'', answer);
     return;
@@ -1700,14 +1718,27 @@ window.submitQuizAnswer = async function(setId) {
     const data=await response.json();
     if(!response.ok)throw alliaHttpError(response, data, '採点に失敗しました。');
     const correct=data.correct===true;
+    const wasInReviewBefore=(set.reviewWordIds||[]).includes(q.wordId);
+    const previousMistakeCount=Number(set.mistakeCounts[q.wordId])||0;
     if(correct){
       p.correctCount=(p.correctCount||0)+1;
       if(p.reviewOnly) set.reviewWordIds=(set.reviewWordIds||[]).filter(id=>id!==q.wordId);
     }else{
       p.wrongCount=(p.wrongCount||0)+1;
       if(!set.reviewWordIds.includes(q.wordId))set.reviewWordIds.push(q.wordId);
-      set.mistakeCounts[q.wordId]=(Number(set.mistakeCounts[q.wordId])||0)+1;
+      set.mistakeCounts[q.wordId]=previousMistakeCount+1;
     }
+    p.lastGrade={
+      wordId:q.wordId,
+      userAnswer:answer,
+      correct,
+      firstFeedback:data.feedback||'',
+      firstModelAnswer:data.modelAnswer||q.referenceAnswer||'',
+      wasInReviewBefore,
+      previousMistakeCount,
+      localGrade:false,
+      challenged:false
+    };
     savePracticeData();
     renderQuizFeedback(setId, correct, data.feedback||'', data.modelAnswer||q.referenceAnswer||'', answer);
   }catch(error){
@@ -1717,6 +1748,10 @@ window.submitQuizAnswer = async function(setId) {
 
 function renderQuizFeedback(setId, correct, feedback, modelAnswer, userAnswer) {
   const set=getQuizSet(setId); if(!set||!set.progress)return;
+  const p=set.progress;
+  const q=p.currentQuestion;
+  const last=p.lastGrade||null;
+  const canChallenge=!correct && q && !q.localGrade && last && last.wordId===q.wordId && last.localGrade!==true && last.challenged!==true;
   const modal=document.getElementById('practiceModal'); if(!modal)return;
   modal.innerHTML=`
     <div style="background:white;border-radius:14px;width:min(650px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
@@ -1725,6 +1760,82 @@ function renderQuizFeedback(setId, correct, feedback, modelAnswer, userAnswer) {
       ${modelAnswer?`<div style="padding:10px;background:#f5f3ff;border-radius:8px;color:#4c1d95;margin-top:8px;"><b>基準・模範：</b>${escapeHtml(modelAnswer)}</div>`:''}
       <div style="margin-top:10px;line-height:1.55;color:#475569;white-space:pre-wrap;">${escapeHtml(feedback)}</div>
       ${!correct?'<div style="margin-top:10px;color:#ea580c;font-size:.85em;font-weight:bold;">この単語は自動で「間違いだけ復習」に追加されました。</div>':''}
+      ${canChallenge?`
+        <div style="margin-top:14px;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;">
+          <div style="font-weight:bold;color:#92400e;">⚖️ ALLIAの判定に異議がある場合</div>
+          <textarea id="quizChallengeReason" rows="3" placeholder="Challengeの理由を入力（例：この訳も文脈上成立する、この用法も辞書的に正しい、など）" style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px;border:1px solid #f59e0b;border-radius:7px;font-size:.95em;resize:vertical;"></textarea>
+          <button onclick="submitQuizChallenge('${set.id}')" style="width:100%;margin-top:8px;background:#d97706;color:white;border:none;border-radius:7px;padding:10px;font-weight:bold;cursor:pointer;">⚖️ Challenge</button>
+        </div>`:''}
+      <button onclick="nextQuizQuestion('${set.id}')" style="width:100%;margin-top:14px;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">次へ</button>
+    </div>`;
+}
+
+window.submitQuizChallenge = async function(setId) {
+  const set=getQuizSet(setId); if(!set||!set.progress||!set.progress.currentQuestion)return;
+  const p=set.progress, q=p.currentQuestion, last=p.lastGrade;
+  if(!last || last.wordId!==q.wordId || last.correct===true || last.localGrade===true || last.challenged===true)return;
+  const ref=getWordById(q.wordId); if(!ref)return;
+  const reasonInput=document.getElementById('quizChallengeReason');
+  const challengeReason=reasonInput?String(reasonInput.value||'').trim():'';
+  const modal=document.getElementById('practiceModal'); if(!modal)return;
+
+  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><h3 style="color:#92400e;">⚖️ ALLIAがChallengeを再審査中…</h3><div style="color:#64748b;margin-top:6px;">最初の採点とは別に、元の回答をもう一度検討します。</div></div>`;
+  try{
+    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      type:'question_challenge',
+      quizType:q.quizType,
+      direction:q.direction,
+      question:q.question,
+      referenceAnswer:q.referenceAnswer||'',
+      userAnswer:last.userAnswer||'',
+      word:ref.word,
+      firstFeedback:last.firstFeedback||'',
+      firstModelAnswer:last.firstModelAnswer||q.referenceAnswer||'',
+      challengeReason
+    })});
+    const data=await response.json();
+    if(!response.ok)throw alliaHttpError(response, data, 'Challengeの再審査に失敗しました。');
+
+    const accepted=data.challengeAccepted===true || data.correct===true;
+    last.challenged=true;
+    last.challengeAccepted=accepted;
+    last.challengeReason=challengeReason;
+    last.challengeFeedback=data.feedback||'';
+
+    if(accepted){
+      p.wrongCount=Math.max(0,(Number(p.wrongCount)||0)-1);
+      p.correctCount=(Number(p.correctCount)||0)+1;
+
+      if(last.wasInReviewBefore){
+        if(!set.reviewWordIds.includes(q.wordId))set.reviewWordIds.push(q.wordId);
+      }else{
+        set.reviewWordIds=(set.reviewWordIds||[]).filter(id=>id!==q.wordId);
+      }
+
+      const previous=Number(last.previousMistakeCount)||0;
+      if(previous>0) set.mistakeCounts[q.wordId]=previous;
+      else delete set.mistakeCounts[q.wordId];
+    }
+
+    savePracticeData();
+    renderQuizChallengeResult(setId, accepted, data.feedback||'', data.modelAnswer||last.firstModelAnswer||q.referenceAnswer||'', last.userAnswer||'', challengeReason);
+  }catch(error){
+    renderQuizFeedback(setId, false, last.firstFeedback||'', last.firstModelAnswer||q.referenceAnswer||'', last.userAnswer||'');
+    setTimeout(()=>alert(String(error.message||error)),20);
+  }
+};
+
+function renderQuizChallengeResult(setId, accepted, feedback, modelAnswer, userAnswer, challengeReason) {
+  const set=getQuizSet(setId); if(!set||!set.progress)return;
+  const modal=document.getElementById('practiceModal'); if(!modal)return;
+  modal.innerHTML=`
+    <div style="background:white;border-radius:14px;width:min(650px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+      <h2 style="margin-top:0;color:${accepted?'#059669':'#dc2626'};">${accepted?'⚖️ Challenge成立':'⚖️ Challenge却下'}</h2>
+      <div style="padding:10px;background:#f8fafc;border-radius:8px;color:#334155;"><b>元の回答：</b>${escapeHtml(userAnswer)}</div>
+      ${challengeReason?`<div style="padding:10px;background:#fffbeb;border-radius:8px;color:#92400e;margin-top:8px;"><b>Challenge理由：</b>${escapeHtml(challengeReason)}</div>`:''}
+      ${modelAnswer?`<div style="padding:10px;background:#f5f3ff;border-radius:8px;color:#4c1d95;margin-top:8px;"><b>基準・模範：</b>${escapeHtml(modelAnswer)}</div>`:''}
+      <div style="margin-top:10px;line-height:1.55;color:#475569;white-space:pre-wrap;">${escapeHtml(feedback)}</div>
+      ${accepted?'<div style="margin-top:10px;color:#059669;font-size:.88em;font-weight:bold;">元の不正解記録を取り消し、この回答を正解として反映しました。</div>':'<div style="margin-top:10px;color:#dc2626;font-size:.88em;font-weight:bold;">元の不正解判定と復習記録を維持します。</div>'}
       <button onclick="nextQuizQuestion('${set.id}')" style="width:100%;margin-top:14px;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">次へ</button>
     </div>`;
 }
