@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP4 2026-09-07：ALLIA採点Challenge・理由入力・誤答記録完全巻戻し ★★★
+// ★★★ IFTY Q3 STEP5 2026-09-07：単語Enter送信時に即クリア・生成中の次入力保持 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -751,7 +751,11 @@ window.addWordToFolder = async function(folderId) {
   if (!folder.words) folder.words = [];
   if (!wordText) return;
 
-  wordInputDrafts[folderId] = wordText;
+  // 送信した単語はEnter/追加の確定時点で入力欄から消す。
+  // その後ユーザーが次の単語を入力した場合は wordInputDrafts に保存され、
+  // AI生成完了後の再描画でもその新しい入力だけを保持する。
+  wordInputDrafts[folderId] = '';
+  input.value = '';
   delete pendingSpellingSuggestions[folderId];
 
   try {
