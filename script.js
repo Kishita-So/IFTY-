@@ -1,4 +1,4 @@
-// ★★★ IFTY 最新版 2026-09-06 Q2：クエスチョン拡張・リスニング/語法/類義語選別対応 ★★★
+// ★★★ IFTY Q3 第1弾 2026-09-07：公式ロゴ・Undo/Redo・シンプルクイズ省AI・利用上限通知・テーマ基盤 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -32,7 +32,265 @@ let practiceData = {
 let currentPracticeSetId = null;
 let currentQuizSetId = null;
 
+// Q3 第1弾：Undo / Redo
+let undoStack = [];
+let redoStack = [];
+let isRestoringHistory = false;
+const MAX_HISTORY_STEPS = 60;
+
+// Q3 第1弾：テーマ
+let iftyTheme = localStorage.getItem('ifty_theme') || 'light';
+
 const WORKER_URL = 'https://ifty.humbleflail205.workers.dev/';
+const IFTY_LOGO_PATH = './ifty-icon.png';
+
+// ==========================================
+// IFTY 共通UI（公式ロゴ・テーマ・Undo/Redo）
+// ==========================================
+function deepClone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function captureLearningState(label) {
+  return {
+    label: label || '操作',
+    folders: deepClone(folders),
+    practiceData: deepClone(practiceData)
+  };
+}
+
+function recordUndoState(label) {
+  if (isRestoringHistory) return;
+  undoStack.push(captureLearningState(label));
+  if (undoStack.length > MAX_HISTORY_STEPS) undoStack.shift();
+  redoStack = [];
+  updateUndoRedoButtons();
+}
+
+function restoreLearningState(snapshot) {
+  if (!snapshot) return;
+  isRestoringHistory = true;
+  try {
+    folders = deepClone(snapshot.folders || []);
+    practiceData = deepClone(snapshot.practiceData || { schemaVersion: 1, modules: { flashcards: { sets: [] }, questions: { sets: [] } } });
+    normalizeFoldersData();
+    normalizePracticeData();
+    selectedFolderIds.clear();
+    selectedWordIds.clear();
+    saveUserData();
+    savePracticeData();
+    renderFolders();
+    const practiceModal = document.getElementById('practiceModal');
+    if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
+  } finally {
+    isRestoringHistory = false;
+  }
+}
+
+window.undoIfty = function() {
+  if (!undoStack.length) return;
+  redoStack.push(captureLearningState('やり直し'));
+  const snapshot = undoStack.pop();
+  restoreLearningState(snapshot);
+  updateUndoRedoButtons();
+};
+
+window.redoIfty = function() {
+  if (!redoStack.length) return;
+  undoStack.push(captureLearningState('取り消し'));
+  const snapshot = redoStack.pop();
+  restoreLearningState(snapshot);
+  updateUndoRedoButtons();
+};
+
+function updateUndoRedoButtons() {
+  const undoBtn = document.getElementById('iftyUndoBtn');
+  const redoBtn = document.getElementById('iftyRedoBtn');
+  if (undoBtn) {
+    undoBtn.disabled = undoStack.length === 0;
+    undoBtn.style.opacity = undoStack.length ? '1' : '.4';
+  }
+  if (redoBtn) {
+    redoBtn.disabled = redoStack.length === 0;
+    redoBtn.style.opacity = redoStack.length ? '1' : '.4';
+  }
+}
+
+function ensureIftyThemeStyles() {
+  if (document.getElementById('iftyThemeStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'iftyThemeStyles';
+  style.textContent = `
+    body[data-ifty-theme="dark"] { background:#020617 !important; color:#e2e8f0 !important; }
+    body[data-ifty-theme="dark"] [style*="background:white"],
+    body[data-ifty-theme="dark"] [style*="background: white"] { background:#0f172a !important; color:#e2e8f0 !important; }
+    body[data-ifty-theme="dark"] [style*="background:#f8fafc"],
+    body[data-ifty-theme="dark"] [style*="background: #f8fafc"],
+    body[data-ifty-theme="dark"] [style*="background:#faf5ff"],
+    body[data-ifty-theme="dark"] [style*="background:#f5f3ff"],
+    body[data-ifty-theme="dark"] [style*="background:#eff6ff"] { background:#111827 !important; }
+    body[data-ifty-theme="dark"] [style*="color:#0f172a"],
+    body[data-ifty-theme="dark"] [style*="color: #0f172a"],
+    body[data-ifty-theme="dark"] [style*="color:#334155"],
+    body[data-ifty-theme="dark"] [style*="color: #334155"],
+    body[data-ifty-theme="dark"] [style*="color:#475569"],
+    body[data-ifty-theme="dark"] [style*="color: #475569"] { color:#e2e8f0 !important; }
+    body[data-ifty-theme="dark"] input,
+    body[data-ifty-theme="dark"] textarea,
+    body[data-ifty-theme="dark"] select { background:#0b1220 !important; color:#e2e8f0 !important; border-color:#475569 !important; }
+    body[data-ifty-theme="dark"] option { background:#0f172a; color:#e2e8f0; }
+    #iftyGlobalLogo img { display:block; width:100%; height:100%; object-fit:contain; }
+  `;
+  document.head.appendChild(style);
+}
+
+function applyIftyTheme() {
+  ensureIftyThemeStyles();
+  document.body.setAttribute('data-ifty-theme', iftyTheme);
+  localStorage.setItem('ifty_theme', iftyTheme);
+  const btn = document.getElementById('iftyThemeBtn');
+  if (btn) btn.textContent = iftyTheme === 'dark' ? '☀️' : '🌙';
+}
+
+window.toggleIftyTheme = function() {
+  iftyTheme = iftyTheme === 'dark' ? 'light' : 'dark';
+  applyIftyTheme();
+};
+
+window.goToIftyHome = function() {
+  if (typeof window.openIftyHome === 'function') {
+    window.openIftyHome();
+    return;
+  }
+  if (typeof window.closePracticeModal === 'function') window.closePracticeModal();
+  if (typeof window.closeMainLauncher === 'function') window.closeMainLauncher();
+  if (typeof window.closeMenuModal === 'function') window.closeMenuModal();
+  if (typeof window.switchToVocabView === 'function') window.switchToVocabView();
+};
+
+function ensureIftyBrandUi() {
+  if (!document.getElementById('iftyGlobalLogo')) {
+    const logo = document.createElement('button');
+    logo.id = 'iftyGlobalLogo';
+    logo.type = 'button';
+    logo.title = 'IFTYホーム';
+    logo.onclick = window.goToIftyHome;
+    logo.style.cssText = 'position:fixed;left:10px;top:10px;width:58px;height:72px;padding:0;border:none;background:#000;border-radius:10px;overflow:hidden;cursor:pointer;z-index:10090;box-shadow:0 5px 18px rgba(0,0,0,.28);';
+    logo.innerHTML = `<img src="${IFTY_LOGO_PATH}" alt="IFTY">`;
+    document.body.appendChild(logo);
+  }
+
+  if (!document.getElementById('iftyQuickControls')) {
+    const controls = document.createElement('div');
+    controls.id = 'iftyQuickControls';
+    controls.style.cssText = 'position:fixed;right:10px;top:10px;display:flex;gap:5px;z-index:10090;';
+    controls.innerHTML = `
+      <button id="iftyUndoBtn" onclick="undoIfty()" title="取り消し Ctrl/⌘ + Z" style="width:38px;height:38px;border:none;border-radius:9px;background:#334155;color:white;font-size:1.05em;cursor:pointer;">↶</button>
+      <button id="iftyRedoBtn" onclick="redoIfty()" title="やり直し Ctrl + Y / ⌘ + Shift + Z" style="width:38px;height:38px;border:none;border-radius:9px;background:#334155;color:white;font-size:1.05em;cursor:pointer;">↷</button>
+      <button id="iftyThemeBtn" onclick="toggleIftyTheme()" title="ライト / ダーク" style="width:38px;height:38px;border:none;border-radius:9px;background:#334155;color:white;font-size:1em;cursor:pointer;">☀️</button>`;
+    document.body.appendChild(controls);
+  }
+
+  const landingPage = document.getElementById('landingPage');
+  if (landingPage && !document.getElementById('iftyLoginLogo')) {
+    const img = document.createElement('img');
+    img.id = 'iftyLoginLogo';
+    img.src = IFTY_LOGO_PATH;
+    img.alt = 'IFTY';
+    img.style.cssText = 'display:block;width:min(440px,80vw);max-height:46vh;object-fit:contain;margin:10px auto 24px;';
+    landingPage.insertBefore(img, landingPage.firstChild);
+  }
+
+  applyIftyTheme();
+  updateUndoRedoButtons();
+}
+
+function ensureIftyPwaHeadLinks() {
+  if (!document.querySelector('link[rel="apple-touch-icon"]')) {
+    const apple = document.createElement('link');
+    apple.rel = 'apple-touch-icon';
+    apple.href = './apple-touch-icon.png';
+    document.head.appendChild(apple);
+  }
+  if (!document.querySelector('link[rel="manifest"]')) {
+    const manifest = document.createElement('link');
+    manifest.rel = 'manifest';
+    manifest.href = './manifest.webmanifest';
+    document.head.appendChild(manifest);
+  }
+  if (!document.querySelector('meta[name="theme-color"]')) {
+    const meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    meta.content = '#000000';
+    document.head.appendChild(meta);
+  }
+}
+
+function isAlliaQuotaError(response, data) {
+  const text = `${data && data.error ? data.error : ''} ${data && data.details ? data.details : ''} ${data && data.message ? data.message : ''}`.toLowerCase();
+  return response && response.status === 429 || /quota|limit|rate limit|neuron|daily.*limit|exceeded|resource exhausted|usage limit/.test(text);
+}
+
+function alliaHttpError(response, data, fallback) {
+  if (isAlliaQuotaError(response, data)) {
+    return new Error('本日のALLIA利用上限に達した可能性があります。Cloudflare Workers AIの無料枠は日本時間9:00ごろにリセットされます。');
+  }
+  return new Error((data && (data.error || data.details || data.message)) || fallback || ('HTTP ' + (response ? response.status : 'error')));
+}
+
+function normalizeQuizAnswerText(value) {
+  return String(value == null ? '' : value)
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[。．.!！?？「」『』"'`]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function deriveQuizAnswers(word) {
+  const existing = word && word.quizAnswers && typeof word.quizAnswers === 'object' ? word.quizAnswers : {};
+  const jp = Array.isArray(existing.jp) ? existing.jp.filter(Boolean).map(String) : [];
+  const en = Array.isArray(existing.en) ? existing.en.filter(Boolean).map(String) : [];
+  const meanings = Array.isArray(word && word.meanings) ? word.meanings.filter(Boolean).map(String) : [];
+  return {
+    jp: [...new Set(jp.length ? jp : meanings)],
+    en: [...new Set(en.length ? en : (word && word.word ? [String(word.word)] : []))]
+  };
+}
+
+function createLocalSimpleQuestion(word, direction) {
+  const answers = deriveQuizAnswers(word);
+  if (direction === 'jp_to_en') {
+    const promptMeaning = answers.jp[0] || (Array.isArray(word.meanings) ? word.meanings[0] : '') || 'この意味';
+    return {
+      question: `「${promptMeaning}」に当たる英単語を答えてください。`,
+      instruction: 'シンプルクイズ：保存済みの解答データで端末内判定します。',
+      referenceAnswer: (answers.en || []).join(' / '),
+      localAnswers: answers.en || [],
+      options: []
+    };
+  }
+  return {
+    question: `「${word.word || ''}」の日本語の意味を答えてください。`,
+    instruction: 'シンプルクイズ：保存済みの解答データで端末内判定します。',
+    referenceAnswer: (answers.jp || []).join(' / '),
+    localAnswers: answers.jp || [],
+    options: []
+  };
+}
+
+function gradeLocalSimpleAnswer(question, userAnswer) {
+  const candidates = Array.isArray(question.localAnswers) ? question.localAnswers : [];
+    const answerParts = String(userAnswer || '').split(/[、,，\/／;；\n]+/).map(normalizeQuizAnswerText).filter(Boolean);
+  const normalizedCandidates = candidates.map(normalizeQuizAnswerText).filter(Boolean);
+  const correct = answerParts.some(part => normalizedCandidates.includes(part));
+  return {
+    correct,
+    feedback: correct ? '保存済みの正解候補と一致しました。ALLIAは使用していません。' : '保存済みの正解候補とは一致しませんでした。',
+    modelAnswer: candidates.join(' / ')
+  };
+}
+
 
 // ==========================================
 // ALLIA 表示統一
@@ -79,6 +337,24 @@ document.addEventListener("DOMContentLoaded", function() {
   loadPracticeData(currentUser);
   initChatSystem();
   applyAlliaBranding();
+  ensureIftyPwaHeadLinks();
+  ensureIftyBrandUi();
+});
+
+document.addEventListener('keydown', function(event) {
+  const target = event.target;
+  const tag = target && target.tagName ? String(target.tagName).toLowerCase() : '';
+  if (tag === 'input' || tag === 'textarea' || (target && target.isContentEditable)) return;
+  const key = String(event.key || '').toLowerCase();
+  const command = event.ctrlKey || event.metaKey;
+  if (!command) return;
+  if (key === 'z' && !event.shiftKey) {
+    event.preventDefault();
+    window.undoIfty();
+  } else if (key === 'y' || (key === 'z' && event.shiftKey)) {
+    event.preventDefault();
+    window.redoIfty();
+  }
 });
 
 // 2. ユーザーデータ管理
@@ -94,6 +370,7 @@ function normalizeFoldersData() {
     if (!Array.isArray(folder.words)) folder.words = [];
     folder.words.forEach(word => {
       if (!word.id) word.id = makeId('word');
+      word.quizAnswers = deriveQuizAnswers(word);
     });
   });
 }
@@ -187,6 +464,7 @@ window.createFolder = function() {
     return;
   }
 
+  recordUndoState('フォルダ作成');
   folders.push({
     id: 'folder_' + Date.now(),
     name: name,
@@ -214,6 +492,7 @@ window.moveFolder = function(index, direction) {
 
   if (newIndex < 0 || newIndex >= folders.length) return;
 
+  recordUndoState('フォルダ移動');
   const temp = folders[index];
   folders[index] = folders[newIndex];
   folders[newIndex] = temp;
@@ -228,6 +507,7 @@ window.clearFolderWords = function(folderId) {
   const folder = folders.find(f => f.id === folderId);
 
   if (folder) {
+    recordUndoState('フォルダ内単語の全削除');
     folder.words = [];
     saveUserData();
     renderFolders();
@@ -470,13 +750,15 @@ async function generateAndAddWord(folderId, wordText) {
   if (!folder) return;
   if (!folder.words) folder.words = [];
 
+  recordUndoState('単語追加');
   const newWordObj = {
     id: makeId('word'),
     word: wordText,
     meanings: ['生成中...'],
     examples: [],
     details: '',
-    mastery: 'unfixed'
+    mastery: 'unfixed',
+    quizAnswers: { jp: [], en: [wordText] }
   };
 
   folder.words.push(newWordObj);
@@ -499,6 +781,8 @@ async function generateAndAddWord(folderId, wordText) {
           includeTransitivity: true,
           includeCountability: true,
           includeExamMeanings: true,
+          advancedMeaningCoverage: 'Eiken Grade 1 / University of Tokyo / TUFS reading level',
+          includeQuizAnswers: true,
           includeExamples: true,
           includeInflections: true,
           includeDerivatives: true,
@@ -509,7 +793,7 @@ async function generateAndAddWord(folderId, wordText) {
 
     const data = await response.json();
     if (!response.ok) {
-      throw new Error(data.error || data.details || ("HTTP " + response.status));
+      throw alliaHttpError(response, data, '単語生成に失敗しました。');
     }
 
     applyWordData(newWordObj, data);
@@ -552,6 +836,13 @@ function applyWordData(wordObj, data) {
   if (data.details) wordObj.details = data.details;
   if (Array.isArray(data.derivatives)) wordObj.derivatives = data.derivatives;
   if (data.forms && typeof data.forms === 'object') wordObj.forms = data.forms;
+  if (data.quizAnswers && typeof data.quizAnswers === 'object') {
+    wordObj.quizAnswers = {
+      jp: Array.isArray(data.quizAnswers.jp) ? data.quizAnswers.jp.filter(Boolean).map(String) : [],
+      en: Array.isArray(data.quizAnswers.en) ? data.quizAnswers.en.filter(Boolean).map(String) : []
+    };
+  }
+  wordObj.quizAnswers = deriveQuizAnswers(wordObj);
 }
 
 window.moveWordWithinFolder = function(folderId, wordIndex, direction) {
@@ -561,6 +852,7 @@ window.moveWordWithinFolder = function(folderId, wordIndex, direction) {
   const newIndex = wordIndex + direction;
   if (newIndex < 0 || newIndex >= folder.words.length) return;
 
+  recordUndoState('単語並べ替え');
   const temp = folder.words[wordIndex];
   folder.words[wordIndex] = folder.words[newIndex];
   folder.words[newIndex] = temp;
@@ -629,6 +921,7 @@ window.saveEditedWord = function(folderId, wordIndex) {
     return { en: parts[0] ? parts[0].trim() : line, ja: parts[1] ? parts[1].trim() : '' };
   });
 
+  recordUndoState('単語編集');
   const word = folder.words[wordIndex];
   word.word = wordVal;
   word.pronunciation = pronunciationVal;
@@ -637,6 +930,7 @@ window.saveEditedWord = function(folderId, wordIndex) {
   word.examples = newExamples;
   word.derivatives = derivativesVal;
   word.details = detailsVal;
+  word.quizAnswers = { jp: meaningsVal, en: wordVal ? [wordVal] : [] };
 
   if (usageVal) {
     const usageParts = usageVal.split('/').map(s => s.trim());
@@ -670,6 +964,7 @@ window.speakWord = function(text) {
 
 window.deleteFolder = function(folderId) {
   if (!confirm("このフォルダを削除しますか？")) return;
+  recordUndoState('フォルダ削除');
   const removedFolder = folders.find(f => f.id === folderId);
   if (removedFolder) (removedFolder.words || []).forEach(w => selectedWordIds.delete(w.id));
   selectedFolderIds.delete(folderId);
@@ -682,6 +977,7 @@ window.deleteFolder = function(folderId) {
 window.deleteWord = function(folderId, wordIndex) {
   const folder = folders.find(f => f.id === folderId);
   if (folder && folder.words) {
+    recordUndoState('単語削除');
     const removed = folder.words[wordIndex];
     if (removed && removed.id) selectedWordIds.delete(removed.id);
     folder.words.splice(wordIndex, 1);
@@ -737,6 +1033,7 @@ window.clearAllSelections = function() {
 window.bulkDeleteSelectedWords = function() {
   if (selectedWordIds.size === 0) return;
   if (!confirm(`選択した ${selectedWordIds.size} 語をすべて削除しますか？`)) return;
+  recordUndoState('選択語の一斉削除');
   folders.forEach(folder => {
     folder.words = (folder.words || []).filter(word => !selectedWordIds.has(word.id));
   });
@@ -752,6 +1049,7 @@ window.bulkMoveSelectedWords = function() {
   const destination = folders.find(f => f.id === select.value);
   if (!destination) return;
 
+  recordUndoState('選択語の一斉移動');
   const moving = [];
   folders.forEach(folder => {
     if (folder.id === destination.id) return;
@@ -916,6 +1214,7 @@ function openPracticeNamePrompt(title, defaultValue, onConfirm) {
 
 window.createPracticeFlashcardSet = function() {
   openPracticeNamePrompt('フラッシュカードセット名を入力してください。', '新しいフラッシュカード', name => {
+    recordUndoState('フラッシュカードセット作成');
     const set = { id: makeId('flashset'), name, wordIds: [], random: true, direction: 'front', progress: null };
     getFlashcardSets().push(set);
     savePracticeData();
@@ -926,6 +1225,7 @@ window.renamePracticeSet = function(setId) {
   const set = getPracticeSet(setId); if (!set) return;
   const name = prompt('新しいセット名', set.name);
   if (!name || !name.trim()) return;
+  recordUndoState('フラッシュカードセット名変更');
   set.name = name.trim(); savePracticeData(); openPracticeFlashcardSet(setId);
 };
 
@@ -933,12 +1233,14 @@ window.movePracticeSet = function(setId, direction) {
   const sets = getFlashcardSets();
   const i = sets.findIndex(s => s.id === setId); const ni = i + direction;
   if (i < 0 || ni < 0 || ni >= sets.length) return;
+  recordUndoState('フラッシュカードセット移動');
   [sets[i], sets[ni]] = [sets[ni], sets[i]];
   savePracticeData(); renderPracticeHome();
 };
 
 window.duplicatePracticeSet = function(setId) {
   const set = getPracticeSet(setId); if (!set) return;
+  recordUndoState('フラッシュカードセット複製');
   getFlashcardSets().push({ ...JSON.parse(JSON.stringify(set)), id: makeId('flashset'), name: set.name + ' コピー', progress: null });
   savePracticeData(); renderPracticeHome();
 };
@@ -946,6 +1248,7 @@ window.duplicatePracticeSet = function(setId) {
 window.deletePracticeSet = function(setId) {
   const set = getPracticeSet(setId); if (!set) return;
   if (!confirm(`「${set.name}」を削除しますか？`)) return;
+  recordUndoState('フラッシュカードセット削除');
   practiceData.modules.flashcards.sets = getFlashcardSets().filter(s => s.id !== setId);
   savePracticeData(); renderPracticeHome();
 };
@@ -998,6 +1301,7 @@ function uniqueExistingWordIds(ids) {
 }
 
 function addIdsToSet(set, ids) {
+  recordUndoState('フラッシュカードへ単語追加');
   set.wordIds = uniqueExistingWordIds([...(set.wordIds || []), ...ids]);
   set.progress = null;
   savePracticeData();
@@ -1007,10 +1311,10 @@ function addIdsToSet(set, ids) {
 window.addSelectedWordsToPracticeSet = function(setId) { const set=getPracticeSet(setId); if(set) addIdsToSet(set, collectWordIdsFromSelection()); };
 window.addFolderWordsToPracticeSet = function(setId) { const set=getPracticeSet(setId); const sel=document.getElementById('practiceFolderSource'); const f=folders.find(x=>sel&&x.id===sel.value); if(set&&f) addIdsToSet(set,(f.words||[]).map(w=>w.id)); };
 window.addAllWordsToPracticeSet = function(setId) { const set=getPracticeSet(setId); if(set) addIdsToSet(set,folders.flatMap(f=>(f.words||[]).map(w=>w.id))); };
-window.removeWordFromPracticeSet = function(setId,wordId) { const set=getPracticeSet(setId); if(!set)return; set.wordIds=(set.wordIds||[]).filter(id=>id!==wordId); set.progress=null; savePracticeData(); openPracticeFlashcardSet(setId); };
-window.clearPracticeSetWords = function(setId) { const set=getPracticeSet(setId); if(!set)return; if(!confirm('このセットの単語をすべて外しますか？'))return; set.wordIds=[]; set.progress=null; savePracticeData(); openPracticeFlashcardSet(setId); };
-window.setPracticeRandom = function(setId,val) { const set=getPracticeSet(setId); if(set){ set.random=!!val; set.progress=null; savePracticeData(); } };
-window.setPracticeDirection = function(setId,val) { const set=getPracticeSet(setId); if(set){ set.direction=val; set.progress=null; savePracticeData(); } };
+window.removeWordFromPracticeSet = function(setId,wordId) { const set=getPracticeSet(setId); if(!set)return; recordUndoState('フラッシュカードから単語削除'); set.wordIds=(set.wordIds||[]).filter(id=>id!==wordId); set.progress=null; savePracticeData(); openPracticeFlashcardSet(setId); };
+window.clearPracticeSetWords = function(setId) { const set=getPracticeSet(setId); if(!set)return; if(!confirm('このセットの単語をすべて外しますか？'))return; recordUndoState('フラッシュカードを空にする'); set.wordIds=[]; set.progress=null; savePracticeData(); openPracticeFlashcardSet(setId); };
+window.setPracticeRandom = function(setId,val) { const set=getPracticeSet(setId); if(set){ recordUndoState('フラッシュカード設定変更'); set.random=!!val; set.progress=null; savePracticeData(); } };
+window.setPracticeDirection = function(setId,val) { const set=getPracticeSet(setId); if(set){ recordUndoState('フラッシュカード設定変更'); set.direction=val; set.progress=null; savePracticeData(); } };
 
 function shuffleArray(arr) {
   const copy=[...arr]; for(let i=copy.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [copy[i],copy[j]]=[copy[j],copy[i]]; } return copy;
@@ -1098,6 +1402,7 @@ function quizDirectionLabel(mode) {
 
 window.createQuizSet = function() {
   openPracticeNamePrompt('クイズフォルダ名を入力してください。', '新しいクイズフォルダ', name => {
+    recordUndoState('クイズフォルダ作成');
     const set = {
       id: makeId('quizset'),
       name,
@@ -1118,6 +1423,7 @@ window.createQuizSet = function() {
 window.renameQuizSet = function(setId) {
   const set = getQuizSet(setId); if (!set) return;
   openPracticeNamePrompt('クイズフォルダ名を変更', set.name, name => {
+    recordUndoState('クイズフォルダ名変更');
     set.name = name;
     savePracticeData();
     openQuizSet(setId);
@@ -1128,12 +1434,14 @@ window.moveQuizSet = function(setId, direction) {
   const sets = getQuizSets();
   const i = sets.findIndex(s => s.id === setId); const ni = i + direction;
   if (i < 0 || ni < 0 || ni >= sets.length) return;
+  recordUndoState('クイズフォルダ移動');
   [sets[i], sets[ni]] = [sets[ni], sets[i]];
   savePracticeData(); renderPracticeHome();
 };
 
 window.duplicateQuizSet = function(setId) {
   const set = getQuizSet(setId); if (!set) return;
+  recordUndoState('クイズフォルダ複製');
   const copy = JSON.parse(JSON.stringify(set));
   copy.id = makeId('quizset');
   copy.name = set.name + ' コピー';
@@ -1145,6 +1453,7 @@ window.duplicateQuizSet = function(setId) {
 window.deleteQuizSet = function(setId) {
   const set = getQuizSet(setId); if (!set) return;
   if (!confirm(`「${set.name}」を削除しますか？`)) return;
+  recordUndoState('クイズフォルダ削除');
   practiceData.modules.questions.sets = getQuizSets().filter(s => s.id !== setId);
   savePracticeData(); renderPracticeHome();
 };
@@ -1221,12 +1530,13 @@ window.openQuizSet = function(setId) {
 
 window.setQuizDirection = function(setId, value) {
   const set=getQuizSet(setId); if(!set)return;
-  if(['jp_to_en','en_to_jp','mixed'].includes(value)) set.directionMode=value;
+  if(['jp_to_en','en_to_jp','mixed'].includes(value)) { recordUndoState('クイズ設定変更'); set.directionMode=value; }
   set.progress=null; savePracticeData(); openQuizSet(setId);
 };
 
 window.setQuizType = function(setId, type, checked) {
   const set=getQuizSet(setId); if(!set || !(type in set.types))return;
+  recordUndoState('クイズ形式変更');
   set.types[type]=!!checked;
   if(!Object.values(set.types).some(Boolean)) {
     set.types[type]=true;
@@ -1235,18 +1545,19 @@ window.setQuizType = function(setId, type, checked) {
   set.progress=null; savePracticeData(); openQuizSet(setId);
 };
 
-window.setQuizRandom = function(setId, value) { const set=getQuizSet(setId); if(set){ set.random=!!value; set.progress=null; savePracticeData(); } };
+window.setQuizRandom = function(setId, value) { const set=getQuizSet(setId); if(set){ recordUndoState('クイズ設定変更'); set.random=!!value; set.progress=null; savePracticeData(); } };
 
 function addIdsToQuizSet(set, ids) {
+  recordUndoState('クイズへ単語追加');
   set.wordIds=uniqueExistingWordIds([...(set.wordIds||[]),...ids]);
   set.progress=null; savePracticeData(); openQuizSet(set.id);
 }
 window.addSelectedWordsToQuizSet = function(setId){ const set=getQuizSet(setId); if(set)addIdsToQuizSet(set,collectWordIdsFromSelection()); };
 window.addFolderWordsToQuizSet = function(setId){ const set=getQuizSet(setId); const sel=document.getElementById('quizFolderSource'); const f=folders.find(x=>sel&&x.id===sel.value); if(set&&f)addIdsToQuizSet(set,(f.words||[]).map(w=>w.id)); };
 window.addAllWordsToQuizSet = function(setId){ const set=getQuizSet(setId); if(set)addIdsToQuizSet(set,folders.flatMap(f=>(f.words||[]).map(w=>w.id))); };
-window.removeWordFromQuizSet = function(setId,wordId){ const set=getQuizSet(setId); if(!set)return; set.wordIds=(set.wordIds||[]).filter(id=>id!==wordId); set.reviewWordIds=(set.reviewWordIds||[]).filter(id=>id!==wordId); delete set.mistakeCounts[wordId]; set.progress=null; savePracticeData(); openQuizSet(setId); };
-window.clearQuizSetWords = function(setId){ const set=getQuizSet(setId); if(!set)return; if(!confirm('このクイズフォルダの単語をすべて外しますか？'))return; set.wordIds=[]; set.reviewWordIds=[]; set.mistakeCounts={}; set.progress=null; savePracticeData(); openQuizSet(setId); };
-window.clearQuizReview = function(setId){ const set=getQuizSet(setId); if(!set)return; if(!confirm('間違い・復習記録を消しますか？'))return; set.reviewWordIds=[]; set.mistakeCounts={}; savePracticeData(); openQuizSet(setId); };
+window.removeWordFromQuizSet = function(setId,wordId){ const set=getQuizSet(setId); if(!set)return; recordUndoState('クイズから単語削除'); set.wordIds=(set.wordIds||[]).filter(id=>id!==wordId); set.reviewWordIds=(set.reviewWordIds||[]).filter(id=>id!==wordId); delete set.mistakeCounts[wordId]; set.progress=null; savePracticeData(); openQuizSet(setId); };
+window.clearQuizSetWords = function(setId){ const set=getQuizSet(setId); if(!set)return; if(!confirm('このクイズフォルダの単語をすべて外しますか？'))return; recordUndoState('クイズフォルダを空にする'); set.wordIds=[]; set.reviewWordIds=[]; set.mistakeCounts={}; set.progress=null; savePracticeData(); openQuizSet(setId); };
+window.clearQuizReview = function(setId){ const set=getQuizSet(setId); if(!set)return; if(!confirm('間違い・復習記録を消しますか？'))return; recordUndoState('クイズ復習記録削除'); set.reviewWordIds=[]; set.mistakeCounts={}; savePracticeData(); openQuizSet(setId); };
 
 function resolveQuizDirection(set) {
   if(set.directionMode==='mixed') return Math.random()<0.5 ? 'jp_to_en' : 'en_to_jp';
@@ -1280,14 +1591,20 @@ async function renderQuizPlayer(setId) {
   if(!ref){ p.index++; p.currentQuestion=null; savePracticeData(); renderQuizPlayer(setId); return; }
 
   if(!p.currentQuestion){
-    modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><div style="font-size:2em;">❓</div><h3 style="color:#4c1d95;">ALLIAが問題を作成中…</h3><div style="color:#64748b;">${p.index+1}/${p.queue.length}</div></div>`;
+    modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><div style="font-size:2em;">❓</div><h3 style="color:#4c1d95;">問題を準備中…</h3><div style="color:#64748b;">${p.index+1}/${p.queue.length}</div></div>`;
     try {
       const type=chooseQuizType(set);
       const direction=resolveQuizDirection(set);
-      const candidateWords=shuffleArray((set.wordIds||[]).filter(id=>id!==ref.word.id)).slice(0,8).map(id=>{const x=getWordById(id);return x?x.word:null;}).filter(Boolean); const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_generate',quizType:type,direction,word:ref.word,candidateWords})});
-      const data=await response.json();
-      if(!response.ok) throw new Error(data.error||data.details||('HTTP '+response.status));
-      p.currentQuestion={...data,quizType:type,direction,wordId:ref.word.id};
+      if (type === 'simple') {
+        const data = createLocalSimpleQuestion(ref.word, direction);
+        p.currentQuestion={...data,quizType:type,direction,wordId:ref.word.id,localGrade:true};
+      } else {
+        const candidateWords=shuffleArray((set.wordIds||[]).filter(id=>id!==ref.word.id)).slice(0,8).map(id=>{const x=getWordById(id);return x?x.word:null;}).filter(Boolean);
+        const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_generate',quizType:type,direction,word:ref.word,candidateWords})});
+        const data=await response.json();
+        if(!response.ok) throw alliaHttpError(response, data, '問題生成に失敗しました。');
+        p.currentQuestion={...data,quizType:type,direction,wordId:ref.word.id};
+      }
       savePracticeData();
     } catch(error){
       modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h3 style="color:#ef4444;">問題生成に失敗しました</h3><p style="color:#64748b;">${escapeHtml(String(error.message||error))}</p><button onclick="retryCurrentQuizQuestion('${set.id}')" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">再試行</button><button onclick="openQuizSet('${set.id}')" style="margin-left:8px;background:#e2e8f0;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">戻る</button></div>`;
@@ -1303,8 +1620,8 @@ async function renderQuizPlayer(setId) {
       ${q.audioText?`<div style="margin-top:10px;display:flex;justify-content:center;"><button onclick="speakQuizAudio('${set.id}')" style="background:#0ea5e9;color:white;border:none;border-radius:8px;padding:10px 16px;font-weight:bold;cursor:pointer;">🔊 音声を再生</button></div>`:''}
       ${q.instruction?`<div style="margin-top:7px;color:#64748b;font-size:.82em;">${escapeHtml(q.instruction)}</div>`:''}
       ${Array.isArray(q.options)&&q.options.length?`<div id="quizChoiceArea" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;">${q.options.map((option,i)=>`<label style="display:flex;gap:8px;align-items:center;border:2px solid #ddd6fe;background:white;border-radius:8px;padding:10px;cursor:pointer;"><input type="radio" name="quizChoice" value="${escapeHtml(option)}" style="accent-color:#7c3aed;"><span>${String.fromCharCode(65+i)}. ${escapeHtml(option)}</span></label>`).join('')}</div>`:`<textarea id="quizAnswerInput" rows="4" placeholder="答えを入力" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1em;resize:vertical;"></textarea>`}
-      <div style="display:flex;gap:8px;margin-top:10px;"><button onclick="submitQuizAnswer('${set.id}')" style="flex:1;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${Array.isArray(q.options)&&q.options.length?'回答する':'ALLIAに判定してもらう'}</button><button onclick="skipQuizQuestion('${set.id}')" style="background:#e2e8f0;color:#475569;border:none;border-radius:7px;padding:11px;cursor:pointer;">スキップ</button></div>
-      <div style="margin-top:9px;color:#94a3b8;font-size:.78em;text-align:center;">記述回答は表記ゆれ・複数の意味・自然さを含めてALLIAが判定します。リスニングは記述式と選択式の両方が出ます。</div>
+      <div style="display:flex;gap:8px;margin-top:10px;"><button onclick="submitQuizAnswer('${set.id}')" style="flex:1;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${q.localGrade?'端末内で判定':(Array.isArray(q.options)&&q.options.length?'回答する':'ALLIAに判定してもらう')}</button><button onclick="skipQuizQuestion('${set.id}')" style="background:#e2e8f0;color:#475569;border:none;border-radius:7px;padding:11px;cursor:pointer;">スキップ</button></div>
+      <div style="margin-top:9px;color:#94a3b8;font-size:.78em;text-align:center;">シンプルは保存済み解答で端末内判定し、ALLIAを使いません。その他の記述回答は表記ゆれ・複数の意味・自然さを含めてALLIAが判定します。リスニングは記述式と選択式の両方が出ます。</div>
     </div>`;
   const input=document.getElementById('quizAnswerInput'); if(input)setTimeout(()=>input.focus(),30); if(q.audioText)setTimeout(()=>window.speakQuizAudio(set.id),180);
 }
@@ -1323,11 +1640,28 @@ window.submitQuizAnswer = async function(setId) {
   if(!answer){ alert(Array.isArray(q.options)&&q.options.length?'選択肢を1つ選んでください。':'答えを入力してください。'); return; }
   const ref=getWordById(q.wordId); if(!ref)return;
   const modal=document.getElementById('practiceModal'); if(!modal)return;
+
+  if (q.localGrade || q.quizType === 'simple') {
+    const data = gradeLocalSimpleAnswer(q, answer);
+    const correct = data.correct === true;
+    if(correct){
+      p.correctCount=(p.correctCount||0)+1;
+      if(p.reviewOnly) set.reviewWordIds=(set.reviewWordIds||[]).filter(id=>id!==q.wordId);
+    }else{
+      p.wrongCount=(p.wrongCount||0)+1;
+      if(!set.reviewWordIds.includes(q.wordId))set.reviewWordIds.push(q.wordId);
+      set.mistakeCounts[q.wordId]=(Number(set.mistakeCounts[q.wordId])||0)+1;
+    }
+    savePracticeData();
+    renderQuizFeedback(setId, correct, data.feedback||'', data.modelAnswer||q.referenceAnswer||'', answer);
+    return;
+  }
+
   modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><h3 style="color:#4c1d95;">ALLIAが採点中…</h3></div>`;
   try{
     const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_grade',quizType:q.quizType,direction:q.direction,question:q.question,referenceAnswer:q.referenceAnswer||'',userAnswer:answer,word:ref.word})});
     const data=await response.json();
-    if(!response.ok)throw new Error(data.error||data.details||('HTTP '+response.status));
+    if(!response.ok)throw alliaHttpError(response, data, '採点に失敗しました。');
     const correct=data.correct===true;
     if(correct){
       p.correctCount=(p.correctCount||0)+1;
@@ -1744,7 +2078,9 @@ window.sendChatMessage = async function() {
         if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
       }
     } else {
-      replyText = data.error || data.details || "AIからの応答に失敗しました。";
+      replyText = isAlliaQuotaError(response, data)
+        ? '本日のALLIA利用上限に達した可能性があります。Cloudflare Workers AIの無料枠は日本時間9:00ごろにリセットされます。'
+        : (data.error || data.details || "AIからの応答に失敗しました。");
     }
   } catch (e) {
     replyText = "通信エラーが発生しました: " + e.message;
