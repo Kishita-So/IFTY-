@@ -1,6 +1,6 @@
-// ★★★ IFTY Service Worker Q3 STEP8 2026-09-09：GitHub Pages /IFTY-/ 対応・オフライン起動安定化 ★★★
+// ★★★ IFTY Service Worker Q3 STEP9 2026-09-09：STEP9配信キャッシュ更新（STEP8オフライン動作は維持） ★★★
 const CACHE_PREFIX = 'ifty-static-';
-const CACHE_NAME = 'ifty-static-q3-step8-v1';
+const CACHE_NAME = 'ifty-static-q3-step9-v1';
 const SCOPE_URL = self.registration.scope;
 const INDEX_URL = new URL('index.html', SCOPE_URL).href;
 
