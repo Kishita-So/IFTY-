@@ -1,6 +1,6 @@
-// ★★★ IFTY Service Worker Q3 STEP9 2026-09-09：STEP9配信キャッシュ更新（STEP8オフライン動作は維持） ★★★
+// ★★★ IFTY Service Worker Q3 STEP11 2026-09-09：STEP10更新方式維持・STEP11配信キャッシュ更新 ★★★
 const CACHE_PREFIX = 'ifty-static-';
-const CACHE_NAME = 'ifty-static-q3-step9-v1';
+const CACHE_NAME = 'ifty-static-q3-step11-v1';
 const SCOPE_URL = self.registration.scope;
 const INDEX_URL = new URL('index.html', SCOPE_URL).href;
 
@@ -15,6 +15,10 @@ const CORE_ASSETS = [
   new URL('ifty-icon-512.png', SCOPE_URL).href,
   new URL('apple-touch-icon.png', SCOPE_URL).href
 ];
+
+async function fetchFresh(request) {
+  return fetch(new Request(request, { cache: 'reload' }));
+}
 
 async function cacheAsset(cache, asset) {
   try {
@@ -33,7 +37,7 @@ async function cacheCoreAssets() {
   await Promise.allSettled(CORE_ASSETS.map(asset => cacheAsset(cache, asset)));
 
   try {
-    const indexResponse = await fetch(new Request(INDEX_URL, { cache: 'reload' }));
+    const indexResponse = await fetchFresh(INDEX_URL);
     if (!indexResponse || !indexResponse.ok) return;
 
     await cache.put(INDEX_URL, indexResponse.clone());
@@ -49,6 +53,65 @@ async function cacheCoreAssets() {
       await cacheAsset(cache, absolute.href);
     }));
   } catch (_) {}
+}
+
+function isUpdateSensitiveRequest(request, url) {
+  if (request.mode === 'navigate') return true;
+  const pathname = url.pathname.toLowerCase();
+  return /\.(?:html?|js|css|webmanifest|json)$/.test(pathname);
+}
+
+async function networkFirst(request, options = {}) {
+  const cache = await caches.open(CACHE_NAME);
+
+  try {
+    const response = await fetchFresh(request);
+    if (response && response.ok) {
+      cache.put(request, response.clone()).catch(() => {});
+      if (options.navigation) {
+        cache.put(INDEX_URL, response.clone()).catch(() => {});
+      }
+    }
+    return response;
+  } catch (_) {
+    const cached = await cache.match(request, { ignoreSearch: true });
+    if (cached) return cached;
+
+    if (options.navigation) {
+      const cachedIndex = await cache.match(INDEX_URL, { ignoreSearch: true });
+      if (cachedIndex) return cachedIndex;
+
+      const cachedRoot = await cache.match(SCOPE_URL, { ignoreSearch: true });
+      if (cachedRoot) return cachedRoot;
+
+      return new Response(
+        '<!DOCTYPE html><html lang="ja"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>IFTY Offline</title><body style="font-family:sans-serif;background:#0f172a;color:white;padding:24px"><h1>IFTY</h1><p>オフライン用データの準備がまだ完了していません。オンラインでIFTYを一度開いてから、もう一度お試しください。</p></body></html>',
+        { status: 200, headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
+      );
+    }
+
+    return new Response('', { status: 503, statusText: 'Offline' });
+  }
+}
+
+async function cacheFirst(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request, { ignoreSearch: true });
+
+  if (cached) {
+    fetchFresh(request).then(response => {
+      if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
+    }).catch(() => {});
+    return cached;
+  }
+
+  try {
+    const response = await fetchFresh(request);
+    if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
+    return response;
+  } catch (_) {
+    return new Response('', { status: 503, statusText: 'Offline' });
+  }
 }
 
 self.addEventListener('install', event => {
@@ -72,8 +135,10 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('message', event => {
-  if (!event.data || event.data.type !== 'IFTY_CACHE_CORE') return;
-  event.waitUntil(cacheCoreAssets());
+  if (!event.data) return;
+  if (event.data.type === 'IFTY_CACHE_CORE') {
+    event.waitUntil(cacheCoreAssets());
+  }
 });
 
 self.addEventListener('fetch', event => {
@@ -84,53 +149,10 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return;
   if (!url.href.startsWith(SCOPE_URL)) return;
 
-  if (request.mode === 'navigate') {
-    event.respondWith((async () => {
-      const cache = await caches.open(CACHE_NAME);
-
-      try {
-        const networkResponse = await fetch(request);
-        if (networkResponse && networkResponse.ok) {
-          cache.put(request, networkResponse.clone()).catch(() => {});
-          cache.put(INDEX_URL, networkResponse.clone()).catch(() => {});
-        }
-        return networkResponse;
-      } catch (_) {
-        const cachedNavigation = await cache.match(request, { ignoreSearch: true });
-        if (cachedNavigation) return cachedNavigation;
-
-        const cachedIndex = await cache.match(INDEX_URL, { ignoreSearch: true });
-        if (cachedIndex) return cachedIndex;
-
-        const cachedRoot = await cache.match(SCOPE_URL, { ignoreSearch: true });
-        if (cachedRoot) return cachedRoot;
-
-        return new Response(
-          '<!DOCTYPE html><html lang="ja"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>IFTY Offline</title><body style="font-family:sans-serif;background:#0f172a;color:white;padding:24px"><h1>IFTY</h1><p>オフライン用データの準備がまだ完了していません。オンラインでIFTYを一度開いてから、もう一度お試しください。</p></body></html>',
-          { status: 200, headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
-        );
-      }
-    })());
+  if (isUpdateSensitiveRequest(request, url)) {
+    event.respondWith(networkFirst(request, { navigation: request.mode === 'navigate' }));
     return;
   }
 
-  event.respondWith((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(request, { ignoreSearch: true });
-
-    if (cached) {
-      fetch(request).then(response => {
-        if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
-      }).catch(() => {});
-      return cached;
-    }
-
-    try {
-      const response = await fetch(request);
-      if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
-      return response;
-    } catch (_) {
-      return new Response('', { status: 503, statusText: 'Offline' });
-    }
-  })());
+  event.respondWith(cacheFirst(request));
 });
