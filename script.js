@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP9 2026-09-09：世代オートバックアップ・復元センター・バックアップ書き出し/読み込み ★★★
+// ★★★ IFTY Q3 STEP11 2026-09-09：バックアップ個別削除・一括削除＋STEP10自動更新維持 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -51,6 +51,12 @@ const IFTY_AUTOSAVE_INTERVAL_MS = 3 * 60 * 1000;
 let iftyAutoBackupTimer = null;
 let iftyLastBackupHash = null;
 let iftyRecoveryLifecycleInstalled = false;
+
+// Q3 STEP10：Service Worker / 配信ファイルの自動更新確認
+const IFTY_UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+let iftyServiceWorkerRegistration = null;
+let iftyServiceWorkerUpdateTimer = null;
+let iftyServiceWorkerUpdateListenersInstalled = false;
 
 const WORKER_URL = 'https://ifty.humbleflail205.workers.dev/';
 const IFTY_LOGO_PATH = './ifty-icon.png';
@@ -281,7 +287,7 @@ function sanitizeChatSessionsForBackup() {
 function captureIftyRecoveryPayload() {
   return {
     schemaVersion: 1,
-    appVersion: 'Q3_STEP9',
+    appVersion: 'Q3_STEP11',
     savedAt: Date.now(),
     currentUser: currentUser,
     folders: deepClone(Array.isArray(folders) ? folders : []),
@@ -428,9 +434,10 @@ function ensureIftyRecoveryModal() {
         <button onclick="createManualIftyBackup()" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer;">💾 今すぐ保存</button>
         <button onclick="exportIftyBackupFile()" style="border:none;background:#334155;color:white;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer;">⬇️ ファイル書き出し</button>
         <button onclick="document.getElementById('iftyBackupImportInput').click()" style="border:none;background:#475569;color:white;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer;">⬆️ ファイルから復元</button>
+        <button onclick="deleteAllIftyRecoverySnapshots()" style="border:none;background:#b91c1c;color:white;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer;">🗑️ 端末内バックアップを全削除</button>
         <input id="iftyBackupImportInput" type="file" accept="application/json,.json" style="display:none;" onchange="handleIftyBackupImport(event)">
       </div>
-      <div style="font-size:.78em;color:#64748b;margin-bottom:12px;line-height:1.5;">復元の直前には現在状態を緊急バックアップしてから復元します。端末内バックアップは、Safariの「Webサイトデータを消去」や端末紛失では一緒に消える可能性があるため、重要な時は「ファイル書き出し」も使えます。</div>
+      <div style="font-size:.78em;color:#64748b;margin-bottom:12px;line-height:1.5;">復元の直前には現在状態を緊急バックアップしてから復元します。端末内バックアップは、Webサイトの「Webサイトデータを消去」や端末紛失では一緒に消える可能性があるため、重要な時は「ファイル書き出し」も使えます。</div>
       <div id="iftyRecoveryList"><div style="padding:18px;text-align:center;color:#64748b;">読み込み中…</div></div>
     </div>`;
   document.body.appendChild(modal);
@@ -459,7 +466,10 @@ async function renderIftyRecoveryCenter() {
               <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;font-weight:800;">${escapeHtml(formatIftyRecoveryTime(snapshot.createdAt))} ${badge}</div>
               <div style="font-size:.78em;color:#64748b;margin-top:3px;">${escapeHtml(snapshot.reason || '保存')} ・ フォルダ ${counts.folders} / 単語 ${counts.words} / Flash ${counts.flashSets} / Quiz ${counts.quizSets} / Chat ${counts.chats}</div>
             </div>
-            <button onclick="restoreIftyRecoverySnapshot('${snapshot.id}')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;white-space:nowrap;">この状態に復元</button>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+              <button onclick="restoreIftyRecoverySnapshot('${snapshot.id}')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;white-space:nowrap;">この状態に復元</button>
+              <button onclick="deleteIftyRecoverySnapshot('${snapshot.id}')" style="border:none;background:#dc2626;color:white;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;white-space:nowrap;">削除</button>
+            </div>
           </div>
         </div>`;
     }).join('');
@@ -485,6 +495,72 @@ window.createManualIftyBackup = async function() {
     await renderIftyRecoveryCenter();
   } catch (error) {
     alert('バックアップに失敗しました：' + String(error.message || error));
+  }
+};
+
+async function deleteIftyRecoverySnapshotRecord(snapshotId) {
+  const db = await openIftyRecoveryDb();
+  try {
+    const transaction = db.transaction(IFTY_RECOVERY_STORE, 'readwrite');
+    transaction.objectStore(IFTY_RECOVERY_STORE).delete(snapshotId);
+    await idbTransactionDone(transaction);
+  } finally {
+    db.close();
+  }
+}
+
+async function refreshIftyRecoveryButtonFromSnapshots() {
+  const snapshots = await getIftyRecoverySnapshots();
+  setIftyRecoveryButtonStatus(snapshots.length ? snapshots[0].createdAt : null);
+  return snapshots;
+}
+
+window.deleteIftyRecoverySnapshot = async function(snapshotId) {
+  try {
+    const snapshots = await getIftyRecoverySnapshots();
+    const snapshot = snapshots.find(item => item.id === snapshotId);
+    if (!snapshot) throw new Error('選択したバックアップが見つかりません。');
+
+    const ok = confirm(`${formatIftyRecoveryTime(snapshot.createdAt)} の端末内バックアップを削除します。
+
+現在の単語帳・実践・チャットのデータは削除されません。続けますか？`);
+    if (!ok) return;
+
+    await deleteIftyRecoverySnapshotRecord(snapshotId);
+    await refreshIftyRecoveryButtonFromSnapshots();
+    await renderIftyRecoveryCenter();
+  } catch (error) {
+    alert('バックアップを削除できませんでした：' + String(error.message || error));
+  }
+};
+
+window.deleteAllIftyRecoverySnapshots = async function() {
+  try {
+    const snapshots = await getIftyRecoverySnapshots();
+    if (!snapshots.length) {
+      alert('削除できる端末内バックアップはありません。');
+      return;
+    }
+
+    const ok = confirm(`この端末に保存されているバックアップ ${snapshots.length}件をすべて削除します。
+
+現在の単語帳・実践・チャットのデータと、書き出し済みのJSONファイルは削除されません。続けますか？`);
+    if (!ok) return;
+
+    const db = await openIftyRecoveryDb();
+    try {
+      const transaction = db.transaction(IFTY_RECOVERY_STORE, 'readwrite');
+      const store = transaction.objectStore(IFTY_RECOVERY_STORE);
+      snapshots.forEach(snapshot => store.delete(snapshot.id));
+      await idbTransactionDone(transaction);
+    } finally {
+      db.close();
+    }
+
+    setIftyRecoveryButtonStatus(null);
+    await renderIftyRecoveryCenter();
+  } catch (error) {
+    alert('バックアップを一括削除できませんでした：' + String(error.message || error));
   }
 };
 
@@ -711,20 +787,63 @@ function installIftyNetworkListeners() {
   window.addEventListener('offline', updateIftyNetworkStatus);
 }
 
+function postIftyCacheRefresh(registration) {
+  if (!registration) return;
+  const worker = registration.active || registration.waiting || registration.installing;
+  if (!worker) return;
+  try { worker.postMessage({ type: 'IFTY_CACHE_CORE' }); } catch (_) {}
+}
+
+async function checkIftyAppUpdate(registration = iftyServiceWorkerRegistration) {
+  if (!registration || !isIftyOnline()) return;
+  try {
+    await registration.update();
+    postIftyCacheRefresh(registration);
+  } catch (error) {
+    console.warn('IFTY 更新確認エラー:', error);
+  }
+}
+
+function installIftyServiceWorkerUpdateChecks(registration) {
+  iftyServiceWorkerRegistration = registration;
+
+  if (iftyServiceWorkerUpdateTimer) clearInterval(iftyServiceWorkerUpdateTimer);
+  iftyServiceWorkerUpdateTimer = setInterval(() => {
+    checkIftyAppUpdate(registration);
+  }, IFTY_UPDATE_CHECK_INTERVAL_MS);
+
+  if (iftyServiceWorkerUpdateListenersInstalled) return;
+  iftyServiceWorkerUpdateListenersInstalled = true;
+
+  window.addEventListener('online', () => {
+    checkIftyAppUpdate(iftyServiceWorkerRegistration);
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      checkIftyAppUpdate(iftyServiceWorkerRegistration);
+    }
+  });
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    postIftyCacheRefresh(iftyServiceWorkerRegistration);
+  });
+}
+
 async function registerIftyServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   if (location.protocol !== 'https:' && location.hostname !== 'localhost') return;
   try {
     const scopeUrl = new URL('./', document.baseURI).href;
     const workerUrl = new URL('service-worker.js', scopeUrl).href;
-    const registration = await navigator.serviceWorker.register(workerUrl, { scope: scopeUrl });
+    const registration = await navigator.serviceWorker.register(workerUrl, {
+      scope: scopeUrl,
+      updateViaCache: 'none'
+    });
     await navigator.serviceWorker.ready;
-    registration.update().catch(() => {});
-
-    const activeWorker = registration.active || registration.waiting || registration.installing;
-    if (activeWorker) {
-      try { activeWorker.postMessage({ type: 'IFTY_CACHE_CORE' }); } catch (_) {}
-    }
+    installIftyServiceWorkerUpdateChecks(registration);
+    await checkIftyAppUpdate(registration);
+    postIftyCacheRefresh(registration);
   } catch (error) {
     console.warn('IFTY Service Worker登録エラー:', error);
   }
