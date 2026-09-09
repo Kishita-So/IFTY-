@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP13 2026-09-10：IFTY左サイドメニュー追加・ALLIA／実践ランチャー維持 ★★★
+// ★★★ IFTY Q3 STEP14 2026-09-10：Developerローカル入場・パスワード表示切替・復旧案内 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -75,6 +75,13 @@ let iftyCloudApplyingRemote = false;
 let iftyCloudSyncInFlight = false;
 let iftyCloudSyncQueued = false;
 let iftyCloudOnlineListenerInstalled = false;
+
+// Q3 STEP14：一時的なDeveloperローカル入場
+// 本物のアカウント認証やクラウドデータへの権限を迂回しない。
+// Developerでは専用の端末ローカル領域だけを使用する。
+const IFTY_DEVELOPER_SESSION_KEY = 'ifty_developer_session';
+const IFTY_DEVELOPER_LOCAL_USER = '__ifty_developer_local__';
+let iftyDeveloperMode = false;
 
 const WORKER_URL = 'https://ifty.humbleflail205.workers.dev/';
 const IFTY_LOGO_PATH = './ifty-icon.png';
@@ -373,7 +380,7 @@ function renderIftySideMenu() {
     document.body.appendChild(overlay);
   }
 
-  const accountName = escapeHtml(String((iftyAccount && iftyAccount.username) || currentUser || ''));
+  const accountName = escapeHtml(String(iftyDeveloperMode ? 'Developer' : ((iftyAccount && iftyAccount.username) || currentUser || '')));
   overlay.innerHTML = `
     <nav id="iftySideMenuDrawer" aria-label="IFTYメニュー" onclick="event.stopPropagation()">
       <div class="ifty-side-menu-header">
@@ -1267,6 +1274,52 @@ function setIftyAccountFormStatus(message, isError = false) {
   el.style.color = isError ? '#fca5a5' : '#bae6fd';
 }
 
+window.toggleIftyPasswordVisibility = function(inputId, button) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  if (button) {
+    button.textContent = show ? '隠す' : '表示';
+    button.setAttribute('aria-label', show ? 'パスワードを隠す' : 'パスワードを表示');
+    button.setAttribute('aria-pressed', show ? 'true' : 'false');
+  }
+};
+
+window.closeIftyPasswordRecoveryInfo = function() {
+  const modal = document.getElementById('iftyPasswordRecoveryModal');
+  if (modal) modal.remove();
+};
+
+window.showIftyPasswordRecoveryInfo = function() {
+  window.closeIftyPasswordRecoveryInfo();
+  const modal = document.createElement('div');
+  modal.id = 'iftyPasswordRecoveryModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.72);z-index:12050;display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;';
+  modal.innerHTML = `
+    <div role="dialog" aria-modal="true" aria-labelledby="iftyPasswordRecoveryTitle" style="width:min(520px,100%);background:#fff;color:#0f172a;border-radius:16px;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.35);">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+        <div>
+          <h3 id="iftyPasswordRecoveryTitle" style="margin:0 0 8px;font-size:1.25em;">パスワードを忘れた場合</h3>
+          <p style="margin:0;color:#475569;line-height:1.65;font-size:.94em;">
+            現在のIFTYアカウントには、本人確認に使える復旧用メールアドレスなどをまだ登録していません。
+            そのため、忘れたパスワードそのものを表示したり、安全に再設定したりする機能は現時点ではありません。
+          </p>
+        </div>
+        <button type="button" onclick="closeIftyPasswordRecoveryInfo()" aria-label="閉じる" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;width:34px;height:34px;font-size:1.1em;cursor:pointer;">×</button>
+      </div>
+      <div style="margin-top:16px;padding:13px 14px;border-radius:10px;background:#f1f5f9;color:#334155;line-height:1.6;font-size:.9em;">
+        本番公開前に、復旧用メールアドレスを本人確認してからワンタイムコードで新しいパスワードを設定する方式を追加するのが安全です。
+        管理者用の共通解除パスワードや秘密の質問での解除は採用しません。
+      </div>
+      <button type="button" onclick="closeIftyPasswordRecoveryInfo()" style="margin-top:16px;width:100%;border:none;background:#0284c7;color:white;padding:10px 14px;border-radius:8px;font-weight:800;cursor:pointer;">閉じる</button>
+    </div>`;
+  modal.addEventListener('click', event => {
+    if (event.target === modal) window.closeIftyPasswordRecoveryInfo();
+  });
+  document.body.appendChild(modal);
+};
+
 function renderIftyAccountLanding(message = '') {
   setIftyAuthenticatedUiVisible(false);
   const landingPage = document.getElementById('landingPage');
@@ -1279,12 +1332,21 @@ function renderIftyAccountLanding(message = '') {
   if (!accountList) return;
   accountList.innerHTML = `
     <input id="iftyAccountUsername" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="IFTY ID（3〜24文字）" style="padding:11px;border:1px solid #475569;border-radius:7px;font-size:1em;background:#0f172a;color:white;">
-    <input id="iftyAccountPassword" type="password" autocomplete="current-password" placeholder="パスワード（10文字以上）" style="padding:11px;border:1px solid #475569;border-radius:7px;font-size:1em;background:#0f172a;color:white;">
-    <input id="iftyAccountPasswordConfirm" type="password" autocomplete="new-password" placeholder="新規作成時のみ：パスワード確認" style="padding:11px;border:1px solid #475569;border-radius:7px;font-size:1em;background:#0f172a;color:white;">
+    <div style="display:flex;gap:7px;align-items:stretch;">
+      <input id="iftyAccountPassword" type="password" autocomplete="current-password" placeholder="パスワード（10文字以上）" style="flex:1;min-width:0;padding:11px;border:1px solid #475569;border-radius:7px;font-size:1em;background:#0f172a;color:white;">
+      <button type="button" onclick="toggleIftyPasswordVisibility('iftyAccountPassword', this)" aria-label="パスワードを表示" aria-pressed="false" style="flex:0 0 auto;background:#334155;color:#f8fafc;border:1px solid #475569;padding:0 12px;border-radius:7px;font-weight:700;cursor:pointer;">表示</button>
+    </div>
+    <div style="display:flex;gap:7px;align-items:stretch;">
+      <input id="iftyAccountPasswordConfirm" type="password" autocomplete="new-password" placeholder="新規作成時のみ：パスワード確認" style="flex:1;min-width:0;padding:11px;border:1px solid #475569;border-radius:7px;font-size:1em;background:#0f172a;color:white;">
+      <button type="button" onclick="toggleIftyPasswordVisibility('iftyAccountPasswordConfirm', this)" aria-label="確認用パスワードを表示" aria-pressed="false" style="flex:0 0 auto;background:#334155;color:#f8fafc;border:1px solid #475569;padding:0 12px;border-radius:7px;font-weight:700;cursor:pointer;">表示</button>
+    </div>
+    <button type="button" onclick="showIftyPasswordRecoveryInfo()" style="align-self:flex-start;background:transparent;color:#7dd3fc;border:none;padding:2px 0;font-size:.84em;text-decoration:underline;cursor:pointer;">パスワードを忘れた場合</button>
     <div style="display:flex;gap:8px;margin-top:4px;">
       <button onclick="loginIftyAccount()" style="flex:1;background:#0284c7;color:white;border:none;padding:10px;border-radius:7px;font-weight:800;cursor:pointer;">ログイン</button>
       <button onclick="registerIftyAccount()" style="flex:1;background:#15803d;color:white;border:none;padding:10px;border-radius:7px;font-weight:800;cursor:pointer;">新規作成</button>
     </div>
+    <button type="button" onclick="enterIftyDeveloperMode()" style="width:100%;background:#d97706;color:white;border:none;padding:10px;border-radius:7px;font-weight:800;cursor:pointer;">Developer</button>
+    <div style="font-size:.75em;line-height:1.45;color:#94a3b8;margin-top:-2px;">開発用：ログインせず、専用の端末ローカル領域だけでIFTYを開きます。クラウドアカウントのデータにはアクセスしません。</div>
     <div id="iftyAccountStatus" style="min-height:1.3em;font-size:.85em;color:#bae6fd;margin-top:4px;">${escapeHtml(message)}</div>
     <div style="font-size:.78em;line-height:1.55;color:#cbd5e1;margin-top:4px;">
       セーブデータの正本はIFTYアカウントのクラウド領域へ保存します。Cookieは使用しません。オフライン中だけ端末内キャッシュを使い、接続復帰後に同期します。
@@ -1608,10 +1670,58 @@ async function enterIftyAccount(account, options = {}) {
   }
 }
 
+async function enterIftyDeveloperSession() {
+  iftyDeveloperMode = true;
+  iftyAccount = null;
+  iftySessionToken = '';
+  iftyCloudRevision = 0;
+  iftyCloudSaveEnabled = false;
+  iftyCloudApplyingRemote = false;
+  iftyCloudSyncInFlight = false;
+  iftyCloudSyncQueued = false;
+
+  currentUser = IFTY_DEVELOPER_LOCAL_USER;
+  localStorage.setItem('currentUser', currentUser);
+  sessionStorage.setItem(IFTY_DEVELOPER_SESSION_KEY, '1');
+
+  setIftyAuthenticatedUiVisible(true);
+  const userDisplay = document.getElementById('userDisplay');
+  if (userDisplay) userDisplay.textContent = 'Developer';
+  ensureIftyCloudStatusUi();
+  setIftyCloudStatus('🧪 Developer：端末ローカルのみ', 'offline');
+
+  loadUserData(currentUser);
+  loadPracticeData(currentUser);
+  initChatSystem();
+  applyAlliaBranding();
+  ensureIftyBrandUi();
+  ensureIftyNetworkUi();
+  startIftyAutoBackup();
+
+  // Developerはアカウント認証を省略する代わりに、クラウド同期は常に無効。
+  iftyCloudSaveEnabled = false;
+}
+
+window.enterIftyDeveloperMode = async function() {
+  setIftyAccountFormStatus('Developerモードを開いています…');
+  try {
+    await enterIftyDeveloperSession();
+  } catch (error) {
+    sessionStorage.removeItem(IFTY_DEVELOPER_SESSION_KEY);
+    iftyDeveloperMode = false;
+    setIftyAccountFormStatus(error.message || 'Developerモードを開けませんでした。', true);
+  }
+};
+
 async function bootstrapIftyAccount() {
   ensureIftyBrandUi();
   setIftyAuthenticatedUiVisible(false);
   installIftyCloudOnlineListener();
+
+  if (sessionStorage.getItem(IFTY_DEVELOPER_SESSION_KEY) === '1') {
+    await enterIftyDeveloperSession();
+    return;
+  }
 
   const token = String(localStorage.getItem(IFTY_SESSION_TOKEN_KEY) || '');
   const meta = readStoredIftyAccountMeta();
@@ -3912,6 +4022,14 @@ window.startQuiz = function() {
 };
 
 window.logout = async function() {
+  if (iftyDeveloperMode || sessionStorage.getItem(IFTY_DEVELOPER_SESSION_KEY) === '1') {
+    iftyDeveloperMode = false;
+    sessionStorage.removeItem(IFTY_DEVELOPER_SESSION_KEY);
+    localStorage.removeItem('currentUser');
+    location.reload();
+    return;
+  }
+
   const token = iftySessionToken;
   if (iftyCloudSaveTimer) {
     clearTimeout(iftyCloudSaveTimer);
