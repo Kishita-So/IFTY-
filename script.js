@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP8 2026-09-09：GitHub Pages /IFTY-/ PWA安定化・ALLIA Thinking表示 ★★★
+// ★★★ IFTY Q3 STEP9 2026-09-09：世代オートバックアップ・復元センター・バックアップ書き出し/読み込み ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -41,6 +41,16 @@ const MAX_HISTORY_STEPS = 60;
 
 // Q3 第1弾：テーマ
 let iftyTheme = localStorage.getItem('ifty_theme') || 'light';
+
+// Q3 STEP9：世代オートバックアップ / 復元
+const IFTY_RECOVERY_DB_NAME = 'ifty_recovery_q3';
+const IFTY_RECOVERY_DB_VERSION = 1;
+const IFTY_RECOVERY_STORE = 'snapshots';
+const IFTY_RECOVERY_MAX_SNAPSHOTS = 30;
+const IFTY_AUTOSAVE_INTERVAL_MS = 3 * 60 * 1000;
+let iftyAutoBackupTimer = null;
+let iftyLastBackupHash = null;
+let iftyRecoveryLifecycleInstalled = false;
 
 const WORKER_URL = 'https://ifty.humbleflail205.workers.dev/';
 const IFTY_LOGO_PATH = './ifty-icon.png';
@@ -196,6 +206,7 @@ function ensureIftyBrandUi() {
     controls.innerHTML = `
       <button id="iftyUndoBtn" onclick="undoIfty()" title="取り消し Ctrl/⌘ + Z" style="width:38px;height:38px;border:none;border-radius:9px;background:#334155;color:white;font-size:1.05em;cursor:pointer;">↶</button>
       <button id="iftyRedoBtn" onclick="redoIfty()" title="やり直し Ctrl + Y / ⌘ + Shift + Z" style="width:38px;height:38px;border:none;border-radius:9px;background:#334155;color:white;font-size:1.05em;cursor:pointer;">↷</button>
+      <button id="iftyRecoveryBtn" onclick="openIftyRecoveryCenter()" title="バックアップ / 復元" style="width:38px;height:38px;border:none;border-radius:9px;background:#334155;color:white;font-size:1em;cursor:pointer;">🛟</button>
       <button id="iftyThemeBtn" onclick="toggleIftyTheme()" title="ライト / ダーク" style="width:38px;height:38px;border:none;border-radius:9px;background:#334155;color:white;font-size:1em;cursor:pointer;">☀️</button>`;
     document.body.appendChild(controls);
   }
@@ -216,6 +227,415 @@ function ensureIftyBrandUi() {
 
   applyIftyTheme();
   updateUndoRedoButtons();
+}
+
+
+// ==========================================
+// Q3 STEP9：世代オートバックアップ / 復元センター
+// ==========================================
+function openIftyRecoveryDb() {
+  return new Promise((resolve, reject) => {
+    if (!('indexedDB' in window)) {
+      reject(new Error('IndexedDBが利用できません。'));
+      return;
+    }
+
+    const request = indexedDB.open(IFTY_RECOVERY_DB_NAME, IFTY_RECOVERY_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(IFTY_RECOVERY_STORE)) {
+        const store = db.createObjectStore(IFTY_RECOVERY_STORE, { keyPath: 'id' });
+        store.createIndex('user', 'user', { unique: false });
+        store.createIndex('createdAt', 'createdAt', { unique: false });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('バックアップ領域を開けませんでした。'));
+  });
+}
+
+function idbRequestPromise(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('保存処理に失敗しました。'));
+  });
+}
+
+function idbTransactionDone(transaction) {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error || new Error('保存処理に失敗しました。'));
+    transaction.onabort = () => reject(transaction.error || new Error('保存処理が中断されました。'));
+  });
+}
+
+function sanitizeChatSessionsForBackup() {
+  const safeSessions = deepClone(Array.isArray(chatSessions) ? chatSessions : []);
+  safeSessions.forEach(session => {
+    if (!Array.isArray(session.messages)) session.messages = [];
+    session.messages = session.messages.filter(message => !message || !message.temporaryThinking);
+  });
+  return safeSessions;
+}
+
+function captureIftyRecoveryPayload() {
+  return {
+    schemaVersion: 1,
+    appVersion: 'Q3_STEP9',
+    savedAt: Date.now(),
+    currentUser: currentUser,
+    folders: deepClone(Array.isArray(folders) ? folders : []),
+    practiceData: deepClone(practiceData || { schemaVersion: 1, modules: {} }),
+    chatSessions: sanitizeChatSessionsForBackup(),
+    currentChatSessionId: currentChatSessionId || null,
+    iftyTheme: iftyTheme
+  };
+}
+
+function makeIftyRecoveryFingerprint(payload) {
+  const stable = JSON.stringify({
+    currentUser: payload.currentUser,
+    folders: payload.folders,
+    practiceData: payload.practiceData,
+    chatSessions: payload.chatSessions,
+    currentChatSessionId: payload.currentChatSessionId,
+    iftyTheme: payload.iftyTheme
+  });
+
+  let hash = 2166136261;
+  for (let i = 0; i < stable.length; i++) {
+    hash ^= stable.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16) + ':' + stable.length;
+}
+
+function countIftyRecoveryContents(payload) {
+  const savedFolders = Array.isArray(payload && payload.folders) ? payload.folders : [];
+  const wordCount = savedFolders.reduce((sum, folder) => sum + (Array.isArray(folder.words) ? folder.words.length : 0), 0);
+  const flashSets = payload && payload.practiceData && payload.practiceData.modules && payload.practiceData.modules.flashcards && Array.isArray(payload.practiceData.modules.flashcards.sets)
+    ? payload.practiceData.modules.flashcards.sets.length : 0;
+  const quizSets = payload && payload.practiceData && payload.practiceData.modules && payload.practiceData.modules.questions && Array.isArray(payload.practiceData.modules.questions.sets)
+    ? payload.practiceData.modules.questions.sets.length : 0;
+  const chats = Array.isArray(payload && payload.chatSessions) ? payload.chatSessions : [];
+  const messageCount = chats.reduce((sum, session) => sum + (Array.isArray(session.messages) ? session.messages.length : 0), 0);
+  return { folders: savedFolders.length, words: wordCount, flashSets, quizSets, chats: chats.length, messages: messageCount };
+}
+
+async function getIftyRecoverySnapshots() {
+  const db = await openIftyRecoveryDb();
+  try {
+    const transaction = db.transaction(IFTY_RECOVERY_STORE, 'readonly');
+    const store = transaction.objectStore(IFTY_RECOVERY_STORE);
+    const all = await idbRequestPromise(store.getAll());
+    return (Array.isArray(all) ? all : [])
+      .filter(item => item && item.user === currentUser)
+      .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+  } finally {
+    db.close();
+  }
+}
+
+async function pruneIftyRecoverySnapshots() {
+  const db = await openIftyRecoveryDb();
+  try {
+    const readTransaction = db.transaction(IFTY_RECOVERY_STORE, 'readonly');
+    const store = readTransaction.objectStore(IFTY_RECOVERY_STORE);
+    const all = await idbRequestPromise(store.getAll());
+    const own = (Array.isArray(all) ? all : [])
+      .filter(item => item && item.user === currentUser)
+      .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+
+    const excess = own.slice(IFTY_RECOVERY_MAX_SNAPSHOTS);
+    if (!excess.length) return;
+
+    const deleteTransaction = db.transaction(IFTY_RECOVERY_STORE, 'readwrite');
+    const deleteStore = deleteTransaction.objectStore(IFTY_RECOVERY_STORE);
+    excess.forEach(item => deleteStore.delete(item.id));
+    await idbTransactionDone(deleteTransaction);
+  } finally {
+    db.close();
+  }
+}
+
+function setIftyRecoveryButtonStatus(savedAt) {
+  const button = document.getElementById('iftyRecoveryBtn');
+  if (!button) return;
+  if (!savedAt) {
+    button.title = 'バックアップ / 復元';
+    return;
+  }
+  const date = new Date(savedAt);
+  button.title = `バックアップ / 復元（最終保存 ${date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}）`;
+}
+
+async function createIftyRecoverySnapshot(reason = '自動保存', options = {}) {
+  const payload = captureIftyRecoveryPayload();
+  const hash = makeIftyRecoveryFingerprint(payload);
+  if (!options.force && hash === iftyLastBackupHash) return null;
+
+  const createdAt = Date.now();
+  const record = {
+    id: `recovery_${createdAt}_${Math.random().toString(36).slice(2, 8)}`,
+    user: currentUser,
+    createdAt,
+    reason: String(reason || '自動保存'),
+    hash,
+    payload
+  };
+
+  const db = await openIftyRecoveryDb();
+  try {
+    const transaction = db.transaction(IFTY_RECOVERY_STORE, 'readwrite');
+    transaction.objectStore(IFTY_RECOVERY_STORE).put(record);
+    await idbTransactionDone(transaction);
+  } finally {
+    db.close();
+  }
+
+  iftyLastBackupHash = hash;
+  setIftyRecoveryButtonStatus(createdAt);
+  await pruneIftyRecoverySnapshots();
+  return record;
+}
+
+function formatIftyRecoveryTime(timestamp) {
+  const date = new Date(Number(timestamp || 0));
+  if (Number.isNaN(date.getTime())) return '日時不明';
+  return date.toLocaleString('ja-JP', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  });
+}
+
+function ensureIftyRecoveryModal() {
+  let modal = document.getElementById('iftyRecoveryModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'iftyRecoveryModal';
+  modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(2,6,23,.78);z-index:10120;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;';
+  modal.innerHTML = `
+    <div style="background:white;color:#0f172a;width:min(720px,96vw);max-height:88vh;overflow:auto;border-radius:14px;padding:18px;box-shadow:0 18px 50px rgba(0,0,0,.35);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;">
+        <div>
+          <div style="font-size:1.25em;font-weight:800;">🛟 バックアップ / 復元</div>
+          <div style="font-size:.82em;color:#64748b;margin-top:3px;">3分ごとに変更があった状態だけを端末内へ世代保存します。</div>
+        </div>
+        <button onclick="closeIftyRecoveryCenter()" style="border:none;background:#e2e8f0;color:#0f172a;border-radius:8px;padding:8px 11px;cursor:pointer;">✕</button>
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;">
+        <button onclick="createManualIftyBackup()" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer;">💾 今すぐ保存</button>
+        <button onclick="exportIftyBackupFile()" style="border:none;background:#334155;color:white;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer;">⬇️ ファイル書き出し</button>
+        <button onclick="document.getElementById('iftyBackupImportInput').click()" style="border:none;background:#475569;color:white;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer;">⬆️ ファイルから復元</button>
+        <input id="iftyBackupImportInput" type="file" accept="application/json,.json" style="display:none;" onchange="handleIftyBackupImport(event)">
+      </div>
+      <div style="font-size:.78em;color:#64748b;margin-bottom:12px;line-height:1.5;">復元の直前には現在状態を緊急バックアップしてから復元します。端末内バックアップは、Safariの「Webサイトデータを消去」や端末紛失では一緒に消える可能性があるため、重要な時は「ファイル書き出し」も使えます。</div>
+      <div id="iftyRecoveryList"><div style="padding:18px;text-align:center;color:#64748b;">読み込み中…</div></div>
+    </div>`;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+async function renderIftyRecoveryCenter() {
+  const container = document.getElementById('iftyRecoveryList');
+  if (!container) return;
+  container.innerHTML = '<div style="padding:18px;text-align:center;color:#64748b;">読み込み中…</div>';
+
+  try {
+    const snapshots = await getIftyRecoverySnapshots();
+    if (!snapshots.length) {
+      container.innerHTML = '<div style="padding:20px;border:1px dashed #cbd5e1;border-radius:10px;text-align:center;color:#64748b;">まだバックアップはありません。「今すぐ保存」を押すか、変更後に3分待つと作成されます。</div>';
+      return;
+    }
+
+    container.innerHTML = snapshots.map((snapshot, index) => {
+      const counts = countIftyRecoveryContents(snapshot.payload || {});
+      const badge = index === 0 ? '<span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:999px;font-size:.72em;font-weight:700;">最新</span>' : '';
+      return `
+        <div style="border:1px solid #cbd5e1;border-radius:10px;padding:11px 12px;margin-bottom:8px;background:#f8fafc;">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+            <div style="min-width:0;">
+              <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;font-weight:800;">${escapeHtml(formatIftyRecoveryTime(snapshot.createdAt))} ${badge}</div>
+              <div style="font-size:.78em;color:#64748b;margin-top:3px;">${escapeHtml(snapshot.reason || '保存')} ・ フォルダ ${counts.folders} / 単語 ${counts.words} / Flash ${counts.flashSets} / Quiz ${counts.quizSets} / Chat ${counts.chats}</div>
+            </div>
+            <button onclick="restoreIftyRecoverySnapshot('${snapshot.id}')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;white-space:nowrap;">この状態に復元</button>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (error) {
+    container.innerHTML = `<div style="padding:16px;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:10px;">バックアップを読み込めませんでした：${escapeHtml(String(error.message || error))}</div>`;
+  }
+}
+
+window.openIftyRecoveryCenter = async function() {
+  const modal = ensureIftyRecoveryModal();
+  modal.style.display = 'flex';
+  await renderIftyRecoveryCenter();
+};
+
+window.closeIftyRecoveryCenter = function() {
+  const modal = document.getElementById('iftyRecoveryModal');
+  if (modal) modal.style.display = 'none';
+};
+
+window.createManualIftyBackup = async function() {
+  try {
+    await createIftyRecoverySnapshot('手動保存', { force: true });
+    await renderIftyRecoveryCenter();
+  } catch (error) {
+    alert('バックアップに失敗しました：' + String(error.message || error));
+  }
+};
+
+async function applyIftyRecoveryPayload(payload) {
+  if (!payload || typeof payload !== 'object') throw new Error('バックアップデータが不正です。');
+  if (!Array.isArray(payload.folders)) throw new Error('単語帳データが見つかりません。');
+
+  isRestoringHistory = true;
+  try {
+    folders = deepClone(payload.folders);
+    practiceData = deepClone(payload.practiceData || { schemaVersion: 1, modules: { flashcards: { sets: [] }, questions: { sets: [] } } });
+    chatSessions = deepClone(Array.isArray(payload.chatSessions) ? payload.chatSessions : []);
+    iftyTheme = payload.iftyTheme === 'dark' ? 'dark' : 'light';
+
+    normalizeFoldersData();
+    normalizePracticeData();
+
+    if (!chatSessions.length) {
+      chatSessions = [{ id: 'session_' + Date.now(), title: 'ALLIA', messages: [] }];
+    }
+    const requestedSessionId = payload.currentChatSessionId;
+    currentChatSessionId = chatSessions.some(session => session.id === requestedSessionId)
+      ? requestedSessionId
+      : chatSessions[0].id;
+
+    selectedFolderIds.clear();
+    selectedWordIds.clear();
+    pendingSpellingSuggestions = {};
+    wordInputDrafts = {};
+    undoStack = [];
+    redoStack = [];
+
+    saveUserData();
+    savePracticeData();
+    saveChatSessions();
+    applyIftyTheme();
+    renderFolders();
+    updateChatSessionSelect();
+    renderChatMessages();
+    updateUndoRedoButtons();
+
+    const practiceModal = document.getElementById('practiceModal');
+    if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
+    applyAlliaBranding();
+  } finally {
+    isRestoringHistory = false;
+  }
+}
+
+window.restoreIftyRecoverySnapshot = async function(snapshotId) {
+  try {
+    const snapshots = await getIftyRecoverySnapshots();
+    const snapshot = snapshots.find(item => item.id === snapshotId);
+    if (!snapshot) throw new Error('選択したバックアップが見つかりません。');
+
+    const counts = countIftyRecoveryContents(snapshot.payload || {});
+    const ok = confirm(`${formatIftyRecoveryTime(snapshot.createdAt)} の状態へ復元します。\n単語 ${counts.words}件 / フォルダ ${counts.folders}件\n\n現在の状態は復元前に緊急保存します。続けますか？`);
+    if (!ok) return;
+
+    await createIftyRecoverySnapshot('復元前の緊急保存', { force: true });
+    await applyIftyRecoveryPayload(snapshot.payload);
+    iftyLastBackupHash = makeIftyRecoveryFingerprint(captureIftyRecoveryPayload());
+    await createIftyRecoverySnapshot('復元直後', { force: true });
+    await renderIftyRecoveryCenter();
+    alert('バックアップから復元しました。');
+  } catch (error) {
+    alert('復元に失敗しました：' + String(error.message || error));
+  }
+};
+
+function makeIftyBackupFileName() {
+  const now = new Date();
+  const pad = value => String(value).padStart(2, '0');
+  return `IFTY-backup-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.json`;
+}
+
+window.exportIftyBackupFile = function() {
+  try {
+    const wrapper = {
+      format: 'IFTY_BACKUP',
+      version: 1,
+      exportedAt: Date.now(),
+      payload: captureIftyRecoveryPayload()
+    };
+    const blob = new Blob([JSON.stringify(wrapper, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = makeIftyBackupFileName();
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    alert('バックアップファイルを作れませんでした：' + String(error.message || error));
+  }
+};
+
+window.handleIftyBackupImport = async function(event) {
+  const input = event && event.target;
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    if (!parsed || parsed.format !== 'IFTY_BACKUP' || !parsed.payload) {
+      throw new Error('IFTYのバックアップファイルではありません。');
+    }
+
+    const counts = countIftyRecoveryContents(parsed.payload);
+    const ok = confirm(`このバックアップファイルを復元します。\n単語 ${counts.words}件 / フォルダ ${counts.folders}件\n\n現在の状態は復元前に緊急保存します。続けますか？`);
+    if (!ok) return;
+
+    await createIftyRecoverySnapshot('ファイル復元前の緊急保存', { force: true });
+    await applyIftyRecoveryPayload(parsed.payload);
+    iftyLastBackupHash = makeIftyRecoveryFingerprint(captureIftyRecoveryPayload());
+    await createIftyRecoverySnapshot('ファイル復元直後', { force: true });
+    await renderIftyRecoveryCenter();
+    alert('バックアップファイルから復元しました。');
+  } catch (error) {
+    alert('バックアップファイルの読み込みに失敗しました：' + String(error.message || error));
+  } finally {
+    if (input) input.value = '';
+  }
+};
+
+function installIftyRecoveryLifecycle() {
+  if (iftyRecoveryLifecycleInstalled) return;
+  iftyRecoveryLifecycleInstalled = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      createIftyRecoverySnapshot('バックグラウンド移行', { force: false }).catch(() => {});
+    }
+  });
+}
+
+function startIftyAutoBackup() {
+  installIftyRecoveryLifecycle();
+  if (iftyAutoBackupTimer) clearInterval(iftyAutoBackupTimer);
+
+  setTimeout(() => {
+    createIftyRecoverySnapshot('起動時', { force: false })
+      .then(record => { if (record) setIftyRecoveryButtonStatus(record.createdAt); })
+      .catch(error => console.warn('IFTYバックアップ初期化エラー:', error));
+  }, 1500);
+
+  iftyAutoBackupTimer = setInterval(() => {
+    createIftyRecoverySnapshot('自動保存', { force: false })
+      .catch(error => console.warn('IFTY自動バックアップエラー:', error));
+  }, IFTY_AUTOSAVE_INTERVAL_MS);
 }
 
 function ensureIftyPwaHeadLinks() {
@@ -449,6 +869,7 @@ document.addEventListener("DOMContentLoaded", function() {
   ensureIftyNetworkUi();
   installIftyNetworkListeners();
   registerIftyServiceWorker();
+  startIftyAutoBackup();
 });
 
 document.addEventListener('keydown', function(event) {
