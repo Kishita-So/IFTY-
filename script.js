@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP6 2026-09-08：単語Enter後も入力欄フォーカス維持・連続入力対応 ★★★
+// ★★★ IFTY Q3 STEP8 2026-09-09：GitHub Pages /IFTY-/ PWA安定化・ALLIA Thinking表示 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -239,6 +239,77 @@ function ensureIftyPwaHeadLinks() {
   }
 }
 
+
+// Q3 STEP7：PWA / オフライン対応
+function isIftyOnline() {
+  return navigator.onLine !== false;
+}
+
+function iftyOfflineMessage(feature) {
+  return `${feature || 'この機能'}にはインターネット接続が必要です。単語帳・フラッシュカード・「選択」クイズなどの端末内機能はオフラインでも使えます。`;
+}
+
+function ensureIftyOnline(feature, options = {}) {
+  if (isIftyOnline()) return true;
+  if (!options.silent) alert(iftyOfflineMessage(feature));
+  updateIftyNetworkStatus();
+  return false;
+}
+
+function ensureIftyNetworkUi() {
+  let badge = document.getElementById('iftyNetworkStatus');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'iftyNetworkStatus';
+    badge.setAttribute('aria-live', 'polite');
+    badge.style.cssText = 'position:fixed;right:10px;top:56px;z-index:10090;padding:6px 10px;border-radius:999px;font-size:.78em;font-weight:bold;box-shadow:0 4px 14px rgba(0,0,0,.18);display:none;user-select:none;';
+    document.body.appendChild(badge);
+  }
+  updateIftyNetworkStatus();
+}
+
+function updateIftyNetworkStatus() {
+  const badge = document.getElementById('iftyNetworkStatus');
+  if (!badge) return;
+  if (isIftyOnline()) {
+    badge.textContent = 'オンライン';
+    badge.style.background = '#dcfce7';
+    badge.style.color = '#166534';
+    badge.style.display = 'none';
+  } else {
+    badge.textContent = '📴 オフライン';
+    badge.style.background = '#fff7ed';
+    badge.style.color = '#9a3412';
+    badge.style.display = 'block';
+  }
+}
+
+function installIftyNetworkListeners() {
+  if (window.__iftyNetworkListenersInstalled) return;
+  window.__iftyNetworkListenersInstalled = true;
+  window.addEventListener('online', updateIftyNetworkStatus);
+  window.addEventListener('offline', updateIftyNetworkStatus);
+}
+
+async function registerIftyServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost') return;
+  try {
+    const scopeUrl = new URL('./', document.baseURI).href;
+    const workerUrl = new URL('service-worker.js', scopeUrl).href;
+    const registration = await navigator.serviceWorker.register(workerUrl, { scope: scopeUrl });
+    await navigator.serviceWorker.ready;
+    registration.update().catch(() => {});
+
+    const activeWorker = registration.active || registration.waiting || registration.installing;
+    if (activeWorker) {
+      try { activeWorker.postMessage({ type: 'IFTY_CACHE_CORE' }); } catch (_) {}
+    }
+  } catch (error) {
+    console.warn('IFTY Service Worker登録エラー:', error);
+  }
+}
+
 function isAlliaQuotaError(response, data) {
   const text = `${data && data.error ? data.error : ''} ${data && data.details ? data.details : ''} ${data && data.message ? data.message : ''}`.toLowerCase();
   return response && response.status === 429 || /quota|limit|rate limit|neuron|daily.*limit|exceeded|resource exhausted|usage limit/.test(text);
@@ -375,6 +446,9 @@ document.addEventListener("DOMContentLoaded", function() {
   applyAlliaBranding();
   ensureIftyPwaHeadLinks();
   ensureIftyBrandUi();
+  ensureIftyNetworkUi();
+  installIftyNetworkListeners();
+  registerIftyServiceWorker();
 });
 
 document.addEventListener('keydown', function(event) {
@@ -787,6 +861,14 @@ window.addWordToFolder = async function(folderId) {
   if (!folder.words) folder.words = [];
   if (!wordText) return;
 
+  // オフライン時はAI単語生成を開始せず、入力文字も消さない。
+  if (!ensureIftyOnline('単語生成')) {
+    wordInputDrafts[folderId] = wordText;
+    input.value = wordText;
+    keepWordInputFocused(folderId);
+    return;
+  }
+
   // 送信した単語はEnter/追加の確定時点で入力欄から消す。
   // その後ユーザーが次の単語を入力した場合は wordInputDrafts に保存され、
   // AI生成完了後の再描画でもその新しい入力だけを保持する。
@@ -833,6 +915,14 @@ async function generateAndAddWord(folderId, wordText) {
   const folder = folders.find(f => f.id === folderId);
   if (!folder) return;
   if (!folder.words) folder.words = [];
+
+  if (!ensureIftyOnline('単語生成')) {
+    const input = document.getElementById(`wordInput_${folderId}`);
+    wordInputDrafts[folderId] = wordText;
+    if (input) input.value = wordText;
+    keepWordInputFocused(folderId);
+    return;
+  }
 
   recordUndoState('単語追加');
   const newWordObj = {
@@ -1686,6 +1776,9 @@ async function renderQuizPlayer(setId) {
     try {
       const type=chooseQuizType(set);
       const direction=resolveQuizDirection(set);
+      if (type !== 'selection' && !ensureIftyOnline('このクイズ形式の問題生成', { silent: true })) {
+        throw new Error(iftyOfflineMessage('このクイズ形式の問題生成'));
+      }
       if (type === 'selection') {
         const data = createLocalSelectionQuestion(set, ref.word, direction);
         p.currentQuestion={...data,quizType:type,direction,wordId:ref.word.id};
@@ -1761,6 +1854,8 @@ window.submitQuizAnswer = async function(setId) {
     return;
   }
 
+  if (!ensureIftyOnline('ALLIA採点')) return;
+
   modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><h3 style="color:#4c1d95;">ALLIAが採点中…</h3></div>`;
   try{
     const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_grade',quizType:q.quizType,direction:q.direction,question:q.question,referenceAnswer:q.referenceAnswer||'',userAnswer:answer,word:ref.word})});
@@ -1827,6 +1922,7 @@ window.submitQuizChallenge = async function(setId) {
   const reasonInput=document.getElementById('quizChallengeReason');
   const challengeReason=reasonInput?String(reasonInput.value||'').trim():'';
   const modal=document.getElementById('practiceModal'); if(!modal)return;
+  if (!ensureIftyOnline('Challenge再審査')) return;
 
   modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><h3 style="color:#92400e;">⚖️ ALLIAがChallengeを再審査中…</h3><div style="color:#64748b;margin-top:6px;">最初の採点とは別に、元の回答をもう一度検討します。</div></div>`;
   try{
@@ -2253,6 +2349,7 @@ window.sendChatMessage = async function() {
 
   const text = input.value.trim();
   if (!text && !selectedImageBase64) return;
+  if (!ensureIftyOnline('ALLIAチャット')) return;
 
   const session = chatSessions.find(s => s.id === currentChatSessionId);
   if (!session) return;
@@ -2260,7 +2357,7 @@ window.sendChatMessage = async function() {
   const userMsg = text || '[画像を送信しました]';
 
   const history = session.messages
-    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .filter(m => (m.role === 'user' || m.role === 'assistant') && !m.temporaryThinking)
     .slice(-12)
     .map(m => ({ role: m.role, content: m.text }));
 
@@ -2269,6 +2366,9 @@ window.sendChatMessage = async function() {
 
   const currentImg = selectedImageBase64;
   clearSelectedImage();
+
+  const thinkingMessage = { role: 'assistant', text: 'Thinking…', temporaryThinking: true };
+  session.messages.push(thinkingMessage);
   renderChatMessages();
 
   let replyText = "処理を実行しました。";
@@ -2328,7 +2428,8 @@ window.sendChatMessage = async function() {
     replyText = "通信エラーが発生しました: " + e.message;
   }
 
-  session.messages.push({ role: 'assistant', text: replyText });
+  thinkingMessage.text = replyText;
+  delete thinkingMessage.temporaryThinking;
   saveChatSessions();
   renderChatMessages();
   applyAlliaBranding();
