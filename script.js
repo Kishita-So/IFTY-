@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP11 2026-09-09：バックアップ個別削除・一括削除＋STEP10自動更新維持 ★★★
+// ★★★ IFTY Q3 STEP13 2026-09-10：IFTY左サイドメニュー追加・ALLIA／実践ランチャー維持 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -57,6 +57,24 @@ const IFTY_UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 let iftyServiceWorkerRegistration = null;
 let iftyServiceWorkerUpdateTimer = null;
 let iftyServiceWorkerUpdateListenersInstalled = false;
+
+// Q3 STEP12：IFTYアカウント / D1クラウドセーブ
+// セーブデータの正本はアカウント側（Cloudflare D1）。
+// localStorage はCookieではなく、オフライン動作用の端末キャッシュとセッショントークンだけに使用する。
+const IFTY_SESSION_TOKEN_KEY = 'ifty_account_session_token';
+const IFTY_ACCOUNT_META_KEY = 'ifty_account_meta';
+const IFTY_CLOUD_REVISION_PREFIX = 'ifty_cloud_revision_';
+const IFTY_CLOUD_DIRTY_PREFIX = 'ifty_cloud_dirty_';
+const IFTY_CLOUD_SAVE_DEBOUNCE_MS = 1200;
+let iftyAccount = null;
+let iftySessionToken = '';
+let iftyCloudRevision = 0;
+let iftyCloudSaveTimer = null;
+let iftyCloudSaveEnabled = false;
+let iftyCloudApplyingRemote = false;
+let iftyCloudSyncInFlight = false;
+let iftyCloudSyncQueued = false;
+let iftyCloudOnlineListenerInstalled = false;
 
 const WORKER_URL = 'https://ifty.humbleflail205.workers.dev/';
 const IFTY_LOGO_PATH = './ifty-icon.png';
@@ -173,9 +191,11 @@ function applyIftyTheme() {
 window.toggleIftyTheme = function() {
   iftyTheme = iftyTheme === 'dark' ? 'light' : 'dark';
   applyIftyTheme();
+  queueIftyCloudSave('テーマ変更');
 };
 
 window.goToIftyHome = function() {
+  if (typeof window.closeIftySideMenu === 'function') window.closeIftySideMenu();
   if (typeof window.openIftyHome === 'function') {
     window.openIftyHome();
     return;
@@ -186,13 +206,259 @@ window.goToIftyHome = function() {
   if (typeof window.switchToVocabView === 'function') window.switchToVocabView();
 };
 
+// ==========================================
+// Q3 STEP13：IFTY左サイドメニュー
+// ==========================================
+function ensureIftySideMenuStyles() {
+  if (document.getElementById('iftySideMenuStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'iftySideMenuStyles';
+  style.textContent = `
+    #iftySideMenuOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10150;
+      background: rgba(15, 23, 42, .46);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease;
+    }
+    #iftySideMenuOverlay.ifty-side-menu-open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #iftySideMenuDrawer {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: min(360px, 86vw);
+      box-sizing: border-box;
+      background: #ffffff;
+      color: #0f172a;
+      box-shadow: 12px 0 34px rgba(15, 23, 42, .26);
+      transform: translateX(-102%);
+      transition: transform .22s ease;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 18px 14px 24px;
+    }
+    #iftySideMenuOverlay.ifty-side-menu-open #iftySideMenuDrawer {
+      transform: translateX(0);
+    }
+    .ifty-side-menu-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 6px 16px;
+      border-bottom: 1px solid #e2e8f0;
+      margin-bottom: 10px;
+    }
+    .ifty-side-menu-logo {
+      width: 50px;
+      height: 62px;
+      object-fit: contain;
+      border-radius: 9px;
+      background: #000;
+      flex: 0 0 auto;
+    }
+    .ifty-side-menu-title {
+      font-size: 1.18rem;
+      font-weight: 900;
+      letter-spacing: .04em;
+    }
+    .ifty-side-menu-user {
+      margin-top: 3px;
+      color: #64748b;
+      font-size: .78rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 210px;
+    }
+    .ifty-side-menu-close {
+      margin-left: auto;
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 9px;
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 1.08rem;
+      cursor: pointer;
+    }
+    .ifty-side-menu-label {
+      padding: 14px 14px 6px;
+      color: #64748b;
+      font-size: .74rem;
+      font-weight: 900;
+      letter-spacing: .1em;
+    }
+    .ifty-side-menu-item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-sizing: border-box;
+      border: none;
+      border-radius: 10px;
+      background: transparent;
+      color: #0f172a;
+      padding: 12px 14px;
+      text-align: left;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .ifty-side-menu-item:hover,
+    .ifty-side-menu-item:focus-visible {
+      background: #f1f5f9;
+      outline: none;
+    }
+    .ifty-side-menu-item.ifty-side-subject {
+      padding-left: 34px;
+      font-weight: 700;
+    }
+    .ifty-side-menu-separator {
+      height: 1px;
+      background: #e2e8f0;
+      margin: 10px 6px;
+    }
+    .ifty-side-menu-item.ifty-side-logout {
+      color: #be123c;
+    }
+    body[data-ifty-theme="dark"] #iftySideMenuDrawer {
+      background: #111827;
+      color: #e5e7eb;
+      box-shadow: 12px 0 34px rgba(0, 0, 0, .45);
+    }
+    body[data-ifty-theme="dark"] .ifty-side-menu-header {
+      border-color: #334155;
+    }
+    body[data-ifty-theme="dark"] .ifty-side-menu-separator {
+      background-color: #334155;
+    }
+    body[data-ifty-theme="dark"] .ifty-side-menu-user,
+    body[data-ifty-theme="dark"] .ifty-side-menu-label {
+      color: #94a3b8;
+    }
+    body[data-ifty-theme="dark"] .ifty-side-menu-close {
+      background: #1e293b;
+      color: #e2e8f0;
+    }
+    body[data-ifty-theme="dark"] .ifty-side-menu-item {
+      color: #e5e7eb;
+    }
+    body[data-ifty-theme="dark"] .ifty-side-menu-item:hover,
+    body[data-ifty-theme="dark"] .ifty-side-menu-item:focus-visible {
+      background: #1e293b;
+    }
+    body[data-ifty-theme="dark"] .ifty-side-menu-item.ifty-side-logout {
+      color: #fb7185;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function renderIftySideMenu() {
+  ensureIftySideMenuStyles();
+  let overlay = document.getElementById('iftySideMenuOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'iftySideMenuOverlay';
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.addEventListener('click', event => {
+      if (event.target === overlay) window.closeIftySideMenu();
+    });
+    document.body.appendChild(overlay);
+  }
+
+  const accountName = escapeHtml(String((iftyAccount && iftyAccount.username) || currentUser || ''));
+  overlay.innerHTML = `
+    <nav id="iftySideMenuDrawer" aria-label="IFTYメニュー" onclick="event.stopPropagation()">
+      <div class="ifty-side-menu-header">
+        <img class="ifty-side-menu-logo" src="${IFTY_LOGO_PATH}" alt="IFTY" onerror="this.onerror=null;this.src='${IFTY_LOGO_FALLBACK_DATA}'">
+        <div style="min-width:0;">
+          <div class="ifty-side-menu-title">IFTY</div>
+          <div class="ifty-side-menu-user">${accountName}</div>
+        </div>
+        <button class="ifty-side-menu-close" type="button" onclick="closeIftySideMenu()" aria-label="メニューを閉じる">×</button>
+      </div>
+
+      <button class="ifty-side-menu-item" type="button" onclick="openIftySideMenuHome()">HOME</button>
+
+      <div class="ifty-side-menu-label">SUBJECTS</div>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ENGLISH')">ENGLISH</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ANCIENT')">ANCIENT</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SCIENCE')">SCIENCE</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SOCIAL STUDIES')">SOCIAL STUDIES</button>
+
+      <div class="ifty-side-menu-separator"></div>
+      <button class="ifty-side-menu-item" type="button" onclick="openIftySettings()">SETTINGS</button>
+      <button class="ifty-side-menu-item ifty-side-logout" type="button" onclick="closeIftySideMenu(); logout();">LOG OUT</button>
+    </nav>`;
+
+  return overlay;
+}
+
+window.openIftySideMenu = function() {
+  const mainPortal = document.getElementById('mainPortal');
+  if (!mainPortal || mainPortal.style.display === 'none') return;
+  if (typeof window.closeMainLauncher === 'function') window.closeMainLauncher();
+  const overlay = renderIftySideMenu();
+  overlay.style.display = 'block';
+  overlay.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => {
+    overlay.classList.add('ifty-side-menu-open');
+  });
+};
+
+window.closeIftySideMenu = function() {
+  const overlay = document.getElementById('iftySideMenuOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('ifty-side-menu-open');
+  overlay.setAttribute('aria-hidden', 'true');
+  window.setTimeout(() => {
+    if (!overlay.classList.contains('ifty-side-menu-open')) overlay.style.display = 'none';
+  }, 230);
+};
+
+window.toggleIftySideMenu = function() {
+  const overlay = document.getElementById('iftySideMenuOverlay');
+  if (overlay && overlay.classList.contains('ifty-side-menu-open')) {
+    window.closeIftySideMenu();
+  } else {
+    window.openIftySideMenu();
+  }
+};
+
+window.openIftySideMenuHome = function() {
+  window.closeIftySideMenu();
+  window.goToIftyHome();
+};
+
+window.openIftySubject = function(subject) {
+  const normalized = String(subject || '').toUpperCase();
+  window.closeIftySideMenu();
+  if (normalized === 'ENGLISH') {
+    window.goToIftyHome();
+    return;
+  }
+  alert(`${normalized} は今後追加予定です。`);
+};
+
+window.openIftySettings = function() {
+  window.closeIftySideMenu();
+  alert('SETTINGS は今後追加予定です。');
+};
+
 function ensureIftyBrandUi() {
   if (!document.getElementById('iftyGlobalLogo')) {
     const logo = document.createElement('button');
     logo.id = 'iftyGlobalLogo';
     logo.type = 'button';
-    logo.title = 'IFTYホーム';
-    logo.onclick = window.goToIftyHome;
+    logo.title = 'IFTYメニュー';
+    logo.onclick = window.toggleIftySideMenu;
     logo.style.cssText = 'position:fixed;left:10px;top:10px;width:58px;height:72px;padding:0;border:none;background:#000;border-radius:10px;overflow:hidden;cursor:pointer;z-index:10090;box-shadow:0 5px 18px rgba(0,0,0,.28);';
     const logoImg = document.createElement('img');
     logoImg.src = IFTY_LOGO_PATH;
@@ -203,6 +469,12 @@ function ensureIftyBrandUi() {
     };
     logo.appendChild(logoImg);
     document.body.appendChild(logo);
+  }
+
+  const globalLogo = document.getElementById('iftyGlobalLogo');
+  if (globalLogo) {
+    globalLogo.title = 'IFTYメニュー';
+    globalLogo.onclick = window.toggleIftySideMenu;
   }
 
   if (!document.getElementById('iftyQuickControls')) {
@@ -287,7 +559,7 @@ function sanitizeChatSessionsForBackup() {
 function captureIftyRecoveryPayload() {
   return {
     schemaVersion: 1,
-    appVersion: 'Q3_STEP11',
+    appVersion: 'Q3_STEP12',
     savedAt: Date.now(),
     currentUser: currentUser,
     folders: deepClone(Array.isArray(folders) ? folders : []),
@@ -938,6 +1210,487 @@ function gradeLocalSelectionAnswer(question, userAnswer) {
   };
 }
 
+
+// ==========================================
+// Q3 STEP12：IFTYアカウント / クラウドセーブ
+// ==========================================
+function getIftyCloudRevisionKey(username = currentUser) {
+  return IFTY_CLOUD_REVISION_PREFIX + String(username || '');
+}
+
+function getIftyCloudDirtyKey(username = currentUser) {
+  return IFTY_CLOUD_DIRTY_PREFIX + String(username || '');
+}
+
+function readStoredIftyAccountMeta() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(IFTY_ACCOUNT_META_KEY) || 'null');
+    if (parsed && typeof parsed === 'object' && parsed.username) return parsed;
+  } catch (_) {}
+  return null;
+}
+
+function storeIftyAccountSession(account, token) {
+  iftyAccount = account && typeof account === 'object' ? account : null;
+  iftySessionToken = String(token || '');
+  if (iftySessionToken) localStorage.setItem(IFTY_SESSION_TOKEN_KEY, iftySessionToken);
+  if (iftyAccount) localStorage.setItem(IFTY_ACCOUNT_META_KEY, JSON.stringify(iftyAccount));
+}
+
+function clearIftyAccountSession() {
+  iftyAccount = null;
+  iftySessionToken = '';
+  iftyCloudRevision = 0;
+  iftyCloudSaveEnabled = false;
+  localStorage.removeItem(IFTY_SESSION_TOKEN_KEY);
+  localStorage.removeItem(IFTY_ACCOUNT_META_KEY);
+  localStorage.removeItem('currentUser');
+}
+
+function setIftyAuthenticatedUiVisible(visible) {
+  if (!visible && typeof window.closeIftySideMenu === 'function') window.closeIftySideMenu();
+  const landingPage = document.getElementById('landingPage');
+  const mainPortal = document.getElementById('mainPortal');
+  const floatingAiBtn = document.getElementById('floatingAiBtn');
+  const quickControls = document.getElementById('iftyQuickControls');
+
+  if (landingPage) landingPage.style.display = visible ? 'none' : 'block';
+  if (mainPortal) mainPortal.style.display = visible ? 'block' : 'none';
+  if (floatingAiBtn) floatingAiBtn.style.display = visible ? 'flex' : 'none';
+  if (quickControls) quickControls.style.display = visible ? 'flex' : 'none';
+}
+
+function setIftyAccountFormStatus(message, isError = false) {
+  const el = document.getElementById('iftyAccountStatus');
+  if (!el) return;
+  el.textContent = String(message || '');
+  el.style.color = isError ? '#fca5a5' : '#bae6fd';
+}
+
+function renderIftyAccountLanding(message = '') {
+  setIftyAuthenticatedUiVisible(false);
+  const landingPage = document.getElementById('landingPage');
+  if (!landingPage) return;
+
+  const heading = landingPage.querySelector('h2');
+  if (heading) heading.textContent = 'IFTYアカウント';
+
+  const accountList = document.getElementById('accountList');
+  if (!accountList) return;
+  accountList.innerHTML = `
+    <input id="iftyAccountUsername" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="IFTY ID（3〜24文字）" style="padding:11px;border:1px solid #475569;border-radius:7px;font-size:1em;background:#0f172a;color:white;">
+    <input id="iftyAccountPassword" type="password" autocomplete="current-password" placeholder="パスワード（10文字以上）" style="padding:11px;border:1px solid #475569;border-radius:7px;font-size:1em;background:#0f172a;color:white;">
+    <input id="iftyAccountPasswordConfirm" type="password" autocomplete="new-password" placeholder="新規作成時のみ：パスワード確認" style="padding:11px;border:1px solid #475569;border-radius:7px;font-size:1em;background:#0f172a;color:white;">
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <button onclick="loginIftyAccount()" style="flex:1;background:#0284c7;color:white;border:none;padding:10px;border-radius:7px;font-weight:800;cursor:pointer;">ログイン</button>
+      <button onclick="registerIftyAccount()" style="flex:1;background:#15803d;color:white;border:none;padding:10px;border-radius:7px;font-weight:800;cursor:pointer;">新規作成</button>
+    </div>
+    <div id="iftyAccountStatus" style="min-height:1.3em;font-size:.85em;color:#bae6fd;margin-top:4px;">${escapeHtml(message)}</div>
+    <div style="font-size:.78em;line-height:1.55;color:#cbd5e1;margin-top:4px;">
+      セーブデータの正本はIFTYアカウントのクラウド領域へ保存します。Cookieは使用しません。オフライン中だけ端末内キャッシュを使い、接続復帰後に同期します。
+    </div>`;
+
+  const password = document.getElementById('iftyAccountPassword');
+  if (password) {
+    password.addEventListener('keydown', event => {
+      if (event.key === 'Enter') window.loginIftyAccount();
+    });
+  }
+  const confirmPassword = document.getElementById('iftyAccountPasswordConfirm');
+  if (confirmPassword) {
+    confirmPassword.addEventListener('keydown', event => {
+      if (event.key === 'Enter') window.registerIftyAccount();
+    });
+  }
+}
+
+function ensureIftyCloudStatusUi() {
+  const userDisplay = document.getElementById('userDisplay');
+  if (!userDisplay || document.getElementById('iftyCloudStatus')) return;
+  const status = document.createElement('div');
+  status.id = 'iftyCloudStatus';
+  status.style.cssText = 'font-size:.72em;color:#64748b;margin-top:3px;';
+  status.textContent = '☁️ 同期確認中';
+  userDisplay.parentElement.appendChild(status);
+}
+
+function setIftyCloudStatus(text, kind = 'normal') {
+  const status = document.getElementById('iftyCloudStatus');
+  if (!status) return;
+  status.textContent = String(text || '');
+  status.style.color = kind === 'error' ? '#dc2626' : kind === 'ok' ? '#0f766e' : kind === 'offline' ? '#b45309' : '#64748b';
+}
+
+async function iftyAccountApi(type, payload = {}) {
+  const response = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type, ...payload })
+  });
+  let data = {};
+  try { data = await response.json(); } catch (_) {}
+  if (!response.ok) {
+    const error = new Error(data.error || data.message || `HTTP ${response.status}`);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+  return data;
+}
+
+function captureIftyCloudPayload() {
+  return {
+    schemaVersion: 1,
+    appVersion: 'Q3_STEP12',
+    savedAt: Date.now(),
+    folders: deepClone(Array.isArray(folders) ? folders : []),
+    practiceData: deepClone(practiceData || { schemaVersion: 1, modules: {} }),
+    chatSessions: sanitizeChatSessionsForBackup(),
+    currentChatSessionId: currentChatSessionId || null,
+    iftyTheme: iftyTheme === 'dark' ? 'dark' : 'light'
+  };
+}
+
+function readIftyLocalPayloadForUser(username) {
+  let savedFolders = [];
+  let savedPractice = { schemaVersion: 1, modules: { flashcards: { sets: [] }, questions: { sets: [] } } };
+  let savedChats = [];
+  try { savedFolders = JSON.parse(localStorage.getItem('vocab_user_' + username) || '[]'); } catch (_) {}
+  try { savedPractice = JSON.parse(localStorage.getItem('practice_user_' + username) || JSON.stringify(savedPractice)); } catch (_) {}
+  try { savedChats = JSON.parse(localStorage.getItem('chat_sessions_' + username) || '[]'); } catch (_) {}
+  return {
+    schemaVersion: 1,
+    appVersion: 'Q3_STEP12_LOCAL',
+    savedAt: Date.now(),
+    folders: Array.isArray(savedFolders) ? savedFolders : [],
+    practiceData: savedPractice && typeof savedPractice === 'object' ? savedPractice : { schemaVersion: 1, modules: {} },
+    chatSessions: Array.isArray(savedChats) ? savedChats : [],
+    currentChatSessionId: Array.isArray(savedChats) && savedChats[0] ? savedChats[0].id : null,
+    iftyTheme: localStorage.getItem('ifty_theme') === 'dark' ? 'dark' : 'light'
+  };
+}
+
+function hasMeaningfulIftyPayload(payload) {
+  if (!payload || typeof payload !== 'object') return false;
+  const savedFolders = Array.isArray(payload.folders) ? payload.folders : [];
+  if (savedFolders.length) return true;
+  const modules = payload.practiceData && payload.practiceData.modules ? payload.practiceData.modules : {};
+  if (modules.flashcards && Array.isArray(modules.flashcards.sets) && modules.flashcards.sets.length) return true;
+  if (modules.questions && Array.isArray(modules.questions.sets) && modules.questions.sets.length) return true;
+  const chats = Array.isArray(payload.chatSessions) ? payload.chatSessions : [];
+  return chats.some(session => Array.isArray(session.messages) && session.messages.some(message => message && message.role === 'user'));
+}
+
+async function applyIftyCloudPayload(payload) {
+  if (!payload || typeof payload !== 'object') throw new Error('クラウドセーブデータが不正です。');
+  iftyCloudApplyingRemote = true;
+  try {
+    folders = deepClone(Array.isArray(payload.folders) ? payload.folders : []);
+    practiceData = deepClone(payload.practiceData || { schemaVersion: 1, modules: { flashcards: { sets: [] }, questions: { sets: [] } } });
+    chatSessions = deepClone(Array.isArray(payload.chatSessions) ? payload.chatSessions : []);
+    iftyTheme = payload.iftyTheme === 'dark' ? 'dark' : 'light';
+
+    normalizeFoldersData();
+    normalizePracticeData();
+    if (!chatSessions.length) {
+      chatSessions = [{ id: 'session_' + Date.now(), title: 'ALLIA', messages: [{ role: 'assistant', text: 'こんにちは！ALLIAアシスタントです。何でも聞いてください！' }] }];
+    }
+    currentChatSessionId = chatSessions.some(session => session.id === payload.currentChatSessionId)
+      ? payload.currentChatSessionId
+      : chatSessions[0].id;
+
+    selectedFolderIds.clear();
+    selectedWordIds.clear();
+    pendingSpellingSuggestions = {};
+    wordInputDrafts = {};
+    undoStack = [];
+    redoStack = [];
+
+    saveUserData();
+    savePracticeData();
+    saveChatSessions();
+    applyIftyTheme();
+    renderFolders();
+    updateChatSessionSelect();
+    renderChatMessages();
+    updateUndoRedoButtons();
+    const practiceModal = document.getElementById('practiceModal');
+    if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
+    applyAlliaBranding();
+  } finally {
+    iftyCloudApplyingRemote = false;
+  }
+}
+
+function markIftyCloudDirty() {
+  if (!iftyAccount) return;
+  localStorage.setItem(getIftyCloudDirtyKey(), '1');
+}
+
+function queueIftyCloudSave(reason = '変更') {
+  if (!iftyCloudSaveEnabled || iftyCloudApplyingRemote || !iftyAccount || !iftySessionToken) return;
+  markIftyCloudDirty();
+
+  if (!isIftyOnline()) {
+    setIftyCloudStatus('☁️ オフライン：端末に一時保存', 'offline');
+    return;
+  }
+
+  if (iftyCloudSaveTimer) clearTimeout(iftyCloudSaveTimer);
+  setIftyCloudStatus('☁️ 保存待ち');
+  iftyCloudSaveTimer = setTimeout(() => {
+    flushIftyCloudSave({ reason }).catch(error => {
+      console.warn('IFTYクラウド保存エラー:', error);
+    });
+  }, IFTY_CLOUD_SAVE_DEBOUNCE_MS);
+}
+
+async function resolveIftyCloudConflict(conflictState) {
+  const remoteRevision = Number(conflictState && conflictState.revision || 0);
+  const remotePayload = conflictState && conflictState.payload;
+  try { await createIftyRecoverySnapshot('クラウド競合前の端末保存', { force: true }); } catch (_) {}
+
+  const useCloud = confirm('別の端末で更新されたクラウドセーブを検出しました。\n\nOK：クラウド版をこの端末へ読み込む\nキャンセル：この端末版をクラウドへ上書きする\n\nどちらを選んでも、この端末の現在状態は復元用バックアップへ保存しています。');
+  if (useCloud) {
+    await applyIftyCloudPayload(remotePayload || {});
+    iftyCloudRevision = remoteRevision;
+    localStorage.setItem(getIftyCloudRevisionKey(), String(iftyCloudRevision));
+    localStorage.removeItem(getIftyCloudDirtyKey());
+    setIftyCloudStatus('☁️ 同期済み', 'ok');
+    return;
+  }
+
+  const forced = await iftyAccountApi('cloud_save', {
+    token: iftySessionToken,
+    expectedRevision: remoteRevision,
+    force: true,
+    payload: captureIftyCloudPayload()
+  });
+  iftyCloudRevision = Number(forced.revision || remoteRevision + 1);
+  localStorage.setItem(getIftyCloudRevisionKey(), String(iftyCloudRevision));
+  localStorage.removeItem(getIftyCloudDirtyKey());
+  setIftyCloudStatus('☁️ 同期済み', 'ok');
+}
+
+async function flushIftyCloudSave(options = {}) {
+  if (!iftyCloudSaveEnabled || !iftyAccount || !iftySessionToken) return;
+  if (!isIftyOnline()) {
+    markIftyCloudDirty();
+    setIftyCloudStatus('☁️ オフライン：端末に一時保存', 'offline');
+    return;
+  }
+
+  if (iftyCloudSyncInFlight) {
+    iftyCloudSyncQueued = true;
+    return;
+  }
+
+  iftyCloudSyncInFlight = true;
+  setIftyCloudStatus('☁️ 保存中…');
+  try {
+    const data = await iftyAccountApi('cloud_save', {
+      token: iftySessionToken,
+      expectedRevision: iftyCloudRevision,
+      force: !!options.force,
+      payload: captureIftyCloudPayload()
+    });
+    iftyCloudRevision = Number(data.revision || iftyCloudRevision + 1);
+    localStorage.setItem(getIftyCloudRevisionKey(), String(iftyCloudRevision));
+    localStorage.removeItem(getIftyCloudDirtyKey());
+    setIftyCloudStatus('☁️ 同期済み', 'ok');
+  } catch (error) {
+    if (error.status === 409 && error.data && error.data.state) {
+      await resolveIftyCloudConflict(error.data.state);
+    } else if (error.status === 401) {
+      setIftyCloudStatus('☁️ ログイン期限切れ', 'error');
+      alert('IFTYアカウントのログイン期限が切れました。もう一度ログインしてください。端末内のデータは削除しません。');
+      clearIftyAccountSession();
+      renderIftyAccountLanding('ログインし直してください。');
+    } else {
+      markIftyCloudDirty();
+      setIftyCloudStatus('☁️ 同期待ち', 'offline');
+      throw error;
+    }
+  } finally {
+    iftyCloudSyncInFlight = false;
+    if (iftyCloudSyncQueued) {
+      iftyCloudSyncQueued = false;
+      setTimeout(() => flushIftyCloudSave().catch(() => {}), 200);
+    }
+  }
+}
+
+async function syncIftyCloudAfterLogin() {
+  if (!iftyAccount || !iftySessionToken || !isIftyOnline()) {
+    setIftyCloudStatus('☁️ オフライン：端末キャッシュ使用', 'offline');
+    return;
+  }
+
+  setIftyCloudStatus('☁️ クラウド確認中…');
+  const localRevision = Number(localStorage.getItem(getIftyCloudRevisionKey()) || 0);
+  const localDirty = localStorage.getItem(getIftyCloudDirtyKey()) === '1';
+  const cloud = await iftyAccountApi('cloud_load', { token: iftySessionToken });
+
+  if (cloud.exists) {
+    const remoteRevision = Number(cloud.revision || 0);
+    if (localDirty) {
+      iftyCloudRevision = localRevision;
+      if (localRevision !== remoteRevision) {
+        await resolveIftyCloudConflict({ revision: remoteRevision, payload: cloud.payload });
+      } else {
+        await flushIftyCloudSave();
+      }
+      return;
+    }
+
+    iftyCloudRevision = remoteRevision;
+    await applyIftyCloudPayload(cloud.payload || {});
+    localStorage.setItem(getIftyCloudRevisionKey(), String(iftyCloudRevision));
+    localStorage.removeItem(getIftyCloudDirtyKey());
+    setIftyCloudStatus('☁️ 同期済み', 'ok');
+    return;
+  }
+
+  let initialPayload = captureIftyCloudPayload();
+  if (!hasMeaningfulIftyPayload(initialPayload)) {
+    const legacy = readIftyLocalPayloadForUser('default_user');
+    if (hasMeaningfulIftyPayload(legacy)) {
+      await applyIftyCloudPayload(legacy);
+      initialPayload = captureIftyCloudPayload();
+      try { await createIftyRecoverySnapshot('旧default_userデータをアカウントへ移行', { force: true }); } catch (_) {}
+    }
+  }
+
+  iftyCloudRevision = 0;
+  localStorage.setItem(getIftyCloudRevisionKey(), '0');
+  markIftyCloudDirty();
+  await flushIftyCloudSave();
+}
+
+function installIftyCloudOnlineListener() {
+  if (iftyCloudOnlineListenerInstalled) return;
+  iftyCloudOnlineListenerInstalled = true;
+  window.addEventListener('online', () => {
+    if (iftyAccount && iftySessionToken) {
+      syncIftyCloudAfterLogin().catch(error => console.warn('IFTY再同期エラー:', error));
+    }
+  });
+  window.addEventListener('offline', () => {
+    if (iftyAccount) setIftyCloudStatus('☁️ オフライン：端末に一時保存', 'offline');
+  });
+}
+
+async function enterIftyAccount(account, options = {}) {
+  if (!account || !account.username) throw new Error('アカウント情報が不正です。');
+  iftyAccount = account;
+  currentUser = String(account.username);
+  localStorage.setItem('currentUser', currentUser);
+  setIftyAuthenticatedUiVisible(true);
+  const userDisplay = document.getElementById('userDisplay');
+  if (userDisplay) userDisplay.textContent = currentUser;
+  ensureIftyCloudStatusUi();
+
+  iftyCloudSaveEnabled = false;
+  loadUserData(currentUser);
+  loadPracticeData(currentUser);
+  initChatSystem();
+  applyAlliaBranding();
+  ensureIftyBrandUi();
+  ensureIftyNetworkUi();
+  startIftyAutoBackup();
+  iftyCloudSaveEnabled = true;
+
+  if (options.offline) {
+    iftyCloudRevision = Number(localStorage.getItem(getIftyCloudRevisionKey()) || 0);
+    setIftyCloudStatus('☁️ オフライン：端末キャッシュ使用', 'offline');
+  } else {
+    await syncIftyCloudAfterLogin();
+  }
+}
+
+async function bootstrapIftyAccount() {
+  ensureIftyBrandUi();
+  setIftyAuthenticatedUiVisible(false);
+  installIftyCloudOnlineListener();
+
+  const token = String(localStorage.getItem(IFTY_SESSION_TOKEN_KEY) || '');
+  const meta = readStoredIftyAccountMeta();
+  if (!token || !meta || !meta.username) {
+    renderIftyAccountLanding();
+    return;
+  }
+
+  iftySessionToken = token;
+  iftyAccount = meta;
+
+  if (!isIftyOnline()) {
+    await enterIftyAccount(meta, { offline: true });
+    return;
+  }
+
+  try {
+    const session = await iftyAccountApi('account_session', { token });
+    storeIftyAccountSession(session.account, token);
+    await enterIftyAccount(session.account);
+  } catch (error) {
+    clearIftyAccountSession();
+    renderIftyAccountLanding(error.status === 401 ? 'セッションの期限が切れました。再ログインしてください。' : 'アカウント確認に失敗しました。');
+  }
+}
+
+window.loginIftyAccount = async function() {
+  const username = String(document.getElementById('iftyAccountUsername')?.value || '').trim();
+  const password = String(document.getElementById('iftyAccountPassword')?.value || '');
+  if (!username || !password) {
+    setIftyAccountFormStatus('IFTY IDとパスワードを入力してください。', true);
+    return;
+  }
+  if (!isIftyOnline()) {
+    setIftyAccountFormStatus('初回ログインにはインターネット接続が必要です。', true);
+    return;
+  }
+
+  setIftyAccountFormStatus('ログイン中…');
+  try {
+    const result = await iftyAccountApi('account_login', { username, password });
+    storeIftyAccountSession(result.account, result.token);
+    await enterIftyAccount(result.account);
+  } catch (error) {
+    setIftyAccountFormStatus(error.message || 'ログインできませんでした。', true);
+  }
+};
+
+window.registerIftyAccount = async function() {
+  const username = String(document.getElementById('iftyAccountUsername')?.value || '').trim();
+  const password = String(document.getElementById('iftyAccountPassword')?.value || '');
+  const confirmPassword = String(document.getElementById('iftyAccountPasswordConfirm')?.value || '');
+  if (!/^[A-Za-z0-9_.-]{3,24}$/.test(username)) {
+    setIftyAccountFormStatus('IFTY IDは英数字・_ . - の3〜24文字で入力してください。', true);
+    return;
+  }
+  if (password.length < 10) {
+    setIftyAccountFormStatus('パスワードは10文字以上にしてください。', true);
+    return;
+  }
+  if (password !== confirmPassword) {
+    setIftyAccountFormStatus('確認用パスワードが一致していません。', true);
+    return;
+  }
+  if (!isIftyOnline()) {
+    setIftyAccountFormStatus('アカウント作成にはインターネット接続が必要です。', true);
+    return;
+  }
+
+  setIftyAccountFormStatus('アカウント作成中…');
+  try {
+    const result = await iftyAccountApi('account_register', { username, password });
+    storeIftyAccountSession(result.account, result.token);
+    await enterIftyAccount(result.account);
+  } catch (error) {
+    setIftyAccountFormStatus(error.message || 'アカウントを作成できませんでした。', true);
+  }
+};
+
 // ==========================================
 // ALLIA 表示統一
 // ==========================================
@@ -965,30 +1718,16 @@ function applyAlliaBranding() {
 
 // 1. 初期化処理
 document.addEventListener("DOMContentLoaded", function() {
-  localStorage.setItem("currentUser", currentUser);
-
-  const landingPage = document.getElementById("landingPage");
-  if (landingPage) landingPage.style.display = "none";
-
-  const mainPortal = document.getElementById("mainPortal");
-  if (mainPortal) mainPortal.style.display = "block";
-
-  const userDisplay = document.getElementById("userDisplay");
-  if (userDisplay) userDisplay.textContent = currentUser;
-
-  const floatingAiBtn = document.getElementById("floatingAiBtn");
-  if (floatingAiBtn) floatingAiBtn.style.display = "flex";
-
-  loadUserData(currentUser);
-  loadPracticeData(currentUser);
-  initChatSystem();
   applyAlliaBranding();
   ensureIftyPwaHeadLinks();
   ensureIftyBrandUi();
   ensureIftyNetworkUi();
   installIftyNetworkListeners();
   registerIftyServiceWorker();
-  startIftyAutoBackup();
+  bootstrapIftyAccount().catch(error => {
+    console.error('IFTYアカウント初期化エラー:', error);
+    renderIftyAccountLanding('アカウント初期化に失敗しました。');
+  });
 });
 
 document.addEventListener('keydown', function(event) {
@@ -1042,6 +1781,7 @@ function saveUserData() {
   try {
     normalizeFoldersData();
     localStorage.setItem("vocab_user_" + currentUser, JSON.stringify(folders));
+    queueIftyCloudSave('単語帳更新');
   } catch (e) {}
 }
 
@@ -1099,6 +1839,7 @@ function savePracticeData() {
   try {
     normalizePracticeData();
     localStorage.setItem("practice_user_" + currentUser, JSON.stringify(practiceData));
+    queueIftyCloudSave('実践データ更新');
   } catch (e) {}
 }
 
@@ -2769,6 +3510,7 @@ window.deleteCurrentChatSession = function() {
 function saveChatSessions() {
   try {
     localStorage.setItem("chat_sessions_" + currentUser, JSON.stringify(chatSessions));
+    queueIftyCloudSave('チャット更新');
   } catch(e) {}
 }
 
@@ -3169,7 +3911,15 @@ window.startQuiz = function() {
   `;
 };
 
-window.logout = function() {
-  localStorage.removeItem("currentUser");
+window.logout = async function() {
+  const token = iftySessionToken;
+  if (iftyCloudSaveTimer) {
+    clearTimeout(iftyCloudSaveTimer);
+    iftyCloudSaveTimer = null;
+  }
+  if (token && isIftyOnline()) {
+    try { await iftyAccountApi('account_logout', { token }); } catch (_) {}
+  }
+  clearIftyAccountSession();
   location.reload();
 };
