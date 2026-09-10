@@ -1,9 +1,10 @@
-// ★★★ IFTY Q3 STEP14 2026-09-10：Developerローカル入場・パスワード表示切替・復旧案内 ★★★
+// ★★★ IFTY Q3 STEP15 2026-09-10：HOME・SUBJECTS・SETTINGS実画面追加 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
 let currentUser = "default_user";
 let currentView = "vocab"; // 'vocab' or 'chat'
+let iftyPortalPage = 'home'; // 'home' | 'subject' | 'settings' | 'vocab' | 'chat'
 let folders = [];
 let flashcardList = [];
 let currentFlashcardIndex = 0;
@@ -439,24 +440,426 @@ window.toggleIftySideMenu = function() {
   }
 };
 
+// ==========================================
+// Q3 STEP15：HOME / SUBJECTS / SETTINGS 実画面
+// ==========================================
+function ensureIftyPortalStyles() {
+  if (document.getElementById('iftyPortalStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'iftyPortalStyles';
+  style.textContent = `
+    #iftyHubPage {
+      display: none;
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 2px;
+    }
+    .ifty-portal-shell {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 18px;
+      color: #0f172a;
+      box-sizing: border-box;
+    }
+    .ifty-portal-title {
+      margin: 0;
+      font-size: 1.55rem;
+      font-weight: 900;
+      letter-spacing: .015em;
+    }
+    .ifty-portal-subtitle {
+      margin-top: 6px;
+      color: #64748b;
+      font-size: .9rem;
+      line-height: 1.55;
+    }
+    .ifty-home-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .ifty-home-card {
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      color: #0f172a;
+      border-radius: 13px;
+      padding: 16px;
+      min-height: 132px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      text-align: left;
+      box-sizing: border-box;
+    }
+    button.ifty-home-card {
+      cursor: pointer;
+      font: inherit;
+    }
+    button.ifty-home-card:hover,
+    button.ifty-home-card:focus-visible {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 3px rgba(56,189,248,.12);
+      outline: none;
+    }
+    .ifty-home-card-title {
+      font-size: 1.08rem;
+      font-weight: 900;
+    }
+    .ifty-home-card-meta {
+      color: #64748b;
+      font-size: .82rem;
+      line-height: 1.5;
+    }
+    .ifty-home-card-spacer {
+      flex: 1;
+    }
+    .ifty-home-card-action {
+      color: #0284c7;
+      font-size: .82rem;
+      font-weight: 900;
+    }
+    .ifty-home-card-soon {
+      color: #94a3b8;
+      font-size: .78rem;
+      font-weight: 800;
+    }
+    .ifty-home-quick {
+      margin-top: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .ifty-home-quick button,
+    .ifty-settings-action {
+      border: none;
+      border-radius: 9px;
+      padding: 10px 13px;
+      cursor: pointer;
+      font-weight: 800;
+    }
+    .ifty-portal-back {
+      border: none;
+      background: #e2e8f0;
+      color: #334155;
+      border-radius: 8px;
+      padding: 8px 11px;
+      cursor: pointer;
+      font-weight: 800;
+    }
+    .ifty-settings-section {
+      margin-top: 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px;
+      background: #f8fafc;
+    }
+    .ifty-settings-section h3 {
+      margin: 0 0 8px;
+      font-size: 1rem;
+    }
+    .ifty-settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .ifty-settings-note {
+      color: #64748b;
+      font-size: .82rem;
+      line-height: 1.55;
+    }
+    .ifty-subject-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: .74rem;
+      font-weight: 900;
+      background: #e2e8f0;
+      color: #475569;
+      margin-top: 12px;
+    }
+    body[data-ifty-theme="dark"] .ifty-portal-shell {
+      background: #111827;
+      border-color: #334155;
+      color: #e5e7eb;
+    }
+    body[data-ifty-theme="dark"] .ifty-portal-subtitle,
+    body[data-ifty-theme="dark"] .ifty-home-card-meta,
+    body[data-ifty-theme="dark"] .ifty-settings-note {
+      color: #94a3b8;
+    }
+    body[data-ifty-theme="dark"] .ifty-home-card,
+    body[data-ifty-theme="dark"] .ifty-settings-section {
+      background: #0f172a;
+      border-color: #334155;
+      color: #e5e7eb;
+    }
+    body[data-ifty-theme="dark"] .ifty-portal-back {
+      background: #334155;
+      color: #e2e8f0;
+    }
+    body[data-ifty-theme="dark"] .ifty-subject-badge {
+      background: #334155;
+      color: #cbd5e1;
+    }
+    @media (max-width: 620px) {
+      .ifty-home-grid { grid-template-columns: 1fr; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function ensureIftyHubPage() {
+  ensureIftyPortalStyles();
+  let page = document.getElementById('iftyHubPage');
+  if (page) return page;
+
+  const mainPortal = document.getElementById('mainPortal');
+  if (!mainPortal) return null;
+
+  page = document.createElement('div');
+  page.id = 'iftyHubPage';
+
+  const vocabPage = document.getElementById('vocabPage');
+  if (vocabPage && vocabPage.parentNode === mainPortal) {
+    mainPortal.insertBefore(page, vocabPage);
+  } else {
+    mainPortal.appendChild(page);
+  }
+  return page;
+}
+
+function hideIftyHubPage() {
+  const page = document.getElementById('iftyHubPage');
+  if (page) page.style.display = 'none';
+}
+
+function getIftyHomeStats() {
+  let wordCount = 0;
+  folders.forEach(folder => {
+    wordCount += Array.isArray(folder && folder.words) ? folder.words.length : 0;
+  });
+
+  const flashSets = practiceData && practiceData.modules && practiceData.modules.flashcards &&
+    Array.isArray(practiceData.modules.flashcards.sets)
+      ? practiceData.modules.flashcards.sets.length
+      : 0;
+
+  const quizSets = practiceData && practiceData.modules && practiceData.modules.questions &&
+    Array.isArray(practiceData.modules.questions.sets)
+      ? practiceData.modules.questions.sets.length
+      : 0;
+
+  return {
+    folders: Array.isArray(folders) ? folders.length : 0,
+    words: wordCount,
+    flashSets,
+    quizSets,
+    chats: Array.isArray(chatSessions) ? chatSessions.length : 0
+  };
+}
+
+function showIftyHubContent(html, pageName) {
+  if (typeof window.closePracticeModal === 'function') window.closePracticeModal();
+  if (typeof window.closeMainLauncher === 'function') window.closeMainLauncher();
+  if (typeof window.closeMenuModal === 'function') window.closeMenuModal();
+
+  const vocabPage = document.getElementById('vocabPage');
+  const aiChatPage = document.getElementById('aiChatPage');
+  const btn = document.getElementById('floatingAiBtn');
+  const page = ensureIftyHubPage();
+  if (!page) return;
+
+  currentView = 'vocab';
+  iftyPortalPage = pageName || 'home';
+
+  if (vocabPage) vocabPage.style.display = 'none';
+  if (aiChatPage) aiChatPage.style.display = 'none';
+  if (btn) btn.textContent = '💬';
+
+  page.innerHTML = html;
+  page.style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+window.openIftyHome = function() {
+  const stats = getIftyHomeStats();
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <h1 class="ifty-portal-title">HOME</h1>
+      <div class="ifty-portal-subtitle">IFTYの学習メニュー。科目を選ぶか、ALLIA・実践へ進めます。</div>
+
+      <div class="ifty-home-grid">
+        <button class="ifty-home-card" type="button" onclick="openIftySubject('ENGLISH')">
+          <div class="ifty-home-card-title">ENGLISH</div>
+          <div class="ifty-home-card-meta">フォルダ ${stats.folders} / 単語 ${stats.words}</div>
+          <div class="ifty-home-card-spacer"></div>
+          <div class="ifty-home-card-action">単語帳を開く →</div>
+        </button>
+
+        <button class="ifty-home-card" type="button" onclick="openIftySubject('ANCIENT')">
+          <div class="ifty-home-card-title">ANCIENT</div>
+          <div class="ifty-home-card-meta">古文・漢文などの学習領域</div>
+          <div class="ifty-home-card-spacer"></div>
+          <div class="ifty-home-card-soon">科目ページ準備済み / 学習機能は今後追加</div>
+        </button>
+
+        <button class="ifty-home-card" type="button" onclick="openIftySubject('SCIENCE')">
+          <div class="ifty-home-card-title">SCIENCE</div>
+          <div class="ifty-home-card-meta">理科系科目の学習領域</div>
+          <div class="ifty-home-card-spacer"></div>
+          <div class="ifty-home-card-soon">科目ページ準備済み / 学習機能は今後追加</div>
+        </button>
+
+        <button class="ifty-home-card" type="button" onclick="openIftySubject('SOCIAL STUDIES')">
+          <div class="ifty-home-card-title">SOCIAL STUDIES</div>
+          <div class="ifty-home-card-meta">地理・歴史などの学習領域</div>
+          <div class="ifty-home-card-spacer"></div>
+          <div class="ifty-home-card-soon">科目ページ準備済み / 学習機能は今後追加</div>
+        </button>
+      </div>
+
+      <div class="ifty-home-quick">
+        <button type="button" onclick="switchToChatView()" style="background:#0284c7;color:white;">🤖 ALLIA</button>
+        <button type="button" onclick="openPracticeHome()" style="background:#7c3aed;color:white;">⚔️ 実践</button>
+        <button type="button" onclick="openIftyRecoveryCenter()" style="background:#334155;color:white;">🛟 バックアップ / 復元</button>
+      </div>
+
+      <div class="ifty-settings-note" style="margin-top:14px;">
+        実践：Flash ${stats.flashSets} / Quiz ${stats.quizSets}　・　ALLIAチャット ${stats.chats}
+      </div>
+    </section>
+  `, 'home');
+};
+
 window.openIftySideMenuHome = function() {
   window.closeIftySideMenu();
-  window.goToIftyHome();
+  window.openIftyHome();
 };
 
 window.openIftySubject = function(subject) {
   const normalized = String(subject || '').toUpperCase();
   window.closeIftySideMenu();
+
   if (normalized === 'ENGLISH') {
-    window.goToIftyHome();
+    iftyPortalPage = 'vocab';
+    window.switchToVocabView();
     return;
   }
-  alert(`${normalized} は今後追加予定です。`);
+
+  const subjectInfo = {
+    'ANCIENT': {
+      title: 'ANCIENT',
+      description: '古文・漢文などを扱う科目ページです。'
+    },
+    'SCIENCE': {
+      title: 'SCIENCE',
+      description: '理科系科目を扱う科目ページです。'
+    },
+    'SOCIAL STUDIES': {
+      title: 'SOCIAL STUDIES',
+      description: '地理・歴史などを扱う科目ページです。'
+    }
+  };
+
+  const info = subjectInfo[normalized] || {
+    title: normalized || 'SUBJECT',
+    description: 'この科目のページです。'
+  };
+
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">${escapeHtml(info.title)}</h1>
+          <div class="ifty-portal-subtitle">${escapeHtml(info.description)}</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+      </div>
+
+      <div class="ifty-subject-badge">SUBJECT PAGE</div>
+
+      <div class="ifty-settings-section" style="margin-top:14px;">
+        <h3>この科目の学習機能は次の更新で追加できます。</h3>
+        <div class="ifty-settings-note">
+          STEP15では、サイドメニューからアラートを出すだけだった状態をやめ、独立した科目ページまで作成しました。
+          既存のENGLISH単語帳・ALLIA・実践には変更を加えていません。
+        </div>
+      </div>
+    </section>
+  `, 'subject');
 };
 
 window.openIftySettings = function() {
   window.closeIftySideMenu();
-  alert('SETTINGS は今後追加予定です。');
+
+  const accountLabel = iftyDeveloperMode
+    ? 'Developer（端末ローカル）'
+    : String((iftyAccount && iftyAccount.username) || currentUser || '未設定');
+
+  const cloudStatus = document.getElementById('iftyCloudStatus');
+  const cloudText = iftyDeveloperMode
+    ? 'Developerモードではクラウド同期しません。'
+    : String((cloudStatus && cloudStatus.textContent) || 'クラウド状態を確認中');
+
+  const themeName = iftyTheme === 'dark' ? 'ダーク' : 'ライト';
+
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">SETTINGS</h1>
+          <div class="ifty-portal-subtitle">IFTYの表示・データ・アカウント設定。</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+      </div>
+
+      <div class="ifty-settings-section">
+        <div class="ifty-settings-row">
+          <div>
+            <h3>APPEARANCE</h3>
+            <div class="ifty-settings-note">現在：${escapeHtml(themeName)}モード</div>
+          </div>
+          <button class="ifty-settings-action" type="button" onclick="toggleIftyTheme(); openIftySettings();" style="background:#334155;color:white;">
+            ${iftyTheme === 'dark' ? '☀️ ライトへ' : '🌙 ダークへ'}
+          </button>
+        </div>
+      </div>
+
+      <div class="ifty-settings-section">
+        <div class="ifty-settings-row">
+          <div>
+            <h3>BACKUP / RESTORE</h3>
+            <div class="ifty-settings-note">3分ごとの世代バックアップ、手動保存、ファイル書き出し・復元を管理します。</div>
+          </div>
+          <button class="ifty-settings-action" type="button" onclick="openIftyRecoveryCenter()" style="background:#0f766e;color:white;">🛟 開く</button>
+        </div>
+      </div>
+
+      <div class="ifty-settings-section">
+        <h3>ACCOUNT</h3>
+        <div style="font-weight:900;margin-bottom:4px;">${escapeHtml(accountLabel)}</div>
+        <div class="ifty-settings-note">${escapeHtml(cloudText)}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+          <button class="ifty-settings-action" type="button" onclick="logout()" style="background:#e11d48;color:white;">LOG OUT</button>
+        </div>
+      </div>
+
+      <div class="ifty-settings-section">
+        <h3>ACCOUNT SECURITY</h3>
+        <div class="ifty-settings-note">
+          パスワード変更・復旧用メール・全端末ログアウト・アカウント削除はまだ未実装です。
+          ここは次のアカウント管理STEPで追加します。
+        </div>
+      </div>
+
+      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP15</div>
+    </section>
+  `, 'settings');
 };
 
 function ensureIftyBrandUi() {
@@ -1668,6 +2071,8 @@ async function enterIftyAccount(account, options = {}) {
   } else {
     await syncIftyCloudAfterLogin();
   }
+
+  if (typeof window.openIftyHome === 'function') window.openIftyHome();
 }
 
 async function enterIftyDeveloperSession() {
@@ -1700,6 +2105,8 @@ async function enterIftyDeveloperSession() {
 
   // Developerはアカウント認証を省略する代わりに、クラウド同期は常に無効。
   iftyCloudSaveEnabled = false;
+
+  if (typeof window.openIftyHome === 'function') window.openIftyHome();
 }
 
 window.enterIftyDeveloperMode = async function() {
@@ -3495,6 +3902,8 @@ window.closeMainLauncher = function() {
 
 window.switchToChatView = function() {
   currentView = 'chat';
+  iftyPortalPage = 'chat';
+  hideIftyHubPage();
 
   const vocabPage = document.getElementById("vocabPage");
   const aiChatPage = document.getElementById("aiChatPage");
@@ -3520,6 +3929,8 @@ window.switchToChatView = function() {
 
 window.switchToVocabView = function() {
   currentView = 'vocab';
+  iftyPortalPage = 'vocab';
+  hideIftyHubPage();
 
   const vocabPage = document.getElementById("vocabPage");
   const aiChatPage = document.getElementById("aiChatPage");
