@@ -1,10 +1,23 @@
-// ★★★ IFTY Q3 STEP15 2026-09-10：HOME・SUBJECTS・SETTINGS実画面追加 ★★★
+// ★★★ IFTY Q3 STEP17 2026-09-11：教科別ORDER・教科別ALLIAコンテキスト分離 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
 let currentUser = "default_user";
 let currentView = "vocab"; // 'vocab' or 'chat'
 let iftyPortalPage = 'home'; // 'home' | 'subject' | 'settings' | 'vocab' | 'chat'
+
+// Q3 STEP17：教科ごとのORDER / ALLIAコンテキスト
+const IFTY_SUBJECT_KEYS = ['ENGLISH', 'ANCIENT', 'SCIENCE', 'SOCIAL STUDIES'];
+const IFTY_ORDER_STORAGE_PREFIX = 'ifty_subject_orders_';
+const IFTY_ORDER_MAX_CHARS = 12000;
+let currentIftySubject = 'ENGLISH';
+let iftySubjectOrders = {
+  ENGLISH: '',
+  ANCIENT: '',
+  SCIENCE: '',
+  'SOCIAL STUDIES': ''
+};
+
 let folders = [];
 let flashcardList = [];
 let currentFlashcardIndex = 0;
@@ -43,15 +56,21 @@ const MAX_HISTORY_STEPS = 60;
 // Q3 第1弾：テーマ
 let iftyTheme = localStorage.getItem('ifty_theme') || 'light';
 
-// Q3 STEP9：世代オートバックアップ / 復元
+// Q3 STEP16：PERIODIC / MANUAL バックアップ + オートセーブ頻度
 const IFTY_RECOVERY_DB_NAME = 'ifty_recovery_q3';
 const IFTY_RECOVERY_DB_VERSION = 1;
 const IFTY_RECOVERY_STORE = 'snapshots';
-const IFTY_RECOVERY_MAX_SNAPSHOTS = 30;
-const IFTY_AUTOSAVE_INTERVAL_MS = 3 * 60 * 1000;
+const IFTY_RECOVERY_MAX_MANUAL_SNAPSHOTS = 30;
+const IFTY_AUTOSAVE_DEFAULT_MINUTES = 3;
+const IFTY_AUTOSAVE_MIN_MINUTES = 1;
+const IFTY_AUTOSAVE_MAX_MINUTES = 240;
+const IFTY_AUTOSAVE_SETTING_PREFIX = 'ifty_autosave_minutes_';
+const IFTY_PERIODIC_BACKUP_PREFIX = 'ifty_periodic_backup_';
+let iftyAutosaveIntervalMinutes = IFTY_AUTOSAVE_DEFAULT_MINUTES;
 let iftyAutoBackupTimer = null;
 let iftyLastBackupHash = null;
 let iftyRecoveryLifecycleInstalled = false;
+let iftyLegacyRecoveryMigrationDoneForUser = null;
 
 // Q3 STEP10：Service Worker / 配信ファイルの自動更新確認
 const IFTY_UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
@@ -76,6 +95,7 @@ let iftyCloudApplyingRemote = false;
 let iftyCloudSyncInFlight = false;
 let iftyCloudSyncQueued = false;
 let iftyCloudOnlineListenerInstalled = false;
+let iftyAccountProfile = null;
 
 // Q3 STEP14：一時的なDeveloperローカル入場
 // 本物のアカウント認証やクラウドデータへの権限を迂回しない。
@@ -441,6 +461,200 @@ window.toggleIftySideMenu = function() {
 };
 
 // ==========================================
+// Q3 STEP17：教科別 ORDER
+// ==========================================
+function normalizeIftySubject(subject) {
+  const normalized = String(subject || '').trim().toUpperCase();
+  return IFTY_SUBJECT_KEYS.includes(normalized) ? normalized : 'ENGLISH';
+}
+
+function makeEmptyIftySubjectOrders() {
+  return {
+    ENGLISH: '',
+    ANCIENT: '',
+    SCIENCE: '',
+    'SOCIAL STUDIES': ''
+  };
+}
+
+function normalizeIftySubjectOrders(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const normalized = makeEmptyIftySubjectOrders();
+
+  IFTY_SUBJECT_KEYS.forEach(subject => {
+    normalized[subject] = String(source[subject] || '').trim().slice(0, IFTY_ORDER_MAX_CHARS);
+  });
+
+  return normalized;
+}
+
+function getIftyOrderStorageKey(username = currentUser) {
+  return IFTY_ORDER_STORAGE_PREFIX + String(username || 'default_user');
+}
+
+function loadIftySubjectOrders(username = currentUser) {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(getIftyOrderStorageKey(username)) || 'null');
+  } catch (_) {
+    saved = null;
+  }
+  iftySubjectOrders = normalizeIftySubjectOrders(saved);
+}
+
+function saveIftySubjectOrders(options = {}) {
+  iftySubjectOrders = normalizeIftySubjectOrders(iftySubjectOrders);
+  try {
+    localStorage.setItem(getIftyOrderStorageKey(currentUser), JSON.stringify(iftySubjectOrders));
+  } catch (_) {}
+
+  if (options.queueCloud !== false) {
+    queueIftyCloudSave('ORDER更新');
+  }
+}
+
+function getIftySubjectOrder(subject = currentIftySubject) {
+  const key = normalizeIftySubject(subject);
+  return String(iftySubjectOrders[key] || '').trim();
+}
+
+function getIftyOrderStatus(subject) {
+  const order = getIftySubjectOrder(subject);
+  return order ? `設定済み（${order.length}文字）` : '未設定';
+}
+
+function renderIftyOrderSettingsCards() {
+  return IFTY_SUBJECT_KEYS.map(subject => {
+    const order = getIftySubjectOrder(subject);
+    const preview = order
+      ? escapeHtml(order.replace(/\s+/g, ' ').slice(0, 72)) + (order.replace(/\s+/g, ' ').length > 72 ? '…' : '')
+      : 'この教科のALLIAに追加指示はありません。';
+
+    return `
+      <button type="button" onclick="openIftySubjectOrder('${subject.replace(/'/g, "\\'")}')" style="width:100%;text-align:left;border:1px solid #cbd5e1;background:transparent;color:inherit;border-radius:10px;padding:12px;cursor:pointer;">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+          <strong>${escapeHtml(subject)}</strong>
+          <span style="font-size:.76em;font-weight:900;color:${order ? '#0284c7' : '#94a3b8'};">${escapeHtml(getIftyOrderStatus(subject))}</span>
+        </div>
+        <div class="ifty-settings-note" style="margin-top:5px;">${preview}</div>
+      </button>`;
+  }).join('');
+}
+
+window.closeIftyOrderModal = function() {
+  const modal = document.getElementById('iftyOrderModal');
+  if (modal) modal.remove();
+};
+
+window.updateIftyOrderCharCount = function() {
+  const textarea = document.getElementById('iftyOrderTextarea');
+  const counter = document.getElementById('iftyOrderCharCount');
+  if (!textarea || !counter) return;
+  counter.textContent = `${String(textarea.value || '').length} / ${IFTY_ORDER_MAX_CHARS}`;
+};
+
+window.openIftySubjectOrder = function(subject) {
+  const key = normalizeIftySubject(subject);
+  window.closeIftyOrderModal();
+
+  const modal = document.createElement('div');
+  modal.id = 'iftyOrderModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.70);z-index:12120;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+  modal.innerHTML = `
+    <div role="dialog" aria-modal="true" aria-labelledby="iftyOrderTitle" style="width:min(720px,100%);max-height:88vh;overflow:auto;background:#fff;color:#0f172a;border-radius:16px;padding:20px;box-shadow:0 20px 55px rgba(0,0,0,.35);">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+        <div>
+          <h2 id="iftyOrderTitle" style="margin:0;">${escapeHtml(key)} ORDER</h2>
+          <div style="margin-top:6px;color:#64748b;font-size:.86em;line-height:1.55;">
+            ${escapeHtml(key)} のALLIA・AI生成機能だけに適用する恒常的なカスタム指示です。
+            他の教科のORDERには一切影響しません。
+          </div>
+        </div>
+        <button type="button" onclick="closeIftyOrderModal()" aria-label="閉じる" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;width:36px;height:36px;font-size:1.15em;cursor:pointer;">×</button>
+      </div>
+
+      <div style="margin-top:14px;padding:11px 12px;background:#f1f5f9;border-radius:9px;color:#475569;font-size:.82em;line-height:1.55;">
+        例：英単語では一般的な意味だけでなく、辞書に載る稀な意味・古義・専門用法も示す。<br>
+        例：古文単語では意味を日本語と英語の両方で示す。
+      </div>
+
+      <textarea id="iftyOrderTextarea" maxlength="${IFTY_ORDER_MAX_CHARS}" rows="13" oninput="updateIftyOrderCharCount()" placeholder="この教科のALLIAへのORDERを自由に記述…" style="width:100%;box-sizing:border-box;margin-top:13px;padding:12px;border:2px solid #94a3b8;border-radius:10px;font-size:1em;line-height:1.6;resize:vertical;">${escapeHtml(getIftySubjectOrder(key))}</textarea>
+
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:7px;">
+        <div id="iftyOrderCharCount" style="font-size:.78em;color:#64748b;"></div>
+        <div style="font-size:.76em;color:#64748b;">必須の出力形式・データ保護・安全上の制約はORDERより優先されます。</div>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
+        <button type="button" onclick="saveIftySubjectOrderFromModal('${key.replace(/'/g, "\\'")}')" style="flex:1;min-width:150px;border:none;background:#0284c7;color:white;padding:11px;border-radius:9px;font-weight:900;cursor:pointer;">SAVE ORDER</button>
+        <button type="button" onclick="clearIftySubjectOrder('${key.replace(/'/g, "\\'")}')" style="border:none;background:#64748b;color:white;padding:11px 14px;border-radius:9px;font-weight:900;cursor:pointer;">RESET</button>
+      </div>
+      <div id="iftyOrderModalStatus" style="min-height:1.25em;margin-top:8px;color:#475569;font-size:.82em;"></div>
+    </div>`;
+
+  modal.addEventListener('click', event => {
+    if (event.target === modal) window.closeIftyOrderModal();
+  });
+  document.body.appendChild(modal);
+  window.updateIftyOrderCharCount();
+
+  const textarea = document.getElementById('iftyOrderTextarea');
+  if (textarea) setTimeout(() => textarea.focus(), 30);
+};
+
+window.saveIftySubjectOrderFromModal = function(subject) {
+  const key = normalizeIftySubject(subject);
+  const textarea = document.getElementById('iftyOrderTextarea');
+  const status = document.getElementById('iftyOrderModalStatus');
+  if (!textarea) return;
+
+  const value = String(textarea.value || '').trim();
+  if (value.length > IFTY_ORDER_MAX_CHARS) {
+    if (status) {
+      status.textContent = `ORDERは${IFTY_ORDER_MAX_CHARS}文字以内にしてください。`;
+      status.style.color = '#dc2626';
+    }
+    return;
+  }
+
+  iftySubjectOrders[key] = value;
+  saveIftySubjectOrders();
+
+  if (status) {
+    status.textContent = `${key} ORDERを保存しました。他の教科には適用されません。`;
+    status.style.color = '#15803d';
+  }
+
+  setTimeout(() => {
+    window.closeIftyOrderModal();
+    if (iftyPortalPage === 'settings') window.openIftySettings();
+    else if (iftyPortalPage === 'subject' && currentIftySubject === key) window.openIftySubject(key);
+  }, 450);
+};
+
+window.clearIftySubjectOrder = function(subject) {
+  const key = normalizeIftySubject(subject);
+  if (!confirm(`${key} ORDERを空に戻しますか？\n他の教科のORDERは変更しません。`)) return;
+
+  iftySubjectOrders[key] = '';
+  saveIftySubjectOrders();
+  const textarea = document.getElementById('iftyOrderTextarea');
+  if (textarea) textarea.value = '';
+  window.updateIftyOrderCharCount();
+
+  const status = document.getElementById('iftyOrderModalStatus');
+  if (status) {
+    status.textContent = `${key} ORDERをリセットしました。`;
+    status.style.color = '#15803d';
+  }
+};
+
+window.openIftySubjectAllia = function(subject) {
+  currentIftySubject = normalizeIftySubject(subject);
+  window.switchToChatView();
+};
+
+// ==========================================
 // Q3 STEP15：HOME / SUBJECTS / SETTINGS 実画面
 // ==========================================
 function ensureIftyPortalStyles() {
@@ -687,6 +901,7 @@ function showIftyHubContent(html, pageName) {
 }
 
 window.openIftyHome = function() {
+  currentIftySubject = 'ENGLISH';
   const stats = getIftyHomeStats();
   showIftyHubContent(`
     <section class="ifty-portal-shell">
@@ -742,7 +957,8 @@ window.openIftySideMenuHome = function() {
 };
 
 window.openIftySubject = function(subject) {
-  const normalized = String(subject || '').toUpperCase();
+  const normalized = normalizeIftySubject(subject);
+  currentIftySubject = normalized;
   window.closeIftySideMenu();
 
   if (normalized === 'ENGLISH') {
@@ -784,10 +1000,29 @@ window.openIftySubject = function(subject) {
       <div class="ifty-subject-badge">SUBJECT PAGE</div>
 
       <div class="ifty-settings-section" style="margin-top:14px;">
-        <h3>この科目の学習機能は次の更新で追加できます。</h3>
+        <div class="ifty-settings-row">
+          <div>
+            <h3>ORDER</h3>
+            <div class="ifty-settings-note">${escapeHtml(getIftyOrderStatus(normalized))}。このORDERは${escapeHtml(normalized)}だけに適用されます。</div>
+          </div>
+          <button class="ifty-settings-action" type="button" onclick="openIftySubjectOrder('${normalized.replace(/'/g, "\'")}')" style="background:#0284c7;color:white;">ORDERを編集</button>
+        </div>
+      </div>
+
+      <div class="ifty-settings-section">
+        <div class="ifty-settings-row">
+          <div>
+            <h3>${escapeHtml(normalized)} ALLIA</h3>
+            <div class="ifty-settings-note">この教科のORDERだけを読み込み、他教科のORDERは参照しません。</div>
+          </div>
+          <button class="ifty-settings-action" type="button" onclick="openIftySubjectAllia('${normalized.replace(/'/g, "\'")}')" style="background:#7c3aed;color:white;">🤖 ALLIAを開く</button>
+        </div>
+      </div>
+
+      <div class="ifty-settings-section">
+        <h3>この科目の学習機能は今後追加できます。</h3>
         <div class="ifty-settings-note">
-          STEP15では、サイドメニューからアラートを出すだけだった状態をやめ、独立した科目ページまで作成しました。
-          既存のENGLISH単語帳・ALLIA・実践には変更を加えていません。
+          現在は教科別ORDERと教科別ALLIAコンテキストまで利用できます。単語帳などの専用学習機能はまだ追加していません。
         </div>
       </div>
     </section>
@@ -807,6 +1042,9 @@ window.openIftySettings = function() {
     : String((cloudStatus && cloudStatus.textContent) || 'クラウド状態を確認中');
 
   const themeName = iftyTheme === 'dark' ? 'ダーク' : 'ライト';
+  const autosaveText = iftyAutosaveIntervalMinutes > 0
+    ? `${iftyAutosaveIntervalMinutes}分ごと`
+    : '停止中';
 
   showIftyHubContent(`
     <section class="ifty-portal-shell">
@@ -831,10 +1069,32 @@ window.openIftySettings = function() {
       </div>
 
       <div class="ifty-settings-section">
+        <h3>ORDER</h3>
+        <div class="ifty-settings-note">
+          教科ごとのALLIA・AI生成機能にだけ適用するカスタム指示です。ENGLISHのORDERをSCIENCEなどが読むことはありません。
+        </div>
+        <div style="display:grid;gap:8px;margin-top:11px;">
+          ${renderIftyOrderSettingsCards()}
+        </div>
+      </div>
+
+      <div class="ifty-settings-section">
+        <h3>AUTO SAVE FREQUENCY</h3>
+        <div class="ifty-settings-note">現在：${escapeHtml(autosaveText)}。この端末・このIFTYユーザーのPERIODIC保存間隔です。</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px;">
+          <input id="iftyAutosaveMinutesInput" type="number" min="${IFTY_AUTOSAVE_MIN_MINUTES}" max="${IFTY_AUTOSAVE_MAX_MINUTES}" step="1" value="${iftyAutosaveIntervalMinutes > 0 ? iftyAutosaveIntervalMinutes : IFTY_AUTOSAVE_DEFAULT_MINUTES}" inputmode="numeric" style="width:90px;padding:9px 10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+          <span style="font-weight:800;">分ごと</span>
+          <button class="ifty-settings-action" type="button" onclick="applyIftyAutosaveSettingFromUi()" style="background:#0284c7;color:white;">変更</button>
+          <button class="ifty-settings-action" type="button" onclick="disableIftyAutosaveFromUi()" style="background:#64748b;color:white;">停止</button>
+        </div>
+        <div class="ifty-settings-note" style="margin-top:8px;">1〜240分で自由に設定できます。停止中でもMANUAL保存は使えます。</div>
+      </div>
+
+      <div class="ifty-settings-section">
         <div class="ifty-settings-row">
           <div>
             <h3>BACKUP / RESTORE</h3>
-            <div class="ifty-settings-note">3分ごとの世代バックアップ、手動保存、ファイル書き出し・復元を管理します。</div>
+            <div class="ifty-settings-note">PERIODICはオートセーブ1件を上書き。MANUALは手動保存を複数残します。</div>
           </div>
           <button class="ifty-settings-action" type="button" onclick="openIftyRecoveryCenter()" style="background:#0f766e;color:white;">🛟 開く</button>
         </div>
@@ -851,15 +1111,21 @@ window.openIftySettings = function() {
 
       <div class="ifty-settings-section">
         <h3>ACCOUNT SECURITY</h3>
-        <div class="ifty-settings-note">
-          パスワード変更・復旧用メール・全端末ログアウト・アカウント削除はまだ未実装です。
-          ここは次のアカウント管理STEPで追加します。
+        <div id="iftyAccountSecurityPanel" class="ifty-settings-note">
+          ${iftyDeveloperMode ? 'Developerモードではアカウント管理機能を使用しません。' : 'アカウント情報を読み込み中…'}
         </div>
       </div>
 
-      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP15</div>
+      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP17</div>
     </section>
   `, 'settings');
+
+  if (!iftyDeveloperMode) {
+    refreshIftyAccountSecurityPanel().catch(error => {
+      const panel = document.getElementById('iftyAccountSecurityPanel');
+      if (panel) panel.innerHTML = `<span style="color:#dc2626;">アカウント情報を読み込めません：${escapeHtml(String(error.message || error))}</span>`;
+    });
+  }
 };
 
 function ensureIftyBrandUi() {
@@ -969,13 +1235,14 @@ function sanitizeChatSessionsForBackup() {
 function captureIftyRecoveryPayload() {
   return {
     schemaVersion: 1,
-    appVersion: 'Q3_STEP12',
+    appVersion: 'Q3_STEP17',
     savedAt: Date.now(),
     currentUser: currentUser,
     folders: deepClone(Array.isArray(folders) ? folders : []),
     practiceData: deepClone(practiceData || { schemaVersion: 1, modules: {} }),
     chatSessions: sanitizeChatSessionsForBackup(),
     currentChatSessionId: currentChatSessionId || null,
+    subjectOrders: deepClone(normalizeIftySubjectOrders(iftySubjectOrders)),
     iftyTheme: iftyTheme
   };
 }
@@ -987,6 +1254,7 @@ function makeIftyRecoveryFingerprint(payload) {
     practiceData: payload.practiceData,
     chatSessions: payload.chatSessions,
     currentChatSessionId: payload.currentChatSessionId,
+    subjectOrders: payload.subjectOrders,
     iftyTheme: payload.iftyTheme
   });
 
@@ -1010,15 +1278,106 @@ function countIftyRecoveryContents(payload) {
   return { folders: savedFolders.length, words: wordCount, flashSets, quizSets, chats: chats.length, messages: messageCount };
 }
 
+function getIftyAutosaveSettingKey(username = currentUser) {
+  return IFTY_AUTOSAVE_SETTING_PREFIX + String(username || 'default_user');
+}
+
+function getIftyPeriodicBackupId(username = currentUser) {
+  return IFTY_PERIODIC_BACKUP_PREFIX + String(username || 'default_user');
+}
+
+function normalizeIftyRecoveryKind(record) {
+  if (record && record.kind === 'PERIODIC') return 'PERIODIC';
+  return 'MANUAL';
+}
+
+function loadIftyAutosavePreference() {
+  const raw = localStorage.getItem(getIftyAutosaveSettingKey());
+  if (raw === null || raw === '') {
+    iftyAutosaveIntervalMinutes = IFTY_AUTOSAVE_DEFAULT_MINUTES;
+    return iftyAutosaveIntervalMinutes;
+  }
+  const value = Number(raw);
+  if (value === 0) {
+    iftyAutosaveIntervalMinutes = 0;
+    return 0;
+  }
+  if (!Number.isFinite(value)) {
+    iftyAutosaveIntervalMinutes = IFTY_AUTOSAVE_DEFAULT_MINUTES;
+    return iftyAutosaveIntervalMinutes;
+  }
+  iftyAutosaveIntervalMinutes = Math.min(IFTY_AUTOSAVE_MAX_MINUTES, Math.max(IFTY_AUTOSAVE_MIN_MINUTES, Math.round(value)));
+  return iftyAutosaveIntervalMinutes;
+}
+
+window.applyIftyAutosaveSettingFromUi = function() {
+  const input = document.getElementById('iftyAutosaveMinutesInput');
+  const value = Number(input && input.value);
+  if (!Number.isFinite(value) || value < IFTY_AUTOSAVE_MIN_MINUTES || value > IFTY_AUTOSAVE_MAX_MINUTES) {
+    alert(`オートセーブ間隔は${IFTY_AUTOSAVE_MIN_MINUTES}〜${IFTY_AUTOSAVE_MAX_MINUTES}分で入力してください。`);
+    return;
+  }
+  iftyAutosaveIntervalMinutes = Math.round(value);
+  localStorage.setItem(getIftyAutosaveSettingKey(), String(iftyAutosaveIntervalMinutes));
+  startIftyAutoBackup();
+  window.openIftySettings();
+};
+
+window.disableIftyAutosaveFromUi = function() {
+  iftyAutosaveIntervalMinutes = 0;
+  localStorage.setItem(getIftyAutosaveSettingKey(), '0');
+  startIftyAutoBackup();
+  window.openIftySettings();
+};
+
 async function getIftyRecoverySnapshots() {
   const db = await openIftyRecoveryDb();
   try {
     const transaction = db.transaction(IFTY_RECOVERY_STORE, 'readonly');
     const store = transaction.objectStore(IFTY_RECOVERY_STORE);
     const all = await idbRequestPromise(store.getAll());
-    return (Array.isArray(all) ? all : [])
-      .filter(item => item && item.user === currentUser)
+    const own = (Array.isArray(all) ? all : []).filter(item => item && item.user === currentUser);
+    return own.sort((a, b) => {
+      const ak = normalizeIftyRecoveryKind(a);
+      const bk = normalizeIftyRecoveryKind(b);
+      if (ak === 'PERIODIC' && bk !== 'PERIODIC') return -1;
+      if (bk === 'PERIODIC' && ak !== 'PERIODIC') return 1;
+      return Number(b.createdAt || 0) - Number(a.createdAt || 0);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function migrateLegacyIftyRecoverySnapshots() {
+  if (iftyLegacyRecoveryMigrationDoneForUser === currentUser) return;
+  iftyLegacyRecoveryMigrationDoneForUser = currentUser;
+
+  const db = await openIftyRecoveryDb();
+  try {
+    const readTransaction = db.transaction(IFTY_RECOVERY_STORE, 'readonly');
+    const all = await idbRequestPromise(readTransaction.objectStore(IFTY_RECOVERY_STORE).getAll());
+    const own = (Array.isArray(all) ? all : []).filter(item => item && item.user === currentUser);
+    const legacyAutoReasons = new Set(['自動保存', '起動時', 'バックグラウンド移行']);
+    const legacyAuto = own
+      .filter(item => item.kind !== 'PERIODIC' && legacyAutoReasons.has(String(item.reason || '')))
       .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+    if (!legacyAuto.length) return;
+
+    const newest = legacyAuto[0];
+    const periodic = {
+      ...newest,
+      id: getIftyPeriodicBackupId(),
+      user: currentUser,
+      kind: 'PERIODIC',
+      reason: 'オートセーブ'
+    };
+
+    const transaction = db.transaction(IFTY_RECOVERY_STORE, 'readwrite');
+    const store = transaction.objectStore(IFTY_RECOVERY_STORE);
+    store.put(periodic);
+    legacyAuto.forEach(item => store.delete(item.id));
+    await idbTransactionDone(transaction);
   } finally {
     db.close();
   }
@@ -1030,11 +1389,11 @@ async function pruneIftyRecoverySnapshots() {
     const readTransaction = db.transaction(IFTY_RECOVERY_STORE, 'readonly');
     const store = readTransaction.objectStore(IFTY_RECOVERY_STORE);
     const all = await idbRequestPromise(store.getAll());
-    const own = (Array.isArray(all) ? all : [])
-      .filter(item => item && item.user === currentUser)
+    const manual = (Array.isArray(all) ? all : [])
+      .filter(item => item && item.user === currentUser && normalizeIftyRecoveryKind(item) === 'MANUAL')
       .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
 
-    const excess = own.slice(IFTY_RECOVERY_MAX_SNAPSHOTS);
+    const excess = manual.slice(IFTY_RECOVERY_MAX_MANUAL_SNAPSHOTS);
     if (!excess.length) return;
 
     const deleteTransaction = db.transaction(IFTY_RECOVERY_STORE, 'readwrite');
@@ -1057,17 +1416,21 @@ function setIftyRecoveryButtonStatus(savedAt) {
   button.title = `バックアップ / 復元（最終保存 ${date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}）`;
 }
 
-async function createIftyRecoverySnapshot(reason = '自動保存', options = {}) {
+async function createIftyRecoverySnapshot(reason = '手動保存', options = {}) {
+  const kind = options.kind === 'PERIODIC' ? 'PERIODIC' : 'MANUAL';
   const payload = captureIftyRecoveryPayload();
   const hash = makeIftyRecoveryFingerprint(payload);
-  if (!options.force && hash === iftyLastBackupHash) return null;
+  if (kind === 'PERIODIC' && !options.force && hash === iftyLastBackupHash) return null;
 
   const createdAt = Date.now();
   const record = {
-    id: `recovery_${createdAt}_${Math.random().toString(36).slice(2, 8)}`,
+    id: kind === 'PERIODIC'
+      ? getIftyPeriodicBackupId()
+      : `recovery_${createdAt}_${Math.random().toString(36).slice(2, 8)}`,
     user: currentUser,
     createdAt,
-    reason: String(reason || '自動保存'),
+    kind,
+    reason: String(reason || (kind === 'PERIODIC' ? 'オートセーブ' : '手動保存')),
     hash,
     payload
   };
@@ -1081,9 +1444,9 @@ async function createIftyRecoverySnapshot(reason = '自動保存', options = {})
     db.close();
   }
 
-  iftyLastBackupHash = hash;
+  if (kind === 'PERIODIC') iftyLastBackupHash = hash;
   setIftyRecoveryButtonStatus(createdAt);
-  await pruneIftyRecoverySnapshots();
+  if (kind === 'MANUAL') await pruneIftyRecoverySnapshots();
   return record;
 }
 
@@ -1108,22 +1471,42 @@ function ensureIftyRecoveryModal() {
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;">
         <div>
           <div style="font-size:1.25em;font-weight:800;">🛟 バックアップ / 復元</div>
-          <div style="font-size:.82em;color:#64748b;margin-top:3px;">3分ごとに変更があった状態だけを端末内へ世代保存します。</div>
+          <div style="font-size:.82em;color:#64748b;margin-top:3px;">PERIODICはオートセーブ1件を上書き、MANUALは手動保存を複数保持します。</div>
         </div>
         <button onclick="closeIftyRecoveryCenter()" style="border:none;background:#e2e8f0;color:#0f172a;border-radius:8px;padding:8px 11px;cursor:pointer;">✕</button>
       </div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;">
-        <button onclick="createManualIftyBackup()" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer;">💾 今すぐ保存</button>
+        <button onclick="createManualIftyBackup()" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer;">💾 MANUALを作成</button>
         <button onclick="exportIftyBackupFile()" style="border:none;background:#334155;color:white;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer;">⬇️ ファイル書き出し</button>
         <button onclick="document.getElementById('iftyBackupImportInput').click()" style="border:none;background:#475569;color:white;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer;">⬆️ ファイルから復元</button>
         <button onclick="deleteAllIftyRecoverySnapshots()" style="border:none;background:#b91c1c;color:white;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer;">🗑️ 端末内バックアップを全削除</button>
         <input id="iftyBackupImportInput" type="file" accept="application/json,.json" style="display:none;" onchange="handleIftyBackupImport(event)">
       </div>
-      <div style="font-size:.78em;color:#64748b;margin-bottom:12px;line-height:1.5;">復元の直前には現在状態を緊急バックアップしてから復元します。端末内バックアップは、Webサイトの「Webサイトデータを消去」や端末紛失では一緒に消える可能性があるため、重要な時は「ファイル書き出し」も使えます。</div>
+      <div style="font-size:.78em;color:#64748b;margin-bottom:12px;line-height:1.5;">PERIODICは常に最上部に固定されます。復元の直前には現在状態をMANUALとして緊急保存します。重要な保存は「ファイル書き出し」も利用できます。</div>
       <div id="iftyRecoveryList"><div style="padding:18px;text-align:center;color:#64748b;">読み込み中…</div></div>
     </div>`;
   document.body.appendChild(modal);
   return modal;
+}
+
+function renderIftyRecoveryCard(snapshot, label, accent) {
+  const counts = countIftyRecoveryContents(snapshot.payload || {});
+  return `
+    <div style="border:1px solid ${accent};border-radius:10px;padding:11px 12px;margin-bottom:8px;background:#f8fafc;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+        <div style="min-width:0;">
+          <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;font-weight:800;">
+            <span style="background:${label === 'PERIODIC' ? '#dbeafe' : '#ede9fe'};color:${label === 'PERIODIC' ? '#1d4ed8' : '#6d28d9'};padding:2px 7px;border-radius:999px;font-size:.72em;font-weight:900;">${label}</span>
+            ${escapeHtml(formatIftyRecoveryTime(snapshot.createdAt))}
+          </div>
+          <div style="font-size:.78em;color:#64748b;margin-top:3px;">${escapeHtml(snapshot.reason || '保存')} ・ フォルダ ${counts.folders} / 単語 ${counts.words} / Flash ${counts.flashSets} / Quiz ${counts.quizSets} / Chat ${counts.chats}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+          <button onclick="restoreIftyRecoverySnapshot('${snapshot.id}')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;white-space:nowrap;">この状態に復元</button>
+          <button onclick="deleteIftyRecoverySnapshot('${snapshot.id}')" style="border:none;background:#dc2626;color:white;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;white-space:nowrap;">削除</button>
+        </div>
+      </div>
+    </div>`;
 }
 
 async function renderIftyRecoveryCenter() {
@@ -1132,29 +1515,28 @@ async function renderIftyRecoveryCenter() {
   container.innerHTML = '<div style="padding:18px;text-align:center;color:#64748b;">読み込み中…</div>';
 
   try {
+    await migrateLegacyIftyRecoverySnapshots();
     const snapshots = await getIftyRecoverySnapshots();
-    if (!snapshots.length) {
-      container.innerHTML = '<div style="padding:20px;border:1px dashed #cbd5e1;border-radius:10px;text-align:center;color:#64748b;">まだバックアップはありません。「今すぐ保存」を押すか、変更後に3分待つと作成されます。</div>';
-      return;
-    }
+    const periodic = snapshots.find(snapshot => normalizeIftyRecoveryKind(snapshot) === 'PERIODIC') || null;
+    const manual = snapshots.filter(snapshot => normalizeIftyRecoveryKind(snapshot) === 'MANUAL');
 
-    container.innerHTML = snapshots.map((snapshot, index) => {
-      const counts = countIftyRecoveryContents(snapshot.payload || {});
-      const badge = index === 0 ? '<span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:999px;font-size:.72em;font-weight:700;">最新</span>' : '';
-      return `
-        <div style="border:1px solid #cbd5e1;border-radius:10px;padding:11px 12px;margin-bottom:8px;background:#f8fafc;">
-          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
-            <div style="min-width:0;">
-              <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;font-weight:800;">${escapeHtml(formatIftyRecoveryTime(snapshot.createdAt))} ${badge}</div>
-              <div style="font-size:.78em;color:#64748b;margin-top:3px;">${escapeHtml(snapshot.reason || '保存')} ・ フォルダ ${counts.folders} / 単語 ${counts.words} / Flash ${counts.flashSets} / Quiz ${counts.quizSets} / Chat ${counts.chats}</div>
-            </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
-              <button onclick="restoreIftyRecoverySnapshot('${snapshot.id}')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;white-space:nowrap;">この状態に復元</button>
-              <button onclick="deleteIftyRecoverySnapshot('${snapshot.id}')" style="border:none;background:#dc2626;color:white;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;white-space:nowrap;">削除</button>
-            </div>
-          </div>
-        </div>`;
-    }).join('');
+    const periodicHtml = periodic
+      ? renderIftyRecoveryCard(periodic, 'PERIODIC', '#93c5fd')
+      : `<div style="border:1px dashed #93c5fd;border-radius:10px;padding:14px;margin-bottom:12px;background:#eff6ff;color:#475569;">
+           <div style="font-weight:900;color:#1d4ed8;margin-bottom:4px;">PERIODIC</div>
+           <div style="font-size:.82em;">${iftyAutosaveIntervalMinutes > 0 ? `次の変更後、最大約${iftyAutosaveIntervalMinutes}分で作成されます。` : 'オートセーブはSETTINGSで停止中です。'}</div>
+         </div>`;
+
+    const manualHtml = manual.length
+      ? manual.map(snapshot => renderIftyRecoveryCard(snapshot, 'MANUAL', '#c4b5fd')).join('')
+      : '<div style="padding:16px;border:1px dashed #cbd5e1;border-radius:10px;text-align:center;color:#64748b;">MANUALはまだありません。「MANUALを作成」で何個でも分けて保存できます（端末内では新しい30件を保持）。</div>';
+
+    container.innerHTML = `
+      <div style="position:sticky;top:-18px;z-index:2;background:white;padding-top:2px;padding-bottom:4px;">
+        ${periodicHtml}
+      </div>
+      <div style="font-weight:900;color:#6d28d9;margin:12px 0 7px;">MANUAL</div>
+      ${manualHtml}`;
   } catch (error) {
     container.innerHTML = `<div style="padding:16px;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:10px;">バックアップを読み込めませんでした：${escapeHtml(String(error.message || error))}</div>`;
   }
@@ -1173,7 +1555,7 @@ window.closeIftyRecoveryCenter = function() {
 
 window.createManualIftyBackup = async function() {
   try {
-    await createIftyRecoverySnapshot('手動保存', { force: true });
+    await createIftyRecoverySnapshot('手動保存', { force: true, kind: 'MANUAL' });
     await renderIftyRecoveryCenter();
   } catch (error) {
     alert('バックアップに失敗しました：' + String(error.message || error));
@@ -1193,7 +1575,11 @@ async function deleteIftyRecoverySnapshotRecord(snapshotId) {
 
 async function refreshIftyRecoveryButtonFromSnapshots() {
   const snapshots = await getIftyRecoverySnapshots();
-  setIftyRecoveryButtonStatus(snapshots.length ? snapshots[0].createdAt : null);
+  const latest = snapshots.reduce((best, snapshot) => {
+    if (!best) return snapshot;
+    return Number(snapshot.createdAt || 0) > Number(best.createdAt || 0) ? snapshot : best;
+  }, null);
+  setIftyRecoveryButtonStatus(latest ? latest.createdAt : null);
   return snapshots;
 }
 
@@ -1255,6 +1641,7 @@ async function applyIftyRecoveryPayload(payload) {
     folders = deepClone(payload.folders);
     practiceData = deepClone(payload.practiceData || { schemaVersion: 1, modules: { flashcards: { sets: [] }, questions: { sets: [] } } });
     chatSessions = deepClone(Array.isArray(payload.chatSessions) ? payload.chatSessions : []);
+    iftySubjectOrders = normalizeIftySubjectOrders(payload.subjectOrders);
     iftyTheme = payload.iftyTheme === 'dark' ? 'dark' : 'light';
 
     normalizeFoldersData();
@@ -1278,6 +1665,7 @@ async function applyIftyRecoveryPayload(payload) {
     saveUserData();
     savePracticeData();
     saveChatSessions();
+    saveIftySubjectOrders({ queueCloud: false });
     applyIftyTheme();
     renderFolders();
     updateChatSessionSelect();
@@ -1302,10 +1690,10 @@ window.restoreIftyRecoverySnapshot = async function(snapshotId) {
     const ok = confirm(`${formatIftyRecoveryTime(snapshot.createdAt)} の状態へ復元します。\n単語 ${counts.words}件 / フォルダ ${counts.folders}件\n\n現在の状態は復元前に緊急保存します。続けますか？`);
     if (!ok) return;
 
-    await createIftyRecoverySnapshot('復元前の緊急保存', { force: true });
+    await createIftyRecoverySnapshot('復元前の緊急保存', { force: true, kind: 'MANUAL' });
     await applyIftyRecoveryPayload(snapshot.payload);
     iftyLastBackupHash = makeIftyRecoveryFingerprint(captureIftyRecoveryPayload());
-    await createIftyRecoverySnapshot('復元直後', { force: true });
+    await createIftyRecoverySnapshot('復元直後', { force: true, kind: 'MANUAL' });
     await renderIftyRecoveryCenter();
     alert('バックアップから復元しました。');
   } catch (error) {
@@ -1357,10 +1745,10 @@ window.handleIftyBackupImport = async function(event) {
     const ok = confirm(`このバックアップファイルを復元します。\n単語 ${counts.words}件 / フォルダ ${counts.folders}件\n\n現在の状態は復元前に緊急保存します。続けますか？`);
     if (!ok) return;
 
-    await createIftyRecoverySnapshot('ファイル復元前の緊急保存', { force: true });
+    await createIftyRecoverySnapshot('ファイル復元前の緊急保存', { force: true, kind: 'MANUAL' });
     await applyIftyRecoveryPayload(parsed.payload);
     iftyLastBackupHash = makeIftyRecoveryFingerprint(captureIftyRecoveryPayload());
-    await createIftyRecoverySnapshot('ファイル復元直後', { force: true });
+    await createIftyRecoverySnapshot('ファイル復元直後', { force: true, kind: 'MANUAL' });
     await renderIftyRecoveryCenter();
     alert('バックアップファイルから復元しました。');
   } catch (error) {
@@ -1374,26 +1762,34 @@ function installIftyRecoveryLifecycle() {
   if (iftyRecoveryLifecycleInstalled) return;
   iftyRecoveryLifecycleInstalled = true;
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') {
-      createIftyRecoverySnapshot('バックグラウンド移行', { force: false }).catch(() => {});
+    if (document.visibilityState === 'hidden' && iftyAutosaveIntervalMinutes > 0) {
+      createIftyRecoverySnapshot('オートセーブ', { force: false, kind: 'PERIODIC' }).catch(() => {});
     }
   });
 }
 
 function startIftyAutoBackup() {
   installIftyRecoveryLifecycle();
-  if (iftyAutoBackupTimer) clearInterval(iftyAutoBackupTimer);
+  if (iftyAutoBackupTimer) {
+    clearInterval(iftyAutoBackupTimer);
+    iftyAutoBackupTimer = null;
+  }
+
+  loadIftyAutosavePreference();
+  migrateLegacyIftyRecoverySnapshots().catch(error => console.warn('IFTY旧バックアップ移行エラー:', error));
+
+  if (iftyAutosaveIntervalMinutes <= 0) return;
 
   setTimeout(() => {
-    createIftyRecoverySnapshot('起動時', { force: false })
+    createIftyRecoverySnapshot('オートセーブ', { force: false, kind: 'PERIODIC' })
       .then(record => { if (record) setIftyRecoveryButtonStatus(record.createdAt); })
       .catch(error => console.warn('IFTYバックアップ初期化エラー:', error));
   }, 1500);
 
   iftyAutoBackupTimer = setInterval(() => {
-    createIftyRecoverySnapshot('自動保存', { force: false })
+    createIftyRecoverySnapshot('オートセーブ', { force: false, kind: 'PERIODIC' })
       .catch(error => console.warn('IFTY自動バックアップエラー:', error));
-  }, IFTY_AUTOSAVE_INTERVAL_MS);
+  }, iftyAutosaveIntervalMinutes * 60 * 1000);
 }
 
 function ensureIftyPwaHeadLinks() {
@@ -1700,27 +2096,92 @@ window.showIftyPasswordRecoveryInfo = function() {
   modal.id = 'iftyPasswordRecoveryModal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.72);z-index:12050;display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;';
   modal.innerHTML = `
-    <div role="dialog" aria-modal="true" aria-labelledby="iftyPasswordRecoveryTitle" style="width:min(520px,100%);background:#fff;color:#0f172a;border-radius:16px;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.35);">
+    <div role="dialog" aria-modal="true" aria-labelledby="iftyPasswordRecoveryTitle" style="width:min(540px,100%);max-height:90vh;overflow:auto;background:#fff;color:#0f172a;border-radius:16px;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.35);">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
         <div>
-          <h3 id="iftyPasswordRecoveryTitle" style="margin:0 0 8px;font-size:1.25em;">パスワードを忘れた場合</h3>
-          <p style="margin:0;color:#475569;line-height:1.65;font-size:.94em;">
-            現在のIFTYアカウントには、本人確認に使える復旧用メールアドレスなどをまだ登録していません。
-            そのため、忘れたパスワードそのものを表示したり、安全に再設定したりする機能は現時点ではありません。
-          </p>
+          <h3 id="iftyPasswordRecoveryTitle" style="margin:0 0 8px;font-size:1.25em;">パスワードを再設定</h3>
+          <p style="margin:0;color:#475569;line-height:1.6;font-size:.9em;">事前にSETTINGSで確認済みの復旧用メールアドレスを登録しているアカウントで利用できます。</p>
         </div>
         <button type="button" onclick="closeIftyPasswordRecoveryInfo()" aria-label="閉じる" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;width:34px;height:34px;font-size:1.1em;cursor:pointer;">×</button>
       </div>
-      <div style="margin-top:16px;padding:13px 14px;border-radius:10px;background:#f1f5f9;color:#334155;line-height:1.6;font-size:.9em;">
-        本番公開前に、復旧用メールアドレスを本人確認してからワンタイムコードで新しいパスワードを設定する方式を追加するのが安全です。
-        管理者用の共通解除パスワードや秘密の質問での解除は採用しません。
+      <div style="display:grid;gap:9px;margin-top:16px;">
+        <input id="iftyResetUsername" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="IFTY ID" style="padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+        <input id="iftyResetEmail" type="email" autocomplete="email" placeholder="確認済みの復旧用メールアドレス" style="padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+        <div style="display:flex;gap:7px;">
+          <input id="iftyResetCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6桁の確認コード" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+          <button type="button" onclick="requestIftyPasswordResetCode()" style="border:none;background:#0284c7;color:white;padding:9px 11px;border-radius:8px;font-weight:800;cursor:pointer;">コード送信</button>
+        </div>
+        <div style="display:flex;gap:7px;">
+          <input id="iftyResetNewPassword" type="password" autocomplete="new-password" placeholder="新しいパスワード（10文字以上）" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+          <button type="button" onclick="toggleIftyPasswordVisibility('iftyResetNewPassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button>
+        </div>
+        <div style="display:flex;gap:7px;">
+          <input id="iftyResetNewPasswordConfirm" type="password" autocomplete="new-password" placeholder="新しいパスワードを再入力" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+          <button type="button" onclick="toggleIftyPasswordVisibility('iftyResetNewPasswordConfirm', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button>
+        </div>
       </div>
-      <button type="button" onclick="closeIftyPasswordRecoveryInfo()" style="margin-top:16px;width:100%;border:none;background:#0284c7;color:white;padding:10px 14px;border-radius:8px;font-weight:800;cursor:pointer;">閉じる</button>
+      <div id="iftyResetStatus" style="min-height:1.3em;margin-top:10px;font-size:.84em;color:#475569;"></div>
+      <button type="button" onclick="confirmIftyPasswordReset()" style="margin-top:9px;width:100%;border:none;background:#15803d;color:white;padding:10px 14px;border-radius:8px;font-weight:800;cursor:pointer;">新しいパスワードに変更</button>
     </div>`;
   modal.addEventListener('click', event => {
     if (event.target === modal) window.closeIftyPasswordRecoveryInfo();
   });
   document.body.appendChild(modal);
+};
+
+function setIftyResetStatus(message, isError = false) {
+  const el = document.getElementById('iftyResetStatus');
+  if (!el) return;
+  el.textContent = String(message || '');
+  el.style.color = isError ? '#dc2626' : '#0f766e';
+}
+
+window.requestIftyPasswordResetCode = async function() {
+  const username = String(document.getElementById('iftyResetUsername')?.value || '').trim();
+  const email = String(document.getElementById('iftyResetEmail')?.value || '').trim();
+  if (!username || !email) {
+    setIftyResetStatus('IFTY IDと復旧用メールアドレスを入力してください。', true);
+    return;
+  }
+  if (!isIftyOnline()) {
+    setIftyResetStatus('確認コードの送信にはインターネット接続が必要です。', true);
+    return;
+  }
+  setIftyResetStatus('確認コードを送信中…');
+  try {
+    const result = await iftyAccountApi('password_reset_request', { username, email });
+    setIftyResetStatus(result.message || '情報が一致する場合、確認コードを送信しました。');
+  } catch (error) {
+    setIftyResetStatus(error.message || '確認コードを送信できませんでした。', true);
+  }
+};
+
+window.confirmIftyPasswordReset = async function() {
+  const username = String(document.getElementById('iftyResetUsername')?.value || '').trim();
+  const email = String(document.getElementById('iftyResetEmail')?.value || '').trim();
+  const code = String(document.getElementById('iftyResetCode')?.value || '').trim();
+  const newPassword = String(document.getElementById('iftyResetNewPassword')?.value || '');
+  const confirmPassword = String(document.getElementById('iftyResetNewPasswordConfirm')?.value || '');
+  if (!username || !email || !/^\d{6}$/.test(code)) {
+    setIftyResetStatus('IFTY ID・復旧用メール・6桁の確認コードを入力してください。', true);
+    return;
+  }
+  if (newPassword.length < 10 || newPassword.length > 128) {
+    setIftyResetStatus('新しいパスワードは10〜128文字で入力してください。', true);
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    setIftyResetStatus('新しいパスワードの確認入力が一致していません。', true);
+    return;
+  }
+  setIftyResetStatus('パスワードを変更中…');
+  try {
+    await iftyAccountApi('password_reset_confirm', { username, email, code, newPassword });
+    setIftyResetStatus('パスワードを変更しました。新しいパスワードでログインしてください。');
+    setTimeout(() => window.closeIftyPasswordRecoveryInfo(), 1200);
+  } catch (error) {
+    setIftyResetStatus(error.message || 'パスワードを変更できませんでした。', true);
+  }
 };
 
 function renderIftyAccountLanding(message = '') {
@@ -1803,15 +2264,281 @@ async function iftyAccountApi(type, payload = {}) {
   return data;
 }
 
+
+function ensureIftySecurityModal() {
+  let modal = document.getElementById('iftySecurityModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'iftySecurityModal';
+  modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(2,6,23,.78);z-index:12100;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;';
+  modal.addEventListener('click', event => {
+    if (event.target === modal) window.closeIftySecurityModal();
+  });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+window.closeIftySecurityModal = function() {
+  const modal = document.getElementById('iftySecurityModal');
+  if (modal) modal.style.display = 'none';
+};
+
+function showIftySecurityModal(title, bodyHtml) {
+  const modal = ensureIftySecurityModal();
+  modal.innerHTML = `
+    <div role="dialog" aria-modal="true" style="width:min(560px,96vw);max-height:90vh;overflow:auto;background:white;color:#0f172a;border-radius:15px;padding:20px;box-shadow:0 18px 50px rgba(0,0,0,.35);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px;">
+        <h3 style="margin:0;font-size:1.2em;">${escapeHtml(title)}</h3>
+        <button type="button" onclick="closeIftySecurityModal()" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:1.1em;">×</button>
+      </div>
+      ${bodyHtml}
+    </div>`;
+  modal.style.display = 'flex';
+}
+
+async function refreshIftyAccountSecurityPanel() {
+  const panel = document.getElementById('iftyAccountSecurityPanel');
+  if (!panel || iftyDeveloperMode) return;
+  if (!iftySessionToken) {
+    panel.textContent = 'ログイン情報がありません。';
+    return;
+  }
+
+  const profile = await iftyAccountApi('account_profile', { token: iftySessionToken });
+  iftyAccountProfile = profile;
+  const emailText = profile.recoveryEmail
+    ? `${escapeHtml(profile.recoveryEmail)} <span style="color:#15803d;font-weight:800;">確認済み</span>`
+    : '<span style="color:#b45309;font-weight:800;">未設定</span>';
+
+  panel.innerHTML = `
+    <div style="display:grid;gap:11px;">
+      <div>
+        <div style="font-weight:900;color:inherit;">復旧用メール</div>
+        <div style="margin-top:3px;">${emailText}</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="ifty-settings-action" type="button" onclick="openIftyRecoveryEmailSettings()" style="background:#0284c7;color:white;">復旧用メールを設定 / 変更</button>
+        <button class="ifty-settings-action" type="button" onclick="openIftyPasswordChange()" style="background:#334155;color:white;">パスワード変更</button>
+        <button class="ifty-settings-action" type="button" onclick="openIftySessionManager()" style="background:#0f766e;color:white;">セッション管理</button>
+        <button class="ifty-settings-action" type="button" onclick="logoutAllIftySessions()" style="background:#b45309;color:white;">全端末からログアウト</button>
+        <button class="ifty-settings-action" type="button" onclick="openIftyAccountDelete()" style="background:#b91c1c;color:white;">アカウント削除</button>
+      </div>
+      <div class="ifty-settings-note">復旧コードの送信にはWorker側のメール送信設定が必要です。</div>
+    </div>`;
+}
+
+window.openIftyRecoveryEmailSettings = function() {
+  const current = String((iftyAccountProfile && iftyAccountProfile.recoveryEmail) || '');
+  showIftySecurityModal('復旧用メールを設定 / 変更', `
+    <div style="display:grid;gap:9px;">
+      <input id="iftySecurityEmail" type="email" autocomplete="email" value="${escapeHtml(current)}" placeholder="復旧用メールアドレス" style="padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+      <div style="display:flex;gap:7px;">
+        <input id="iftySecurityEmailPassword" type="password" autocomplete="current-password" placeholder="現在のパスワード" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+        <button type="button" onclick="toggleIftyPasswordVisibility('iftySecurityEmailPassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button>
+      </div>
+      <button type="button" onclick="requestIftyRecoveryEmailCode()" style="border:none;background:#0284c7;color:white;padding:10px;border-radius:8px;font-weight:800;cursor:pointer;">確認コードを送信</button>
+      <div style="display:flex;gap:7px;">
+        <input id="iftySecurityEmailCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="メールに届いた6桁コード" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+        <button type="button" onclick="verifyIftyRecoveryEmail()" style="border:none;background:#15803d;color:white;padding:9px 12px;border-radius:8px;font-weight:800;cursor:pointer;">確認</button>
+      </div>
+      <div id="iftySecurityModalStatus" style="min-height:1.3em;color:#475569;font-size:.84em;"></div>
+    </div>`);
+};
+
+function setIftySecurityModalStatus(message, isError = false) {
+  const el = document.getElementById('iftySecurityModalStatus');
+  if (!el) return;
+  el.textContent = String(message || '');
+  el.style.color = isError ? '#dc2626' : '#0f766e';
+}
+
+window.requestIftyRecoveryEmailCode = async function() {
+  const email = String(document.getElementById('iftySecurityEmail')?.value || '').trim();
+  const currentPassword = String(document.getElementById('iftySecurityEmailPassword')?.value || '');
+  if (!email || !currentPassword) {
+    setIftySecurityModalStatus('メールアドレスと現在のパスワードを入力してください。', true);
+    return;
+  }
+  setIftySecurityModalStatus('確認コードを送信中…');
+  try {
+    await iftyAccountApi('account_email_request', { token: iftySessionToken, email, currentPassword });
+    setIftySecurityModalStatus('確認コードを送信しました。10分以内に入力してください。');
+  } catch (error) {
+    setIftySecurityModalStatus(error.message || '確認コードを送信できませんでした。', true);
+  }
+};
+
+window.verifyIftyRecoveryEmail = async function() {
+  const email = String(document.getElementById('iftySecurityEmail')?.value || '').trim();
+  const code = String(document.getElementById('iftySecurityEmailCode')?.value || '').trim();
+  if (!email || !/^\d{6}$/.test(code)) {
+    setIftySecurityModalStatus('メールアドレスと6桁の確認コードを入力してください。', true);
+    return;
+  }
+  setIftySecurityModalStatus('確認中…');
+  try {
+    await iftyAccountApi('account_email_verify', { token: iftySessionToken, email, code });
+    setIftySecurityModalStatus('復旧用メールを確認しました。');
+    iftyAccountProfile = null;
+    setTimeout(async () => {
+      window.closeIftySecurityModal();
+      await refreshIftyAccountSecurityPanel();
+    }, 700);
+  } catch (error) {
+    setIftySecurityModalStatus(error.message || '確認できませんでした。', true);
+  }
+};
+
+window.openIftyPasswordChange = function() {
+  showIftySecurityModal('パスワード変更', `
+    <div style="display:grid;gap:9px;">
+      <div style="display:flex;gap:7px;"><input id="iftyCurrentPasswordChange" type="password" autocomplete="current-password" placeholder="現在のパスワード" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;"><button type="button" onclick="toggleIftyPasswordVisibility('iftyCurrentPasswordChange', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button></div>
+      <div style="display:flex;gap:7px;"><input id="iftyNewPasswordChange" type="password" autocomplete="new-password" placeholder="新しいパスワード（10文字以上）" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;"><button type="button" onclick="toggleIftyPasswordVisibility('iftyNewPasswordChange', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button></div>
+      <div style="display:flex;gap:7px;"><input id="iftyNewPasswordChangeConfirm" type="password" autocomplete="new-password" placeholder="新しいパスワードを再入力" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;"><button type="button" onclick="toggleIftyPasswordVisibility('iftyNewPasswordChangeConfirm', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button></div>
+      <button type="button" onclick="submitIftyPasswordChange()" style="border:none;background:#0284c7;color:white;padding:10px;border-radius:8px;font-weight:800;cursor:pointer;">変更する</button>
+      <div id="iftySecurityModalStatus" style="min-height:1.3em;color:#475569;font-size:.84em;"></div>
+    </div>`);
+};
+
+window.submitIftyPasswordChange = async function() {
+  const currentPassword = String(document.getElementById('iftyCurrentPasswordChange')?.value || '');
+  const newPassword = String(document.getElementById('iftyNewPasswordChange')?.value || '');
+  const confirmPassword = String(document.getElementById('iftyNewPasswordChangeConfirm')?.value || '');
+  if (newPassword.length < 10 || newPassword.length > 128) {
+    setIftySecurityModalStatus('新しいパスワードは10〜128文字で入力してください。', true);
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    setIftySecurityModalStatus('新しいパスワードの確認入力が一致していません。', true);
+    return;
+  }
+  setIftySecurityModalStatus('変更中…');
+  try {
+    await iftyAccountApi('account_password_change', { token: iftySessionToken, currentPassword, newPassword });
+    setIftySecurityModalStatus('パスワードを変更しました。他のセッションは終了しました。');
+  } catch (error) {
+    setIftySecurityModalStatus(error.message || 'パスワードを変更できませんでした。', true);
+  }
+};
+
+window.openIftySessionManager = async function() {
+  showIftySecurityModal('セッション管理', '<div id="iftySecurityModalStatus">読み込み中…</div>');
+  try {
+    const result = await iftyAccountApi('account_sessions', { token: iftySessionToken });
+    const sessions = Array.isArray(result.sessions) ? result.sessions : [];
+    const body = sessions.length ? sessions.map(session => `
+      <div style="border:1px solid #cbd5e1;border-radius:10px;padding:11px;margin-bottom:8px;">
+        <div style="font-weight:900;">${session.current ? 'このセッション' : 'ログイン中のセッション'} ${session.current ? '<span style="color:#15803d;font-size:.78em;">CURRENT</span>' : ''}</div>
+        <div style="font-size:.8em;color:#64748b;margin-top:4px;">開始：${escapeHtml(formatIftyRecoveryTime(session.createdAt))}<br>期限：${escapeHtml(formatIftyRecoveryTime(session.expiresAt))}</div>
+        <button type="button" onclick="revokeIftySession('${session.id}', ${session.current ? 'true' : 'false'})" style="margin-top:8px;border:none;background:#b45309;color:white;padding:8px 10px;border-radius:8px;font-weight:800;cursor:pointer;">このセッションを終了</button>
+      </div>`).join('') : '<div style="color:#64748b;">セッションはありません。</div>';
+    const modal = document.getElementById('iftySecurityModal');
+    if (modal) {
+      const inner = modal.firstElementChild;
+      if (inner) inner.querySelector('#iftySecurityModalStatus').outerHTML = `<div>${body}</div>`;
+    }
+  } catch (error) {
+    setIftySecurityModalStatus(error.message || 'セッションを読み込めませんでした。', true);
+  }
+};
+
+window.revokeIftySession = async function(sessionId, isCurrent) {
+  if (!confirm(isCurrent ? 'この端末のログインを終了しますか？' : '選択したセッションを終了しますか？')) return;
+  try {
+    await iftyAccountApi('account_session_revoke', { token: iftySessionToken, sessionId });
+    if (isCurrent) {
+      clearIftyAccountSession();
+      location.reload();
+      return;
+    }
+    await window.openIftySessionManager();
+  } catch (error) {
+    alert('セッションを終了できませんでした：' + String(error.message || error));
+  }
+};
+
+window.logoutAllIftySessions = async function() {
+  if (!confirm('すべての端末・ブラウザのログインを終了します。続けますか？')) return;
+  try {
+    await iftyAccountApi('account_logout_all', { token: iftySessionToken });
+    clearIftyAccountSession();
+    location.reload();
+  } catch (error) {
+    alert('全端末ログアウトに失敗しました：' + String(error.message || error));
+  }
+};
+
+async function purgeIftyLocalAccountData(username) {
+  const user = String(username || '');
+  if (!user) return;
+
+  localStorage.removeItem('vocab_user_' + user);
+  localStorage.removeItem('practice_user_' + user);
+  localStorage.removeItem('chat_sessions_' + user);
+  localStorage.removeItem(IFTY_ORDER_STORAGE_PREFIX + user);
+  localStorage.removeItem(IFTY_CLOUD_REVISION_PREFIX + user);
+  localStorage.removeItem(IFTY_CLOUD_DIRTY_PREFIX + user);
+  localStorage.removeItem(IFTY_AUTOSAVE_SETTING_PREFIX + user);
+
+  try {
+    const db = await openIftyRecoveryDb();
+    try {
+      const readTransaction = db.transaction(IFTY_RECOVERY_STORE, 'readonly');
+      const all = await idbRequestPromise(readTransaction.objectStore(IFTY_RECOVERY_STORE).getAll());
+      const own = (Array.isArray(all) ? all : []).filter(item => item && item.user === user);
+      if (own.length) {
+        const deleteTransaction = db.transaction(IFTY_RECOVERY_STORE, 'readwrite');
+        const store = deleteTransaction.objectStore(IFTY_RECOVERY_STORE);
+        own.forEach(item => store.delete(item.id));
+        await idbTransactionDone(deleteTransaction);
+      }
+    } finally {
+      db.close();
+    }
+  } catch (_) {}
+}
+
+window.openIftyAccountDelete = function() {
+  showIftySecurityModal('アカウント削除', `
+    <div style="padding:11px;border-radius:9px;background:#fef2f2;color:#991b1b;font-size:.86em;line-height:1.55;">IFTYアカウントとクラウド上の単語帳・実践・チャットデータを削除し、この端末のIFTY用ローカルキャッシュと端末内バックアップも削除します。この操作は取り消せません。書き出し済みJSONファイルは自動削除されません。</div>
+    <div style="display:grid;gap:9px;margin-top:12px;">
+      <div style="display:flex;gap:7px;"><input id="iftyDeletePassword" type="password" autocomplete="current-password" placeholder="現在のパスワード" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;"><button type="button" onclick="toggleIftyPasswordVisibility('iftyDeletePassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button></div>
+      <input id="iftyDeleteConfirmText" autocomplete="off" placeholder="確認のため DELETE と入力" style="padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+      <button type="button" onclick="submitIftyAccountDelete()" style="border:none;background:#b91c1c;color:white;padding:10px;border-radius:8px;font-weight:900;cursor:pointer;">完全に削除</button>
+      <div id="iftySecurityModalStatus" style="min-height:1.3em;color:#475569;font-size:.84em;"></div>
+    </div>`);
+};
+
+window.submitIftyAccountDelete = async function() {
+  const currentPassword = String(document.getElementById('iftyDeletePassword')?.value || '');
+  const confirmText = String(document.getElementById('iftyDeleteConfirmText')?.value || '').trim();
+  if (confirmText !== 'DELETE') {
+    setIftySecurityModalStatus('確認欄に DELETE と入力してください。', true);
+    return;
+  }
+  if (!confirm('本当にIFTYアカウントを削除しますか？クラウドデータは元に戻せません。')) return;
+  setIftySecurityModalStatus('削除中…');
+  try {
+    const deletingUser = currentUser;
+    await iftyAccountApi('account_delete', { token: iftySessionToken, currentPassword, confirm: 'DELETE' });
+    await purgeIftyLocalAccountData(deletingUser);
+    clearIftyAccountSession();
+    location.reload();
+  } catch (error) {
+    setIftySecurityModalStatus(error.message || 'アカウントを削除できませんでした。', true);
+  }
+};
+
 function captureIftyCloudPayload() {
   return {
     schemaVersion: 1,
-    appVersion: 'Q3_STEP12',
+    appVersion: 'Q3_STEP17',
     savedAt: Date.now(),
     folders: deepClone(Array.isArray(folders) ? folders : []),
     practiceData: deepClone(practiceData || { schemaVersion: 1, modules: {} }),
     chatSessions: sanitizeChatSessionsForBackup(),
     currentChatSessionId: currentChatSessionId || null,
+    subjectOrders: deepClone(normalizeIftySubjectOrders(iftySubjectOrders)),
     iftyTheme: iftyTheme === 'dark' ? 'dark' : 'light'
   };
 }
@@ -1820,17 +2547,20 @@ function readIftyLocalPayloadForUser(username) {
   let savedFolders = [];
   let savedPractice = { schemaVersion: 1, modules: { flashcards: { sets: [] }, questions: { sets: [] } } };
   let savedChats = [];
+  let savedOrders = makeEmptyIftySubjectOrders();
   try { savedFolders = JSON.parse(localStorage.getItem('vocab_user_' + username) || '[]'); } catch (_) {}
   try { savedPractice = JSON.parse(localStorage.getItem('practice_user_' + username) || JSON.stringify(savedPractice)); } catch (_) {}
   try { savedChats = JSON.parse(localStorage.getItem('chat_sessions_' + username) || '[]'); } catch (_) {}
+  try { savedOrders = JSON.parse(localStorage.getItem(getIftyOrderStorageKey(username)) || 'null') || savedOrders; } catch (_) {}
   return {
     schemaVersion: 1,
-    appVersion: 'Q3_STEP12_LOCAL',
+    appVersion: 'Q3_STEP17_LOCAL',
     savedAt: Date.now(),
     folders: Array.isArray(savedFolders) ? savedFolders : [],
     practiceData: savedPractice && typeof savedPractice === 'object' ? savedPractice : { schemaVersion: 1, modules: {} },
     chatSessions: Array.isArray(savedChats) ? savedChats : [],
     currentChatSessionId: Array.isArray(savedChats) && savedChats[0] ? savedChats[0].id : null,
+    subjectOrders: normalizeIftySubjectOrders(savedOrders),
     iftyTheme: localStorage.getItem('ifty_theme') === 'dark' ? 'dark' : 'light'
   };
 }
@@ -1842,6 +2572,8 @@ function hasMeaningfulIftyPayload(payload) {
   const modules = payload.practiceData && payload.practiceData.modules ? payload.practiceData.modules : {};
   if (modules.flashcards && Array.isArray(modules.flashcards.sets) && modules.flashcards.sets.length) return true;
   if (modules.questions && Array.isArray(modules.questions.sets) && modules.questions.sets.length) return true;
+  const orders = normalizeIftySubjectOrders(payload.subjectOrders);
+  if (IFTY_SUBJECT_KEYS.some(subject => !!orders[subject])) return true;
   const chats = Array.isArray(payload.chatSessions) ? payload.chatSessions : [];
   return chats.some(session => Array.isArray(session.messages) && session.messages.some(message => message && message.role === 'user'));
 }
@@ -1853,6 +2585,7 @@ async function applyIftyCloudPayload(payload) {
     folders = deepClone(Array.isArray(payload.folders) ? payload.folders : []);
     practiceData = deepClone(payload.practiceData || { schemaVersion: 1, modules: { flashcards: { sets: [] }, questions: { sets: [] } } });
     chatSessions = deepClone(Array.isArray(payload.chatSessions) ? payload.chatSessions : []);
+    iftySubjectOrders = normalizeIftySubjectOrders(payload.subjectOrders);
     iftyTheme = payload.iftyTheme === 'dark' ? 'dark' : 'light';
 
     normalizeFoldersData();
@@ -1874,6 +2607,7 @@ async function applyIftyCloudPayload(payload) {
     saveUserData();
     savePracticeData();
     saveChatSessions();
+    saveIftySubjectOrders({ queueCloud: false });
     applyIftyTheme();
     renderFolders();
     updateChatSessionSelect();
@@ -1913,7 +2647,7 @@ function queueIftyCloudSave(reason = '変更') {
 async function resolveIftyCloudConflict(conflictState) {
   const remoteRevision = Number(conflictState && conflictState.revision || 0);
   const remotePayload = conflictState && conflictState.payload;
-  try { await createIftyRecoverySnapshot('クラウド競合前の端末保存', { force: true }); } catch (_) {}
+  try { await createIftyRecoverySnapshot('クラウド競合前の端末保存', { force: true, kind: 'MANUAL' }); } catch (_) {}
 
   const useCloud = confirm('別の端末で更新されたクラウドセーブを検出しました。\n\nOK：クラウド版をこの端末へ読み込む\nキャンセル：この端末版をクラウドへ上書きする\n\nどちらを選んでも、この端末の現在状態は復元用バックアップへ保存しています。');
   if (useCloud) {
@@ -2022,7 +2756,7 @@ async function syncIftyCloudAfterLogin() {
     if (hasMeaningfulIftyPayload(legacy)) {
       await applyIftyCloudPayload(legacy);
       initialPayload = captureIftyCloudPayload();
-      try { await createIftyRecoverySnapshot('旧default_userデータをアカウントへ移行', { force: true }); } catch (_) {}
+      try { await createIftyRecoverySnapshot('旧default_userデータをアカウントへ移行', { force: true, kind: 'MANUAL' }); } catch (_) {}
     }
   }
 
@@ -2059,9 +2793,11 @@ async function enterIftyAccount(account, options = {}) {
   loadUserData(currentUser);
   loadPracticeData(currentUser);
   initChatSystem();
+  loadIftySubjectOrders(currentUser);
   applyAlliaBranding();
   ensureIftyBrandUi();
   ensureIftyNetworkUi();
+  loadIftyAutosavePreference();
   startIftyAutoBackup();
   iftyCloudSaveEnabled = true;
 
@@ -2098,9 +2834,11 @@ async function enterIftyDeveloperSession() {
   loadUserData(currentUser);
   loadPracticeData(currentUser);
   initChatSystem();
+  loadIftySubjectOrders(currentUser);
   applyAlliaBranding();
   ensureIftyBrandUi();
   ensureIftyNetworkUi();
+  loadIftyAutosavePreference();
   startIftyAutoBackup();
 
   // Developerはアカウント認証を省略する代わりに、クラウド同期は常に無効。
@@ -2218,7 +2956,7 @@ function applyAlliaBranding() {
 
   const chatInput = document.getElementById('chatInput');
   if (chatInput) {
-    chatInput.placeholder = 'ALLIAに質問、または「○○の意味」など…';
+    chatInput.placeholder = `${normalizeIftySubject(currentIftySubject)} ALLIAに質問…`;
 
     const initialValue = String(chatInput.value || '').trim();
     if (initialValue === 'ALLIA' || /^grok$/i.test(initialValue)) {
@@ -2762,7 +3500,9 @@ async function generateAndAddWord(folderId, wordText) {
           includeInflections: true,
           includeDerivatives: true,
           shortDetails: true
-        }
+        },
+        subject: 'ENGLISH',
+        order: getIftySubjectOrder('ENGLISH')
       })
     });
 
@@ -3582,7 +4322,7 @@ async function renderQuizPlayer(setId) {
         p.currentQuestion={...data,quizType:type,direction,wordId:ref.word.id};
       } else {
         const candidateWords=shuffleArray((set.wordIds||[]).filter(id=>id!==ref.word.id)).slice(0,8).map(id=>{const x=getWordById(id);return x?x.word:null;}).filter(Boolean);
-        const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_generate',quizType:type,direction,word:ref.word,candidateWords})});
+        const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_generate',quizType:type,direction,word:ref.word,candidateWords,subject:'ENGLISH',order:getIftySubjectOrder('ENGLISH')})});
         const data=await response.json();
         if(!response.ok) throw alliaHttpError(response, data, '問題生成に失敗しました。');
         p.currentQuestion={...data,quizType:type,direction,wordId:ref.word.id};
@@ -3656,7 +4396,7 @@ window.submitQuizAnswer = async function(setId) {
 
   modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><h3 style="color:#4c1d95;">ALLIAが採点中…</h3></div>`;
   try{
-    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_grade',quizType:q.quizType,direction:q.direction,question:q.question,referenceAnswer:q.referenceAnswer||'',userAnswer:answer,word:ref.word})});
+    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_grade',quizType:q.quizType,direction:q.direction,question:q.question,referenceAnswer:q.referenceAnswer||'',userAnswer:answer,word:ref.word,subject:'ENGLISH',order:getIftySubjectOrder('ENGLISH')})});
     const data=await response.json();
     if(!response.ok)throw alliaHttpError(response, data, '採点に失敗しました。');
     const correct=data.correct===true;
@@ -3734,7 +4474,9 @@ window.submitQuizChallenge = async function(setId) {
       word:ref.word,
       firstFeedback:last.firstFeedback||'',
       firstModelAnswer:last.firstModelAnswer||q.referenceAnswer||'',
-      challengeReason
+      challengeReason,
+      subject:'ENGLISH',
+      order:getIftySubjectOrder('ENGLISH')
     })});
     const data=await response.json();
     if(!response.ok)throw alliaHttpError(response, data, 'Challengeの再審査に失敗しました。');
@@ -3928,6 +4670,7 @@ window.switchToChatView = function() {
 };
 
 window.switchToVocabView = function() {
+  currentIftySubject = 'ENGLISH';
   currentView = 'vocab';
   iftyPortalPage = 'vocab';
   hideIftyHubPage();
@@ -4062,11 +4805,22 @@ function renderChatMessages() {
     return;
   }
 
-  container.innerHTML = session.messages.map(m => `
-    <div style="display: flex; justify-content: ${m.role === 'user' ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
-      <div style="background: ${m.role === 'user' ? '#0284c7' : '#e2e8f0'}; color: ${m.role === 'user' ? 'white' : '#0f172a'}; padding: 10px 14px; border-radius: 8px; max-width: 80%; word-break: break-word; white-space: pre-wrap; line-height: 1.5; font-size: 0.95em;">${escapeHtml(m.text)}</div>
-    </div>
-  `).join('');
+  const activeSubject = normalizeIftySubject(currentIftySubject);
+  const visibleMessages = session.messages.filter(message => {
+    const messageSubject = normalizeIftySubject(message && message.subject ? message.subject : 'ENGLISH');
+    return messageSubject === activeSubject;
+  });
+
+  container.innerHTML = visibleMessages.length
+    ? visibleMessages.map(m => `
+      <div style="display: flex; justify-content: ${m.role === 'user' ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
+        <div style="background: ${m.role === 'user' ? '#0284c7' : '#e2e8f0'}; color: ${m.role === 'user' ? 'white' : '#0f172a'}; padding: 10px 14px; border-radius: 8px; max-width: 80%; word-break: break-word; white-space: pre-wrap; line-height: 1.5; font-size: 0.95em;">${escapeHtml(m.text)}</div>
+      </div>
+    `).join('')
+    : `<div style="margin:16px auto;max-width:560px;padding:13px 15px;background:#f1f5f9;color:#475569;border-radius:10px;text-align:center;font-size:.88em;line-height:1.55;">
+         ${escapeHtml(activeSubject)} ALLIA<br>
+         この教科では${getIftySubjectOrder(activeSubject) ? '専用ORDERを適用します。' : 'ORDERはまだ設定されていません。'}
+       </div>`;
 
   container.scrollTop = container.scrollHeight;
 }
@@ -4158,19 +4912,26 @@ window.sendChatMessage = async function() {
   if (!session) return;
 
   const userMsg = text || '[画像を送信しました]';
+  const activeSubject = normalizeIftySubject(currentIftySubject);
+  const activeOrder = getIftySubjectOrder(activeSubject);
 
   const history = session.messages
-    .filter(m => (m.role === 'user' || m.role === 'assistant') && !m.temporaryThinking)
+    .filter(m => {
+      const messageSubject = normalizeIftySubject(m && m.subject ? m.subject : 'ENGLISH');
+      return (m.role === 'user' || m.role === 'assistant') &&
+        !m.temporaryThinking &&
+        messageSubject === activeSubject;
+    })
     .slice(-12)
     .map(m => ({ role: m.role, content: m.text }));
 
-  session.messages.push({ role: 'user', text: userMsg });
+  session.messages.push({ role: 'user', text: userMsg, subject: activeSubject });
   input.value = "";
 
   const currentImg = selectedImageBase64;
   clearSelectedImage();
 
-  const thinkingMessage = { role: 'assistant', text: 'Thinking…', temporaryThinking: true };
+  const thinkingMessage = { role: 'assistant', text: 'Thinking…', temporaryThinking: true, subject: activeSubject };
   session.messages.push(thinkingMessage);
   renderChatMessages();
 
@@ -4184,8 +4945,13 @@ window.sendChatMessage = async function() {
         type: "agent_chat",
         prompt: userMsg,
         history,
-        currentFolders: folders,
-        practiceData: practiceData,
+        subject: activeSubject,
+        order: activeOrder,
+        allowAppEdits: activeSubject === 'ENGLISH',
+        currentFolders: activeSubject === 'ENGLISH' ? folders : [],
+        practiceData: activeSubject === 'ENGLISH'
+          ? practiceData
+          : { schemaVersion: 1, modules: { flashcards: { sets: [] }, questions: { sets: [] } } },
         practiceCapabilities: {
           schemaVersion: 1,
           note: "ALLIA may edit the entire practiceData object. Future practice modules are stored under practiceData.modules and should be preserved unless explicitly changed by the user. Question type selection is generated and graded locally from other words in the same quiz set and must not require AI.",
@@ -4209,13 +4975,13 @@ window.sendChatMessage = async function() {
 
     if (response.ok) {
       replyText = data.reply || data.content || data.message || "応答を取得しました。";
-      if (Array.isArray(data.updatedFolders)) {
+      if (activeSubject === 'ENGLISH' && Array.isArray(data.updatedFolders)) {
         folders = data.updatedFolders;
         normalizeFoldersData();
         saveUserData();
         renderFolders();
       }
-      if (data.updatedPracticeData && typeof data.updatedPracticeData === 'object') {
+      if (activeSubject === 'ENGLISH' && data.updatedPracticeData && typeof data.updatedPracticeData === 'object') {
         practiceData = data.updatedPracticeData;
         normalizePracticeData();
         savePracticeData();
