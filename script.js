@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP17 2026-09-11：教科別ORDER・教科別ALLIAコンテキスト分離 ★★★
+// ★★★ IFTY Q3 STEP18 2026-09-11：生成データ再利用・語彙検索・ENGLISH ORDER入口統一 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -32,6 +32,10 @@ let selectedImageBase64 = null;
 let pendingSpellingSuggestions = {};
 let wordInputDrafts = {};
 
+// Q3 STEP18：語彙検索（全フォルダ / フォルダ内）
+let iftyGlobalVocabSearchQuery = '';
+let iftyFolderSearchQueries = {};
+
 // 選択状態（フォルダ・単語）
 let selectedFolderIds = new Set();
 let selectedWordIds = new Set();
@@ -58,8 +62,10 @@ let iftyTheme = localStorage.getItem('ifty_theme') || 'light';
 
 // Q3 STEP16：PERIODIC / MANUAL バックアップ + オートセーブ頻度
 const IFTY_RECOVERY_DB_NAME = 'ifty_recovery_q3';
-const IFTY_RECOVERY_DB_VERSION = 1;
+const IFTY_RECOVERY_DB_VERSION = 2;
 const IFTY_RECOVERY_STORE = 'snapshots';
+// Q3 STEP18：AI生成済み英単語データはクラウドへ送らず、この端末のIndexedDBへ保存して再利用する。
+const IFTY_GENERATED_WORD_CACHE_STORE = 'generatedWordCache';
 const IFTY_RECOVERY_MAX_MANUAL_SNAPSHOTS = 30;
 const IFTY_AUTOSAVE_DEFAULT_MINUTES = 3;
 const IFTY_AUTOSAVE_MIN_MINUTES = 1;
@@ -619,6 +625,7 @@ window.saveIftySubjectOrderFromModal = function(subject) {
 
   iftySubjectOrders[key] = value;
   saveIftySubjectOrders();
+  refreshIftyEnglishOrderPanel();
 
   if (status) {
     status.textContent = `${key} ORDERを保存しました。他の教科には適用されません。`;
@@ -638,6 +645,7 @@ window.clearIftySubjectOrder = function(subject) {
 
   iftySubjectOrders[key] = '';
   saveIftySubjectOrders();
+  refreshIftyEnglishOrderPanel();
   const textarea = document.getElementById('iftyOrderTextarea');
   if (textarea) textarea.value = '';
   window.updateIftyOrderCharCount();
@@ -647,6 +655,137 @@ window.clearIftySubjectOrder = function(subject) {
     status.textContent = `${key} ORDERをリセットしました。`;
     status.style.color = '#15803d';
   }
+};
+
+// Q3 STEP18：ENGLISHにも他教科と同じORDER入口を表示する。
+function ensureIftyEnglishVocabTools() {
+  const vocabPage = document.getElementById('vocabPage');
+  if (!vocabPage) return;
+
+  let orderPanel = document.getElementById('iftyEnglishOrderPanel');
+  if (!orderPanel) {
+    orderPanel = document.createElement('div');
+    orderPanel.id = 'iftyEnglishOrderPanel';
+    orderPanel.style.cssText = 'background:white;border:1px solid #cbd5e1;border-radius:10px;padding:12px;margin-bottom:12px;box-shadow:0 1px 3px rgba(15,23,42,.05);';
+    vocabPage.insertBefore(orderPanel, vocabPage.firstChild);
+  }
+
+  let searchPanel = document.getElementById('iftyVocabSearchPanel');
+  if (!searchPanel) {
+    searchPanel = document.createElement('div');
+    searchPanel.id = 'iftyVocabSearchPanel';
+    searchPanel.style.cssText = 'background:white;border:1px solid #cbd5e1;border-radius:10px;padding:12px;margin-bottom:12px;box-shadow:0 1px 3px rgba(15,23,42,.05);';
+    orderPanel.insertAdjacentElement('afterend', searchPanel);
+  }
+
+  refreshIftyEnglishOrderPanel();
+  refreshIftyVocabSearchPanel();
+}
+
+function refreshIftyEnglishOrderPanel() {
+  const panel = document.getElementById('iftyEnglishOrderPanel');
+  if (!panel) return;
+  const status = getIftyOrderStatus('ENGLISH');
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div style="min-width:0;">
+        <div style="font-weight:900;color:#0f172a;">ORDER</div>
+        <div style="font-size:.82em;color:#64748b;margin-top:3px;">${escapeHtml(status)}。このORDERはENGLISHだけに適用されます。</div>
+      </div>
+      <button type="button" onclick="openIftySubjectOrder('ENGLISH')" style="border:none;background:#0284c7;color:white;padding:9px 12px;border-radius:8px;font-weight:900;cursor:pointer;">ORDERを編集</button>
+    </div>`;
+}
+
+function normalizeIftyVocabSearchText(value) {
+  return String(value || '').normalize('NFKC').trim().toLowerCase();
+}
+
+function iftyWordMatchesSearch(word, query) {
+  const q = normalizeIftyVocabSearchText(query);
+  if (!q) return true;
+  if (!word || typeof word !== 'object') return false;
+
+  const spell = normalizeIftyVocabSearchText(word.word || '');
+  if (spell.includes(q)) return true;
+
+  const meanings = [];
+  if (Array.isArray(word.meanings)) meanings.push(...word.meanings);
+  else if (word.meanings) meanings.push(word.meanings);
+  if (word.meaning) meanings.push(word.meaning);
+  if (word.quizAnswers && Array.isArray(word.quizAnswers.jp)) meanings.push(...word.quizAnswers.jp);
+
+  return meanings.some(value => normalizeIftyVocabSearchText(value).includes(q));
+}
+
+function getIftyVisibleWordEntries(folder) {
+  const words = folder && Array.isArray(folder.words) ? folder.words : [];
+  const globalQuery = normalizeIftyVocabSearchText(iftyGlobalVocabSearchQuery);
+  const folderQuery = normalizeIftyVocabSearchText(iftyFolderSearchQueries[folder && folder.id] || '');
+
+  return words
+    .map((word, index) => ({ word, index }))
+    .filter(entry => {
+      if (globalQuery && !iftyWordMatchesSearch(entry.word, globalQuery)) return false;
+      if (folderQuery && !iftyWordMatchesSearch(entry.word, folderQuery)) return false;
+      return true;
+    });
+}
+
+function countIftyGlobalVocabMatches() {
+  const query = normalizeIftyVocabSearchText(iftyGlobalVocabSearchQuery);
+  if (!query) return folders.reduce((sum, folder) => sum + (Array.isArray(folder.words) ? folder.words.length : 0), 0);
+  return folders.reduce((sum, folder) => {
+    const words = Array.isArray(folder.words) ? folder.words : [];
+    return sum + words.filter(word => iftyWordMatchesSearch(word, query)).length;
+  }, 0);
+}
+
+function refreshIftyVocabSearchPanel() {
+  const panel = document.getElementById('iftyVocabSearchPanel');
+  if (!panel) return;
+
+  const inputValue = String(iftyGlobalVocabSearchQuery || '');
+  const total = folders.reduce((sum, folder) => sum + (Array.isArray(folder.words) ? folder.words.length : 0), 0);
+  const matchCount = countIftyGlobalVocabMatches();
+  panel.innerHTML = `
+    <div style="font-weight:900;color:#0f172a;margin-bottom:7px;">全フォルダ検索</div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+      <input id="iftyGlobalVocabSearchInput" value="${escapeHtml(inputValue)}" oninput="setIftyGlobalVocabSearch(this.value)" placeholder="スペル・意味で全フォルダを検索" style="flex:1;min-width:180px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.92em;">
+      <button type="button" onclick="clearIftyGlobalVocabSearch()" style="border:none;background:#e2e8f0;color:#334155;padding:9px 11px;border-radius:7px;font-weight:800;cursor:pointer;">クリア</button>
+      <span style="font-size:.8em;color:#64748b;white-space:nowrap;">${normalizeIftyVocabSearchText(inputValue) ? `${matchCount}件一致` : `${total}語`}</span>
+    </div>`;
+}
+
+window.setIftyGlobalVocabSearch = function(value) {
+  iftyGlobalVocabSearchQuery = String(value || '');
+  renderFolders();
+  const panel = document.getElementById('iftyVocabSearchPanel');
+  if (panel) {
+    const total = folders.reduce((sum, folder) => sum + (Array.isArray(folder.words) ? folder.words.length : 0), 0);
+    const count = countIftyGlobalVocabMatches();
+    const status = panel.querySelector('span');
+    if (status) status.textContent = normalizeIftyVocabSearchText(iftyGlobalVocabSearchQuery) ? `${count}件一致` : `${total}語`;
+  }
+};
+
+window.clearIftyGlobalVocabSearch = function() {
+  iftyGlobalVocabSearchQuery = '';
+  const input = document.getElementById('iftyGlobalVocabSearchInput');
+  if (input) input.value = '';
+  renderFolders();
+  refreshIftyVocabSearchPanel();
+};
+
+window.setIftyFolderSearchQuery = function(folderId, value) {
+  iftyFolderSearchQueries[folderId] = String(value || '');
+  refreshFolderWordArea(folderId);
+};
+
+window.clearIftyFolderSearchQuery = function(folderId) {
+  iftyFolderSearchQueries[folderId] = '';
+  const input = document.getElementById(`folderSearch_${folderId}`);
+  if (input) input.value = '';
+  refreshFolderWordArea(folderId);
 };
 
 window.openIftySubjectAllia = function(subject) {
@@ -1116,7 +1255,7 @@ window.openIftySettings = function() {
         </div>
       </div>
 
-      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP17</div>
+      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP18</div>
     </section>
   `, 'settings');
 
@@ -1202,6 +1341,11 @@ function openIftyRecoveryDb() {
         store.createIndex('user', 'user', { unique: false });
         store.createIndex('createdAt', 'createdAt', { unique: false });
       }
+      if (!db.objectStoreNames.contains(IFTY_GENERATED_WORD_CACHE_STORE)) {
+        const cacheStore = db.createObjectStore(IFTY_GENERATED_WORD_CACHE_STORE, { keyPath: 'id' });
+        cacheStore.createIndex('user', 'user', { unique: false });
+        cacheStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error('バックアップ領域を開けませんでした。'));
@@ -1223,6 +1367,159 @@ function idbTransactionDone(transaction) {
   });
 }
 
+
+// ==========================================
+// Q3 STEP18：生成済み英単語データの端末ローカル再利用
+// 同じIFTYユーザー + ENGLISH + 同じ単語 + 同じORDER のときだけ再利用する。
+// ==========================================
+function normalizeIftyGeneratedWordKey(word) {
+  return String(word || '').normalize('NFKC').trim().toLowerCase();
+}
+
+function hashIftyGeneratedCacheText(value) {
+  const text = String(value || '');
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+function getIftyGeneratedWordCacheId(username, subject, wordKey, order) {
+  return [
+    'gword',
+    hashIftyGeneratedCacheText(username),
+    normalizeIftySubject(subject),
+    hashIftyGeneratedCacheText(wordKey),
+    hashIftyGeneratedCacheText(order)
+  ].join(':');
+}
+
+function sanitizeIftyGeneratedWordData(data) {
+  if (!data || typeof data !== 'object') return null;
+  const safe = {};
+  const fields = [
+    'word', 'pronunciation', 'partOfSpeech', 'transitivity', 'countability',
+    'meanings', 'meaning', 'examples', 'details', 'derivatives', 'forms', 'quizAnswers'
+  ];
+  fields.forEach(key => {
+    if (typeof data[key] !== 'undefined') safe[key] = deepClone(data[key]);
+  });
+  if (!safe.word && !safe.meanings && !safe.meaning) return null;
+  return safe;
+}
+
+async function getIftyGeneratedWordCache(wordText, subject = 'ENGLISH', order = '') {
+  if (!('indexedDB' in window)) return null;
+  const user = String(currentUser || 'default_user');
+  const normalizedSubject = normalizeIftySubject(subject);
+  const wordKey = normalizeIftyGeneratedWordKey(wordText);
+  const normalizedOrder = String(order || '').trim();
+  if (!wordKey) return null;
+
+  const id = getIftyGeneratedWordCacheId(user, normalizedSubject, wordKey, normalizedOrder);
+  try {
+    const db = await openIftyRecoveryDb();
+    try {
+      if (!db.objectStoreNames.contains(IFTY_GENERATED_WORD_CACHE_STORE)) return null;
+      const transaction = db.transaction(IFTY_GENERATED_WORD_CACHE_STORE, 'readonly');
+      const record = await idbRequestPromise(transaction.objectStore(IFTY_GENERATED_WORD_CACHE_STORE).get(id));
+      if (!record) return null;
+      if (record.user !== user || record.subject !== normalizedSubject || record.wordKey !== wordKey || String(record.order || '') !== normalizedOrder) return null;
+      return sanitizeIftyGeneratedWordData(record.data);
+    } finally {
+      db.close();
+    }
+  } catch (error) {
+    console.warn('単語生成キャッシュ読込エラー:', error);
+    return null;
+  }
+}
+
+async function saveIftyGeneratedWordCache(wordText, data, subject = 'ENGLISH', order = '') {
+  if (!('indexedDB' in window)) return;
+  const safeData = sanitizeIftyGeneratedWordData(data);
+  if (!safeData) return;
+
+  const user = String(currentUser || 'default_user');
+  const normalizedSubject = normalizeIftySubject(subject);
+  const wordKey = normalizeIftyGeneratedWordKey(wordText);
+  const normalizedOrder = String(order || '').trim();
+  if (!wordKey) return;
+
+  const record = {
+    id: getIftyGeneratedWordCacheId(user, normalizedSubject, wordKey, normalizedOrder),
+    user,
+    subject: normalizedSubject,
+    wordKey,
+    order: normalizedOrder,
+    data: safeData,
+    updatedAt: Date.now()
+  };
+
+  try {
+    const db = await openIftyRecoveryDb();
+    try {
+      if (!db.objectStoreNames.contains(IFTY_GENERATED_WORD_CACHE_STORE)) return;
+      const transaction = db.transaction(IFTY_GENERATED_WORD_CACHE_STORE, 'readwrite');
+      transaction.objectStore(IFTY_GENERATED_WORD_CACHE_STORE).put(record);
+      await idbTransactionDone(transaction);
+    } finally {
+      db.close();
+    }
+  } catch (error) {
+    console.warn('単語生成キャッシュ保存エラー:', error);
+  }
+}
+
+function makeIftyWordDataFromStoredWord(word) {
+  if (!word || typeof word !== 'object') return null;
+  const meanings = Array.isArray(word.meanings) ? word.meanings : (word.meanings ? [word.meanings] : []);
+  if (!word.word || !meanings.length) return null;
+  if (meanings.some(value => /生成中|AI生成に失敗/.test(String(value || '')))) return null;
+  return sanitizeIftyGeneratedWordData(word);
+}
+
+function findIftyReusableStoredWordData(wordText, subject = 'ENGLISH', order = '') {
+  const wordKey = normalizeIftyGeneratedWordKey(wordText);
+  const normalizedSubject = normalizeIftySubject(subject);
+  const normalizedOrder = String(order || '').trim();
+  if (!wordKey) return null;
+
+  for (const folder of folders) {
+    const words = folder && Array.isArray(folder.words) ? folder.words : [];
+    for (const word of words) {
+      if (normalizeIftyGeneratedWordKey(word && word.word) !== wordKey) continue;
+
+      const meta = word && word.generationMeta && typeof word.generationMeta === 'object' ? word.generationMeta : null;
+      if (meta) {
+        if (normalizeIftySubject(meta.subject) !== normalizedSubject) continue;
+        if (String(meta.order || '').trim() !== normalizedOrder) continue;
+      } else if (normalizedOrder) {
+        // STEP18以前の単語は生成時ORDERが不明。ORDERありの場合は誤再利用しない。
+        continue;
+      }
+
+      const data = makeIftyWordDataFromStoredWord(word);
+      if (data) return data;
+    }
+  }
+  return null;
+}
+
+async function resolveIftyReusableWordData(wordText, subject = 'ENGLISH', order = '') {
+  const cached = await getIftyGeneratedWordCache(wordText, subject, order);
+  if (cached) return { data: cached, source: 'local-cache' };
+
+  const stored = findIftyReusableStoredWordData(wordText, subject, order);
+  if (stored) {
+    saveIftyGeneratedWordCache(wordText, stored, subject, order).catch(() => {});
+    return { data: stored, source: 'existing-ifty-data' };
+  }
+  return null;
+}
+
 function sanitizeChatSessionsForBackup() {
   const safeSessions = deepClone(Array.isArray(chatSessions) ? chatSessions : []);
   safeSessions.forEach(session => {
@@ -1235,7 +1532,7 @@ function sanitizeChatSessionsForBackup() {
 function captureIftyRecoveryPayload() {
   return {
     schemaVersion: 1,
-    appVersion: 'Q3_STEP17',
+    appVersion: 'Q3_STEP18',
     savedAt: Date.now(),
     currentUser: currentUser,
     folders: deepClone(Array.isArray(folders) ? folders : []),
@@ -1659,6 +1956,8 @@ async function applyIftyRecoveryPayload(payload) {
     selectedWordIds.clear();
     pendingSpellingSuggestions = {};
     wordInputDrafts = {};
+    iftyGlobalVocabSearchQuery = '';
+    iftyFolderSearchQueries = {};
     undoStack = [];
     redoStack = [];
 
@@ -2492,6 +2791,18 @@ async function purgeIftyLocalAccountData(username) {
         own.forEach(item => store.delete(item.id));
         await idbTransactionDone(deleteTransaction);
       }
+
+      if (db.objectStoreNames.contains(IFTY_GENERATED_WORD_CACHE_STORE)) {
+        const cacheReadTransaction = db.transaction(IFTY_GENERATED_WORD_CACHE_STORE, 'readonly');
+        const cached = await idbRequestPromise(cacheReadTransaction.objectStore(IFTY_GENERATED_WORD_CACHE_STORE).getAll());
+        const ownCache = (Array.isArray(cached) ? cached : []).filter(item => item && item.user === user);
+        if (ownCache.length) {
+          const cacheDeleteTransaction = db.transaction(IFTY_GENERATED_WORD_CACHE_STORE, 'readwrite');
+          const cacheStore = cacheDeleteTransaction.objectStore(IFTY_GENERATED_WORD_CACHE_STORE);
+          ownCache.forEach(item => cacheStore.delete(item.id));
+          await idbTransactionDone(cacheDeleteTransaction);
+        }
+      }
     } finally {
       db.close();
     }
@@ -2532,7 +2843,7 @@ window.submitIftyAccountDelete = async function() {
 function captureIftyCloudPayload() {
   return {
     schemaVersion: 1,
-    appVersion: 'Q3_STEP17',
+    appVersion: 'Q3_STEP18',
     savedAt: Date.now(),
     folders: deepClone(Array.isArray(folders) ? folders : []),
     practiceData: deepClone(practiceData || { schemaVersion: 1, modules: {} }),
@@ -2554,7 +2865,7 @@ function readIftyLocalPayloadForUser(username) {
   try { savedOrders = JSON.parse(localStorage.getItem(getIftyOrderStorageKey(username)) || 'null') || savedOrders; } catch (_) {}
   return {
     schemaVersion: 1,
-    appVersion: 'Q3_STEP17_LOCAL',
+    appVersion: 'Q3_STEP18_LOCAL',
     savedAt: Date.now(),
     folders: Array.isArray(savedFolders) ? savedFolders : [],
     practiceData: savedPractice && typeof savedPractice === 'object' ? savedPractice : { schemaVersion: 1, modules: {} },
@@ -3020,6 +3331,8 @@ function normalizeFoldersData() {
 }
 
 function loadUserData(username) {
+  iftyGlobalVocabSearchQuery = '';
+  iftyFolderSearchQueries = {};
   try {
     const saved = localStorage.getItem("vocab_user_" + username);
     folders = saved ? JSON.parse(saved) : [];
@@ -3189,19 +3502,34 @@ function renderFolders() {
     return;
   }
 
-  container.innerHTML = selectionToolbar + folders.map((folder, fIndex) => {
+  const globalSearchActive = !!normalizeIftyVocabSearchText(iftyGlobalVocabSearchQuery);
+  const renderedFolders = folders
+    .map((folder, fIndex) => ({ folder, fIndex }))
+    .filter(({ folder }) => !globalSearchActive || getIftyVisibleWordEntries(folder).length > 0);
+
+  if (globalSearchActive && renderedFolders.length === 0) {
+    container.innerHTML = selectionToolbar + `
+      <p style="color:#64748b;text-align:center;padding:28px;background:white;border-radius:8px;border:1px dashed #cbd5e1;">
+        全フォルダ検索に一致する単語がありません。
+      </p>`;
+    return;
+  }
+
+  container.innerHTML = selectionToolbar + renderedFolders.map(({ folder, fIndex }) => {
     const suggestion = pendingSpellingSuggestions[folder.id];
     const words = folder.words || [];
     const allWordsSelected = words.length > 0 && words.every(w => selectedWordIds.has(w.id));
     const folderChecked = selectedFolderIds.has(folder.id);
+    // 全フォルダ検索中は結果を確認できるよう一時的に展開表示するが、保存済みcollapsed状態は変更しない。
+    const visuallyCollapsed = folder.collapsed && !globalSearchActive;
 
     return `
     <div style="background:white;border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin-bottom:12px;box-shadow:0 2px 4px rgba(0,0,0,0.05);">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${folder.collapsed ? '0' : '8px'};gap:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${visuallyCollapsed ? '0' : '8px'};gap:8px;">
         <div style="display:flex;align-items:center;gap:8px;min-width:0;">
           <input type="checkbox" ${folderChecked ? 'checked' : ''} onchange="toggleFolderSelection('${folder.id}', this.checked)" title="このフォルダを選択" style="width:18px;height:18px;flex:none;">
           <div style="display:flex;align-items:center;gap:8px;cursor:pointer;min-width:0;" onclick="toggleFolderCollapse('${folder.id}')">
-            <span style="font-size:.9em;color:#64748b;">${folder.collapsed ? '▶' : '▼'}</span>
+            <span style="font-size:.9em;color:#64748b;">${visuallyCollapsed ? '▶' : '▼'}</span>
             <h3 style="margin:0;color:#0f172a;font-size:1.1em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📁 ${escapeHtml(folder.name)} (<span id="folderWordCount_${folder.id}">${words.length}件</span>)</h3>
           </div>
         </div>
@@ -3214,12 +3542,17 @@ function renderFolders() {
         </div>
       </div>
 
-      ${folder.collapsed ? '' : `
+      ${visuallyCollapsed ? '' : `
         <div style="display:flex;gap:6px;margin-bottom:10px;margin-top:8px;">
           <input id="wordInput_${folder.id}" value="${escapeHtml(wordInputDrafts[folder.id] || '')}" placeholder="単語を入力（Enterまたは追加でAI自動生成）" oninput="saveWordInputDraft('${folder.id}', this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); addWordToFolder('${folder.id}');}" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:4px;font-size:.9em;min-width:0;">
           <button onclick="addWordToFolder('${folder.id}')" style="background:#0284c7;color:white;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:.9em;font-weight:bold;">追加</button>
         </div>
         <div id="spellingSuggestion_${folder.id}">${suggestion ? renderSpellingSuggestion(folder.id, suggestion) : ''}</div>
+        <div style="display:flex;gap:6px;align-items:center;margin:8px 0 10px;flex-wrap:wrap;">
+          <input id="folderSearch_${folder.id}" value="${escapeHtml(iftyFolderSearchQueries[folder.id] || '')}" oninput="setIftyFolderSearchQuery('${folder.id}', this.value)" placeholder="このフォルダ内をスペル・意味で検索" style="flex:1;min-width:170px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-size:.86em;">
+          <button type="button" onclick="clearIftyFolderSearchQuery('${folder.id}')" style="border:none;background:#e2e8f0;color:#334155;padding:8px 10px;border-radius:6px;font-size:.8em;font-weight:800;cursor:pointer;">クリア</button>
+          <span id="folderSearchCount_${folder.id}" style="font-size:.76em;color:#64748b;white-space:nowrap;">${getIftyVisibleWordEntries(folder).length}/${words.length}件</span>
+        </div>
         <div id="wordList_${folder.id}" style="display:flex;flex-direction:column;gap:8px;">
           ${renderFolderWordList(folder)}
         </div>
@@ -3233,8 +3566,14 @@ window.saveWordInputDraft = function(folderId, value) {
 };
 
 function renderFolderWordList(folder) {
-  const words = folder && Array.isArray(folder.words) ? folder.words : [];
-  return words.map((w, wIndex) => `
+  const entries = getIftyVisibleWordEntries(folder);
+  const hasSearch = !!normalizeIftyVocabSearchText(iftyGlobalVocabSearchQuery) || !!normalizeIftyVocabSearchText(iftyFolderSearchQueries[folder && folder.id] || '');
+
+  if (!entries.length && hasSearch) {
+    return `<div style="padding:16px;text-align:center;color:#94a3b8;border:1px dashed #cbd5e1;border-radius:6px;">一致する単語がありません。</div>`;
+  }
+
+  return entries.map(({ word: w, index: wIndex }) => `
     <div style="display:flex;align-items:flex-start;gap:8px;">
       <input type="checkbox" ${selectedWordIds.has(w.id) ? 'checked' : ''} onchange="toggleWordSelection('${w.id}', this.checked)" title="この単語を選択" style="width:18px;height:18px;margin-top:14px;flex:none;">
       <div style="flex:1;min-width:0;">${renderWordItem(w, folder.id, wIndex)}</div>
@@ -3251,6 +3590,10 @@ function refreshFolderWordArea(folderId) {
 
   const count = document.getElementById(`folderWordCount_${folderId}`);
   if (count) count.textContent = `${Array.isArray(folder.words) ? folder.words.length : 0}件`;
+
+  const searchCount = document.getElementById(`folderSearchCount_${folderId}`);
+  if (searchCount) searchCount.textContent = `${getIftyVisibleWordEntries(folder).length}/${Array.isArray(folder.words) ? folder.words.length : 0}件`;
+  refreshIftyVocabSearchPanel();
 }
 
 function refreshSpellingSuggestion(folderId) {
@@ -3397,7 +3740,22 @@ window.addWordToFolder = async function(folderId) {
   if (!folder.words) folder.words = [];
   if (!wordText) return;
 
-  // オフライン時はAI単語生成を開始せず、入力文字も消さない。
+  const englishOrder = getIftySubjectOrder('ENGLISH');
+
+  // STEP18：同じ単語 + 同じENGLISH ORDERの生成済みデータが端末にあれば、
+  // スペル確認も単語生成もALLIAを呼ばず、そのデータをそのまま再利用する。
+  const reusable = await resolveIftyReusableWordData(wordText, 'ENGLISH', englishOrder);
+  if (reusable && reusable.data) {
+    wordInputDrafts[folderId] = '';
+    input.value = '';
+    keepWordInputFocused(folderId);
+    delete pendingSpellingSuggestions[folderId];
+    refreshSpellingSuggestion(folderId);
+    await addWordFromReusableData(folderId, wordText, reusable.data, reusable.source, englishOrder);
+    return;
+  }
+
+  // キャッシュがない場合だけ従来どおりオンラインAI処理へ進む。
   if (!ensureIftyOnline('単語生成')) {
     wordInputDrafts[folderId] = wordText;
     input.value = wordText;
@@ -3447,10 +3805,50 @@ window.addWordToFolder = async function(folderId) {
   await generateAndAddWord(folderId, wordText);
 };
 
+async function addWordFromReusableData(folderId, wordText, data, source, order) {
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder) return;
+  if (!folder.words) folder.words = [];
+
+  recordUndoState('単語追加');
+  const newWordObj = {
+    id: makeId('word'),
+    word: wordText,
+    meanings: [],
+    examples: [],
+    details: '',
+    mastery: 'unfixed',
+    quizAnswers: { jp: [], en: [wordText] }
+  };
+
+  applyWordData(newWordObj, data);
+  newWordObj.generationMeta = {
+    subject: 'ENGLISH',
+    order: String(order || '').trim(),
+    source: source || 'local-cache',
+    generatedAt: Date.now()
+  };
+
+  folder.words.push(newWordObj);
+  saveUserData();
+  refreshFolderWordArea(folderId);
+  keepWordInputFocused(folderId);
+  setTimeout(() => speakWord(newWordObj.word || wordText), 150);
+}
+
 async function generateAndAddWord(folderId, wordText) {
   const folder = folders.find(f => f.id === folderId);
   if (!folder) return;
   if (!folder.words) folder.words = [];
+
+  const englishOrder = getIftySubjectOrder('ENGLISH');
+
+  // acceptSpellingSuggestion / keepOriginalSpelling から直接来た場合にも再利用を確認する。
+  const reusable = await resolveIftyReusableWordData(wordText, 'ENGLISH', englishOrder);
+  if (reusable && reusable.data) {
+    await addWordFromReusableData(folderId, wordText, reusable.data, reusable.source, englishOrder);
+    return;
+  }
 
   if (!ensureIftyOnline('単語生成')) {
     const input = document.getElementById(`wordInput_${folderId}`);
@@ -3502,7 +3900,7 @@ async function generateAndAddWord(folderId, wordText) {
           shortDetails: true
         },
         subject: 'ENGLISH',
-        order: getIftySubjectOrder('ENGLISH')
+        order: englishOrder
       })
     });
 
@@ -3512,6 +3910,13 @@ async function generateAndAddWord(folderId, wordText) {
     }
 
     applyWordData(newWordObj, data);
+    newWordObj.generationMeta = {
+      subject: 'ENGLISH',
+      order: String(englishOrder || '').trim(),
+      source: 'ALLIA',
+      generatedAt: Date.now()
+    };
+    await saveIftyGeneratedWordCache(wordText, data, 'ENGLISH', englishOrder);
   } catch (error) {
     console.error("単語生成エラー:", error);
     newWordObj.meanings = ["AI生成に失敗しました。もう一度お試しください。"];
@@ -4682,6 +5087,7 @@ window.switchToVocabView = function() {
   if (vocabPage) vocabPage.style.display = "block";
   if (aiChatPage) aiChatPage.style.display = "none";
   if (btn) btn.textContent = "💬";
+  ensureIftyEnglishVocabTools();
 
   closeMainLauncher();
   closeMenuModal();
