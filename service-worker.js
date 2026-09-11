@@ -1,6 +1,6 @@
-// ★★★ IFTY Service Worker Q3 STEP17 2026-09-11：STEP10更新方式維持・STEP17配信キャッシュ更新 ★★★
+// ★★★ IFTY Service Worker Q3 STEP18 2026-09-11：STEP10更新方式維持・STEP18配信キャッシュ更新 ★★★
 const CACHE_PREFIX = 'ifty-static-';
-const CACHE_NAME = 'ifty-static-q3-step17-v1';
+const CACHE_NAME = 'ifty-static-q3-step18-v1';
 const SCOPE_URL = self.registration.scope;
 const INDEX_URL = new URL('index.html', SCOPE_URL).href;
 
