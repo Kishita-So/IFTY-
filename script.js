@@ -26,6 +26,11 @@ let currentFlashcardMode = 'all';
 let isRandomMode = true;
 let cardMode = 'front';
 
+// Q3 STEP19：復習フォルダ / 間隔反復
+const IFTY_REVIEW_INTERVAL_DAYS = [1, 3, 7, 14, 30];
+const IFTY_REVIEW_DAY_MS = 24 * 60 * 60 * 1000;
+const IFTY_REVIEW_QUIZ_SET_ID = '__ifty_review_quiz__';
+
 let chatSessions = [];
 let currentChatSessionId = null;
 let selectedImageBase64 = null;
@@ -2405,11 +2410,11 @@ window.showIftyPasswordRecoveryInfo = function() {
       </div>
       <div style="display:grid;gap:9px;margin-top:16px;">
         <input id="iftyResetUsername" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="IFTY ID" style="padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
-        <input id="iftyResetEmail" type="email" autocomplete="email" placeholder="確認済みの復旧用メールアドレス" style="padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
         <div style="display:flex;gap:7px;">
-          <input id="iftyResetCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6桁の確認コード" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
-          <button type="button" onclick="requestIftyPasswordResetCode()" style="border:none;background:#0284c7;color:white;padding:9px 11px;border-radius:8px;font-weight:800;cursor:pointer;">コード送信</button>
+          <input id="iftyResetEmail" type="email" autocomplete="email" placeholder="確認済みの復旧用メールアドレス" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+          <button type="button" onclick="requestIftyPasswordResetCode()" style="border:none;background:#0284c7;color:white;padding:9px 11px;border-radius:8px;font-weight:800;cursor:pointer;">確認コードを送信</button>
         </div>
+        <input id="iftyResetCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6桁の確認コード" style="padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
         <div style="display:flex;gap:7px;">
           <input id="iftyResetNewPassword" type="password" autocomplete="new-password" placeholder="新しいパスワード（10文字以上）" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
           <button type="button" onclick="toggleIftyPasswordVisibility('iftyResetNewPassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button>
@@ -2420,6 +2425,7 @@ window.showIftyPasswordRecoveryInfo = function() {
         </div>
       </div>
       <div id="iftyResetStatus" style="min-height:1.3em;margin-top:10px;font-size:.84em;color:#475569;"></div>
+      <div style="margin-top:4px;font-size:.78em;color:#64748b;line-height:1.5;">メールが届かない場合は、迷惑メールフォルダも確認してください。</div>
       <button type="button" onclick="confirmIftyPasswordReset()" style="margin-top:9px;width:100%;border:none;background:#15803d;color:white;padding:10px 14px;border-radius:8px;font-weight:800;cursor:pointer;">新しいパスワードに変更</button>
     </div>`;
   modal.addEventListener('click', event => {
@@ -3317,6 +3323,263 @@ function makeId(prefix) {
   return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
 }
 
+function normalizeIftyReviewState(word) {
+  if (!word || typeof word !== 'object') return null;
+  if (!word.review || typeof word.review !== 'object') return null;
+
+  const review = word.review;
+  review.active = review.active === true;
+
+  let level = Number(review.level);
+  if (!Number.isFinite(level)) level = -1;
+  review.level = Math.max(-1, Math.min(IFTY_REVIEW_INTERVAL_DAYS.length - 1, Math.trunc(level)));
+
+  const lastReviewed = Number(review.lastReviewed);
+  review.lastReviewed = Number.isFinite(lastReviewed) && lastReviewed > 0 ? lastReviewed : 0;
+
+  const nextReview = Number(review.nextReview);
+  review.nextReview = Number.isFinite(nextReview) && nextReview > 0 ? nextReview : Date.now();
+
+  const correctCount = Number(review.correctCount);
+  review.correctCount = Number.isFinite(correctCount) && correctCount >= 0 ? Math.trunc(correctCount) : 0;
+
+  const wrongCount = Number(review.wrongCount);
+  review.wrongCount = Number.isFinite(wrongCount) && wrongCount >= 0 ? Math.trunc(wrongCount) : 0;
+
+  return review;
+}
+
+function isIftyReviewTagged(word) {
+  const review = normalizeIftyReviewState(word);
+  return !!(review && review.active);
+}
+
+function isIftyReviewDue(word, now = Date.now()) {
+  const review = normalizeIftyReviewState(word);
+  return !!(review && review.active && Number(review.nextReview || 0) <= now);
+}
+
+function formatIftyReviewDate(timestamp) {
+  const value = Number(timestamp || 0);
+  if (!Number.isFinite(value) || value <= 0) return '未設定';
+  const date = new Date(value);
+  const now = new Date();
+  const sameYear = date.getFullYear() === now.getFullYear();
+  return new Intl.DateTimeFormat('ja-JP', sameYear
+    ? { month: 'numeric', day: 'numeric' }
+    : { year: 'numeric', month: 'numeric', day: 'numeric' }
+  ).format(date);
+}
+
+function getIftyReviewEntries(options = {}) {
+  const dueOnly = options.dueOnly === true;
+  const now = Number(options.now || Date.now());
+  const entries = [];
+
+  folders.forEach(folder => {
+    (folder.words || []).forEach((word, index) => {
+      const review = normalizeIftyReviewState(word);
+      if (!review || !review.active) return;
+      if (dueOnly && review.nextReview > now) return;
+      entries.push({ folder, word, index, review });
+    });
+  });
+
+  entries.sort((a, b) => {
+    const nextDiff = Number(a.review.nextReview || 0) - Number(b.review.nextReview || 0);
+    if (nextDiff !== 0) return nextDiff;
+    return String(a.word.word || '').localeCompare(String(b.word.word || ''), 'en');
+  });
+
+  return entries;
+}
+
+function getIftyNextReviewTimestamp(now = Date.now()) {
+  const future = getIftyReviewEntries()
+    .map(entry => Number(entry.review.nextReview || 0))
+    .filter(value => value > now);
+  return future.length ? Math.min(...future) : 0;
+}
+
+function getIftyReviewWordById(wordId) {
+  const ref = getWordById(wordId);
+  return ref && ref.word ? ref.word : null;
+}
+
+function snapshotIftyReviewState(wordId) {
+  const word = getIftyReviewWordById(wordId);
+  if (!word) return null;
+  return word.review && typeof word.review === 'object' ? deepClone(word.review) : null;
+}
+
+function restoreIftyReviewState(wordId, snapshot) {
+  const word = getIftyReviewWordById(wordId);
+  if (!word) return;
+  if (snapshot && typeof snapshot === 'object') word.review = deepClone(snapshot);
+  else delete word.review;
+  normalizeIftyReviewState(word);
+}
+
+function applyIftyReviewResult(wordId, correct) {
+  const word = getIftyReviewWordById(wordId);
+  if (!word) return false;
+
+  const review = normalizeIftyReviewState(word);
+  if (!review || !review.active) return false;
+
+  const now = Date.now();
+  if (correct) {
+    review.level = Math.min(review.level + 1, IFTY_REVIEW_INTERVAL_DAYS.length - 1);
+    review.correctCount += 1;
+  } else {
+    review.level = 0;
+    review.wrongCount += 1;
+  }
+
+  const intervalIndex = Math.max(0, review.level);
+  review.lastReviewed = now;
+  review.nextReview = now + IFTY_REVIEW_INTERVAL_DAYS[intervalIndex] * IFTY_REVIEW_DAY_MS;
+  word.mastery = correct ? 'fixed' : 'unfixed';
+  return true;
+}
+
+window.toggleIftyWordReview = function(folderId, wordId) {
+  const folder = folders.find(item => item.id === folderId);
+  const word = folder && (folder.words || []).find(item => item.id === wordId);
+  if (!word) return;
+
+  recordUndoState(isIftyReviewTagged(word) ? '復習登録解除' : '復習登録');
+
+  if (isIftyReviewTagged(word)) {
+    word.review.active = false;
+  } else {
+    const review = normalizeIftyReviewState(word);
+    if (!review) {
+      word.review = {
+        active: true,
+        level: -1,
+        lastReviewed: 0,
+        nextReview: Date.now(),
+        correctCount: 0,
+        wrongCount: 0
+      };
+    } else {
+      review.active = true;
+      if (!Number.isFinite(Number(review.nextReview)) || Number(review.nextReview) <= 0) {
+        review.nextReview = Date.now();
+      }
+    }
+  }
+
+  saveUserData();
+  renderFolders();
+};
+
+function renderIftyReviewFolder() {
+  const allEntries = getIftyReviewEntries();
+  const dueEntries = getIftyReviewEntries({ dueOnly: true });
+  const nextReview = getIftyNextReviewTimestamp();
+
+  const dueList = dueEntries.length
+    ? dueEntries.map(({ folder, word, review }) => {
+        const meanings = Array.isArray(word.meanings) ? word.meanings : (word.meanings ? [word.meanings] : []);
+        return `
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid #fed7aa;">
+            <div style="min-width:0;">
+              <div style="font-weight:900;color:#7c2d12;">${escapeHtml(word.word || '')}</div>
+              <div style="margin-top:2px;color:#9a3412;font-size:.82em;line-height:1.4;">${escapeHtml(meanings.join(' / '))}</div>
+              <div style="margin-top:3px;color:#a16207;font-size:.72em;">📁 ${escapeHtml(folder.name || '')} ・ 復習段階 ${Math.max(0, Number(review.level || 0)) + 1}</div>
+            </div>
+            <button type="button" onclick="toggleIftyWordReview('${folder.id}','${word.id}')" style="border:none;background:#ffedd5;color:#9a3412;border-radius:6px;padding:6px 8px;font-size:.74em;font-weight:800;cursor:pointer;flex:none;">解除</button>
+          </div>`;
+      }).join('')
+    : `<div style="padding:16px 4px;text-align:center;color:#a16207;font-size:.86em;">今日の復習はありません。${nextReview ? `次回は ${escapeHtml(formatIftyReviewDate(nextReview))} です。` : '単語カードの「復習登録」から追加できます。'}</div>`;
+
+  return `
+    <div id="iftyReviewFolder" style="background:#fff7ed;border:2px solid #fb923c;border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 2px 5px rgba(154,52,18,.08);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div>
+          <h3 style="margin:0;color:#7c2d12;font-size:1.12em;">🔁 復習 <span style="font-size:.82em;color:#c2410c;">(今日 ${dueEntries.length}件 / 登録 ${allEntries.length}件)</span></h3>
+          <div style="margin-top:4px;color:#9a3412;font-size:.78em;">間隔：1日 → 3日 → 7日 → 14日 → 30日</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button type="button" onclick="startIftyDueReviewFlashcards('front')" ${dueEntries.length ? '' : 'disabled'} style="border:none;background:#ea580c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${dueEntries.length ? 'pointer' : 'default'};opacity:${dueEntries.length ? '1' : '.45'};">📇 今日の復習</button>
+          <button type="button" onclick="startIftyDueReviewQuiz()" ${dueEntries.length ? '' : 'disabled'} style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${dueEntries.length ? 'pointer' : 'default'};opacity:${dueEntries.length ? '1' : '.45'};">❓ クイズ</button>
+        </div>
+      </div>
+      <div style="margin-top:10px;">${dueList}</div>
+    </div>`;
+}
+
+window.startIftyDueReviewFlashcards = function(direction = 'front') {
+  const entries = getIftyReviewEntries({ dueOnly: true });
+  if (!entries.length) {
+    alert('今日の復習対象はありません。');
+    renderFolders();
+    return;
+  }
+
+  currentFlashcardMode = 'review_due';
+  isRandomMode = true;
+  cardMode = direction === 'back' ? 'back' : 'front';
+  flashcardList = shuffleArray(entries.map(({ word }) => ({ ...deepClone(word), __iftyReviewWordId: word.id })));
+  currentFlashcardIndex = 0;
+  isCardFlipped = false;
+  renderFlashcardModal();
+};
+
+function ensureIftyReviewQuizSet() {
+  normalizePracticeData();
+  let set = practiceData.modules.questions.sets.find(item => item && item.id === IFTY_REVIEW_QUIZ_SET_ID);
+  if (!set) {
+    set = {
+      id: IFTY_REVIEW_QUIZ_SET_ID,
+      name: '今日の復習',
+      wordIds: [],
+      directionMode: 'mixed',
+      types: { simple: true, selection: false, written: false, example: false, knowledge: false, composition: false, translation: false, listening: false, usage_cloze: false, synonym_choice: false },
+      random: true,
+      progress: null,
+      reviewWordIds: [],
+      mistakeCounts: {},
+      systemReview: true
+    };
+    practiceData.modules.questions.sets.push(set);
+  }
+  set.systemReview = true;
+  set.name = '今日の復習';
+  return set;
+}
+
+window.startIftyDueReviewQuiz = function() {
+  const dueIds = getIftyReviewEntries({ dueOnly: true }).map(entry => entry.word.id);
+  if (!dueIds.length) {
+    alert('今日の復習対象はありません。');
+    renderFolders();
+    return;
+  }
+
+  const set = ensureIftyReviewQuizSet();
+  set.wordIds = uniqueExistingWordIds(dueIds);
+  set.directionMode = 'mixed';
+  set.types = { simple: true, selection: false, written: false, example: false, knowledge: false, composition: false, translation: false, listening: false, usage_cloze: false, synonym_choice: false };
+  set.random = true;
+  set.progress = null;
+  set.reviewWordIds = [];
+  set.mistakeCounts = {};
+  savePracticeData();
+
+  let modal = document.getElementById('practiceModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'practiceModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;justify-content:center;align-items:center;padding:18px;box-sizing:border-box;z-index:10030;';
+    document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+  startQuizSet(set.id, true, false);
+};
+
 function normalizeFoldersData() {
   if (!Array.isArray(folders)) folders = [];
 
@@ -3326,6 +3589,7 @@ function normalizeFoldersData() {
     folder.words.forEach(word => {
       if (!word.id) word.id = makeId('word');
       word.quizAnswers = deriveQuizAnswers(word);
+      normalizeIftyReviewState(word);
     });
   });
 }
@@ -3482,6 +3746,8 @@ function renderFolders() {
   const selectedCount = selectedWordIds.size;
   const folderOptions = folders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
 
+  const reviewFolder = renderIftyReviewFolder();
+
   const selectionToolbar = `
     <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:10px;margin-bottom:12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
       <b style="color:#334155;margin-right:4px;">選択: ${selectedCount}語</b>
@@ -3494,7 +3760,7 @@ function renderFolders() {
   `;
 
   if (folders.length === 0) {
-    container.innerHTML = selectionToolbar + `
+    container.innerHTML = reviewFolder + selectionToolbar + `
       <p style="color:#94a3b8;text-align:center;padding:30px;background:white;border-radius:8px;border:1px dashed #cbd5e1;">
         フォルダがありません。下のフォームからフォルダを作成してください。
       </p>
@@ -3508,14 +3774,14 @@ function renderFolders() {
     .filter(({ folder }) => !globalSearchActive || getIftyVisibleWordEntries(folder).length > 0);
 
   if (globalSearchActive && renderedFolders.length === 0) {
-    container.innerHTML = selectionToolbar + `
+    container.innerHTML = reviewFolder + selectionToolbar + `
       <p style="color:#64748b;text-align:center;padding:28px;background:white;border-radius:8px;border:1px dashed #cbd5e1;">
         全フォルダ検索に一致する単語がありません。
       </p>`;
     return;
   }
 
-  container.innerHTML = selectionToolbar + renderedFolders.map(({ folder, fIndex }) => {
+  container.innerHTML = reviewFolder + selectionToolbar + renderedFolders.map(({ folder, fIndex }) => {
     const suggestion = pendingSpellingSuggestions[folder.id];
     const words = folder.words || [];
     const allWordsSelected = words.length > 0 && words.every(w => selectedWordIds.has(w.id));
@@ -3663,7 +3929,10 @@ function renderWordItem(w, folderId, wIndex) {
     <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; font-size: 0.9em;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div style="flex: 1; min-width: 0;">
-          <div style="font-size: 1.25em; font-weight: bold; color: #0f172a;">${escapeHtml(w.word || '')}</div>
+          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
+            <div style="font-size: 1.25em; font-weight: bold; color: #0f172a;">${escapeHtml(w.word || '')}</div>
+            ${isIftyReviewTagged(w) ? `<span style="display:inline-block;padding:2px 6px;border-radius:999px;background:${isIftyReviewDue(w) ? '#ffedd5' : '#fef3c7'};color:${isIftyReviewDue(w) ? '#c2410c' : '#a16207'};font-size:.68em;font-weight:900;">${isIftyReviewDue(w) ? '🔁 復習：今日' : `🔁 次回 ${escapeHtml(formatIftyReviewDate(w.review.nextReview))}`}</span>` : ''}
+          </div>
 
           ${(w.pronunciation || w.partOfSpeech) ? `
             <div style="margin-top: 2px; color: #64748b; font-size: 0.85em;">
@@ -3719,6 +3988,7 @@ function renderWordItem(w, folderId, wIndex) {
 
         <div style="display: flex; gap: 3px; align-items: center; margin-left: 8px;">
           ${w.word ? `<button onclick="speakWord('${escapeHtml(String(w.word).replace(/'/g, "\\'"))}')" style="background: #0284c7; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="単語を発音">🔊</button>` : ''}
+          <button onclick="toggleIftyWordReview('${folderId}','${w.id}')" style="background:${isIftyReviewTagged(w) ? '#ea580c' : '#f59e0b'};color:white;border:none;padding:3px 6px;border-radius:4px;font-size:.75em;cursor:pointer;" title="${isIftyReviewTagged(w) ? '復習登録を解除' : 'この単語を復習に登録'}">${isIftyReviewTagged(w) ? '🔁 復習中' : '🔁 復習登録'}</button>
           <button onclick="openEditWordModal('${folderId}', ${wIndex})" style="background: #64748b; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="編集">編集</button>
           <button onclick="moveWordWithinFolder('${folderId}', ${wIndex}, -1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="上へ">⬆️</button>
           <button onclick="moveWordWithinFolder('${folderId}', ${wIndex}, 1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="下へ">⬇️</button>
@@ -4245,7 +4515,7 @@ function renderPracticeHome() {
   const modal = document.getElementById('practiceModal');
   if (!modal) return;
   const sets = getFlashcardSets();
-  const quizSets = getQuizSets();
+  const quizSets = getQuizSets().filter(set => !set.systemReview);
   modal.innerHTML = `
     <div style="background:white;border-radius:14px;width:min(760px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;">
@@ -4742,7 +5012,7 @@ async function renderQuizPlayer(setId) {
   const q=p.currentQuestion;
   modal.innerHTML=`
     <div style="background:white;border-radius:14px;width:min(700px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div style="color:#7c3aed;font-size:.88em;font-weight:bold;">${escapeHtml(set.name)} ・ ${p.index+1}/${p.queue.length} ・ ${quizTypeLabel(q.quizType)} ・ ${quizDirectionLabel(q.direction==='jp_to_en'?'jp_to_en':'en_to_jp')}</div><button onclick="pauseQuizSet('${set.id}')" style="background:#ede9fe;color:#5b21b6;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;">⏸ 一時中断</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div style="color:#7c3aed;font-size:.88em;font-weight:bold;">${escapeHtml(set.name)} ・ ${p.index+1}/${p.queue.length} ・ ${quizTypeLabel(q.quizType)} ・ ${quizDirectionLabel(q.direction==='jp_to_en'?'jp_to_en':'en_to_jp')}</div><button onclick="pauseQuizSet('${set.id}')" style="background:#ede9fe;color:#5b21b6;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;">${set.systemReview?'✕ 終了':'⏸ 一時中断'}</button></div>
       <div style="margin-top:15px;padding:18px;background:#faf5ff;border:2px solid #ddd6fe;border-radius:10px;color:#2e1065;line-height:1.65;font-size:1.08em;white-space:pre-wrap;">${escapeHtml(q.question||'')}</div>
       ${q.audioText?`<div style="margin-top:10px;display:flex;justify-content:center;"><button onclick="speakQuizAudio('${set.id}')" style="background:#0ea5e9;color:white;border:none;border-radius:8px;padding:10px 16px;font-weight:bold;cursor:pointer;">🔊 音声を再生</button></div>`:''}
       ${q.instruction?`<div style="margin-top:7px;color:#64748b;font-size:.82em;">${escapeHtml(q.instruction)}</div>`:''}
@@ -4755,7 +5025,7 @@ async function renderQuizPlayer(setId) {
 
 window.retryCurrentQuizQuestion = function(setId){ const set=getQuizSet(setId); if(!set||!set.progress)return; set.progress.currentQuestion=null; savePracticeData(); renderQuizPlayer(setId); };
 window.speakQuizAudio = function(setId){ const set=getQuizSet(setId); const q=set&&set.progress&&set.progress.currentQuestion; if(!q||!q.audioText||!('speechSynthesis' in window))return; window.speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(q.audioText); u.lang=q.audioLang==='ja'?'ja-JP':'en-US'; u.rate=q.audioLang==='ja'?0.95:0.9; window.speechSynthesis.speak(u); };
-window.pauseQuizSet = function(setId){ savePracticeData(); openQuizSet(setId); };
+window.pauseQuizSet = function(setId){ const set=getQuizSet(setId); savePracticeData(); if(set&&set.systemReview){ closePracticeModal(); renderFolders(); return; } openQuizSet(setId); };
 window.skipQuizQuestion = function(setId){ const set=getQuizSet(setId); if(!set||!set.progress)return; set.progress.index++; set.progress.currentQuestion=null; savePracticeData(); renderQuizPlayer(setId); };
 
 window.submitQuizAnswer = async function(setId) {
@@ -4771,6 +5041,7 @@ window.submitQuizAnswer = async function(setId) {
   if (q.localGrade) {
     const data = gradeLocalSelectionAnswer(q, answer);
     const correct = data.correct === true;
+    const reviewStateBefore = set.systemReview ? snapshotIftyReviewState(q.wordId) : null;
     const wasInReviewBefore=(set.reviewWordIds||[]).includes(q.wordId);
     const previousMistakeCount=Number(set.mistakeCounts[q.wordId])||0;
     if(correct){
@@ -4790,8 +5061,10 @@ window.submitQuizAnswer = async function(setId) {
       wasInReviewBefore,
       previousMistakeCount,
       localGrade:true,
-      challenged:false
+      challenged:false,
+      reviewStateBefore
     };
+    if (set.systemReview && applyIftyReviewResult(q.wordId, correct)) saveUserData();
     savePracticeData();
     renderQuizFeedback(setId, correct, data.feedback||'', data.modelAnswer||q.referenceAnswer||'', answer);
     return;
@@ -4805,6 +5078,7 @@ window.submitQuizAnswer = async function(setId) {
     const data=await response.json();
     if(!response.ok)throw alliaHttpError(response, data, '採点に失敗しました。');
     const correct=data.correct===true;
+    const reviewStateBefore = set.systemReview ? snapshotIftyReviewState(q.wordId) : null;
     const wasInReviewBefore=(set.reviewWordIds||[]).includes(q.wordId);
     const previousMistakeCount=Number(set.mistakeCounts[q.wordId])||0;
     if(correct){
@@ -4824,8 +5098,10 @@ window.submitQuizAnswer = async function(setId) {
       wasInReviewBefore,
       previousMistakeCount,
       localGrade:false,
-      challenged:false
+      challenged:false,
+      reviewStateBefore
     };
+    if (set.systemReview && applyIftyReviewResult(q.wordId, correct)) saveUserData();
     savePracticeData();
     renderQuizFeedback(setId, correct, data.feedback||'', data.modelAnswer||q.referenceAnswer||'', answer);
   }catch(error){
@@ -4896,6 +5172,11 @@ window.submitQuizChallenge = async function(setId) {
       p.wrongCount=Math.max(0,(Number(p.wrongCount)||0)-1);
       p.correctCount=(Number(p.correctCount)||0)+1;
 
+      if (set.systemReview) {
+        restoreIftyReviewState(q.wordId, last.reviewStateBefore || null);
+        if (applyIftyReviewResult(q.wordId, true)) saveUserData();
+      }
+
       if(last.wasInReviewBefore){
         if(!set.reviewWordIds.includes(q.wordId))set.reviewWordIds.push(q.wordId);
       }else{
@@ -4937,6 +5218,16 @@ function renderQuizComplete(setId) {
   const p=set.progress;
   const modal=document.getElementById('practiceModal'); if(!modal)return;
   const correct=p.correctCount||0, wrong=p.wrongCount||0;
+
+  if (set.systemReview) {
+    set.progress=null;
+    savePracticeData();
+    renderFolders();
+    const remaining = getIftyReviewEntries({ dueOnly: true }).length;
+    modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(560px,100%);padding:26px;text-align:center;"><h2 style="color:#4c1d95;margin-top:0;">🎉 今日の復習クイズ完了</h2><p style="color:#475569;">正解 ${correct} / 不正解 ${wrong}</p><p style="color:#c2410c;font-weight:bold;">今日まだ復習できる単語：${remaining}語</p><div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">${remaining?'<button onclick="startIftyDueReviewQuiz()" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">残りを続ける</button>':''}<button onclick="closePracticeModal(); renderFolders();" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">復習フォルダへ戻る</button></div></div>`;
+    return;
+  }
+
   set.progress=null; savePracticeData();
   modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(560px,100%);padding:26px;text-align:center;"><h2 style="color:#4c1d95;margin-top:0;">🎉 クイズ完了</h2><p style="color:#475569;">正解 ${correct} / 不正解 ${wrong}</p><p style="color:#ea580c;font-weight:bold;">復習対象：${set.reviewWordIds.length}語</p><div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;"><button onclick="startQuizSet('${set.id}',true,false)" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">最初から</button><button onclick="startQuizSet('${set.id}',true,true)" ${set.reviewWordIds.length?'':'disabled'} style="background:#ea580c;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;opacity:${set.reviewWordIds.length?'1':'.45'};">間違いだけ復習</button><button onclick="openQuizSet('${set.id}')" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">設定へ戻る</button></div></div>`;
 }
@@ -5523,13 +5814,15 @@ window.renderFlashcardModal = function() {
   }
 
   if (currentFlashcardIndex >= flashcardList.length) {
+    const isReviewSession = currentFlashcardMode === 'review_due';
+    if (isReviewSession) renderFolders();
     modal.innerHTML = `
       <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
         <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 10px;">🎉 完了！</h3>
-        <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">すべてのカードを終了しました。</p>
+        <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">${isReviewSession ? '今日の復習を終了しました。' : 'すべてのカードを終了しました。'}</p>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-          <button onclick="closeFlashcardModal(); openMenuModal(); openPlaySubMenu();" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>
-          <button onclick="closeFlashcardModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">閉じる</button>
+          ${isReviewSession ? '' : '<button onclick="closeFlashcardModal(); openMenuModal(); openPlaySubMenu();" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>'}
+          <button onclick="closeFlashcardModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">${isReviewSession ? '復習フォルダへ戻る' : '閉じる'}</button>
         </div>
       </div>
     `;
@@ -5567,8 +5860,14 @@ window.toggleCardFlip = function() {
 };
 
 window.setMasteryAndNext = function(status) {
-  if (flashcardList[currentFlashcardIndex]) {
-    flashcardList[currentFlashcardIndex].mastery = status;
+  const current = flashcardList[currentFlashcardIndex];
+  if (current) {
+    current.mastery = status;
+    if (currentFlashcardMode === 'review_due' && current.__iftyReviewWordId) {
+      if (applyIftyReviewResult(current.__iftyReviewWordId, status === 'fixed')) {
+        saveUserData();
+      }
+    }
   }
 
   currentFlashcardIndex++;
