@@ -1260,7 +1260,7 @@ window.openIftySettings = function() {
         </div>
       </div>
 
-      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP18</div>
+      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP19</div>
     </section>
   `, 'settings');
 
@@ -2312,11 +2312,96 @@ function createLocalSelectionQuestion(set, word, direction) {
 function gradeLocalSelectionAnswer(question, userAnswer) {
   const correctAnswer = String(question && question.localCorrectAnswer || '').trim();
   const answer = String(userAnswer || '').trim();
-  const correct = !!correctAnswer && answer === correctAnswer;
+  const spellingMode = question && question.localAnswerMode === 'spelling';
+  const normalizedCorrect = spellingMode ? correctAnswer.toLowerCase().replace(/\s+/g, ' ') : correctAnswer;
+  const normalizedAnswer = spellingMode ? answer.toLowerCase().replace(/\s+/g, ' ') : answer;
+  const correct = !!correctAnswer && normalizedAnswer === normalizedCorrect;
   return {
     correct,
-    feedback: correct ? '正しい選択肢です。ALLIAは使用していません。' : '選択肢が違います。ALLIAは使用していません。',
+    feedback: spellingMode
+      ? (correct ? '正しいスペルです。ALLIAは使用していません。' : 'スペルが違います。ALLIAは使用していません。')
+      : (correct ? '正しい選択肢です。ALLIAは使用していません。' : '選択肢が違います。ALLIAは使用していません。'),
     modelAnswer: correctAnswer
+  };
+}
+
+function createLocalListeningQuestion(set, word) {
+  const targetWord = String(word && word.word || '').trim();
+  if (!targetWord) throw new Error('この単語には読み上げる英単語がありません。');
+
+  const candidateRefs = uniqueExistingWordIds(set.wordIds || [])
+    .filter(id => id !== word.id)
+    .map(id => getWordById(id))
+    .filter(Boolean);
+
+  const availableModes = ['spelling'];
+
+  const wordDistractors = shuffleArray(
+    candidateRefs
+      .map(ref => String(ref.word.word || '').trim())
+      .filter(Boolean)
+  ).filter((value, index, arr) =>
+    value.toLowerCase() !== targetWord.toLowerCase() &&
+    arr.findIndex(item => item.toLowerCase() === value.toLowerCase()) === index
+  ).slice(0, 3);
+
+  if (wordDistractors.length >= 3) availableModes.push('word_choice');
+
+  const correctMeaning = getLocalChoiceMeaning(word);
+  const meaningDistractors = shuffleArray(
+    candidateRefs
+      .map(ref => getLocalChoiceMeaning(ref.word))
+      .map(value => String(value || '').trim())
+      .filter(Boolean)
+  ).filter((value, index, arr) =>
+    value !== correctMeaning && arr.indexOf(value) === index
+  ).slice(0, 3);
+
+  if (correctMeaning && meaningDistractors.length >= 3) availableModes.push('meaning_choice');
+
+  const mode = availableModes[Math.floor(Math.random() * availableModes.length)];
+
+  if (mode === 'word_choice') {
+    return {
+      question: '音声で読まれた英単語を選んでください。',
+      instruction: '音声はお題の英単語だけです。4択は同じクイズフォルダの単語から作成しています。ALLIAは使用しません。',
+      referenceAnswer: targetWord,
+      localCorrectAnswer: targetWord,
+      localAnswerMode: 'exact',
+      listeningMode: 'word_choice',
+      options: shuffleArray([targetWord, ...wordDistractors]),
+      audioText: targetWord,
+      audioLang: 'en',
+      localGrade: true
+    };
+  }
+
+  if (mode === 'meaning_choice') {
+    return {
+      question: '音声で読まれた英単語の意味を選んでください。',
+      instruction: '音声はお題の英単語だけです。4択は同じクイズフォルダの単語から作成しています。ALLIAは使用しません。',
+      referenceAnswer: correctMeaning,
+      localCorrectAnswer: correctMeaning,
+      localAnswerMode: 'exact',
+      listeningMode: 'meaning_choice',
+      options: shuffleArray([correctMeaning, ...meaningDistractors]),
+      audioText: targetWord,
+      audioLang: 'en',
+      localGrade: true
+    };
+  }
+
+  return {
+    question: '音声で読まれた英単語のスペルを書いてください。',
+    instruction: '音声はお題の英単語だけです。大文字・小文字の違いは採点に影響しません。ALLIAは使用しません。',
+    referenceAnswer: targetWord,
+    localCorrectAnswer: targetWord,
+    localAnswerMode: 'spelling',
+    listeningMode: 'spelling',
+    options: [],
+    audioText: targetWord,
+    audioLang: 'en',
+    localGrade: true
   };
 }
 
@@ -2615,22 +2700,180 @@ async function refreshIftyAccountSecurityPanel() {
     ? `${escapeHtml(profile.recoveryEmail)} <span style="color:#15803d;font-weight:800;">確認済み</span>`
     : '<span style="color:#b45309;font-weight:800;">未設定</span>';
 
+  const usernameText = escapeHtml(String((profile.account && profile.account.username) || (iftyAccount && iftyAccount.username) || currentUser || ''));
+
   panel.innerHTML = `
     <div style="display:grid;gap:11px;">
+      <div>
+        <div style="font-weight:900;color:inherit;">IFTY ID</div>
+        <div style="margin-top:3px;">${usernameText}</div>
+      </div>
       <div>
         <div style="font-weight:900;color:inherit;">復旧用メール</div>
         <div style="margin-top:3px;">${emailText}</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="ifty-settings-action" type="button" onclick="openIftyUsernameChange()" style="background:#7c3aed;color:white;">IFTY IDを変更</button>
         <button class="ifty-settings-action" type="button" onclick="openIftyRecoveryEmailSettings()" style="background:#0284c7;color:white;">復旧用メールを設定 / 変更</button>
         <button class="ifty-settings-action" type="button" onclick="openIftyPasswordChange()" style="background:#334155;color:white;">パスワード変更</button>
         <button class="ifty-settings-action" type="button" onclick="openIftySessionManager()" style="background:#0f766e;color:white;">セッション管理</button>
         <button class="ifty-settings-action" type="button" onclick="logoutAllIftySessions()" style="background:#b45309;color:white;">全端末からログアウト</button>
         <button class="ifty-settings-action" type="button" onclick="openIftyAccountDelete()" style="background:#b91c1c;color:white;">アカウント削除</button>
       </div>
-      <div class="ifty-settings-note">復旧コードの送信にはWorker側のメール送信設定が必要です。</div>
+      <div class="ifty-settings-note">IFTY IDの変更には現在のパスワードが必要です。復旧コードの送信にはWorker側のメール送信設定が必要です。</div>
     </div>`;
 }
+
+async function migrateIftyLocalUsernameData(oldUsername, newUsername) {
+  const oldName = String(oldUsername || '').trim();
+  const newName = String(newUsername || '').trim();
+  if (!oldName || !newName || oldName === newName) return;
+
+  const localKeyPairs = [
+    [`vocab_user_${oldName}`, `vocab_user_${newName}`],
+    [`practice_user_${oldName}`, `practice_user_${newName}`],
+    [`chat_sessions_${oldName}`, `chat_sessions_${newName}`],
+    [getIftyOrderStorageKey(oldName), getIftyOrderStorageKey(newName)],
+    [getIftyAutosaveSettingKey(oldName), getIftyAutosaveSettingKey(newName)],
+    [getIftyCloudRevisionKey(oldName), getIftyCloudRevisionKey(newName)],
+    [getIftyCloudDirtyKey(oldName), getIftyCloudDirtyKey(newName)]
+  ];
+
+  localKeyPairs.forEach(([oldKey, newKey]) => {
+    const value = localStorage.getItem(oldKey);
+    if (value !== null) localStorage.setItem(newKey, value);
+  });
+
+  if ('indexedDB' in window) {
+    try {
+      const db = await openIftyRecoveryDb();
+      try {
+        if (db.objectStoreNames.contains(IFTY_RECOVERY_STORE)) {
+          const readTx = db.transaction(IFTY_RECOVERY_STORE, 'readonly');
+          const records = await idbRequestPromise(readTx.objectStore(IFTY_RECOVERY_STORE).getAll());
+          const own = (Array.isArray(records) ? records : []).filter(record => record && record.user === oldName);
+          if (own.length) {
+            const writeTx = db.transaction(IFTY_RECOVERY_STORE, 'readwrite');
+            const store = writeTx.objectStore(IFTY_RECOVERY_STORE);
+            own.forEach(record => {
+              const oldId = record.id;
+              const updated = { ...record, user: newName };
+              if (normalizeIftyRecoveryKind(record) === 'PERIODIC') {
+                updated.id = getIftyPeriodicBackupId(newName);
+              }
+              store.put(updated);
+              if (updated.id !== oldId) store.delete(oldId);
+            });
+            await idbTransactionDone(writeTx);
+          }
+        }
+
+        if (db.objectStoreNames.contains(IFTY_GENERATED_WORD_CACHE_STORE)) {
+          const readTx = db.transaction(IFTY_GENERATED_WORD_CACHE_STORE, 'readonly');
+          const records = await idbRequestPromise(readTx.objectStore(IFTY_GENERATED_WORD_CACHE_STORE).getAll());
+          const own = (Array.isArray(records) ? records : []).filter(record => record && record.user === oldName);
+          if (own.length) {
+            const writeTx = db.transaction(IFTY_GENERATED_WORD_CACHE_STORE, 'readwrite');
+            const store = writeTx.objectStore(IFTY_GENERATED_WORD_CACHE_STORE);
+            own.forEach(record => {
+              const oldId = record.id;
+              const updated = {
+                ...record,
+                id: getIftyGeneratedWordCacheId(newName, record.subject, record.wordKey, String(record.order || '')),
+                user: newName,
+                updatedAt: Date.now()
+              };
+              store.put(updated);
+              if (updated.id !== oldId) store.delete(oldId);
+            });
+            await idbTransactionDone(writeTx);
+          }
+        }
+      } finally {
+        db.close();
+      }
+    } catch (error) {
+      console.warn('IFTY ID変更時の端末データ移行エラー:', error);
+    }
+  }
+
+  localKeyPairs.forEach(([oldKey]) => localStorage.removeItem(oldKey));
+}
+
+window.openIftyUsernameChange = function() {
+  const current = String((iftyAccountProfile && iftyAccountProfile.account && iftyAccountProfile.account.username) || (iftyAccount && iftyAccount.username) || currentUser || '');
+  showIftySecurityModal('IFTY IDを変更', `
+    <div style="display:grid;gap:9px;">
+      <div style="font-size:.84em;color:#64748b;line-height:1.5;">現在のIFTY ID：<b>${escapeHtml(current)}</b><br>英数字・_ . - の3〜24文字で設定できます。</div>
+      <input id="iftyNewUsername" type="text" autocomplete="username" maxlength="24" value="${escapeHtml(current)}" placeholder="新しいIFTY ID" style="padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+      <div style="display:flex;gap:7px;">
+        <input id="iftyUsernameChangePassword" type="password" autocomplete="current-password" placeholder="現在のパスワード" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+        <button type="button" onclick="toggleIftyPasswordVisibility('iftyUsernameChangePassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button>
+      </div>
+      <button type="button" onclick="submitIftyUsernameChange()" style="border:none;background:#7c3aed;color:white;padding:10px;border-radius:8px;font-weight:800;cursor:pointer;">IFTY IDを変更</button>
+      <div id="iftySecurityModalStatus" style="min-height:1.3em;color:#475569;font-size:.84em;"></div>
+    </div>`);
+};
+
+window.submitIftyUsernameChange = async function() {
+  const newUsername = String(document.getElementById('iftyNewUsername')?.value || '').trim();
+  const currentPassword = String(document.getElementById('iftyUsernameChangePassword')?.value || '');
+  if (!/^[A-Za-z0-9_.-]{3,24}$/.test(newUsername)) {
+    setIftySecurityModalStatus('IFTY IDは英数字・_ . - の3〜24文字で入力してください。', true);
+    return;
+  }
+  if (!currentPassword) {
+    setIftySecurityModalStatus('現在のパスワードを入力してください。', true);
+    return;
+  }
+
+  const oldUsername = String(currentUser || '');
+  if (newUsername === oldUsername) {
+    setIftySecurityModalStatus('現在と同じIFTY IDです。', true);
+    return;
+  }
+
+  setIftySecurityModalStatus('IFTY IDを変更中…');
+  try {
+    const result = await iftyAccountApi('account_username_change', {
+      token: iftySessionToken,
+      newUsername,
+      currentPassword
+    });
+    const account = result && result.account ? result.account : { ...(iftyAccount || {}), username: newUsername };
+    const confirmedUsername = String(account.username || newUsername);
+
+    await migrateIftyLocalUsernameData(oldUsername, confirmedUsername);
+
+    currentUser = confirmedUsername;
+    localStorage.setItem('currentUser', currentUser);
+    storeIftyAccountSession(account, iftySessionToken);
+    iftyAccountProfile = {
+      ...(iftyAccountProfile || {}),
+      account
+    };
+
+    saveUserData();
+    savePracticeData();
+    saveChatSessions();
+    saveIftySubjectOrders({ queueCloud: false });
+    localStorage.setItem(getIftyAutosaveSettingKey(currentUser), String(iftyAutosaveIntervalMinutes));
+    localStorage.setItem(getIftyCloudRevisionKey(currentUser), String(iftyCloudRevision));
+
+    const userDisplay = document.getElementById('userDisplay');
+    if (userDisplay) userDisplay.textContent = currentUser;
+    startIftyAutoBackup();
+
+    setIftySecurityModalStatus(`IFTY IDを「${confirmedUsername}」に変更しました。`);
+    setTimeout(async () => {
+      window.closeIftySecurityModal();
+      await refreshIftyAccountSecurityPanel();
+      if (typeof window.openIftySettings === 'function') window.openIftySettings();
+    }, 700);
+  } catch (error) {
+    setIftySecurityModalStatus(error.message || 'IFTY IDを変更できませんでした。', true);
+  }
+};
 
 window.openIftyRecoveryEmailSettings = function() {
   const current = String((iftyAccountProfile && iftyAccountProfile.recoveryEmail) || '');
@@ -4864,7 +5107,7 @@ window.openQuizSet = function(setId) {
     ['knowledge','知識','類義語・対義語・前置詞・語法・ニュアンスなどから出題'],
     ['composition','作文','お題の語彙を使った短い英文を書く'],
     ['translation','和訳','例文を和訳。日英設定では逆向きの英訳にも対応'],
-    ['listening','リスニング','単語音声→意味、英文例文音声→出てきた語、日本語音声→合う英単語。記述/選択をランダム出題'],
+    ['listening','リスニング','英単語だけを音声再生し、①読まれた単語を4択 ②意味を4択 ③スペル記述 の3形式をランダム出題。生成・採点ともALLIA不使用'],
     ['usage_cloze','語法穴埋め','前置詞・語形・コロケーション・定型表現の穴埋め'],
     ['synonym_choice','類義語選別','似た語の中から文脈・ニュアンスに最も合う語を選ぶ']
   ];
@@ -4989,12 +5232,15 @@ async function renderQuizPlayer(setId) {
     try {
       const type=chooseQuizType(set);
       const direction=resolveQuizDirection(set);
-      if (type !== 'selection' && !ensureIftyOnline('このクイズ形式の問題生成', { silent: true })) {
+      if (!['selection','listening'].includes(type) && !ensureIftyOnline('このクイズ形式の問題生成', { silent: true })) {
         throw new Error(iftyOfflineMessage('このクイズ形式の問題生成'));
       }
       if (type === 'selection') {
         const data = createLocalSelectionQuestion(set, ref.word, direction);
         p.currentQuestion={...data,quizType:type,direction,wordId:ref.word.id};
+      } else if (type === 'listening') {
+        const data = createLocalListeningQuestion(set, ref.word);
+        p.currentQuestion={...data,quizType:type,direction:'listening',wordId:ref.word.id};
       } else {
         const candidateWords=shuffleArray((set.wordIds||[]).filter(id=>id!==ref.word.id)).slice(0,8).map(id=>{const x=getWordById(id);return x?x.word:null;}).filter(Boolean);
         const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_generate',quizType:type,direction,word:ref.word,candidateWords,subject:'ENGLISH',order:getIftySubjectOrder('ENGLISH')})});
@@ -5012,13 +5258,13 @@ async function renderQuizPlayer(setId) {
   const q=p.currentQuestion;
   modal.innerHTML=`
     <div style="background:white;border-radius:14px;width:min(700px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div style="color:#7c3aed;font-size:.88em;font-weight:bold;">${escapeHtml(set.name)} ・ ${p.index+1}/${p.queue.length} ・ ${quizTypeLabel(q.quizType)} ・ ${quizDirectionLabel(q.direction==='jp_to_en'?'jp_to_en':'en_to_jp')}</div><button onclick="pauseQuizSet('${set.id}')" style="background:#ede9fe;color:#5b21b6;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;">${set.systemReview?'✕ 終了':'⏸ 一時中断'}</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div style="color:#7c3aed;font-size:.88em;font-weight:bold;">${escapeHtml(set.name)} ・ ${p.index+1}/${p.queue.length} ・ ${quizTypeLabel(q.quizType)}${q.quizType==='listening'?'':` ・ ${quizDirectionLabel(q.direction==='jp_to_en'?'jp_to_en':'en_to_jp')}`}</div><button onclick="pauseQuizSet('${set.id}')" style="background:#ede9fe;color:#5b21b6;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;">${set.systemReview?'✕ 終了':'⏸ 一時中断'}</button></div>
       <div style="margin-top:15px;padding:18px;background:#faf5ff;border:2px solid #ddd6fe;border-radius:10px;color:#2e1065;line-height:1.65;font-size:1.08em;white-space:pre-wrap;">${escapeHtml(q.question||'')}</div>
       ${q.audioText?`<div style="margin-top:10px;display:flex;justify-content:center;"><button onclick="speakQuizAudio('${set.id}')" style="background:#0ea5e9;color:white;border:none;border-radius:8px;padding:10px 16px;font-weight:bold;cursor:pointer;">🔊 音声を再生</button></div>`:''}
       ${q.instruction?`<div style="margin-top:7px;color:#64748b;font-size:.82em;">${escapeHtml(q.instruction)}</div>`:''}
-      ${Array.isArray(q.options)&&q.options.length?`<div id="quizChoiceArea" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;">${q.options.map((option,i)=>`<label style="display:flex;gap:8px;align-items:center;border:2px solid #ddd6fe;background:white;border-radius:8px;padding:10px;cursor:pointer;"><input type="radio" name="quizChoice" value="${escapeHtml(option)}" style="accent-color:#7c3aed;"><span>${String.fromCharCode(65+i)}. ${escapeHtml(option)}</span></label>`).join('')}</div>`:`<textarea id="quizAnswerInput" rows="4" placeholder="答えを入力（Enterで確定 / Shift+Enterで改行）" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1em;resize:vertical;"></textarea>`}
+      ${Array.isArray(q.options)&&q.options.length?`<div id="quizChoiceArea" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;">${q.options.map((option,i)=>`<label style="display:flex;gap:8px;align-items:center;border:2px solid #ddd6fe;background:white;border-radius:8px;padding:10px;cursor:pointer;"><input type="radio" name="quizChoice" value="${escapeHtml(option)}" style="accent-color:#7c3aed;"><span>${String.fromCharCode(65+i)}. ${escapeHtml(option)}</span></label>`).join('')}</div>`:(q.localAnswerMode==='spelling'?`<input id="quizAnswerInput" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="スペルを入力してEnter" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1.05em;">`:`<textarea id="quizAnswerInput" rows="4" placeholder="答えを入力（Enterで確定 / Shift+Enterで改行）" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1em;resize:vertical;"></textarea>`)}
       <div style="display:flex;gap:8px;margin-top:10px;"><button onclick="submitQuizAnswer('${set.id}')" style="flex:1;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${q.localGrade?'端末内で判定':(Array.isArray(q.options)&&q.options.length?'回答する':'ALLIAに判定してもらう')}</button><button onclick="skipQuizQuestion('${set.id}')" style="background:#e2e8f0;color:#475569;border:none;border-radius:7px;padding:11px;cursor:pointer;">スキップ</button></div>
-      <div style="margin-top:9px;color:#94a3b8;font-size:.78em;text-align:center;">「選択」だけは同じクイズフォルダの他の単語から4択を端末内生成・判定するためALLIAを使いません。シンプルを含む記述回答はALLIAが表記ゆれ・複数の意味・自然さを含めて判定します。リスニングは記述式と選択式の両方が出ます。</div>
+      <div style="margin-top:9px;color:#94a3b8;font-size:.78em;text-align:center;">「選択」と「リスニング」は端末内で問題生成・採点するためALLIAを使いません。リスニングは英単語だけを再生し、単語4択・意味4択・スペル記述の3形式から出題します。その他の記述回答はALLIAが表記ゆれ・複数の意味・自然さを含めて判定します。</div>
     </div>`;
   const input=document.getElementById('quizAnswerInput'); if(input)setTimeout(()=>input.focus(),30); if(q.audioText)setTimeout(()=>window.speakQuizAudio(set.id),180);
 }
