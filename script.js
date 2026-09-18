@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP21 2026-09-18：白紙単語・スペル候補自動確定 ★★★
+// ★★★ IFTY Q3 STEP22 2026-09-18：白紙編集UI強化・連続手動登録 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -4630,12 +4630,17 @@ function renderWordItem(w, folderId, wIndex) {
 }
 
 // 4. 単語追加・編集・移動
+let iftyEditWordModalState = null;
+let iftyEditWordModalKeyboardInstalled = false;
+
 window.addBlankWordToFolder = function(folderId) {
   const folder = folders.find(f => f.id === folderId);
   if (!folder) return;
   if (!Array.isArray(folder.words)) folder.words = [];
 
+  const undoDepthBefore = undoStack.length;
   recordUndoState('白紙単語追加');
+
   const blankWord = {
     id: makeId('word'),
     word: '',
@@ -4661,7 +4666,13 @@ window.addBlankWordToFolder = function(folderId) {
   folder.words.push(blankWord);
   saveUserData();
   refreshFolderWordArea(folderId);
-  window.openEditWordModal(folderId, folder.words.length - 1);
+
+  window.openEditWordModal(folderId, folder.words.length - 1, {
+    isNewBlank: true,
+    wordId: blankWord.id,
+    undoDepthBefore
+  });
+
   setTimeout(() => {
     const field = document.getElementById('editWordText');
     if (field) field.focus();
@@ -4915,7 +4926,7 @@ window.moveWordWithinFolder = function(folderId, wordIndex, direction) {
   renderFolders();
 };
 
-window.openEditWordModal = function(folderId, wordIndex) {
+window.openEditWordModal = function(folderId, wordIndex, options = {}) {
   const folder = folders.find(f => f.id === folderId);
   if (!folder || !folder.words[wordIndex]) return;
 
@@ -4925,39 +4936,131 @@ window.openEditWordModal = function(folderId, wordIndex) {
   if (!modal) {
     modal = document.createElement("div");
     modal.id = "editWordModal";
-    modal.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 10005;`;
+    modal.style.cssText = `position: fixed; inset: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 10005; padding: 14px; box-sizing: border-box;`;
     document.body.appendChild(modal);
   }
+
+  iftyEditWordModalState = {
+    folderId,
+    wordIndex,
+    wordId: String(options.wordId || w.id || ''),
+    isNewBlank: !!options.isNewBlank,
+    undoDepthBefore: Number.isInteger(options.undoDepthBefore) ? options.undoDepthBefore : null,
+    saved: false
+  };
 
   const meaningsStr = Array.isArray(w.meanings) ? w.meanings.join('\n') : (w.meanings || '');
   const examplesStr = w.examples ? w.examples.map(ex => `${ex.en || ''} | ${ex.ja || ''}`).join('\n') : '';
   const derivativesStr = Array.isArray(w.derivatives) ? w.derivatives.join('\n') : (w.derivatives || '');
+  const titleText = iftyEditWordModalState.isNewBlank ? '📝 白紙から単語を作成' : '✏️ 単語の編集';
 
   modal.innerHTML = `
-    <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 420px; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
-      <h3 style="margin-top: 0; color: #0f172a; margin-bottom: 12px;">✏️ 単語の編集</h3>
-      <div style="display: flex; flex-direction: column; gap: 10px; text-align: left;">
-        <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">単語</label><input id="editWordText" value="${escapeHtml(w.word)}" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;"></div>
-        <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">発音記号</label><input id="editPronunciationText" value="${escapeHtml(w.pronunciation || '')}" placeholder="/.../" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;"></div>
-        <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">品詞</label><input id="editPartOfSpeechText" value="${escapeHtml(w.partOfSpeech || '')}" placeholder="動詞・名詞など" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;"></div>
-        <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">自他動詞・可算不可算</label><input id="editUsageText" value="${escapeHtml([w.transitivity, w.countability].filter(Boolean).join(' / '))}" placeholder="他動詞 / 可算" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;"></div>
-        <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">意味（改行区切り）</label><textarea id="editMeaningsText" rows="4" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 0.9em;">${escapeHtml(meaningsStr)}</textarea></div>
-        <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">活用</label><input id="editFormsText" value="${escapeHtml([w.forms && w.forms.past ? `過去:${w.forms.past}` : '', w.forms && w.forms.pastParticiple ? `過去分詞:${w.forms.pastParticiple}` : '', w.forms && w.forms.ing ? `ing:${w.forms.ing}` : '', w.forms && w.forms.thirdPerson ? `三単現:${w.forms.thirdPerson}` : ''].filter(Boolean).join(' / '))}" placeholder="過去 / 過去分詞 / -ing / 三単現" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;"></div>
-        <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">例文（英語 | 和訳）</label><textarea id="editExamplesText" rows="4" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 0.9em;">${escapeHtml(examplesStr)}</textarea></div>
-        <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">派生語（改行区切り）</label><textarea id="editDerivativesText" rows="2" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 0.9em;">${escapeHtml(derivativesStr)}</textarea></div>
-        <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">💡 補足</label><input id="editDetailsText" value="${escapeHtml(w.details || '')}" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;"></div>
-        <div style="display: flex; gap: 10px; margin-top: 10px;">
-          <button onclick="saveEditedWord('${folder.id}', ${wordIndex})" style="flex: 1; padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">保存</button>
-          <button onclick="closeEditWordModal()" style="padding: 10px 16px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">キャンセル</button>
+    <div id="editWordDialog" role="dialog" aria-modal="true" aria-label="${iftyEditWordModalState.isNewBlank ? '白紙から単語を作成' : '単語の編集'}" style="background:white;border-radius:12px;width:min(92vw,520px);max-height:92vh;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.3);position:relative;">
+      <div style="position:sticky;top:0;z-index:4;background:white;padding:16px 18px 12px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <h3 style="margin:0;color:#0f172a;">${titleText}</h3>
+        <button type="button" onclick="closeEditWordModal()" aria-label="閉じる" title="閉じる" style="flex:0 0 auto;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.45em;line-height:1;cursor:pointer;font-weight:900;">×</button>
+      </div>
+
+      <div style="padding:16px 18px 8px;">
+        ${iftyEditWordModalState.isNewBlank ? `<div style="margin-bottom:12px;padding:9px 11px;border-radius:8px;background:#f0f9ff;color:#075985;font-size:.82em;line-height:1.45;">ALLIAを使わず、すべて自分で入力します。閉じる／キャンセルした場合、未保存の白紙単語は残りません。</div>` : ''}
+        <div id="editWordValidationMessage" style="display:none;margin-bottom:10px;padding:8px 10px;border-radius:7px;background:#fee2e2;color:#b91c1c;font-size:.82em;font-weight:700;"></div>
+
+        <div style="display:flex;flex-direction:column;gap:10px;text-align:left;">
+          <div>
+            <label style="font-size:.85em;font-weight:bold;color:#475569;">単語</label>
+            <div style="display:flex;gap:7px;align-items:center;">
+              <input id="editWordText" value="${escapeHtml(w.word)}" autocomplete="off" style="flex:1;min-width:0;padding:8px;border:1px solid #cbd5e1;border-radius:4px;box-sizing:border-box;">
+              <button type="button" onclick="speakWord((document.getElementById('editWordText')||{}).value || '')" title="入力中の単語を発音" style="padding:8px 10px;background:#0284c7;color:white;border:none;border-radius:5px;cursor:pointer;">🔊</button>
+            </div>
+          </div>
+          <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">発音記号</label><input id="editPronunciationText" value="${escapeHtml(w.pronunciation || '')}" placeholder="/.../" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;"></div>
+          <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">品詞</label><input id="editPartOfSpeechText" value="${escapeHtml(w.partOfSpeech || '')}" placeholder="動詞・名詞など" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;"></div>
+          <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">自他動詞・可算不可算</label><input id="editUsageText" value="${escapeHtml([w.transitivity, w.countability].filter(Boolean).join(' / '))}" placeholder="他動詞 / 可算" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;"></div>
+          <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">意味（改行区切り）</label><textarea id="editMeaningsText" rows="4" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 0.9em;">${escapeHtml(meaningsStr)}</textarea></div>
+          <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">活用</label><input id="editFormsText" value="${escapeHtml([w.forms && w.forms.past ? `過去:${w.forms.past}` : '', w.forms && w.forms.pastParticiple ? `過去分詞:${w.forms.pastParticiple}` : '', w.forms && w.forms.ing ? `ing:${w.forms.ing}` : '', w.forms && w.forms.thirdPerson ? `三単現:${w.forms.thirdPerson}` : ''].filter(Boolean).join(' / '))}" placeholder="過去 / 過去分詞 / -ing / 三単現" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;"></div>
+          <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">例文（英語 | 和訳）</label><textarea id="editExamplesText" rows="4" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 0.9em;">${escapeHtml(examplesStr)}</textarea></div>
+          <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">派生語（改行区切り）</label><textarea id="editDerivativesText" rows="2" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 0.9em;">${escapeHtml(derivativesStr)}</textarea></div>
+          <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">💡 補足</label><input id="editDetailsText" value="${escapeHtml(w.details || '')}" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;"></div>
         </div>
+      </div>
+
+      <div style="position:sticky;bottom:0;z-index:4;background:rgba(255,255,255,.98);border-top:1px solid #e2e8f0;padding:12px 18px;display:flex;gap:8px;flex-wrap:wrap;box-shadow:0 -4px 12px rgba(15,23,42,.06);">
+        <button type="button" onclick="saveEditedWord('${folder.id}', ${wordIndex})" style="flex:1;min-width:120px;padding:10px;background:#0284c7;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:bold;">保存</button>
+        ${iftyEditWordModalState.isNewBlank ? `<button type="button" onclick="saveEditedWord('${folder.id}', ${wordIndex}, true)" style="flex:1;min-width:150px;padding:10px;background:#0f766e;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:bold;">保存して次の白紙</button>` : ''}
+        <button type="button" onclick="closeEditWordModal()" style="padding:10px 16px;background:#e2e8f0;color:#334155;border:none;border-radius:6px;cursor:pointer;font-weight:700;">キャンセル</button>
       </div>
     </div>
   `;
 
+  modal.onclick = function(event) {
+    if (event.target === modal) closeEditWordModal();
+  };
+
   modal.style.display = "flex";
+  installIftyEditWordModalKeyboard();
 };
 
-window.saveEditedWord = function(folderId, wordIndex) {
+function installIftyEditWordModalKeyboard() {
+  if (iftyEditWordModalKeyboardInstalled) return;
+  iftyEditWordModalKeyboardInstalled = true;
+
+  document.addEventListener('keydown', event => {
+    const modal = document.getElementById('editWordModal');
+    if (!modal || modal.style.display === 'none') return;
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeEditWordModal();
+      return;
+    }
+
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      const state = iftyEditWordModalState;
+      if (!state) return;
+      event.preventDefault();
+      saveEditedWord(state.folderId, state.wordIndex);
+    }
+  });
+}
+
+function parseIftyEditedForms(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return {};
+
+  const result = {};
+  const parts = raw.split('/').map(s => s.trim()).filter(Boolean);
+  const hasLabels = parts.some(part => /^(?:過去分詞|過去|ing|-ing|三単現)\s*[:：]/i.test(part));
+
+  if (hasLabels) {
+    parts.forEach(part => {
+      const match = part.match(/^(過去分詞|過去|ing|-ing|三単現)\s*[:：]\s*(.+)$/i);
+      if (!match) return;
+      const label = match[1].toLowerCase();
+      const val = match[2].trim();
+      if (!val) return;
+      if (label === '過去') result.past = val;
+      else if (label === '過去分詞') result.pastParticiple = val;
+      else if (label === 'ing' || label === '-ing') result.ing = val;
+      else if (label === '三単現') result.thirdPerson = val;
+    });
+    return result;
+  }
+
+  if (parts[0]) result.past = parts[0];
+  if (parts[1]) result.pastParticiple = parts[1];
+  if (parts[2]) result.ing = parts[2];
+  if (parts[3]) result.thirdPerson = parts[3];
+  return result;
+}
+
+function showIftyEditWordValidation(message) {
+  const box = document.getElementById('editWordValidationMessage');
+  if (!box) return;
+  box.textContent = String(message || '');
+  box.style.display = message ? 'block' : 'none';
+}
+
+window.saveEditedWord = function(folderId, wordIndex, createNextBlank = false) {
   const folder = folders.find(f => f.id === folderId);
   if (!folder || !folder.words[wordIndex]) return;
 
@@ -4965,17 +5068,36 @@ window.saveEditedWord = function(folderId, wordIndex) {
   const pronunciationVal = document.getElementById("editPronunciationText").value.trim();
   const partOfSpeechVal = document.getElementById("editPartOfSpeechText").value.trim();
   const usageVal = document.getElementById("editUsageText").value.trim();
+  const formsVal = document.getElementById("editFormsText").value.trim();
   const meaningsVal = document.getElementById("editMeaningsText").value.split('\n').map(s => s.trim()).filter(Boolean);
   const examplesRaw = document.getElementById("editExamplesText").value.split('\n').map(s => s.trim()).filter(Boolean);
   const derivativesVal = document.getElementById("editDerivativesText").value.split('\n').map(s => s.trim()).filter(Boolean);
   const detailsVal = document.getElementById("editDetailsText").value.trim();
 
+  if (!wordVal) {
+    showIftyEditWordValidation('単語を入力してください。');
+    const field = document.getElementById('editWordText');
+    if (field) field.focus();
+    return;
+  }
+  showIftyEditWordValidation('');
+
   const newExamples = examplesRaw.map(line => {
-    const parts = line.split('|');
-    return { en: parts[0] ? parts[0].trim() : line, ja: parts[1] ? parts[1].trim() : '' };
+    const separatorIndex = line.indexOf('|');
+    if (separatorIndex < 0) return { en: line, ja: '' };
+    return {
+      en: line.slice(0, separatorIndex).trim(),
+      ja: line.slice(separatorIndex + 1).trim()
+    };
   });
 
-  recordUndoState('単語編集');
+  // 白紙新規作成では addBlankWordToFolder() の開始時点でUndoを記録済み。
+  // 通常編集だけここでUndoを記録する。
+  const state = iftyEditWordModalState;
+  if (!state || !state.isNewBlank) {
+    recordUndoState('単語編集');
+  }
+
   const word = folder.words[wordIndex];
   word.word = wordVal;
   word.pronunciation = pronunciationVal;
@@ -4984,22 +5106,53 @@ window.saveEditedWord = function(folderId, wordIndex) {
   word.examples = newExamples;
   word.derivatives = derivativesVal;
   word.details = detailsVal;
+  word.forms = parseIftyEditedForms(formsVal);
   word.quizAnswers = { jp: meaningsVal, en: wordVal ? [wordVal] : [] };
 
   if (usageVal) {
     const usageParts = usageVal.split('/').map(s => s.trim());
     word.transitivity = usageParts[0] || '';
     word.countability = usageParts[1] || '';
+  } else {
+    word.transitivity = '';
+    word.countability = '';
   }
+
+  if (state) state.saved = true;
 
   saveUserData();
   renderFolders();
-  closeEditWordModal();
+  closeEditWordModal({ keepNewBlank: true });
+
+  if (createNextBlank) {
+    setTimeout(() => window.addBlankWordToFolder(folderId), 0);
+  }
 };
 
-window.closeEditWordModal = function() {
+window.closeEditWordModal = function(options = {}) {
   const modal = document.getElementById("editWordModal");
+  const state = iftyEditWordModalState;
+  const keepNewBlank = !!(options && options.keepNewBlank);
+
+  if (state && state.isNewBlank && !state.saved && !keepNewBlank) {
+    const folder = folders.find(f => f.id === state.folderId);
+    if (folder && Array.isArray(folder.words)) {
+      const index = folder.words.findIndex(word => String(word && word.id || '') === state.wordId);
+      if (index >= 0) folder.words.splice(index, 1);
+    }
+
+    // 「白紙を開いて閉じただけ」がUndo履歴に残らないようにする。
+    if (Number.isInteger(state.undoDepthBefore) && undoStack.length > state.undoDepthBefore) {
+      undoStack.splice(state.undoDepthBefore);
+      updateUndoRedoButtons();
+    }
+
+    saveUserData();
+    renderFolders();
+  }
+
   if (modal) modal.style.display = "none";
+  iftyEditWordModalState = null;
 };
 
 function generateSmartWordData(word) {
