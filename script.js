@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP22 2026-09-18：白紙編集UI強化・連続手動登録 ★★★
+// ★★★ IFTY Q3 STEP26 2026-09-18：SOCIAL STUDIES フォルダ科目設定 / 5W1H ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -47,6 +47,47 @@ const IFTY_SPELLING_AUTO_ACCEPT_MAX_SECONDS = 60;
 const IFTY_SPELLING_AUTO_ACCEPT_SETTING_PREFIX = 'ifty_spelling_auto_accept_seconds_';
 let iftySpellingAutoAcceptSeconds = IFTY_SPELLING_AUTO_ACCEPT_DEFAULT_SECONDS;
 let iftySpellingSuggestionTimers = {};
+
+// Q3 STEP23：1日の学習目標 / 連続学習
+const IFTY_DAILY_GOAL_DEFAULT_WORDS = 20;
+const IFTY_DAILY_GOAL_MIN_WORDS = 1;
+const IFTY_DAILY_GOAL_MAX_WORDS = 500;
+const IFTY_DAILY_GOAL_SETTING_PREFIX = 'ifty_daily_goal_words_';
+let iftyDailyGoalWords = IFTY_DAILY_GOAL_DEFAULT_WORDS;
+
+// Q3 STEP23：保存済み例文をAIなしで再利用する「例文資産」
+let iftyExampleSearchQuery = '';
+let iftyExamplePracticeState = {
+  mode: '',
+  queue: [],
+  index: 0,
+  revealed: false,
+  answered: false,
+  resultText: ''
+};
+
+// Q3 STEP25：BASIC SENTENCES
+// 自分で登録した英文、またはEXAMPLE BANKから取り込んだ英文をALLIAなしで学習する。
+let iftyBasicSentenceSearchQuery = '';
+let iftyBasicSentencePracticeState = {
+  mode: '',
+  queue: [],
+  index: 0,
+  revealed: false,
+  answered: false,
+  correct: 0,
+  wrong: 0
+};
+
+// Q3 STEP26：SOCIAL STUDIES
+// 社会は1教科として保持し、フォルダごとに日本史・世界史・地理・公共を複数設定できる。
+const IFTY_SOCIAL_SUBJECTS = [
+  { key: 'JAPANESE_HISTORY', label: '日本史' },
+  { key: 'WORLD_HISTORY', label: '世界史' },
+  { key: 'GEOGRAPHY', label: '地理' },
+  { key: 'PUBLIC', label: '公共' }
+];
+const IFTY_SOCIAL_SUBJECT_KEYS = IFTY_SOCIAL_SUBJECTS.map(item => item.key);
 
 let chatSessions = [];
 let currentChatSessionId = null;
@@ -172,6 +213,9 @@ function restoreLearningState(snapshot) {
     saveUserData();
     savePracticeData();
     renderFolders();
+    if (currentIftySubject === 'SOCIAL STUDIES' && iftyPortalPage === 'subject') {
+      renderIftySocialStudiesPage();
+    }
     const practiceModal = document.getElementById('practiceModal');
     if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
   } finally {
@@ -448,6 +492,13 @@ function renderIftySideMenu() {
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ANCIENT')">ANCIENT</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SCIENCE')">SCIENCE</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SOCIAL STUDIES')">SOCIAL STUDIES</button>
+
+      <div class="ifty-side-menu-separator"></div>
+      <div class="ifty-side-menu-label">TOOLS</div>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); switchToChatView();">ALLIA</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyExampleBank();">EXAMPLES</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyBasicSentences();">BASIC SENTENCES</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openPracticeHome();">PRACTICE</button>
 
       <div class="ifty-side-menu-separator"></div>
       <button class="ifty-side-menu-item" type="button" onclick="openIftySettings()">SETTINGS</button>
@@ -1029,6 +1080,11 @@ function getIftyHomeStats() {
       ? practiceData.modules.questions.sets.length
       : 0;
 
+  const socialFolders = practiceData && practiceData.modules && practiceData.modules.socialStudies && Array.isArray(practiceData.modules.socialStudies.folders)
+    ? practiceData.modules.socialStudies.folders
+    : [];
+  const socialItems = socialFolders.reduce((sum, folder) => sum + (Array.isArray(folder.items) ? folder.items.length : 0), 0);
+
   const learning = getIftyLearningStats();
   return {
     folders: Array.isArray(folders) ? folders.length : 0,
@@ -1036,6 +1092,10 @@ function getIftyHomeStats() {
     flashSets,
     quizSets,
     chats: Array.isArray(chatSessions) ? chatSessions.length : 0,
+    examples: countIftyExampleAssets(),
+    basicSentences: countIftyBasicSentences(),
+    socialFolders: socialFolders.length,
+    socialItems,
     ...learning
   };
 }
@@ -1095,9 +1155,9 @@ window.openIftyHome = function() {
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('SOCIAL STUDIES')">
           <div class="ifty-home-card-title">SOCIAL STUDIES</div>
-          <div class="ifty-home-card-meta">地理・歴史などの学習領域</div>
+          <div class="ifty-home-card-meta">フォルダ ${stats.socialFolders} / 項目 ${stats.socialItems}</div>
           <div class="ifty-home-card-spacer"></div>
-          <div class="ifty-home-card-soon">科目ページ準備済み / 学習機能は今後追加</div>
+          <div class="ifty-home-card-action">日本史・世界史・地理・公共 →</div>
         </button>
       </div>
 
@@ -1110,18 +1170,30 @@ window.openIftyHome = function() {
           <div style="padding:10px;border-radius:9px;background:#fff7ed;border:1px solid #fed7aa;"><div style="font-size:.72em;color:#9a3412;">今日の復習</div><div style="font-size:1.35em;font-weight:900;color:#c2410c;">${stats.dueReview}語</div></div>
           <div style="padding:10px;border-radius:9px;background:#fff1f2;border:1px solid #fecdd3;"><div style="font-size:.72em;color:#9f1239;">苦手候補</div><div style="font-size:1.35em;font-weight:900;color:#be123c;">${stats.weakWords}語</div></div>
         </div>
+        <div style="margin-top:11px;padding:10px;border:1px solid #dbeafe;border-radius:9px;background:white;">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:.8em;">
+            <b>今日の目標 ${stats.studiedToday}/${stats.dailyGoal}語</b>
+            <span>${stats.goalPercent >= 100 ? '達成 ✓' : `${stats.goalPercent}%`}</span>
+          </div>
+          <div style="height:8px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:7px;">
+            <div style="height:100%;width:${Math.min(100, stats.goalPercent)}%;background:#0f766e;border-radius:999px;"></div>
+          </div>
+          <div style="margin-top:6px;color:#64748b;font-size:.74em;">🔥 連続学習 ${stats.studyStreak}日　・　自己ベスト ${stats.bestStreak}日</div>
+        </div>
         ${stats.dueReview ? `<button type="button" onclick="switchToVocabView(); setTimeout(()=>startIftyDueReviewFlashcards('front'),0);" style="width:100%;margin-top:10px;border:none;background:#ea580c;color:white;border-radius:8px;padding:10px;font-weight:900;cursor:pointer;">🔁 今日の復習を始める（${stats.dueReview}語）</button>` : ''}
       </div>
 
       <div class="ifty-home-quick">
         <button type="button" onclick="switchToChatView()" style="background:#0284c7;color:white;">🤖 ALLIA</button>
+        <button type="button" onclick="openIftyExampleBank()" style="background:#2563eb;color:white;">📚 例文資産 ${stats.examples}</button>
+        <button type="button" onclick="openIftyBasicSentences()" style="background:#059669;color:white;">📝 BASIC SENTENCES ${stats.basicSentences}</button>
         <button type="button" onclick="openPracticeHome()" style="background:#7c3aed;color:white;">⚔️ 実践</button>
         <button type="button" onclick="openIftyLearningStats()" style="background:#0f766e;color:white;">📊 学習統計</button>
         <button type="button" onclick="openIftyRecoveryCenter()" style="background:#334155;color:white;">🛟 バックアップ / 復元</button>
       </div>
 
       <div class="ifty-settings-note" style="margin-top:14px;">
-        実践：Flash ${stats.flashSets} / Quiz ${stats.quizSets}　・　ALLIAチャット ${stats.chats}　・　復習管理 ${stats.reviewActive}語 / 卒業 ${stats.reviewGraduated}語
+        実践：Flash ${stats.flashSets} / Quiz ${stats.quizSets}　・　例文資産 ${stats.examples}件　・　BASIC SENTENCES ${stats.basicSentences}件　・　ALLIAチャット ${stats.chats}　・　復習管理 ${stats.reviewActive}語 / 卒業 ${stats.reviewGraduated}語
       </div>
     </section>
   `, 'home');
@@ -1132,6 +1204,365 @@ window.openIftySideMenuHome = function() {
   window.openIftyHome();
 };
 
+// ==========================================
+// Q3 STEP26：SOCIAL STUDIES / フォルダ別科目設定 + 5W1H
+// ==========================================
+function normalizeIftySocialSubjects(value) {
+  const source = Array.isArray(value) ? value : [];
+  return [...new Set(source.map(item => String(item || '').trim().toUpperCase()))]
+    .filter(key => IFTY_SOCIAL_SUBJECT_KEYS.includes(key));
+}
+
+function getIftySocialSubjectLabel(key) {
+  const found = IFTY_SOCIAL_SUBJECTS.find(item => item.key === key);
+  return found ? found.label : String(key || '');
+}
+
+function normalizeIftySocialItem(value) {
+  if (!value || typeof value !== 'object') return null;
+  const text = field => String(value[field] || '').trim();
+  return {
+    id: value.id || makeId('socialitem'),
+    topic: text('topic'),
+    title: text('title') || text('topic'),
+    summary: text('summary'),
+    who: text('who'),
+    when: text('when'),
+    where: text('where'),
+    what: text('what'),
+    why: text('why'),
+    how: text('how'),
+    keyPoints: Array.isArray(value.keyPoints) ? value.keyPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12) : [],
+    subjects: normalizeIftySocialSubjects(value.subjects),
+    source: String(value.source || 'MANUAL').trim(),
+    createdAt: Number(value.createdAt || 0) || Date.now(),
+    updatedAt: Number(value.updatedAt || 0) || Date.now()
+  };
+}
+
+function getIftySocialModule() {
+  normalizePracticeData();
+  return practiceData.modules.socialStudies;
+}
+
+function getIftySocialFolder(folderId) {
+  return getIftySocialModule().folders.find(folder => folder.id === folderId) || null;
+}
+
+function countIftySocialItems() {
+  return getIftySocialModule().folders.reduce((sum, folder) => sum + (Array.isArray(folder.items) ? folder.items.length : 0), 0);
+}
+
+function renderIftySocialSubjectBadges(subjects) {
+  const normalized = normalizeIftySocialSubjects(subjects);
+  return normalized.map(key => `<span style="display:inline-block;padding:3px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.72em;font-weight:900;">${escapeHtml(getIftySocialSubjectLabel(key))}</span>`).join(' ');
+}
+
+function renderIftySocialFiveWOneH(item) {
+  const rows = [
+    ['Who', '誰・主体', item.who],
+    ['When', 'いつ', item.when],
+    ['Where', 'どこで', item.where],
+    ['What', '何を・何か', item.what],
+    ['Why', 'なぜ', item.why],
+    ['How', 'どのように', item.how]
+  ];
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin-top:10px;">
+    ${rows.map(([en, ja, value]) => `<div style="border:1px solid #dbeafe;background:#f8fbff;border-radius:8px;padding:8px;min-width:0;">
+      <div style="font-size:.72em;color:#0369a1;font-weight:900;">${en} / ${ja}</div>
+      <div style="margin-top:3px;color:#0f172a;font-size:.88em;line-height:1.45;white-space:pre-wrap;">${escapeHtml(value || '—')}</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderIftySocialItemCard(folder, item) {
+  return `<article style="border:1px solid #cbd5e1;border-radius:10px;background:white;padding:12px;margin-top:9px;box-shadow:0 1px 3px rgba(15,23,42,.05);">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+      <div style="min-width:0;flex:1;">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <strong style="font-size:1.08em;color:#0f172a;">${escapeHtml(item.title || item.topic || '無題')}</strong>
+          ${renderIftySocialSubjectBadges(item.subjects.length ? item.subjects : folder.subjects)}
+          ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
+        </div>
+        ${item.summary ? `<div style="margin-top:7px;color:#334155;line-height:1.55;white-space:pre-wrap;">${escapeHtml(item.summary)}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:5px;flex:none;">
+        <button type="button" onclick="openIftySocialItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
+        <button type="button" onclick="deleteIftySocialItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">削除</button>
+      </div>
+    </div>
+    ${renderIftySocialFiveWOneH(item)}
+    ${item.keyPoints.length ? `<div style="margin-top:9px;padding:9px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;">
+      <div style="font-size:.76em;font-weight:900;color:#475569;margin-bottom:4px;">重要ポイント</div>
+      ${item.keyPoints.map(point => `<div style="font-size:.86em;color:#334155;line-height:1.45;">・${escapeHtml(point)}</div>`).join('')}
+    </div>` : ''}
+  </article>`;
+}
+
+function renderIftySocialFolder(folder) {
+  const items = Array.isArray(folder.items) ? folder.items : [];
+  const subjectChecks = IFTY_SOCIAL_SUBJECTS.map(subject => {
+    const checked = folder.subjects.includes(subject.key);
+    return `<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 7px;border:1px solid ${checked ? '#38bdf8' : '#cbd5e1'};border-radius:999px;background:${checked ? '#f0f9ff' : 'white'};font-size:.76em;font-weight:800;cursor:pointer;">
+      <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleIftySocialFolderSubject('${folder.id}','${subject.key}',this.checked)"> ${escapeHtml(subject.label)}
+    </label>`;
+  }).join('');
+
+  return `<section style="margin-top:14px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;padding:13px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+      <div style="min-width:0;flex:1;">
+        <button type="button" onclick="toggleIftySocialFolderCollapse('${folder.id}')" style="border:none;background:transparent;padding:0;cursor:pointer;font-size:1.02em;font-weight:900;color:#0f172a;text-align:left;">${folder.collapsed ? '▶' : '▼'} 📁 ${escapeHtml(folder.name)} (${items.length}件)</button>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;">${subjectChecks}</div>
+        <div style="font-size:.72em;color:#64748b;margin-top:5px;">このフォルダでは複数科目を同時選択できます。ALLIA生成時には選択中の科目だけをコンテキストとして送ります。</div>
+      </div>
+      <button type="button" onclick="deleteIftySocialFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">フォルダ削除</button>
+    </div>
+
+    ${folder.collapsed ? '' : `<div style="margin-top:12px;">
+      <div style="display:flex;gap:7px;flex-wrap:wrap;">
+        <input id="iftySocialTopic_${folder.id}" placeholder="人物・出来事・制度・地名など" onkeydown="if(event.key==='Enter'){event.preventDefault();generateIftySocialItem('${folder.id}');}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;">
+        <button type="button" onclick="generateIftySocialItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">ALLIAで5W1H生成</button>
+        <button type="button" onclick="addBlankIftySocialItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">白紙</button>
+      </div>
+      <div id="iftySocialStatus_${folder.id}" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;"></div>
+      <div>${items.length ? items.map(item => renderIftySocialItemCard(folder, item)).join('') : '<div style="margin-top:12px;padding:18px;text-align:center;border:1px dashed #cbd5e1;border-radius:8px;color:#94a3b8;">まだ項目がありません。</div>'}</div>
+    </div>`}
+  </section>`;
+}
+
+function renderIftySocialStudiesPage() {
+  currentIftySubject = 'SOCIAL STUDIES';
+  const module = getIftySocialModule();
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">SOCIAL STUDIES</h1>
+          <div class="ifty-portal-subtitle">日本史・世界史・地理・公共を、フォルダごとに1つ以上組み合わせて管理。</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+      </div>
+
+      <div class="ifty-settings-section" style="margin-top:14px;">
+        <div class="ifty-settings-row">
+          <div>
+            <h3>ORDER / ALLIA</h3>
+            <div class="ifty-settings-note">${escapeHtml(getIftyOrderStatus('SOCIAL STUDIES'))}。社会のALLIAは、説明時にWho / When / Where / What / Why / Howを明確にする設定です。</div>
+          </div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;">
+            <button class="ifty-settings-action" type="button" onclick="openIftySubjectOrder('SOCIAL STUDIES')" style="background:#0284c7;color:white;">ORDERを編集</button>
+            <button class="ifty-settings-action" type="button" onclick="openIftySubjectAllia('SOCIAL STUDIES')" style="background:#7c3aed;color:white;">🤖 ALLIA</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;padding:13px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;">
+        <div style="font-weight:900;color:#0c4a6e;">新しい社会フォルダ</div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;align-items:center;">
+          <input id="iftySocialFolderName" placeholder="例：古代中国 / 幕末 / 気候 / 日本国憲法" onkeydown="if(event.key==='Enter'){event.preventDefault();createIftySocialFolder();}" style="flex:1;min-width:210px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;font-size:.95em;">
+          <button type="button" onclick="createIftySocialFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">作成</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">
+          ${IFTY_SOCIAL_SUBJECTS.map((subject, index) => `<label style="display:inline-flex;align-items:center;gap:4px;font-size:.8em;font-weight:800;"><input id="iftySocialCreate_${subject.key}" type="checkbox" ${index === 1 ? 'checked' : ''}> ${escapeHtml(subject.label)}</label>`).join('')}
+        </div>
+      </div>
+
+      <div style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 項目 ${countIftySocialItems()}。社会データは既存のpracticeDataに保存されるため、クラウド同期・バックアップ対象です。</div>
+      <div>${module.folders.length ? module.folders.map(renderIftySocialFolder).join('') : '<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">社会フォルダを作成してください。</div>'}</div>
+    </section>
+  `, 'subject');
+}
+
+window.createIftySocialFolder = function() {
+  const input = document.getElementById('iftySocialFolderName');
+  const name = String(input?.value || '').trim();
+  if (!name) {
+    alert('フォルダ名を入力してください。');
+    return;
+  }
+  const subjects = IFTY_SOCIAL_SUBJECTS
+    .filter(subject => document.getElementById(`iftySocialCreate_${subject.key}`)?.checked)
+    .map(subject => subject.key);
+  if (!subjects.length) {
+    alert('日本史・世界史・地理・公共から1つ以上選択してください。');
+    return;
+  }
+  recordUndoState('社会フォルダ作成');
+  getIftySocialModule().folders.push({ id: makeId('socialfolder'), name, subjects, collapsed: false, items: [] });
+  savePracticeData();
+  renderIftySocialStudiesPage();
+};
+
+window.toggleIftySocialFolderCollapse = function(folderId) {
+  const folder = getIftySocialFolder(folderId);
+  if (!folder) return;
+  folder.collapsed = !folder.collapsed;
+  savePracticeData();
+  renderIftySocialStudiesPage();
+};
+
+window.toggleIftySocialFolderSubject = function(folderId, subjectKey, checked) {
+  const folder = getIftySocialFolder(folderId);
+  if (!folder || !IFTY_SOCIAL_SUBJECT_KEYS.includes(subjectKey)) return;
+  const next = new Set(folder.subjects);
+  if (checked) next.add(subjectKey); else next.delete(subjectKey);
+  if (!next.size) {
+    alert('少なくとも1科目は選択してください。');
+    renderIftySocialStudiesPage();
+    return;
+  }
+  recordUndoState('社会フォルダ科目変更');
+  folder.subjects = [...next];
+  savePracticeData();
+  renderIftySocialStudiesPage();
+};
+
+window.deleteIftySocialFolder = function(folderId) {
+  const module = getIftySocialModule();
+  const folder = module.folders.find(item => item.id === folderId);
+  if (!folder) return;
+  if (!confirm(`「${folder.name}」を削除しますか？中の項目も削除されます。`)) return;
+  recordUndoState('社会フォルダ削除');
+  module.folders = module.folders.filter(item => item.id !== folderId);
+  savePracticeData();
+  renderIftySocialStudiesPage();
+};
+
+window.generateIftySocialItem = async function(folderId) {
+  const folder = getIftySocialFolder(folderId);
+  const input = document.getElementById(`iftySocialTopic_${folderId}`);
+  const status = document.getElementById(`iftySocialStatus_${folderId}`);
+  const topic = String(input?.value || '').trim();
+  if (!folder || !topic) return;
+  if (!ensureIftyOnline('社会5W1H生成')) return;
+  if (status) status.textContent = 'ALLIAが5W1Hを整理中…';
+  try {
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'social_generate',
+        topic,
+        subjects: folder.subjects,
+        subject: 'SOCIAL STUDIES',
+        order: getIftySubjectOrder('SOCIAL STUDIES')
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw alliaHttpError(response, data, '社会データ生成に失敗しました。');
+    recordUndoState('社会項目追加');
+    folder.items.push(normalizeIftySocialItem({
+      ...data,
+      id: makeId('socialitem'),
+      topic,
+      subjects: folder.subjects,
+      source: 'ALLIA',
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }));
+    savePracticeData();
+    renderIftySocialStudiesPage();
+  } catch (error) {
+    console.error('社会5W1H生成エラー:', error);
+    if (status) status.textContent = String(error.message || error);
+  }
+};
+
+window.addBlankIftySocialItem = function(folderId) {
+  const folder = getIftySocialFolder(folderId);
+  if (!folder) return;
+  recordUndoState('社会白紙項目追加');
+  const item = normalizeIftySocialItem({
+    id: makeId('socialitem'),
+    subjects: folder.subjects,
+    source: 'MANUAL',
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  });
+  folder.items.push(item);
+  savePracticeData();
+  renderIftySocialStudiesPage();
+  setTimeout(() => window.openIftySocialItemEditor(folderId, item.id), 0);
+};
+
+function ensureIftySocialItemModal() {
+  let modal = document.getElementById('iftySocialItemModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'iftySocialItemModal';
+  modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(15,23,42,.58);z-index:12050;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;';
+  modal.innerHTML = '<div id="iftySocialItemModalCard" style="width:min(760px,96vw);max-height:92vh;overflow:auto;background:white;border-radius:12px;padding:16px;box-shadow:0 20px 50px rgba(0,0,0,.28);"></div>';
+  modal.addEventListener('click', event => { if (event.target === modal) window.closeIftySocialItemEditor(); });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+window.openIftySocialItemEditor = function(folderId, itemId) {
+  const folder = getIftySocialFolder(folderId);
+  const item = folder?.items?.find(entry => entry.id === itemId);
+  if (!folder || !item) return;
+  const modal = ensureIftySocialItemModal();
+  const card = document.getElementById('iftySocialItemModalCard');
+  const field = (id, label, value, rows = 1) => `<label style="display:block;margin-top:9px;font-size:.78em;font-weight:900;color:#475569;">${label}</label>${rows > 1 ? `<textarea id="${id}" rows="${rows}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.95em;resize:vertical;">${escapeHtml(value || '')}</textarea>` : `<input id="${id}" value="${escapeHtml(value || '')}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.95em;">`}`;
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+      <div><div style="font-size:1.15em;font-weight:900;color:#0f172a;">社会項目を編集</div><div style="font-size:.75em;color:#64748b;">5W1Hを必要に応じて自分で修正できます。</div></div>
+      <button type="button" onclick="closeIftySocialItemEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:999px;width:34px;height:34px;font-size:1.2em;font-weight:900;cursor:pointer;">×</button>
+    </div>
+    ${field('iftySocialEditTitle','タイトル',item.title)}
+    ${field('iftySocialEditSummary','要約',item.summary,3)}
+    ${field('iftySocialEditWho','Who / 誰・主体',item.who,2)}
+    ${field('iftySocialEditWhen','When / いつ',item.when,2)}
+    ${field('iftySocialEditWhere','Where / どこで',item.where,2)}
+    ${field('iftySocialEditWhat','What / 何を・何か',item.what,3)}
+    ${field('iftySocialEditWhy','Why / なぜ',item.why,3)}
+    ${field('iftySocialEditHow','How / どのように',item.how,3)}
+    ${field('iftySocialEditKeyPoints','重要ポイント（1行1項目）',item.keyPoints.join('\n'),4)}
+    <div style="position:sticky;bottom:-16px;margin:14px -16px -16px;padding:10px 16px;background:rgba(255,255,255,.97);border-top:1px solid #e2e8f0;display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" onclick="closeIftySocialItemEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">キャンセル</button>
+      <button type="button" onclick="saveIftySocialItemEditor('${folderId}','${itemId}')" data-ifty-enter-primary="true" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 14px;font-weight:900;cursor:pointer;">保存</button>
+    </div>`;
+  modal.style.display = 'flex';
+  setTimeout(() => document.getElementById('iftySocialEditTitle')?.focus(), 0);
+};
+
+window.closeIftySocialItemEditor = function() {
+  const modal = document.getElementById('iftySocialItemModal');
+  if (modal) modal.style.display = 'none';
+};
+
+window.saveIftySocialItemEditor = function(folderId, itemId) {
+  const folder = getIftySocialFolder(folderId);
+  const item = folder?.items?.find(entry => entry.id === itemId);
+  if (!item) return;
+  recordUndoState('社会項目編集');
+  const val = id => String(document.getElementById(id)?.value || '').trim();
+  item.title = val('iftySocialEditTitle');
+  item.summary = val('iftySocialEditSummary');
+  item.who = val('iftySocialEditWho');
+  item.when = val('iftySocialEditWhen');
+  item.where = val('iftySocialEditWhere');
+  item.what = val('iftySocialEditWhat');
+  item.why = val('iftySocialEditWhy');
+  item.how = val('iftySocialEditHow');
+  item.keyPoints = val('iftySocialEditKeyPoints').split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 12);
+  item.updatedAt = Date.now();
+  savePracticeData();
+  window.closeIftySocialItemEditor();
+  renderIftySocialStudiesPage();
+};
+
+window.deleteIftySocialItem = function(folderId, itemId) {
+  const folder = getIftySocialFolder(folderId);
+  const item = folder?.items?.find(entry => entry.id === itemId);
+  if (!folder || !item) return;
+  if (!confirm(`「${item.title || item.topic || 'この項目'}」を削除しますか？`)) return;
+  recordUndoState('社会項目削除');
+  folder.items = folder.items.filter(entry => entry.id !== itemId);
+  savePracticeData();
+  renderIftySocialStudiesPage();
+};
+
 window.openIftySubject = function(subject) {
   const normalized = normalizeIftySubject(subject);
   currentIftySubject = normalized;
@@ -1140,6 +1571,11 @@ window.openIftySubject = function(subject) {
   if (normalized === 'ENGLISH') {
     iftyPortalPage = 'vocab';
     window.switchToVocabView();
+    return;
+  }
+
+  if (normalized === 'SOCIAL STUDIES') {
+    renderIftySocialStudiesPage();
     return;
   }
 
@@ -1255,6 +1691,17 @@ window.openIftySettings = function() {
       </div>
 
       <div class="ifty-settings-section">
+        <h3>DAILY STUDY GOAL</h3>
+        <div class="ifty-settings-note">1日に学習する単語数の目標です。学習統計とHOMEの進捗表示に使います。現在：${iftyDailyGoalWords}語。</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px;">
+          <input id="iftyDailyGoalWordsInput" type="number" min="${IFTY_DAILY_GOAL_MIN_WORDS}" max="${IFTY_DAILY_GOAL_MAX_WORDS}" step="1" value="${iftyDailyGoalWords}" inputmode="numeric" style="width:90px;padding:9px 10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+          <span style="font-weight:800;">語 / 日</span>
+          <button class="ifty-settings-action" type="button" onclick="applyIftyDailyGoalSettingFromUi()" style="background:#0f766e;color:white;">変更</button>
+        </div>
+        <div class="ifty-settings-note" style="margin-top:8px;">${IFTY_DAILY_GOAL_MIN_WORDS}〜${IFTY_DAILY_GOAL_MAX_WORDS}語で設定できます。</div>
+      </div>
+
+      <div class="ifty-settings-section">
         <h3>AUTO SAVE FREQUENCY</h3>
         <div class="ifty-settings-note">現在：${escapeHtml(autosaveText)}。この端末・このIFTYユーザーのPERIODIC保存間隔です。</div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px;">
@@ -1303,7 +1750,7 @@ window.openIftySettings = function() {
         </div>
       </div>
 
-      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP21</div>
+      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP23</div>
     </section>
   `, 'settings');
 
@@ -1700,6 +2147,33 @@ window.applyIftySpellingAutoAcceptSettingFromUi = function() {
   iftySpellingAutoAcceptSeconds = Math.round(value);
   localStorage.setItem(getIftySpellingAutoAcceptSettingKey(), String(iftySpellingAutoAcceptSeconds));
   rescheduleAllIftySpellingSuggestionTimers();
+  window.openIftySettings();
+};
+
+function getIftyDailyGoalSettingKey(username = currentUser) {
+  return IFTY_DAILY_GOAL_SETTING_PREFIX + String(username || 'default_user');
+}
+
+function loadIftyDailyGoalPreference() {
+  const raw = localStorage.getItem(getIftyDailyGoalSettingKey());
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < IFTY_DAILY_GOAL_MIN_WORDS || value > IFTY_DAILY_GOAL_MAX_WORDS) {
+    iftyDailyGoalWords = IFTY_DAILY_GOAL_DEFAULT_WORDS;
+    return iftyDailyGoalWords;
+  }
+  iftyDailyGoalWords = Math.round(value);
+  return iftyDailyGoalWords;
+}
+
+window.applyIftyDailyGoalSettingFromUi = function() {
+  const input = document.getElementById('iftyDailyGoalWordsInput');
+  const value = Number(input && input.value);
+  if (!Number.isFinite(value) || value < IFTY_DAILY_GOAL_MIN_WORDS || value > IFTY_DAILY_GOAL_MAX_WORDS) {
+    alert(`1日の学習目標は${IFTY_DAILY_GOAL_MIN_WORDS}〜${IFTY_DAILY_GOAL_MAX_WORDS}語で入力してください。`);
+    return;
+  }
+  iftyDailyGoalWords = Math.round(value);
+  localStorage.setItem(getIftyDailyGoalSettingKey(), String(iftyDailyGoalWords));
   window.openIftySettings();
 };
 
@@ -2808,6 +3282,7 @@ async function migrateIftyLocalUsernameData(oldUsername, newUsername) {
     [getIftyOrderStorageKey(oldName), getIftyOrderStorageKey(newName)],
     [getIftyAutosaveSettingKey(oldName), getIftyAutosaveSettingKey(newName)],
     [getIftySpellingAutoAcceptSettingKey(oldName), getIftySpellingAutoAcceptSettingKey(newName)],
+    [getIftyDailyGoalSettingKey(oldName), getIftyDailyGoalSettingKey(newName)],
     [getIftyCloudRevisionKey(oldName), getIftyCloudRevisionKey(newName)],
     [getIftyCloudDirtyKey(oldName), getIftyCloudDirtyKey(newName)]
   ];
@@ -3435,6 +3910,7 @@ async function enterIftyAccount(account, options = {}) {
   ensureIftyNetworkUi();
   loadIftyAutosavePreference();
   loadIftySpellingAutoAcceptPreference();
+  loadIftyDailyGoalPreference();
   startIftyAutoBackup();
   iftyCloudSaveEnabled = true;
 
@@ -3477,6 +3953,7 @@ async function enterIftyDeveloperSession() {
   ensureIftyNetworkUi();
   loadIftyAutosavePreference();
   loadIftySpellingAutoAcceptPreference();
+  loadIftyDailyGoalPreference();
   startIftyAutoBackup();
 
   // Developerはアカウント認証を省略する代わりに、クラウド同期は常に無効。
@@ -3639,6 +4116,149 @@ document.addEventListener('keydown', function(event) {
   }
 });
 
+
+// ==========================================
+// Q3 STEP24：全画面スマートEnter確定
+// 「次へ」「続ける」「開始」「判定」「保存」など、次の状態へ進む主操作をEnterで実行する。
+// 入力欄・IME変換中・破壊操作・戻る/閉じる系・候補が複数で曖昧な画面は自動実行しない。
+// ボタン自身にフォーカスがある場合はブラウザ標準のEnterクリックに任せる。
+// ==========================================
+const IFTY_ENTER_MODAL_IDS = [
+  'editWordModal',
+  'iftySecurityModal',
+  'iftyPasswordRecoveryModal',
+  'iftyRecoveryModal',
+  'practiceNameModal',
+  'iftyExamplePracticeModal',
+  'iftyBasicSentenceModal',
+  'iftyBasicSentencePracticeModal',
+  'iftySocialItemModal',
+  'practiceModal',
+  'flashcardModal',
+  'mainLauncherModal',
+  'appMenuModal',
+  'iftyOrderModal'
+];
+
+function isIftyElementVisible(element) {
+  if (!element || !element.isConnected) return false;
+  if (element.hidden) return false;
+  const style = window.getComputedStyle ? window.getComputedStyle(element) : null;
+  if (style && (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0)) return false;
+  const rect = typeof element.getBoundingClientRect === 'function' ? element.getBoundingClientRect() : null;
+  if (rect && rect.width <= 0 && rect.height <= 0) return false;
+  return true;
+}
+
+function getIftyEnterScope() {
+  const visibleModals = IFTY_ENTER_MODAL_IDS
+    .map((id, order) => {
+      const element = document.getElementById(id);
+      if (!isIftyElementVisible(element)) return null;
+      const style = window.getComputedStyle ? window.getComputedStyle(element) : null;
+      const zIndex = style ? Number.parseInt(style.zIndex, 10) : 0;
+      return { element, order, zIndex: Number.isFinite(zIndex) ? zIndex : 0 };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b.zIndex - a.zIndex) || (b.order - a.order));
+
+  return visibleModals.length ? visibleModals[0].element : document;
+}
+
+function normalizeIftyEnterButtonText(button) {
+  return String((button && (button.innerText || button.textContent)) || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getIftyEnterButtonPriority(button) {
+  if (!button || button.disabled || button.getAttribute('aria-disabled') === 'true') return -1;
+  if (!isIftyElementVisible(button)) return -1;
+
+  const text = normalizeIftyEnterButtonText(button);
+  const aria = String(button.getAttribute('aria-label') || '').trim();
+  const onclick = String(button.getAttribute('onclick') || '').trim();
+  const combined = `${text} ${aria}`.trim();
+
+  // Enterだけで実行すると困る操作は明示的に除外する。
+  if (/閉じる|戻る|終了|中断|キャンセル|スキップ|削除|全削除|消す|解除|停止|RESET|LOG\s*OUT|ログアウト|復元|書き出し|Challenge|チャレンジ|表示|発音|音声を再生|クリア|取り消し|やり直し/i.test(combined)) return -1;
+  if (/delete|remove|logout|restore|revoke|clear|close|pause|skip/i.test(onclick)) return -1;
+
+  // 最優先：結果画面などの明確な「次へ」。
+  if (/^(?:➡️\s*)?次へ$/i.test(text) || /^NEXT$/i.test(text) || /next[A-Z_a-z0-9]*\s*\(/.test(onclick)) return 100;
+
+  // 続行系。復習の「残りを続ける」など。
+  if (/続ける|続きから|もう一度続ける|残りを続ける|答えを見る/i.test(text)) return 95;
+
+  // 回答確定・ローカル判定。クイズ側の専用Enter処理がpreventDefaultした場合はこちらは動かない。
+  if (/端末内で判定|回答する|判定してもらう|回答を確定|確定$/i.test(text) || /submit[A-Z_a-z0-9]*\s*\(/.test(onclick)) return 90;
+
+  // 明確な開始操作。
+  if (/開始|始める|プレイ開始|学習開始/i.test(text) || /start[A-Z_a-z0-9]*\s*\(/.test(onclick)) return 80;
+
+  // 保存・決定・送信・認証・再試行など。入力欄フォーカス中はこの仕組み自体を使わない。
+  if (/^保存$|^SAVE ORDER$|保存して閉じる|決定|送信|確認コードを送信|パスワードに変更|^変更$|^作成$|^登録$|^ログイン$|^新規登録$|再試行/i.test(text)) return 70;
+  if (/^(?:save|confirm|retry|login|register)[A-Z_a-z0-9]*\s*\(/.test(onclick)) return 70;
+
+  // 「他のモードでプレイ」のような明確な前進遷移。
+  if (/他のモードでプレイ|ALLIAを開く|例文.*学習|苦手だけ学習/i.test(text)) return 60;
+
+  return -1;
+}
+
+function findIftySmartEnterButton(scope = getIftyEnterScope()) {
+  if (!scope || typeof scope.querySelectorAll !== 'function') return null;
+  const candidates = Array.from(scope.querySelectorAll('button'))
+    .map(button => ({ button, priority: getIftyEnterButtonPriority(button) }))
+    .filter(item => item.priority >= 0);
+
+  if (!candidates.length) return null;
+  const highest = Math.max(...candidates.map(item => item.priority));
+  const top = candidates.filter(item => item.priority === highest);
+
+  // 同格の主操作が複数ある画面では勝手に選ばない。
+  if (top.length !== 1) return null;
+  return top[0].button;
+}
+
+function shouldIftySkipSmartEnter(event) {
+  if (!event || event.key !== 'Enter') return true;
+  if (event.repeat || event.isComposing || event.keyCode === 229) return true;
+  if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return true;
+
+  const target = event.target;
+  const tag = target && target.tagName ? String(target.tagName).toLowerCase() : '';
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || (target && target.isContentEditable)) return true;
+
+  // フォーカス中のボタン/リンクはブラウザ標準操作を優先する。
+  const active = document.activeElement;
+  const activeTag = active && active.tagName ? String(active.tagName).toLowerCase() : '';
+  if (activeTag === 'button' || activeTag === 'a') return true;
+
+  return false;
+}
+
+function installIftySmartEnterNavigation() {
+  if (window.__iftySmartEnterNavigationInstalled) return;
+  window.__iftySmartEnterNavigationInstalled = true;
+
+  document.addEventListener('keydown', event => {
+    if (shouldIftySkipSmartEnter(event)) return;
+
+    // 同じkeydownを扱うクイズ/例文学習などの専用処理を先に通す。
+    // それらがpreventDefaultした場合は二重実行しない。
+    queueMicrotask(() => {
+      if (event.defaultPrevented) return;
+      const button = findIftySmartEnterButton();
+      if (!button || !button.isConnected || !isIftyElementVisible(button) || button.disabled) return;
+      event.preventDefault();
+      button.click();
+    });
+  });
+}
+
+installIftySmartEnterNavigation();
+
 // 2. ユーザーデータ管理
 function makeId(prefix) {
   return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
@@ -3766,6 +4386,53 @@ function getIftyWeakEntries() {
   return entries;
 }
 
+function getIftyStudyActivityMap() {
+  const activity = {};
+  folders.forEach(folder => {
+    (folder.words || []).forEach(word => {
+      const study = normalizeIftyStudyState(word);
+      if (!study || !study.daily) return;
+      Object.entries(study.daily).forEach(([key, row]) => {
+        if (!row || Number(row.attempts || 0) <= 0) return;
+        activity[key] = (activity[key] || 0) + 1;
+      });
+    });
+  });
+  return activity;
+}
+
+function getIftyDateKeyDaysAgo(daysAgo = 0) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() - Math.max(0, Math.trunc(Number(daysAgo) || 0)));
+  return getIftyLocalDateKey(date.getTime());
+}
+
+function getIftyStudyStreakInfo(maxDays = IFTY_STUDY_HISTORY_MAX_DAYS) {
+  const activity = getIftyStudyActivityMap();
+  const todayActive = !!activity[getIftyDateKeyDaysAgo(0)];
+  let current = 0;
+  let offset = todayActive ? 0 : 1;
+
+  while (offset < maxDays && activity[getIftyDateKeyDaysAgo(offset)]) {
+    current += 1;
+    offset += 1;
+  }
+
+  let best = 0;
+  let running = 0;
+  for (let i = maxDays - 1; i >= 0; i--) {
+    if (activity[getIftyDateKeyDaysAgo(i)]) {
+      running += 1;
+      if (running > best) best = running;
+    } else {
+      running = 0;
+    }
+  }
+
+  return { current, best };
+}
+
 function getIftyLearningStats() {
   const today = getIftyLocalDateKey();
   let studiedToday = 0;
@@ -3787,6 +4454,8 @@ function getIftyLearningStats() {
       if (review && review.graduatedAt > 0) reviewGraduated += 1;
     });
   });
+  const streak = getIftyStudyStreakInfo();
+  const dailyGoal = Math.max(IFTY_DAILY_GOAL_MIN_WORDS, Number(iftyDailyGoalWords) || IFTY_DAILY_GOAL_DEFAULT_WORDS);
   return {
     studiedToday,
     answersToday,
@@ -3795,7 +4464,11 @@ function getIftyLearningStats() {
     dueReview: getIftyReviewEntries({ dueOnly: true }).length,
     reviewActive,
     reviewGraduated,
-    weakWords: getIftyWeakEntries().length
+    weakWords: getIftyWeakEntries().length,
+    dailyGoal,
+    goalPercent: Math.min(999, Math.round(studiedToday / dailyGoal * 100)),
+    studyStreak: streak.current,
+    bestStreak: streak.best
   };
 }
 
@@ -4075,6 +4748,9 @@ window.openIftyLearningStats = function() {
         <div class="ifty-settings-section"><div class="ifty-settings-note">今日学習</div><div style="font-size:1.6em;font-weight:900;">${stats.studiedToday}語</div></div>
         <div class="ifty-settings-section"><div class="ifty-settings-note">今日の回答</div><div style="font-size:1.6em;font-weight:900;">${stats.answersToday}回</div></div>
         <div class="ifty-settings-section"><div class="ifty-settings-note">今日の正答率</div><div style="font-size:1.6em;font-weight:900;">${stats.answersToday ? stats.accuracyToday + '%' : '—'}</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">今日の目標</div><div style="font-size:1.6em;font-weight:900;color:#0f766e;">${stats.studiedToday}/${stats.dailyGoal}語</div><div class="ifty-settings-note">${stats.goalPercent >= 100 ? '達成 ✓' : stats.goalPercent + '%'}</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">連続学習</div><div style="font-size:1.6em;font-weight:900;color:#b45309;">${stats.studyStreak}日</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">自己ベスト</div><div style="font-size:1.6em;font-weight:900;color:#7c3aed;">${stats.bestStreak}日</div></div>
         <div class="ifty-settings-section"><div class="ifty-settings-note">今日の復習</div><div style="font-size:1.6em;font-weight:900;color:#c2410c;">${stats.dueReview}語</div></div>
         <div class="ifty-settings-section"><div class="ifty-settings-note">復習卒業</div><div style="font-size:1.6em;font-weight:900;color:#047857;">${stats.reviewGraduated}語</div></div>
         <div class="ifty-settings-section"><div class="ifty-settings-note">苦手候補</div><div style="font-size:1.6em;font-weight:900;color:#be123c;">${stats.weakWords}語</div></div>
@@ -4083,6 +4759,1044 @@ window.openIftyLearningStats = function() {
       <div class="ifty-settings-section"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div><h3 style="margin-bottom:4px;">苦手候補</h3><div class="ifty-settings-note">回答履歴から自動判定。</div></div>${weak.length ? '<button class="ifty-settings-action" type="button" onclick="switchToVocabView(); setTimeout(()=>startIftyWeakFlashcards(\'front\'),0);" style="background:#be123c;color:white;">苦手だけ学習</button>' : ''}</div><div style="margin-top:10px;display:grid;gap:6px;">${weak.length ? weak.map(({ folder, word, study, accuracy }) => `<div style="padding:9px;border:1px solid #fecdd3;border-radius:8px;background:#fff1f2;"><b>${escapeHtml(word.word || '')}</b><span style="margin-left:8px;color:#be123c;font-size:.8em;">${Math.round(accuracy*100)}% (${study.correct}/${study.total})</span><div style="font-size:.72em;color:#9f1239;margin-top:2px;">${escapeHtml(folder.name || '')}</div></div>`).join('') : '<div class="ifty-settings-note">現在、苦手候補はありません。</div>'}</div></div>
     </section>`, 'stats');
 };
+
+
+// ==========================================
+// Q3 STEP23：例文資産 / AIなし例文学習
+// ==========================================
+function normalizeIftyExamplePair(example) {
+  if (typeof example === 'string') {
+    const en = String(example || '').trim();
+    return en ? { en, ja: '' } : null;
+  }
+  if (!example || typeof example !== 'object') return null;
+  const en = String(example.en || example.english || '').trim();
+  const ja = String(example.ja || example.jp || example.japanese || '').trim();
+  if (!en && !ja) return null;
+  return { en, ja };
+}
+
+function getIftyExampleEntries(query = '') {
+  const normalizedQuery = normalizeIftyVocabSearchText(query);
+  const rows = [];
+
+  folders.forEach(folder => {
+    (folder.words || []).forEach((word, wordIndex) => {
+      const examples = Array.isArray(word.examples) ? word.examples : [];
+      examples.forEach((example, exampleIndex) => {
+        const pair = normalizeIftyExamplePair(example);
+        if (!pair || !pair.en) return;
+        const key = `${String(word.id || '')}::${exampleIndex}`;
+        const haystack = normalizeIftyVocabSearchText([
+          word.word || '',
+          pair.en,
+          pair.ja,
+          folder.name || ''
+        ].join(' '));
+        if (normalizedQuery && !haystack.includes(normalizedQuery)) return;
+        rows.push({
+          key,
+          folder,
+          word,
+          wordIndex,
+          exampleIndex,
+          en: pair.en,
+          ja: pair.ja
+        });
+      });
+    });
+  });
+
+  return rows;
+}
+
+function countIftyExampleAssets() {
+  let count = 0;
+  folders.forEach(folder => {
+    (folder.words || []).forEach(word => {
+      const examples = Array.isArray(word.examples) ? word.examples : [];
+      examples.forEach(example => {
+        const pair = normalizeIftyExamplePair(example);
+        if (pair && pair.en) count += 1;
+      });
+    });
+  });
+  return count;
+}
+
+function findIftyExampleEntryByKey(key) {
+  const target = String(key || '');
+  if (!target) return null;
+  return getIftyExampleEntries('').find(entry => entry.key === target) || null;
+}
+
+function renderIftyExampleBankList() {
+  const list = document.getElementById('iftyExampleBankList');
+  const count = document.getElementById('iftyExampleBankCount');
+  if (!list) return;
+
+  const entries = getIftyExampleEntries(iftyExampleSearchQuery);
+  const total = countIftyExampleAssets();
+  if (count) count.textContent = normalizeIftyVocabSearchText(iftyExampleSearchQuery)
+    ? `${entries.length} / ${total}件`
+    : `${total}件`;
+
+  if (!entries.length) {
+    list.innerHTML = `<div class="ifty-settings-note" style="padding:16px 4px;">${total ? '検索条件に一致する例文はありません。' : 'まだ例文がありません。単語編集またはALLIA生成で保存した例文がここに集まります。'}</div>`;
+    return;
+  }
+
+  const visible = entries.slice(0, 200);
+  list.innerHTML = visible.map(entry => `
+    <div style="border:1px solid #dbeafe;border-radius:10px;padding:12px;background:white;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+        <div style="min-width:0;">
+          <div style="font-weight:900;color:#1e3a8a;">${escapeHtml(entry.word.word || '')}</div>
+          <div style="margin-top:6px;font-size:.97em;line-height:1.55;color:#0f172a;">${escapeHtml(entry.en)}</div>
+          ${entry.ja ? `<div style="margin-top:4px;font-size:.84em;line-height:1.5;color:#475569;">${escapeHtml(entry.ja)}</div>` : ''}
+          <div style="margin-top:5px;font-size:.72em;color:#64748b;">📁 ${escapeHtml(entry.folder.name || '')}</div>
+        </div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
+          <button type="button" onclick="speakIftyExampleByKey('${escapeHtml(entry.key)}')" title="例文を読む" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">🔊</button>
+          <button type="button" onclick="addIftyExampleToBasicSentences('${escapeHtml(entry.key)}')" title="BASIC SENTENCESへ追加" style="border:none;background:${isIftyBasicSentenceDuplicate(entry.en, entry.ja) ? '#94a3b8' : '#059669'};color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">${isIftyBasicSentenceDuplicate(entry.en, entry.ja) ? '✓ BASIC' : '＋ BASIC'}</button>
+          <button type="button" onclick="openEditWordModal('${escapeHtml(String(entry.folder.id || ''))}', ${entry.wordIndex})" title="単語を編集" style="border:none;background:#64748b;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">✏️</button>
+        </div>
+      </div>
+    </div>
+  `).join('') + (entries.length > visible.length
+    ? `<div class="ifty-settings-note" style="padding:10px 2px;">表示は先頭200件まで。検索で絞り込めます。</div>`
+    : '');
+}
+
+window.openIftyExampleBank = function() {
+  window.closeIftySideMenu();
+  const total = countIftyExampleAssets();
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">EXAMPLE BANK</h1>
+          <div class="ifty-portal-subtitle">保存済みの例文を一覧・検索・学習。ここでのフラッシュと穴埋めはALLIAを使用しません。</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+      </div>
+
+      <div class="ifty-settings-section">
+        <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+          <input id="iftyExampleSearchInput" value="${escapeHtml(iftyExampleSearchQuery)}" oninput="setIftyExampleSearch(this.value)" placeholder="単語・英文・和訳・フォルダ名で検索" style="flex:1;min-width:210px;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:.94em;">
+          <button class="ifty-settings-action" type="button" onclick="clearIftyExampleSearch()" style="background:#64748b;color:white;">クリア</button>
+          <span id="iftyExampleBankCount" class="ifty-settings-note">${total}件</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
+          <button class="ifty-settings-action" type="button" onclick="startIftyExampleFlashcards()" style="background:#2563eb;color:white;">📇 例文フラッシュ</button>
+          <button class="ifty-settings-action" type="button" onclick="startIftyExampleClozeQuiz()" style="background:#7c3aed;color:white;">🧩 AIなし穴埋め4択</button>
+          <button class="ifty-settings-action" type="button" onclick="addVisibleIftyExamplesToBasicSentences()" style="background:#059669;color:white;">＋ 表示中をBASICへ追加</button>
+        </div>
+        <div class="ifty-settings-note" style="margin-top:8px;">検索中は、表示中の例文だけを学習対象にできます。</div>
+      </div>
+
+      <div id="iftyExampleBankList" style="display:grid;gap:8px;margin-top:12px;"></div>
+    </section>
+  `, 'examples');
+  renderIftyExampleBankList();
+};
+
+window.setIftyExampleSearch = function(value) {
+  iftyExampleSearchQuery = String(value || '');
+  renderIftyExampleBankList();
+};
+
+window.clearIftyExampleSearch = function() {
+  iftyExampleSearchQuery = '';
+  const input = document.getElementById('iftyExampleSearchInput');
+  if (input) input.value = '';
+  renderIftyExampleBankList();
+};
+
+window.speakIftyExampleByKey = function(key) {
+  const entry = findIftyExampleEntryByKey(key);
+  if (!entry || !entry.en) return;
+  window.speakWord(entry.en);
+};
+
+
+// ==========================================
+// Q3 STEP25：BASIC SENTENCES
+// ALLIAを呼ばず、自作英文とEXAMPLE BANK由来の英文を保存・検索・音読・反復学習する。
+// practiceData.modules.basicSentences に保存するため、既存のクラウド同期・バックアップ対象に自動で含まれる。
+// ==========================================
+function normalizeIftyBasicSentenceStudy(study) {
+  const source = study && typeof study === 'object' ? study : {};
+  const daily = source.daily && typeof source.daily === 'object' ? source.daily : {};
+  const normalizedDaily = {};
+  Object.entries(daily).forEach(([key, row]) => {
+    if (!row || typeof row !== 'object') return;
+    const attempts = Math.max(0, Math.trunc(Number(row.attempts) || 0));
+    const correct = Math.max(0, Math.trunc(Number(row.correct) || 0));
+    const wrong = Math.max(0, Math.trunc(Number(row.wrong) || 0));
+    if (attempts > 0 || correct > 0 || wrong > 0) {
+      normalizedDaily[String(key)] = { attempts, correct, wrong };
+    }
+  });
+  return {
+    total: Math.max(0, Math.trunc(Number(source.total) || 0)),
+    correct: Math.max(0, Math.trunc(Number(source.correct) || 0)),
+    wrong: Math.max(0, Math.trunc(Number(source.wrong) || 0)),
+    firstStudiedAt: Math.max(0, Number(source.firstStudiedAt) || 0),
+    lastStudiedAt: Math.max(0, Number(source.lastStudiedAt) || 0),
+    daily: normalizedDaily
+  };
+}
+
+function normalizeIftyBasicSentenceItem(item) {
+  if (!item || typeof item !== 'object') return null;
+  const en = String(item.en || item.english || '').trim();
+  const ja = String(item.ja || item.jp || item.japanese || '').trim();
+  const note = String(item.note || '').trim();
+  if (!en && !ja && !note) return null;
+  const createdAt = Math.max(0, Number(item.createdAt) || Date.now());
+  const updatedAt = Math.max(createdAt, Number(item.updatedAt) || createdAt);
+  return {
+    ...item,
+    id: String(item.id || makeId('basic_sentence')),
+    en,
+    ja,
+    note,
+    source: item.source && typeof item.source === 'object' ? { ...item.source } : { type: 'manual' },
+    createdAt,
+    updatedAt,
+    study: normalizeIftyBasicSentenceStudy(item.study)
+  };
+}
+
+function getIftyBasicSentenceItems() {
+  const module = practiceData && practiceData.modules && practiceData.modules.basicSentences;
+  return module && Array.isArray(module.items) ? module.items : [];
+}
+
+function countIftyBasicSentences() {
+  return getIftyBasicSentenceItems().length;
+}
+
+function findIftyBasicSentenceById(id) {
+  return getIftyBasicSentenceItems().find(item => String(item.id) === String(id)) || null;
+}
+
+function normalizeIftyBasicSentenceText(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .replace(/[’‘]/g, "'")
+    .replace(/[“”]/g, '"')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[.!?。！？]+$/g, '')
+    .trim();
+}
+
+function isIftyBasicSentenceDuplicate(en, ja = '') {
+  const targetEn = normalizeIftyBasicSentenceText(en);
+  const targetJa = normalizeIftyVocabSearchText(ja);
+  if (!targetEn) return false;
+  return getIftyBasicSentenceItems().some(item => {
+    const sameEn = normalizeIftyBasicSentenceText(item.en) === targetEn;
+    if (!sameEn) return false;
+    if (!targetJa) return true;
+    return normalizeIftyVocabSearchText(item.ja) === targetJa;
+  });
+}
+
+function getIftyFilteredBasicSentences() {
+  const query = normalizeIftyVocabSearchText(iftyBasicSentenceSearchQuery);
+  const items = getIftyBasicSentenceItems();
+  if (!query) return items.slice();
+  return items.filter(item => normalizeIftyVocabSearchText([
+    item.en || '',
+    item.ja || '',
+    item.note || ''
+  ].join(' ')).includes(query));
+}
+
+function getIftyBasicSentenceStats() {
+  const today = getIftyLocalDateKey();
+  let attempts = 0;
+  let correct = 0;
+  let studied = 0;
+  getIftyBasicSentenceItems().forEach(item => {
+    const study = normalizeIftyBasicSentenceStudy(item.study);
+    const row = study.daily[today];
+    if (!row || !row.attempts) return;
+    studied += 1;
+    attempts += row.attempts;
+    correct += row.correct;
+  });
+  return {
+    total: countIftyBasicSentences(),
+    studiedToday: studied,
+    attemptsToday: attempts,
+    correctToday: correct,
+    accuracyToday: attempts ? Math.round(correct / attempts * 100) : 0
+  };
+}
+
+function recordIftyBasicSentenceStudy(sentenceId, correct) {
+  const item = findIftyBasicSentenceById(sentenceId);
+  if (!item) return false;
+  const now = Date.now();
+  const dayKey = getIftyLocalDateKey(now);
+  const study = normalizeIftyBasicSentenceStudy(item.study);
+  if (!study.firstStudiedAt) study.firstStudiedAt = now;
+  study.lastStudiedAt = now;
+  study.total += 1;
+  if (correct) study.correct += 1;
+  else study.wrong += 1;
+  if (!study.daily[dayKey]) study.daily[dayKey] = { attempts: 0, correct: 0, wrong: 0 };
+  study.daily[dayKey].attempts += 1;
+  if (correct) study.daily[dayKey].correct += 1;
+  else study.daily[dayKey].wrong += 1;
+  item.study = study;
+  item.updatedAt = Math.max(Number(item.updatedAt) || 0, now);
+  savePracticeData();
+  return true;
+}
+
+function ensureIftyBasicSentenceModal() {
+  let modal = document.getElementById('iftyBasicSentenceModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'iftyBasicSentenceModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.72);display:none;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;z-index:10080;';
+    modal.addEventListener('click', event => {
+      if (event.target === modal) window.closeIftyBasicSentenceEditor();
+    });
+    document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+  return modal;
+}
+
+window.closeIftyBasicSentenceEditor = function() {
+  const modal = document.getElementById('iftyBasicSentenceModal');
+  if (modal) modal.style.display = 'none';
+};
+
+window.openIftyBasicSentenceEditor = function(sentenceId = '') {
+  const item = sentenceId ? findIftyBasicSentenceById(sentenceId) : null;
+  const modal = ensureIftyBasicSentenceModal();
+  modal.dataset.sentenceId = item ? String(item.id) : '';
+  modal.innerHTML = `
+    <div style="width:min(94vw,700px);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:20px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
+      <button type="button" onclick="closeIftyBasicSentenceEditor()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
+      <h2 style="margin:0;padding-right:46px;color:#065f46;">${item ? 'BASIC SENTENCEを編集' : 'BASIC SENTENCEを追加'}</h2>
+      <div style="margin-top:15px;display:grid;gap:11px;">
+        <label style="display:grid;gap:5px;font-weight:800;color:#334155;">英文
+          <textarea id="iftyBasicSentenceEn" rows="3" placeholder="English sentence" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.en : '')}</textarea>
+        </label>
+        <label style="display:grid;gap:5px;font-weight:800;color:#334155;">和訳
+          <textarea id="iftyBasicSentenceJa" rows="3" placeholder="日本語訳" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.ja : '')}</textarea>
+        </label>
+        <label style="display:grid;gap:5px;font-weight:800;color:#334155;">メモ
+          <textarea id="iftyBasicSentenceNote" rows="2" placeholder="文法・語法・覚え方など（任意）" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.note : '')}</textarea>
+        </label>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;position:sticky;bottom:-20px;background:white;padding:14px 0 2px;margin-top:10px;border-top:1px solid #e2e8f0;">
+        <button type="button" onclick="closeIftyBasicSentenceEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;padding:10px 13px;font-weight:900;cursor:pointer;">キャンセル</button>
+        <button type="button" onclick="saveIftyBasicSentenceEditor()" style="border:none;background:#059669;color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">保存</button>
+      </div>
+      <div style="margin-top:7px;color:#64748b;font-size:.76em;">Ctrl/Cmd + Enterでも保存できます。ALLIAは使用しません。</div>
+    </div>`;
+  modal.onkeydown = event => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) {
+      event.preventDefault();
+      window.saveIftyBasicSentenceEditor();
+    }
+  };
+  setTimeout(() => document.getElementById('iftyBasicSentenceEn')?.focus(), 0);
+};
+
+window.saveIftyBasicSentenceEditor = function() {
+  const modal = document.getElementById('iftyBasicSentenceModal');
+  if (!modal) return;
+  const sentenceId = String(modal.dataset.sentenceId || '');
+  const en = String(document.getElementById('iftyBasicSentenceEn')?.value || '').trim();
+  const ja = String(document.getElementById('iftyBasicSentenceJa')?.value || '').trim();
+  const note = String(document.getElementById('iftyBasicSentenceNote')?.value || '').trim();
+  if (!en) {
+    alert('英文を入力してください。');
+    document.getElementById('iftyBasicSentenceEn')?.focus();
+    return;
+  }
+
+  const current = sentenceId ? findIftyBasicSentenceById(sentenceId) : null;
+  if (!current && isIftyBasicSentenceDuplicate(en, ja)) {
+    if (!confirm('同じ英文がBASIC SENTENCESにあります。それでも追加しますか？')) return;
+  }
+
+  recordUndoState(current ? 'BASIC SENTENCE編集' : 'BASIC SENTENCE追加');
+  const now = Date.now();
+  if (current) {
+    current.en = en;
+    current.ja = ja;
+    current.note = note;
+    current.updatedAt = now;
+  } else {
+    getIftyBasicSentenceItems().push(normalizeIftyBasicSentenceItem({
+      id: makeId('basic_sentence'),
+      en,
+      ja,
+      note,
+      source: { type: 'manual' },
+      createdAt: now,
+      updatedAt: now,
+      study: {}
+    }));
+  }
+  savePracticeData();
+  window.closeIftyBasicSentenceEditor();
+  window.openIftyBasicSentences();
+};
+
+window.deleteIftyBasicSentence = function(sentenceId) {
+  const item = findIftyBasicSentenceById(sentenceId);
+  if (!item) return;
+  if (!confirm(`「${item.en}」をBASIC SENTENCESから削除しますか？`)) return;
+  const items = getIftyBasicSentenceItems();
+  const index = items.findIndex(row => String(row.id) === String(sentenceId));
+  if (index < 0) return;
+  recordUndoState('BASIC SENTENCE削除');
+  items.splice(index, 1);
+  savePracticeData();
+  window.openIftyBasicSentences();
+};
+
+window.speakIftyBasicSentence = function(sentenceId) {
+  const item = findIftyBasicSentenceById(sentenceId);
+  if (!item || !item.en) return;
+  window.speakWord(item.en);
+};
+
+window.setIftyBasicSentenceSearch = function(value) {
+  iftyBasicSentenceSearchQuery = String(value || '');
+  renderIftyBasicSentenceList();
+};
+
+window.clearIftyBasicSentenceSearch = function() {
+  iftyBasicSentenceSearchQuery = '';
+  const input = document.getElementById('iftyBasicSentenceSearchInput');
+  if (input) input.value = '';
+  renderIftyBasicSentenceList();
+};
+
+function renderIftyBasicSentenceList() {
+  const list = document.getElementById('iftyBasicSentenceList');
+  const count = document.getElementById('iftyBasicSentenceCount');
+  if (!list) return;
+  const items = getIftyFilteredBasicSentences();
+  const total = countIftyBasicSentences();
+  if (count) count.textContent = normalizeIftyVocabSearchText(iftyBasicSentenceSearchQuery) ? `${items.length} / ${total}件` : `${total}件`;
+
+  if (!items.length) {
+    list.innerHTML = `<div class="ifty-settings-note" style="padding:16px 4px;">${total ? '検索条件に一致する英文はありません。' : 'まだ英文がありません。「白紙から追加」またはEXAMPLE BANKから追加できます。'}</div>`;
+    return;
+  }
+
+  list.innerHTML = items.slice(0, 250).map(item => {
+    const study = normalizeIftyBasicSentenceStudy(item.study);
+    const accuracy = study.total ? Math.round(study.correct / study.total * 100) : null;
+    const sourceLabel = item.source && item.source.type === 'example_bank' ? 'EXAMPLE BANK' : 'MANUAL';
+    return `
+      <div style="border:1px solid #d1fae5;border-radius:10px;padding:12px;background:white;">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+          <div style="min-width:0;flex:1;">
+            <div style="font-size:1em;font-weight:900;line-height:1.6;color:#064e3b;">${escapeHtml(item.en)}</div>
+            ${item.ja ? `<div style="margin-top:5px;color:#475569;line-height:1.55;">${escapeHtml(item.ja)}</div>` : '<div style="margin-top:5px;color:#94a3b8;font-size:.82em;">和訳なし</div>'}
+            ${item.note ? `<div style="margin-top:7px;padding:7px 9px;border-radius:7px;background:#f8fafc;color:#475569;font-size:.82em;line-height:1.5;">${escapeHtml(item.note)}</div>` : ''}
+            <div style="margin-top:7px;font-size:.72em;color:#64748b;">${sourceLabel}　${study.total ? `・ 学習 ${study.total}回 / 正答率 ${accuracy}%` : '・ 未学習'}</div>
+          </div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
+            <button type="button" onclick="speakIftyBasicSentence('${escapeHtml(String(item.id))}')" title="英文を読む" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">🔊</button>
+            <button type="button" onclick="openIftyBasicSentenceEditor('${escapeHtml(String(item.id))}')" title="編集" style="border:none;background:#64748b;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">✏️</button>
+            <button type="button" onclick="deleteIftyBasicSentence('${escapeHtml(String(item.id))}')" title="削除" style="border:none;background:#dc2626;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">削除</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('') + (items.length > 250 ? '<div class="ifty-settings-note" style="padding:10px 2px;">表示は先頭250件まで。検索で絞り込めます。</div>' : '');
+}
+
+window.openIftyBasicSentences = function() {
+  window.closeIftySideMenu();
+  const stats = getIftyBasicSentenceStats();
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">BASIC SENTENCES</h1>
+          <div class="ifty-portal-subtitle">覚えたい英文を自分で作るか、EXAMPLE BANKから取り込んで反復学習します。生成・採点にALLIAは使いません。</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;margin-top:15px;">
+        <div class="ifty-settings-section"><div class="ifty-settings-note">登録英文</div><div style="font-size:1.45em;font-weight:900;color:#047857;">${stats.total}</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">今日学習</div><div style="font-size:1.45em;font-weight:900;">${stats.studiedToday}</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">今日の回答</div><div style="font-size:1.45em;font-weight:900;">${stats.attemptsToday}</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">今日の正答率</div><div style="font-size:1.45em;font-weight:900;">${stats.attemptsToday ? stats.accuracyToday + '%' : '—'}</div></div>
+      </div>
+
+      <div class="ifty-settings-section">
+        <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+          <input id="iftyBasicSentenceSearchInput" value="${escapeHtml(iftyBasicSentenceSearchQuery)}" oninput="setIftyBasicSentenceSearch(this.value)" placeholder="英文・和訳・メモで検索" style="flex:1;min-width:210px;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:.94em;">
+          <button class="ifty-settings-action" type="button" onclick="clearIftyBasicSentenceSearch()" style="background:#64748b;color:white;">クリア</button>
+          <span id="iftyBasicSentenceCount" class="ifty-settings-note">${stats.total}件</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
+          <button class="ifty-settings-action" type="button" onclick="openIftyBasicSentenceEditor()" style="background:#059669;color:white;">＋ 白紙から追加</button>
+          <button class="ifty-settings-action" type="button" onclick="startIftyBasicSentenceFlashcards()" style="background:#2563eb;color:white;">📇 英文フラッシュ</button>
+          <button class="ifty-settings-action" type="button" onclick="startIftyBasicSentenceTyping()" style="background:#7c3aed;color:white;">⌨️ 和訳→英作文</button>
+          <button class="ifty-settings-action" type="button" onclick="openIftyExampleBank()" style="background:#0f766e;color:white;">📚 EXAMPLE BANK</button>
+        </div>
+        <div class="ifty-settings-note" style="margin-top:8px;">検索中は表示中の英文だけを学習対象にします。英作文は大文字・文末記号・連続スペースの違いを無視して端末内で判定します。</div>
+      </div>
+
+      <div id="iftyBasicSentenceList" style="display:grid;gap:8px;margin-top:12px;"></div>
+    </section>
+  `, 'basic_sentences');
+  renderIftyBasicSentenceList();
+};
+
+window.addIftyExampleToBasicSentences = function(key) {
+  const entry = findIftyExampleEntryByKey(key);
+  if (!entry || !entry.en) return;
+  if (isIftyBasicSentenceDuplicate(entry.en, entry.ja)) {
+    alert('この例文はすでにBASIC SENTENCESにあります。');
+    return;
+  }
+  recordUndoState('例文をBASIC SENTENCESへ追加');
+  const now = Date.now();
+  getIftyBasicSentenceItems().push(normalizeIftyBasicSentenceItem({
+    id: makeId('basic_sentence'),
+    en: entry.en,
+    ja: entry.ja,
+    note: entry.word && entry.word.word ? `元単語: ${entry.word.word}` : '',
+    source: {
+      type: 'example_bank',
+      exampleKey: entry.key,
+      wordId: entry.word ? String(entry.word.id || '') : '',
+      folderId: entry.folder ? String(entry.folder.id || '') : ''
+    },
+    createdAt: now,
+    updatedAt: now,
+    study: {}
+  }));
+  savePracticeData();
+  renderIftyExampleBankList();
+};
+
+window.addVisibleIftyExamplesToBasicSentences = function() {
+  const entries = getIftyExampleEntries(iftyExampleSearchQuery);
+  if (!entries.length) {
+    alert('追加できる例文がありません。');
+    return;
+  }
+  const addable = entries.filter(entry => entry.en && !isIftyBasicSentenceDuplicate(entry.en, entry.ja));
+  if (!addable.length) {
+    alert('表示中の例文はすべて追加済みです。');
+    return;
+  }
+  recordUndoState('表示中の例文をBASIC SENTENCESへ追加');
+  const items = getIftyBasicSentenceItems();
+  const now = Date.now();
+  addable.forEach((entry, index) => {
+    items.push(normalizeIftyBasicSentenceItem({
+      id: makeId('basic_sentence'),
+      en: entry.en,
+      ja: entry.ja,
+      note: entry.word && entry.word.word ? `元単語: ${entry.word.word}` : '',
+      source: {
+        type: 'example_bank',
+        exampleKey: entry.key,
+        wordId: entry.word ? String(entry.word.id || '') : '',
+        folderId: entry.folder ? String(entry.folder.id || '') : ''
+      },
+      createdAt: now + index,
+      updatedAt: now + index,
+      study: {}
+    }));
+  });
+  savePracticeData();
+  renderIftyExampleBankList();
+  alert(`${addable.length}件をBASIC SENTENCESへ追加しました。`);
+};
+
+function ensureIftyBasicSentencePracticeModal() {
+  let modal = document.getElementById('iftyBasicSentencePracticeModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'iftyBasicSentencePracticeModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.72);display:none;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;z-index:10075;';
+    modal.addEventListener('click', event => {
+      if (event.target === modal) window.closeIftyBasicSentencePractice();
+    });
+    document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+  return modal;
+}
+
+window.closeIftyBasicSentencePractice = function() {
+  const modal = document.getElementById('iftyBasicSentencePracticeModal');
+  if (modal) modal.style.display = 'none';
+  iftyBasicSentencePracticeState.mode = '';
+};
+
+function renderIftyBasicSentencePracticeDone(title) {
+  const state = iftyBasicSentencePracticeState;
+  const total = Number(state.correct || 0) + Number(state.wrong || 0);
+  const modal = ensureIftyBasicSentencePracticeModal();
+  modal.innerHTML = `
+    <div style="width:min(92vw,620px);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:22px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
+      <button type="button" onclick="closeIftyBasicSentencePractice()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
+      <h2 style="margin:0;padding-right:44px;color:#065f46;">${escapeHtml(title)}</h2>
+      <div style="margin-top:12px;color:#475569;">正解 ${state.correct || 0} / もう一度 ${state.wrong || 0}${total ? `　・　${Math.round((state.correct || 0) / total * 100)}%` : ''}</div>
+      <div style="margin-top:7px;color:#64748b;font-size:.84em;">端末内だけで学習・判定しました。ALLIAは使用していません。</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px;">
+        <button type="button" onclick="closeIftyBasicSentencePractice(); openIftyBasicSentences();" style="border:none;background:#059669;color:white;border-radius:8px;padding:10px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCESへ戻る</button>
+      </div>
+    </div>`;
+}
+
+window.startIftyBasicSentenceFlashcards = function() {
+  const ids = shuffleArray(getIftyFilteredBasicSentences().map(item => String(item.id)));
+  if (!ids.length) {
+    alert('学習できる英文がありません。');
+    return;
+  }
+  iftyBasicSentencePracticeState = {
+    mode: 'flash',
+    queue: ids,
+    index: 0,
+    revealed: false,
+    answered: false,
+    correct: 0,
+    wrong: 0
+  };
+  renderIftyBasicSentenceFlashcard();
+};
+
+function renderIftyBasicSentenceFlashcard() {
+  const state = iftyBasicSentencePracticeState;
+  if (state.mode !== 'flash') return;
+  if (state.index >= state.queue.length) {
+    renderIftyBasicSentencePracticeDone('BASIC SENTENCES フラッシュ完了');
+    return;
+  }
+  const item = findIftyBasicSentenceById(state.queue[state.index]);
+  if (!item) {
+    state.index += 1;
+    renderIftyBasicSentenceFlashcard();
+    return;
+  }
+  const modal = ensureIftyBasicSentencePracticeModal();
+  modal.innerHTML = `
+    <div style="width:min(94vw,720px);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:22px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
+      <button type="button" onclick="closeIftyBasicSentencePractice()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
+      <div style="font-size:.8em;font-weight:900;color:#059669;padding-right:44px;">BASIC FLASH ${state.index + 1}/${state.queue.length}</div>
+      <div style="margin-top:20px;font-size:1.25em;font-weight:900;line-height:1.75;color:#0f172a;">${escapeHtml(item.en)}</div>
+      <button type="button" onclick="speakIftyBasicSentence('${escapeHtml(String(item.id))}')" style="margin-top:12px;border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">🔊 音声</button>
+      ${state.revealed ? `
+        <div style="margin-top:18px;padding:14px;border-radius:10px;background:#f0fdf4;border:1px solid #bbf7d0;color:#14532d;line-height:1.65;">${item.ja ? escapeHtml(item.ja) : '和訳は登録されていません。'}</div>
+        ${item.note ? `<div style="margin-top:9px;padding:10px;border-radius:8px;background:#f8fafc;color:#475569;font-size:.86em;">${escapeHtml(item.note)}</div>` : ''}
+        <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:18px;">
+          <button type="button" onclick="answerIftyBasicSentenceFlash(true)" style="flex:1;min-width:150px;border:none;background:#059669;color:white;border-radius:9px;padding:12px;font-weight:900;cursor:pointer;">覚えた</button>
+          <button type="button" onclick="answerIftyBasicSentenceFlash(false)" style="flex:1;min-width:150px;border:none;background:#ea580c;color:white;border-radius:9px;padding:12px;font-weight:900;cursor:pointer;">もう一度</button>
+        </div>` : `
+        <button type="button" onclick="revealIftyBasicSentenceFlash()" style="width:100%;margin-top:18px;border:none;background:#2563eb;color:white;border-radius:9px;padding:12px;font-weight:900;cursor:pointer;">答えを見る</button>`}
+    </div>`;
+};
+
+window.revealIftyBasicSentenceFlash = function() {
+  iftyBasicSentencePracticeState.revealed = true;
+  renderIftyBasicSentenceFlashcard();
+};
+
+window.answerIftyBasicSentenceFlash = function(correct) {
+  const state = iftyBasicSentencePracticeState;
+  if (state.mode !== 'flash') return;
+  const id = state.queue[state.index];
+  recordIftyBasicSentenceStudy(id, !!correct);
+  if (correct) state.correct += 1;
+  else state.wrong += 1;
+  state.index += 1;
+  state.revealed = false;
+  renderIftyBasicSentenceFlashcard();
+};
+
+window.startIftyBasicSentenceTyping = function() {
+  const ids = shuffleArray(getIftyFilteredBasicSentences().filter(item => !!String(item.ja || '').trim()).map(item => String(item.id)));
+  if (!ids.length) {
+    alert('和訳が登録された英文がありません。');
+    return;
+  }
+  iftyBasicSentencePracticeState = {
+    mode: 'typing',
+    queue: ids,
+    index: 0,
+    revealed: false,
+    answered: false,
+    correct: 0,
+    wrong: 0
+  };
+  renderIftyBasicSentenceTyping();
+};
+
+function renderIftyBasicSentenceTyping() {
+  const state = iftyBasicSentencePracticeState;
+  if (state.mode !== 'typing') return;
+  if (state.index >= state.queue.length) {
+    renderIftyBasicSentencePracticeDone('BASIC SENTENCES 英作文完了');
+    return;
+  }
+  const item = findIftyBasicSentenceById(state.queue[state.index]);
+  if (!item) {
+    state.index += 1;
+    renderIftyBasicSentenceTyping();
+    return;
+  }
+  const modal = ensureIftyBasicSentencePracticeModal();
+  const result = state.answered ? state.lastResult : null;
+  modal.innerHTML = `
+    <div style="width:min(94vw,720px);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:22px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
+      <button type="button" onclick="closeIftyBasicSentencePractice()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
+      <div style="font-size:.8em;font-weight:900;color:#7c3aed;padding-right:44px;">JP → EN ${state.index + 1}/${state.queue.length}</div>
+      <div style="margin-top:20px;padding:15px;border-radius:10px;background:#f5f3ff;border:1px solid #ddd6fe;color:#4c1d95;font-size:1.08em;font-weight:800;line-height:1.65;">${escapeHtml(item.ja)}</div>
+      ${state.answered ? `
+        <div style="margin-top:15px;padding:12px;border-radius:9px;background:${result && result.correct ? '#ecfdf5' : '#fff7ed'};border:1px solid ${result && result.correct ? '#a7f3d0' : '#fed7aa'};">
+          <div style="font-weight:900;color:${result && result.correct ? '#047857' : '#c2410c'};">${result && result.correct ? '正解' : 'もう一度'}</div>
+          <div style="margin-top:7px;color:#334155;line-height:1.6;">正答：${escapeHtml(item.en)}</div>
+          ${result && result.userAnswer ? `<div style="margin-top:5px;color:#64748b;font-size:.85em;">あなたの回答：${escapeHtml(result.userAnswer)}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
+          <button id="iftyBasicTypingNextBtn" type="button" onclick="nextIftyBasicSentenceTyping()" style="border:none;background:#7c3aed;color:white;border-radius:9px;padding:11px 15px;font-weight:900;cursor:pointer;">次へ</button>
+          <button type="button" onclick="speakIftyBasicSentence('${escapeHtml(String(item.id))}')" style="border:none;background:#0284c7;color:white;border-radius:9px;padding:11px 13px;font-weight:900;cursor:pointer;">🔊 音声</button>
+        </div>` : `
+        <textarea id="iftyBasicTypingInput" rows="3" autocomplete="off" autocapitalize="sentences" spellcheck="false" placeholder="英文を入力" style="width:100%;box-sizing:border-box;margin-top:15px;padding:12px;border:2px solid #c4b5fd;border-radius:9px;font:inherit;font-size:1.05em;resize:vertical;"></textarea>
+        <button type="button" onclick="submitIftyBasicSentenceTyping()" style="width:100%;margin-top:10px;border:none;background:#7c3aed;color:white;border-radius:9px;padding:12px;font-weight:900;cursor:pointer;">端末内で判定</button>
+        <div style="margin-top:7px;color:#64748b;font-size:.76em;">入力欄ではEnterで判定。大文字・文末記号・連続スペースの違いは無視します。</div>`}
+    </div>`;
+  if (!state.answered) {
+    const input = document.getElementById('iftyBasicTypingInput');
+    if (input) {
+      input.addEventListener('keydown', event => {
+        if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+          event.preventDefault();
+          window.submitIftyBasicSentenceTyping();
+        }
+      });
+      setTimeout(() => input.focus(), 0);
+    }
+  } else {
+    setTimeout(() => document.getElementById('iftyBasicTypingNextBtn')?.focus(), 0);
+  }
+}
+
+window.submitIftyBasicSentenceTyping = function() {
+  const state = iftyBasicSentencePracticeState;
+  if (state.mode !== 'typing' || state.answered) return;
+  const item = findIftyBasicSentenceById(state.queue[state.index]);
+  if (!item) return;
+  const input = document.getElementById('iftyBasicTypingInput');
+  const userAnswer = String(input ? input.value : '').trim();
+  if (!userAnswer) {
+    alert('英文を入力してください。');
+    input?.focus();
+    return;
+  }
+  const correct = normalizeIftyBasicSentenceText(userAnswer) === normalizeIftyBasicSentenceText(item.en);
+  recordIftyBasicSentenceStudy(item.id, correct);
+  if (correct) state.correct += 1;
+  else state.wrong += 1;
+  state.answered = true;
+  state.lastResult = { correct, userAnswer };
+  renderIftyBasicSentenceTyping();
+};
+
+window.nextIftyBasicSentenceTyping = function() {
+  const state = iftyBasicSentencePracticeState;
+  if (state.mode !== 'typing') return;
+  state.index += 1;
+  state.answered = false;
+  state.lastResult = null;
+  renderIftyBasicSentenceTyping();
+};
+
+function ensureIftyExamplePracticeModal() {
+  let modal = document.getElementById('iftyExamplePracticeModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'iftyExamplePracticeModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.68);display:none;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;z-index:10070;';
+    modal.addEventListener('click', event => {
+      if (event.target === modal) window.closeIftyExamplePractice();
+    });
+    document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+  installIftyExamplePracticeKeyboard();
+  return modal;
+}
+
+window.closeIftyExamplePractice = function() {
+  const modal = document.getElementById('iftyExamplePracticeModal');
+  if (modal) modal.style.display = 'none';
+  iftyExamplePracticeState.mode = '';
+};
+
+function renderIftyExamplePracticeDone(title) {
+  const modal = ensureIftyExamplePracticeModal();
+  modal.innerHTML = `
+    <div style="width:min(92vw,620px);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:20px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
+      <button type="button" onclick="closeIftyExamplePractice()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
+      <div style="font-size:1.25em;font-weight:900;color:#0f172a;padding-right:44px;">${escapeHtml(title)}</div>
+      <div style="margin-top:8px;color:#64748b;">保存済み例文だけで学習しました。ALLIAは使用していません。</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px;">
+        <button type="button" onclick="closeIftyExamplePractice()" style="border:none;background:#334155;color:white;border-radius:8px;padding:10px 13px;font-weight:900;cursor:pointer;">閉じる</button>
+        <button type="button" onclick="closeIftyExamplePractice(); openIftyExampleBank();" style="border:none;background:#2563eb;color:white;border-radius:8px;padding:10px 13px;font-weight:900;cursor:pointer;">例文資産へ戻る</button>
+      </div>
+    </div>`;
+}
+
+window.startIftyExampleFlashcards = function() {
+  const entries = shuffleArray(getIftyExampleEntries(iftyExampleSearchQuery).map(entry => ({ ...entry })));
+  if (!entries.length) {
+    alert('学習できる例文がありません。');
+    return;
+  }
+  iftyExamplePracticeState = {
+    mode: 'flash',
+    queue: entries,
+    index: 0,
+    revealed: false,
+    answered: false,
+    resultText: ''
+  };
+  renderIftyExampleFlashcard();
+};
+
+function renderIftyExampleFlashcard() {
+  const state = iftyExamplePracticeState;
+  if (state.mode !== 'flash') return;
+  if (state.index >= state.queue.length) {
+    renderIftyExamplePracticeDone('例文フラッシュ完了');
+    return;
+  }
+  const entry = state.queue[state.index];
+  const modal = ensureIftyExamplePracticeModal();
+  modal.innerHTML = `
+    <div style="width:min(94vw,680px);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:20px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
+      <button type="button" onclick="closeIftyExamplePractice()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
+      <div style="font-size:.8em;font-weight:900;color:#2563eb;padding-right:44px;">EXAMPLE FLASH ${state.index + 1}/${state.queue.length}</div>
+      <div style="margin-top:18px;font-size:1.18em;font-weight:800;line-height:1.7;color:#0f172a;">${escapeHtml(entry.en)}</div>
+      <button type="button" onclick="speakIftyExampleByKey('${escapeHtml(entry.key)}')" style="margin-top:12px;border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">🔊 音声</button>
+
+      ${state.revealed ? `
+        <div style="margin-top:18px;border-top:1px solid #e2e8f0;padding-top:16px;">
+          <div style="font-size:1.1em;font-weight:900;color:#1e3a8a;">${escapeHtml(entry.word.word || '')}</div>
+          <div style="margin-top:7px;line-height:1.6;color:#334155;">${escapeHtml(entry.ja || '和訳は未登録です。')}</div>
+          <div style="margin-top:5px;color:#64748b;font-size:.78em;">📁 ${escapeHtml(entry.folder.name || '')}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:18px;">
+          <button type="button" onclick="answerIftyExampleFlashcard(false)" style="border:none;background:#e11d48;color:white;border-radius:9px;padding:12px;font-weight:900;cursor:pointer;">△ 怪しい</button>
+          <button type="button" onclick="answerIftyExampleFlashcard(true)" style="border:none;background:#059669;color:white;border-radius:9px;padding:12px;font-weight:900;cursor:pointer;">○ わかった</button>
+        </div>
+      ` : `
+        <button type="button" onclick="revealIftyExampleFlashcard()" style="width:100%;margin-top:20px;border:none;background:#2563eb;color:white;border-radius:9px;padding:12px;font-weight:900;cursor:pointer;">意味を見る</button>
+      `}
+      <div style="margin-top:12px;color:#94a3b8;font-size:.72em;">Space / Enter：表示　・　表示後 ←：怪しい / →：わかった</div>
+    </div>`;
+};
+
+window.revealIftyExampleFlashcard = function() {
+  if (iftyExamplePracticeState.mode !== 'flash') return;
+  iftyExamplePracticeState.revealed = true;
+  renderIftyExampleFlashcard();
+};
+
+window.answerIftyExampleFlashcard = function(correct) {
+  const state = iftyExamplePracticeState;
+  if (state.mode !== 'flash') return;
+  const entry = state.queue[state.index];
+  if (!entry) return;
+  recordIftyStudyEvent(entry.word.id, !!correct, 'example_flashcard');
+  enrollIftyReviewFromStudy(entry.word.id, !!correct);
+  saveUserData();
+  state.index += 1;
+  state.revealed = false;
+  renderIftyExampleFlashcard();
+};
+
+function makeIftyExampleClozeText(sentence, headword) {
+  const text = String(sentence || '');
+  const needle = String(headword || '').trim();
+  if (!text || !needle) return '';
+  const lower = text.toLowerCase();
+  const target = needle.toLowerCase();
+  let start = 0;
+
+  while (start <= lower.length - target.length) {
+    const index = lower.indexOf(target, start);
+    if (index < 0) return '';
+    const before = index > 0 ? text[index - 1] : '';
+    const afterIndex = index + needle.length;
+    const after = afterIndex < text.length ? text[afterIndex] : '';
+    const beforeOk = !before || !/[A-Za-z]/.test(before);
+    const afterOk = !after || !/[A-Za-z]/.test(after);
+    if (beforeOk && afterOk) {
+      return text.slice(0, index) + '□□□□' + text.slice(index + needle.length);
+    }
+    start = index + Math.max(1, needle.length);
+  }
+  return '';
+}
+
+function buildIftyExampleClozeQueue(entries) {
+  const allHeads = [];
+  folders.forEach(folder => (folder.words || []).forEach(word => {
+    const head = String(word.word || '').trim();
+    if (head && !allHeads.some(value => value.toLowerCase() === head.toLowerCase())) allHeads.push(head);
+  }));
+  if (allHeads.length < 4) return [];
+
+  const questions = [];
+  entries.forEach(entry => {
+    const target = String(entry.word.word || '').trim();
+    const question = makeIftyExampleClozeText(entry.en, target);
+    if (!question) return;
+    const distractors = shuffleArray(allHeads.filter(head => head.toLowerCase() !== target.toLowerCase())).slice(0, 3);
+    if (distractors.length < 3) return;
+    questions.push({
+      ...entry,
+      clozeText: question,
+      options: shuffleArray([target, ...distractors])
+    });
+  });
+  return shuffleArray(questions);
+}
+
+window.startIftyExampleClozeQuiz = function() {
+  const entries = getIftyExampleEntries(iftyExampleSearchQuery);
+  const queue = buildIftyExampleClozeQueue(entries);
+  if (!queue.length) {
+    alert('穴埋め4択を作れる例文がありません。英文内に見出し語がそのまま含まれ、異なる単語が4語以上必要です。');
+    return;
+  }
+  iftyExamplePracticeState = {
+    mode: 'cloze',
+    queue,
+    index: 0,
+    revealed: false,
+    answered: false,
+    resultText: ''
+  };
+  renderIftyExampleClozeQuiz();
+};
+
+function renderIftyExampleClozeQuiz() {
+  const state = iftyExamplePracticeState;
+  if (state.mode !== 'cloze') return;
+  if (state.index >= state.queue.length) {
+    renderIftyExamplePracticeDone('例文穴埋め完了');
+    return;
+  }
+
+  const item = state.queue[state.index];
+  const modal = ensureIftyExamplePracticeModal();
+  const optionButtons = item.options.map((option, index) => `
+    <button type="button" ${state.answered ? 'disabled' : ''} onclick="answerIftyExampleCloze(${index})" style="text-align:left;border:1px solid #c4b5fd;background:${state.answered && option.toLowerCase() === String(item.word.word || '').toLowerCase() ? '#dcfce7' : 'white'};color:#0f172a;border-radius:9px;padding:11px 12px;font-weight:800;cursor:${state.answered ? 'default' : 'pointer'};">${String.fromCharCode(65 + index)}. ${escapeHtml(option)}</button>
+  `).join('');
+
+  modal.innerHTML = `
+    <div style="width:min(94vw,700px);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:20px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
+      <button type="button" onclick="closeIftyExamplePractice()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
+      <div style="font-size:.8em;font-weight:900;color:#7c3aed;padding-right:44px;">LOCAL CLOZE ${state.index + 1}/${state.queue.length}</div>
+      <div style="margin-top:18px;font-size:1.15em;font-weight:800;line-height:1.7;color:#0f172a;">${escapeHtml(item.clozeText)}</div>
+      <div style="margin-top:16px;display:grid;gap:8px;">${optionButtons}</div>
+      ${state.answered ? `
+        <div style="margin-top:14px;padding:11px;border-radius:9px;background:${state.resultText === '正解' ? '#ecfdf5' : '#fff1f2'};color:${state.resultText === '正解' ? '#047857' : '#be123c'};font-weight:900;">${escapeHtml(state.resultText)}　答え：${escapeHtml(item.word.word || '')}${item.ja ? `<div style="font-weight:500;font-size:.86em;margin-top:5px;">${escapeHtml(item.ja)}</div>` : ''}</div>
+        <button type="button" onclick="nextIftyExampleCloze()" style="width:100%;margin-top:12px;border:none;background:#7c3aed;color:white;border-radius:9px;padding:11px;font-weight:900;cursor:pointer;">次へ</button>
+      ` : ''}
+      <div style="margin-top:12px;color:#94a3b8;font-size:.72em;">A-D / 1-4：選択　・　回答後 Enter：次へ</div>
+    </div>`;
+}
+
+window.answerIftyExampleCloze = function(optionIndex) {
+  const state = iftyExamplePracticeState;
+  if (state.mode !== 'cloze' || state.answered) return;
+  const item = state.queue[state.index];
+  if (!item) return;
+  const selected = String(item.options[Number(optionIndex)] || '');
+  const correct = selected.toLowerCase() === String(item.word.word || '').trim().toLowerCase();
+  state.answered = true;
+  state.resultText = correct ? '正解' : '不正解';
+  recordIftyStudyEvent(item.word.id, correct, 'example_cloze');
+  enrollIftyReviewFromStudy(item.word.id, correct);
+  saveUserData();
+  renderIftyExampleClozeQuiz();
+};
+
+window.nextIftyExampleCloze = function() {
+  const state = iftyExamplePracticeState;
+  if (state.mode !== 'cloze' || !state.answered) return;
+  state.index += 1;
+  state.answered = false;
+  state.resultText = '';
+  renderIftyExampleClozeQuiz();
+};
+
+function installIftyExamplePracticeKeyboard() {
+  if (window.__iftyExamplePracticeKeyboardInstalled) return;
+  window.__iftyExamplePracticeKeyboardInstalled = true;
+  document.addEventListener('keydown', event => {
+    const modal = document.getElementById('iftyExamplePracticeModal');
+    if (!modal || modal.style.display === 'none') return;
+    const active = document.activeElement;
+    if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) return;
+
+    const state = iftyExamplePracticeState;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      window.closeIftyExamplePractice();
+      return;
+    }
+
+    if (state.mode === 'flash') {
+      if (!state.revealed && (event.key === ' ' || event.key === 'Enter')) {
+        event.preventDefault();
+        window.revealIftyExampleFlashcard();
+      } else if (state.revealed && event.key === 'ArrowLeft') {
+        event.preventDefault();
+        window.answerIftyExampleFlashcard(false);
+      } else if (state.revealed && event.key === 'ArrowRight') {
+        event.preventDefault();
+        window.answerIftyExampleFlashcard(true);
+      }
+      return;
+    }
+
+    if (state.mode === 'cloze') {
+      if (!state.answered) {
+        const key = String(event.key || '').toLowerCase();
+        const indexMap = { a: 0, b: 1, c: 2, d: 3, '1': 0, '2': 1, '3': 2, '4': 3 };
+        if (Object.prototype.hasOwnProperty.call(indexMap, key)) {
+          event.preventDefault();
+          window.answerIftyExampleCloze(indexMap[key]);
+        }
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        window.nextIftyExampleCloze();
+      }
+    }
+  });
+}
 
 window.startIftyDueReviewFlashcards = function(direction = 'front') {
   const entries = getIftyReviewEntries({ dueOnly: true });
@@ -4230,6 +5944,34 @@ function normalizePracticeData() {
     if (!set.progress || typeof set.progress !== 'object') set.progress = null;
     if (!Array.isArray(set.reviewWordIds)) set.reviewWordIds = [];
     if (!set.mistakeCounts || typeof set.mistakeCounts !== 'object') set.mistakeCounts = {};
+  });
+
+  if (!practiceData.modules.basicSentences || typeof practiceData.modules.basicSentences !== 'object') {
+    practiceData.modules.basicSentences = { items: [] };
+  }
+  if (!Array.isArray(practiceData.modules.basicSentences.items)) {
+    practiceData.modules.basicSentences.items = [];
+  }
+  practiceData.modules.basicSentences.items = practiceData.modules.basicSentences.items
+    .map(normalizeIftyBasicSentenceItem)
+    .filter(Boolean);
+
+  if (!practiceData.modules.socialStudies || typeof practiceData.modules.socialStudies !== 'object') {
+    practiceData.modules.socialStudies = { folders: [] };
+  }
+  if (!Array.isArray(practiceData.modules.socialStudies.folders)) {
+    practiceData.modules.socialStudies.folders = [];
+  }
+  practiceData.modules.socialStudies.folders = practiceData.modules.socialStudies.folders.map(folder => {
+    const source = folder && typeof folder === 'object' ? folder : {};
+    const normalizedSubjects = normalizeIftySocialSubjects(source.subjects);
+    return {
+      id: source.id || makeId('socialfolder'),
+      name: String(source.name || '社会').trim() || '社会',
+      subjects: normalizedSubjects.length ? normalizedSubjects : ['WORLD_HISTORY'],
+      collapsed: !!source.collapsed,
+      items: Array.isArray(source.items) ? source.items.map(normalizeIftySocialItem).filter(Boolean) : []
+    };
   });
 }
 function loadPracticeData(username) {
