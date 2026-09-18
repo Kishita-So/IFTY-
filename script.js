@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP20 2026-09-18：自動復習・学習統計・苦手抽出・リスニング操作強化 ★★★
+// ★★★ IFTY Q3 STEP21 2026-09-18：白紙単語・スペル候補自動確定 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -39,6 +39,14 @@ let iftyListeningRate = (() => {
   const value = Number(localStorage.getItem(IFTY_LISTENING_RATE_KEY));
   return [0.75, 0.9, 1].includes(value) ? value : 0.9;
 })();
+
+// Q3 STEP21：スペル候補は一定時間応答がなければ候補側を自動採用する。
+const IFTY_SPELLING_AUTO_ACCEPT_DEFAULT_SECONDS = 5;
+const IFTY_SPELLING_AUTO_ACCEPT_MIN_SECONDS = 1;
+const IFTY_SPELLING_AUTO_ACCEPT_MAX_SECONDS = 60;
+const IFTY_SPELLING_AUTO_ACCEPT_SETTING_PREFIX = 'ifty_spelling_auto_accept_seconds_';
+let iftySpellingAutoAcceptSeconds = IFTY_SPELLING_AUTO_ACCEPT_DEFAULT_SECONDS;
+let iftySpellingSuggestionTimers = {};
 
 let chatSessions = [];
 let currentChatSessionId = null;
@@ -1259,6 +1267,17 @@ window.openIftySettings = function() {
       </div>
 
       <div class="ifty-settings-section">
+        <h3>SPELLING SUGGESTION</h3>
+        <div class="ifty-settings-note">「もしかして」が表示されたあと、応答がなければ候補の単語を自動追加します。現在：${iftySpellingAutoAcceptSeconds}秒。</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px;">
+          <input id="iftySpellingAutoAcceptSecondsInput" type="number" min="${IFTY_SPELLING_AUTO_ACCEPT_MIN_SECONDS}" max="${IFTY_SPELLING_AUTO_ACCEPT_MAX_SECONDS}" step="1" value="${iftySpellingAutoAcceptSeconds}" inputmode="numeric" style="width:90px;padding:9px 10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+          <span style="font-weight:800;">秒後</span>
+          <button class="ifty-settings-action" type="button" onclick="applyIftySpellingAutoAcceptSettingFromUi()" style="background:#0284c7;color:white;">変更</button>
+        </div>
+        <div class="ifty-settings-note" style="margin-top:8px;">${IFTY_SPELLING_AUTO_ACCEPT_MIN_SECONDS}〜${IFTY_SPELLING_AUTO_ACCEPT_MAX_SECONDS}秒で設定できます。</div>
+      </div>
+
+      <div class="ifty-settings-section">
         <div class="ifty-settings-row">
           <div>
             <h3>BACKUP / RESTORE</h3>
@@ -1284,7 +1303,7 @@ window.openIftySettings = function() {
         </div>
       </div>
 
-      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP20</div>
+      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP21</div>
     </section>
   `, 'settings');
 
@@ -1656,6 +1675,34 @@ window.disableIftyAutosaveFromUi = function() {
   window.openIftySettings();
 };
 
+function getIftySpellingAutoAcceptSettingKey(username = currentUser) {
+  return IFTY_SPELLING_AUTO_ACCEPT_SETTING_PREFIX + String(username || 'default_user');
+}
+
+function loadIftySpellingAutoAcceptPreference() {
+  const raw = localStorage.getItem(getIftySpellingAutoAcceptSettingKey());
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < IFTY_SPELLING_AUTO_ACCEPT_MIN_SECONDS || value > IFTY_SPELLING_AUTO_ACCEPT_MAX_SECONDS) {
+    iftySpellingAutoAcceptSeconds = IFTY_SPELLING_AUTO_ACCEPT_DEFAULT_SECONDS;
+    return iftySpellingAutoAcceptSeconds;
+  }
+  iftySpellingAutoAcceptSeconds = Math.round(value);
+  return iftySpellingAutoAcceptSeconds;
+}
+
+window.applyIftySpellingAutoAcceptSettingFromUi = function() {
+  const input = document.getElementById('iftySpellingAutoAcceptSecondsInput');
+  const value = Number(input && input.value);
+  if (!Number.isFinite(value) || value < IFTY_SPELLING_AUTO_ACCEPT_MIN_SECONDS || value > IFTY_SPELLING_AUTO_ACCEPT_MAX_SECONDS) {
+    alert(`「もしかして」の自動確定時間は${IFTY_SPELLING_AUTO_ACCEPT_MIN_SECONDS}〜${IFTY_SPELLING_AUTO_ACCEPT_MAX_SECONDS}秒で入力してください。`);
+    return;
+  }
+  iftySpellingAutoAcceptSeconds = Math.round(value);
+  localStorage.setItem(getIftySpellingAutoAcceptSettingKey(), String(iftySpellingAutoAcceptSeconds));
+  rescheduleAllIftySpellingSuggestionTimers();
+  window.openIftySettings();
+};
+
 async function getIftyRecoverySnapshots() {
   const db = await openIftyRecoveryDb();
   try {
@@ -1983,6 +2030,7 @@ async function applyIftyRecoveryPayload(payload) {
 
     selectedFolderIds.clear();
     selectedWordIds.clear();
+    clearAllIftySpellingSuggestionTimers();
     pendingSpellingSuggestions = {};
     wordInputDrafts = {};
     iftyGlobalVocabSearchQuery = '';
@@ -2759,6 +2807,7 @@ async function migrateIftyLocalUsernameData(oldUsername, newUsername) {
     [`chat_sessions_${oldName}`, `chat_sessions_${newName}`],
     [getIftyOrderStorageKey(oldName), getIftyOrderStorageKey(newName)],
     [getIftyAutosaveSettingKey(oldName), getIftyAutosaveSettingKey(newName)],
+    [getIftySpellingAutoAcceptSettingKey(oldName), getIftySpellingAutoAcceptSettingKey(newName)],
     [getIftyCloudRevisionKey(oldName), getIftyCloudRevisionKey(newName)],
     [getIftyCloudDirtyKey(oldName), getIftyCloudDirtyKey(newName)]
   ];
@@ -2882,6 +2931,7 @@ window.submitIftyUsernameChange = async function() {
     saveChatSessions();
     saveIftySubjectOrders({ queueCloud: false });
     localStorage.setItem(getIftyAutosaveSettingKey(currentUser), String(iftyAutosaveIntervalMinutes));
+    localStorage.setItem(getIftySpellingAutoAcceptSettingKey(currentUser), String(iftySpellingAutoAcceptSeconds));
     localStorage.setItem(getIftyCloudRevisionKey(currentUser), String(iftyCloudRevision));
 
     const userDisplay = document.getElementById('userDisplay');
@@ -3051,6 +3101,7 @@ async function purgeIftyLocalAccountData(username) {
   localStorage.removeItem(IFTY_CLOUD_REVISION_PREFIX + user);
   localStorage.removeItem(IFTY_CLOUD_DIRTY_PREFIX + user);
   localStorage.removeItem(IFTY_AUTOSAVE_SETTING_PREFIX + user);
+  localStorage.removeItem(IFTY_SPELLING_AUTO_ACCEPT_SETTING_PREFIX + user);
 
   try {
     const db = await openIftyRecoveryDb();
@@ -3183,6 +3234,7 @@ async function applyIftyCloudPayload(payload) {
 
     selectedFolderIds.clear();
     selectedWordIds.clear();
+    clearAllIftySpellingSuggestionTimers();
     pendingSpellingSuggestions = {};
     wordInputDrafts = {};
     undoStack = [];
@@ -3382,6 +3434,7 @@ async function enterIftyAccount(account, options = {}) {
   ensureIftyBrandUi();
   ensureIftyNetworkUi();
   loadIftyAutosavePreference();
+  loadIftySpellingAutoAcceptPreference();
   startIftyAutoBackup();
   iftyCloudSaveEnabled = true;
 
@@ -3423,6 +3476,7 @@ async function enterIftyDeveloperSession() {
   ensureIftyBrandUi();
   ensureIftyNetworkUi();
   loadIftyAutosavePreference();
+  loadIftySpellingAutoAcceptPreference();
   startIftyAutoBackup();
 
   // Developerはアカウント認証を省略する代わりに、クラウド同期は常に無効。
@@ -4331,8 +4385,9 @@ function renderFolders() {
 
       ${visuallyCollapsed ? '' : `
         <div style="display:flex;gap:6px;margin-bottom:10px;margin-top:8px;">
-          <input id="wordInput_${folder.id}" value="${escapeHtml(wordInputDrafts[folder.id] || '')}" placeholder="単語を入力（Enterまたは追加でAI自動生成）" oninput="saveWordInputDraft('${folder.id}', this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); addWordToFolder('${folder.id}');}" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:4px;font-size:.9em;min-width:0;">
+          <input id="wordInput_${folder.id}" value="${escapeHtml(wordInputDrafts[folder.id] || '')}" placeholder="単語を入力（Enterまたは追加でALLIA生成）" oninput="saveWordInputDraft('${folder.id}', this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); addWordToFolder('${folder.id}');}" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:4px;font-size:.9em;min-width:0;">
           <button onclick="addWordToFolder('${folder.id}')" style="background:#0284c7;color:white;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:.9em;font-weight:bold;">追加</button>
+          <button onclick="addBlankWordToFolder('${folder.id}')" title="ALLIAを使わず白紙から自分で作成" style="background:white;color:#334155;border:1px solid #94a3b8;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:.9em;font-weight:bold;white-space:nowrap;">白紙</button>
         </div>
         <div id="spellingSuggestion_${folder.id}">${suggestion ? renderSpellingSuggestion(folder.id, suggestion) : ''}</div>
         <div style="display:flex;gap:6px;align-items:center;margin:8px 0 10px;flex-wrap:wrap;">
@@ -4390,6 +4445,60 @@ function refreshSpellingSuggestion(folderId) {
   area.innerHTML = suggestion ? renderSpellingSuggestion(folderId, suggestion) : '';
 }
 
+function clearIftySpellingSuggestionTimer(folderId) {
+  const timer = iftySpellingSuggestionTimers[folderId];
+  if (timer) clearTimeout(timer);
+  delete iftySpellingSuggestionTimers[folderId];
+}
+
+function clearAllIftySpellingSuggestionTimers() {
+  Object.keys(iftySpellingSuggestionTimers).forEach(clearIftySpellingSuggestionTimer);
+}
+
+function clearIftySpellingSuggestion(folderId, options = {}) {
+  clearIftySpellingSuggestionTimer(folderId);
+  delete pendingSpellingSuggestions[folderId];
+  if (!options.skipRefresh) refreshSpellingSuggestion(folderId);
+}
+
+function scheduleIftySpellingSuggestionAutoAccept(folderId, suggestion) {
+  clearIftySpellingSuggestionTimer(folderId);
+  if (!suggestion) return;
+  const token = String(suggestion.id || '');
+  const createdAt = Number(suggestion.createdAt || Date.now());
+  const dueAt = createdAt + iftySpellingAutoAcceptSeconds * 1000;
+  const delay = Math.max(0, dueAt - Date.now());
+  iftySpellingSuggestionTimers[folderId] = setTimeout(async () => {
+    delete iftySpellingSuggestionTimers[folderId];
+    const current = pendingSpellingSuggestions[folderId];
+    if (!current || String(current.id || '') !== token) return;
+    const word = String(current.suggested || '').trim();
+    clearIftySpellingSuggestion(folderId);
+    if (!word) return;
+    keepWordInputFocused(folderId);
+    await generateAndAddWord(folderId, word);
+  }, delay);
+}
+
+function setIftySpellingSuggestion(folderId, original, suggested) {
+  const suggestion = {
+    id: makeId('spelling'),
+    original: String(original || '').trim(),
+    suggested: String(suggested || '').trim(),
+    createdAt: Date.now()
+  };
+  pendingSpellingSuggestions[folderId] = suggestion;
+  refreshSpellingSuggestion(folderId);
+  scheduleIftySpellingSuggestionAutoAccept(folderId, suggestion);
+}
+
+function rescheduleAllIftySpellingSuggestionTimers() {
+  clearAllIftySpellingSuggestionTimers();
+  Object.entries(pendingSpellingSuggestions).forEach(([folderId, suggestion]) => {
+    if (suggestion) scheduleIftySpellingSuggestionAutoAccept(folderId, suggestion);
+  });
+}
+
 function keepWordInputFocused(folderId) {
   const input = document.getElementById(`wordInput_${folderId}`);
   if (!input) return;
@@ -4403,7 +4512,8 @@ function keepWordInputFocused(folderId) {
 function renderSpellingSuggestion(folderId, suggestion) {
   return `
     <div style="margin-bottom: 10px; padding: 10px 12px; background: #eff6ff; border: 1px solid #93c5fd; border-radius: 7px; color: #334155; font-size: 0.9em;">
-      <div style="margin-bottom: 8px;">もしかして <b>${escapeHtml(suggestion.suggested)}</b> ？</div>
+      <div style="margin-bottom: 5px;">もしかして <b>${escapeHtml(suggestion.suggested)}</b> ？</div>
+      <div style="margin-bottom:8px;color:#64748b;font-size:.82em;">${iftySpellingAutoAcceptSeconds}秒以内に応答がなければ <b>${escapeHtml(suggestion.suggested)}</b> を自動追加します。</div>
       <div style="display: flex; gap: 7px; flex-wrap: wrap;">
         <button onclick="acceptSpellingSuggestion('${folderId}')" style="background: #0284c7; color: white; border: none; padding: 6px 10px; border-radius: 5px; cursor: pointer; font-weight: bold;">${escapeHtml(suggestion.suggested)} を追加</button>
         <button onclick="keepOriginalSpelling('${folderId}')" style="background: #e2e8f0; color: #334155; border: none; padding: 6px 10px; border-radius: 5px; cursor: pointer;">${escapeHtml(suggestion.original)} のまま追加</button>
@@ -4417,8 +4527,7 @@ window.acceptSpellingSuggestion = async function(folderId) {
   const suggestion = pendingSpellingSuggestions[folderId];
   if (!suggestion) return;
   const word = suggestion.suggested;
-  delete pendingSpellingSuggestions[folderId];
-  refreshSpellingSuggestion(folderId);
+  clearIftySpellingSuggestion(folderId);
   keepWordInputFocused(folderId);
   await generateAndAddWord(folderId, word);
 };
@@ -4427,15 +4536,13 @@ window.keepOriginalSpelling = async function(folderId) {
   const suggestion = pendingSpellingSuggestions[folderId];
   if (!suggestion) return;
   const word = suggestion.original;
-  delete pendingSpellingSuggestions[folderId];
-  refreshSpellingSuggestion(folderId);
+  clearIftySpellingSuggestion(folderId);
   keepWordInputFocused(folderId);
   await generateAndAddWord(folderId, word);
 };
 
 window.cancelSpellingSuggestion = function(folderId) {
-  delete pendingSpellingSuggestions[folderId];
-  refreshSpellingSuggestion(folderId);
+  clearIftySpellingSuggestion(folderId);
   keepWordInputFocused(folderId);
 };
 
@@ -4523,6 +4630,44 @@ function renderWordItem(w, folderId, wIndex) {
 }
 
 // 4. 単語追加・編集・移動
+window.addBlankWordToFolder = function(folderId) {
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder) return;
+  if (!Array.isArray(folder.words)) folder.words = [];
+
+  recordUndoState('白紙単語追加');
+  const blankWord = {
+    id: makeId('word'),
+    word: '',
+    meanings: [],
+    examples: [],
+    pronunciation: '',
+    partOfSpeech: '',
+    transitivity: '',
+    countability: '',
+    details: '',
+    derivatives: [],
+    forms: {},
+    mastery: 'unfixed',
+    quizAnswers: { jp: [], en: [] },
+    generationMeta: {
+      subject: 'ENGLISH',
+      order: '',
+      source: 'MANUAL_BLANK',
+      generatedAt: 0
+    }
+  };
+
+  folder.words.push(blankWord);
+  saveUserData();
+  refreshFolderWordArea(folderId);
+  window.openEditWordModal(folderId, folder.words.length - 1);
+  setTimeout(() => {
+    const field = document.getElementById('editWordText');
+    if (field) field.focus();
+  }, 0);
+};
+
 window.addWordToFolder = async function(folderId) {
   const input = document.getElementById(`wordInput_${folderId}`);
   if (!input) return;
@@ -4542,8 +4687,7 @@ window.addWordToFolder = async function(folderId) {
     wordInputDrafts[folderId] = '';
     input.value = '';
     keepWordInputFocused(folderId);
-    delete pendingSpellingSuggestions[folderId];
-    refreshSpellingSuggestion(folderId);
+    clearIftySpellingSuggestion(folderId);
     await addWordFromReusableData(folderId, wordText, reusable.data, reusable.source, englishOrder);
     return;
   }
@@ -4563,8 +4707,7 @@ window.addWordToFolder = async function(folderId) {
   input.value = '';
   // Enterで送信しても入力欄からフォーカスを外さず、iPadでそのまま次の単語を続けて入力できるようにする。
   keepWordInputFocused(folderId);
-  delete pendingSpellingSuggestions[folderId];
-  refreshSpellingSuggestion(folderId);
+  clearIftySpellingSuggestion(folderId);
 
   try {
     const spellResponse = await fetch(WORKER_URL, {
@@ -4582,11 +4725,7 @@ window.addWordToFolder = async function(folderId) {
         spellData.suggestion &&
         String(spellData.suggestion).trim().toLowerCase() !== wordText.toLowerCase()
       ) {
-        pendingSpellingSuggestions[folderId] = {
-          original: wordText,
-          suggested: String(spellData.suggestion).trim()
-        };
-        refreshSpellingSuggestion(folderId);
+        setIftySpellingSuggestion(folderId, wordText, String(spellData.suggestion).trim());
         keepWordInputFocused(folderId);
         return;
       }
@@ -4884,7 +5023,7 @@ window.deleteFolder = function(folderId) {
   if (removedFolder) (removedFolder.words || []).forEach(w => selectedWordIds.delete(w.id));
   selectedFolderIds.delete(folderId);
   folders = folders.filter(f => f.id !== folderId);
-  delete pendingSpellingSuggestions[folderId];
+  clearIftySpellingSuggestion(folderId, { skipRefresh: true });
   saveUserData();
   renderFolders();
 };
