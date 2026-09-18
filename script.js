@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP26 2026-09-18：SOCIAL STUDIES フォルダ科目設定 / 5W1H ★★★
+// ★★★ IFTY Q3 STEP27 2026-09-18：SOCIAL STUDIES 画像資産 / 画像クイズ / Enter改善 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -88,6 +88,23 @@ const IFTY_SOCIAL_SUBJECTS = [
   { key: 'PUBLIC', label: '公共' }
 ];
 const IFTY_SOCIAL_SUBJECT_KEYS = IFTY_SOCIAL_SUBJECTS.map(item => item.key);
+
+// Q3 STEP27：SOCIAL STUDIES 画像資産 / 入力ドラフト / 画像クイズ
+// AI解析用画像は一時的に高解像度、保存用画像はクラウド容量を抑えるため縮小して保持する。
+let iftySocialTopicDrafts = {};
+let iftySocialImageDrafts = {};
+let iftySocialEditorImageDraft = null;
+let iftySocialVisualQuizState = {
+  mode: '',
+  folderId: '',
+  queue: [],
+  index: 0,
+  correct: 0,
+  wrong: 0,
+  answered: false,
+  selectedId: '',
+  optionIds: []
+};
 
 let chatSessions = [];
 let currentChatSessionId = null;
@@ -1205,7 +1222,7 @@ window.openIftySideMenuHome = function() {
 };
 
 // ==========================================
-// Q3 STEP26：SOCIAL STUDIES / フォルダ別科目設定 + 5W1H
+// Q3 STEP27：SOCIAL STUDIES / フォルダ別科目設定 + 5W1H + 画像資産 + 画像クイズ
 // ==========================================
 function normalizeIftySocialSubjects(value) {
   const source = Array.isArray(value) ? value : [];
@@ -1216,6 +1233,28 @@ function normalizeIftySocialSubjects(value) {
 function getIftySocialSubjectLabel(key) {
   const found = IFTY_SOCIAL_SUBJECTS.find(item => item.key === key);
   return found ? found.label : String(key || '');
+}
+
+function normalizeIftySocialImageData(value) {
+  const image = String(value || '').trim();
+  return /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(image) ? image : '';
+}
+
+function normalizeIftySocialImageKind(value) {
+  const kind = String(value || '').trim().toUpperCase();
+  return ['MAP', 'ARTWORK', 'PHOTO', 'DOCUMENT', 'CHART', 'OTHER'].includes(kind) ? kind : '';
+}
+
+function getIftySocialImageKindLabel(kind) {
+  const labels = {
+    MAP: '地図',
+    ARTWORK: '作品・建築',
+    PHOTO: '写真',
+    DOCUMENT: '史料・文書',
+    CHART: '図表・グラフ',
+    OTHER: 'その他'
+  };
+  return labels[normalizeIftySocialImageKind(kind)] || '画像';
 }
 
 function normalizeIftySocialItem(value) {
@@ -1234,6 +1273,11 @@ function normalizeIftySocialItem(value) {
     how: text('how'),
     keyPoints: Array.isArray(value.keyPoints) ? value.keyPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12) : [],
     subjects: normalizeIftySocialSubjects(value.subjects),
+    imageData: normalizeIftySocialImageData(value.imageData),
+    imageName: text('imageName'),
+    imageKind: normalizeIftySocialImageKind(value.imageKind),
+    imageFocus: text('imageFocus'),
+    workTitle: text('workTitle'),
     source: String(value.source || 'MANUAL').trim(),
     createdAt: Number(value.createdAt || 0) || Date.now(),
     updatedAt: Number(value.updatedAt || 0) || Date.now()
@@ -1249,8 +1293,24 @@ function getIftySocialFolder(folderId) {
   return getIftySocialModule().folders.find(folder => folder.id === folderId) || null;
 }
 
+function getIftySocialItemById(itemId) {
+  for (const folder of getIftySocialModule().folders) {
+    const item = (folder.items || []).find(entry => String(entry.id) === String(itemId));
+    if (item) return { folder, item };
+  }
+  return null;
+}
+
 function countIftySocialItems() {
   return getIftySocialModule().folders.reduce((sum, folder) => sum + (Array.isArray(folder.items) ? folder.items.length : 0), 0);
+}
+
+function getIftySocialImageEntries(folderId = '') {
+  const module = getIftySocialModule();
+  const foldersToUse = folderId ? module.folders.filter(folder => folder.id === folderId) : module.folders;
+  return foldersToUse.flatMap(folder => (folder.items || [])
+    .filter(item => !!normalizeIftySocialImageData(item.imageData))
+    .map(item => ({ folder, item })));
 }
 
 function renderIftySocialSubjectBadges(subjects) {
@@ -1260,7 +1320,7 @@ function renderIftySocialSubjectBadges(subjects) {
 
 function renderIftySocialFiveWOneH(item) {
   const rows = [
-    ['Who', '誰・主体', item.who],
+    ['Who', '誰・主体・建国者・首謀者', item.who],
     ['When', 'いつ', item.when],
     ['Where', 'どこで', item.where],
     ['What', '何を・何か', item.what],
@@ -1275,6 +1335,24 @@ function renderIftySocialFiveWOneH(item) {
   </div>`;
 }
 
+function renderIftySocialVisualAsset(item) {
+  const imageData = normalizeIftySocialImageData(item.imageData);
+  if (!imageData) return '';
+  return `<div style="margin-top:10px;border:1px solid #d8b4fe;background:#faf5ff;border-radius:10px;padding:9px;display:grid;grid-template-columns:minmax(120px,220px) 1fr;gap:10px;align-items:start;">
+    <button type="button" onclick="openIftySocialImageViewer('${item.id}')" style="border:none;background:transparent;padding:0;cursor:zoom-in;min-width:0;">
+      <img src="${imageData}" alt="${escapeHtml(item.imageName || item.title || '社会画像')}" style="display:block;width:100%;max-height:190px;object-fit:contain;border-radius:7px;background:white;border:1px solid #e9d5ff;">
+    </button>
+    <div style="min-width:0;">
+      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:.72em;font-weight:900;color:#7e22ce;background:#f3e8ff;border-radius:999px;padding:3px 7px;">${escapeHtml(getIftySocialImageKindLabel(item.imageKind))}</span>
+        ${item.workTitle ? `<span style="font-size:.78em;font-weight:900;color:#581c87;">${escapeHtml(item.workTitle)}</span>` : ''}
+      </div>
+      <div style="margin-top:6px;font-size:.76em;font-weight:900;color:#6b21a8;">画像から押さえる核</div>
+      <div style="margin-top:2px;color:#3b0764;font-size:.87em;line-height:1.5;white-space:pre-wrap;">${escapeHtml(item.imageFocus || '—')}</div>
+    </div>
+  </div>`;
+}
+
 function renderIftySocialItemCard(folder, item) {
   return `<article style="border:1px solid #cbd5e1;border-radius:10px;background:white;padding:12px;margin-top:9px;box-shadow:0 1px 3px rgba(15,23,42,.05);">
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
@@ -1283,6 +1361,7 @@ function renderIftySocialItemCard(folder, item) {
           <strong style="font-size:1.08em;color:#0f172a;">${escapeHtml(item.title || item.topic || '無題')}</strong>
           ${renderIftySocialSubjectBadges(item.subjects.length ? item.subjects : folder.subjects)}
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
+          ${item.imageData ? '<span style="font-size:.68em;color:#7e22ce;font-weight:900;">IMAGE</span>' : ''}
         </div>
         ${item.summary ? `<div style="margin-top:7px;color:#334155;line-height:1.55;white-space:pre-wrap;">${escapeHtml(item.summary)}</div>` : ''}
       </div>
@@ -1291,6 +1370,7 @@ function renderIftySocialItemCard(folder, item) {
         <button type="button" onclick="deleteIftySocialItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">削除</button>
       </div>
     </div>
+    ${renderIftySocialVisualAsset(item)}
     ${renderIftySocialFiveWOneH(item)}
     ${item.keyPoints.length ? `<div style="margin-top:9px;padding:9px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;">
       <div style="font-size:.76em;font-weight:900;color:#475569;margin-bottom:4px;">重要ポイント</div>
@@ -1299,8 +1379,39 @@ function renderIftySocialItemCard(folder, item) {
   </article>`;
 }
 
+function renderIftySocialPendingImage(folderId) {
+  const container = document.getElementById(`iftySocialImagePreview_${folderId}`);
+  if (!container) return;
+  const draft = iftySocialImageDrafts[folderId];
+  if (!draft || !draft.storedDataUrl) {
+    container.innerHTML = '';
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'flex';
+  container.innerHTML = `
+    <img src="${draft.storedDataUrl}" alt="添付画像" style="width:74px;height:74px;object-fit:contain;border:1px solid #d8b4fe;border-radius:7px;background:white;">
+    <div style="min-width:0;flex:1;">
+      <div style="font-size:.78em;font-weight:900;color:#6b21a8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(draft.name || '画像')}</div>
+      <div style="font-size:.7em;color:#7c3aed;margin-top:3px;">ALLIAが画像も読み取り、地図・作品名・覚える核を整理します。</div>
+    </div>
+    <button type="button" onclick="clearIftySocialImageDraft('${folderId}')" style="border:none;background:#e2e8f0;color:#475569;border-radius:999px;width:28px;height:28px;font-weight:900;cursor:pointer;">×</button>`;
+}
+
+function keepIftySocialTopicFocused(folderId) {
+  setTimeout(() => {
+    const input = document.getElementById(`iftySocialTopic_${folderId}`);
+    if (input) {
+      input.focus({ preventScroll: true });
+      const end = input.value.length;
+      try { input.setSelectionRange(end, end); } catch (_) {}
+    }
+  }, 0);
+}
+
 function renderIftySocialFolder(folder) {
   const items = Array.isArray(folder.items) ? folder.items : [];
+  const imageCount = items.filter(item => !!item.imageData).length;
   const subjectChecks = IFTY_SOCIAL_SUBJECTS.map(subject => {
     const checked = folder.subjects.includes(subject.key);
     return `<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 7px;border:1px solid ${checked ? '#38bdf8' : '#cbd5e1'};border-radius:999px;background:${checked ? '#f0f9ff' : 'white'};font-size:.76em;font-weight:800;cursor:pointer;">
@@ -1320,11 +1431,20 @@ function renderIftySocialFolder(folder) {
 
     ${folder.collapsed ? '' : `<div style="margin-top:12px;">
       <div style="display:flex;gap:7px;flex-wrap:wrap;">
-        <input id="iftySocialTopic_${folder.id}" placeholder="人物・出来事・制度・地名など" onkeydown="if(event.key==='Enter'){event.preventDefault();generateIftySocialItem('${folder.id}');}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;">
-        <button type="button" onclick="generateIftySocialItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">ALLIAで5W1H生成</button>
+        <input id="iftySocialTopic_${folder.id}" value="${escapeHtml(iftySocialTopicDrafts[folder.id] || '')}" placeholder="人物・出来事・制度・地名など（画像だけでも可）" oninput="iftySocialTopicDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'){event.preventDefault();generateIftySocialItem('${folder.id}');}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;">
+        <button type="button" onclick="document.getElementById('iftySocialImageInput_${folder.id}').click()" style="border:1px solid #c084fc;background:#faf5ff;color:#7e22ce;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">🖼 画像</button>
+        <input id="iftySocialImageInput_${folder.id}" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleIftySocialImageSelect(event,'${folder.id}')" style="display:none;">
+        <button type="button" onclick="generateIftySocialItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">ALLIAで生成</button>
         <button type="button" onclick="addBlankIftySocialItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">白紙</button>
       </div>
+      <div id="iftySocialImagePreview_${folder.id}" style="display:${iftySocialImageDrafts[folder.id]?.storedDataUrl ? 'flex' : 'none'};align-items:center;gap:8px;margin-top:7px;padding:7px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:8px;"></div>
       <div id="iftySocialStatus_${folder.id}" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;"></div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:7px;padding:8px;border:1px solid #ede9fe;border-radius:8px;background:#fafaff;">
+        <span style="font-size:.76em;font-weight:900;color:#6d28d9;">画像クイズ ${imageCount}枚</span>
+        <button type="button" onclick="startIftySocialVisualQuiz('${folder.id}','image_to_text')" ${imageCount < 2 ? 'disabled' : ''} style="border:none;background:${imageCount < 2 ? '#cbd5e1' : '#7c3aed'};color:white;border-radius:7px;padding:6px 9px;font-weight:900;cursor:${imageCount < 2 ? 'not-allowed' : 'pointer'};">画像を見て選ぶ</button>
+        <button type="button" onclick="startIftySocialVisualQuiz('${folder.id}','text_to_image')" ${imageCount < 2 ? 'disabled' : ''} style="border:none;background:${imageCount < 2 ? '#cbd5e1' : '#6d28d9'};color:white;border-radius:7px;padding:6px 9px;font-weight:900;cursor:${imageCount < 2 ? 'not-allowed' : 'pointer'};">画像を選ぶ</button>
+        ${imageCount < 2 ? '<span style="font-size:.7em;color:#94a3b8;">2枚以上の画像を登録すると使用できます。</span>' : ''}
+      </div>
       <div>${items.length ? items.map(item => renderIftySocialItemCard(folder, item)).join('') : '<div style="margin-top:12px;padding:18px;text-align:center;border:1px dashed #cbd5e1;border-radius:8px;color:#94a3b8;">まだ項目がありません。</div>'}</div>
     </div>`}
   </section>`;
@@ -1347,7 +1467,7 @@ function renderIftySocialStudiesPage() {
         <div class="ifty-settings-row">
           <div>
             <h3>ORDER / ALLIA</h3>
-            <div class="ifty-settings-note">${escapeHtml(getIftyOrderStatus('SOCIAL STUDIES'))}。社会のALLIAは、説明時にWho / When / Where / What / Why / Howを明確にする設定です。</div>
+            <div class="ifty-settings-note">${escapeHtml(getIftyOrderStatus('SOCIAL STUDIES'))}。社会のALLIAは、Who / When / Where / What / Why / Howに加え、画像の地図・作品名・覚える核も整理します。Whoには建国者・創始者・首謀者・指導者・実行主体も含めます。</div>
           </div>
           <div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;">
             <button class="ifty-settings-action" type="button" onclick="openIftySubjectOrder('SOCIAL STUDIES')" style="background:#0284c7;color:white;">ORDERを編集</button>
@@ -1367,10 +1487,11 @@ function renderIftySocialStudiesPage() {
         </div>
       </div>
 
-      <div style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 項目 ${countIftySocialItems()}。社会データは既存のpracticeDataに保存されるため、クラウド同期・バックアップ対象です。</div>
+      <div style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 項目 ${countIftySocialItems()}。画像はクイズ用に圧縮して項目へ保存され、既存のpracticeDataと一緒にクラウド同期・バックアップ対象になります。</div>
       <div>${module.folders.length ? module.folders.map(renderIftySocialFolder).join('') : '<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">社会フォルダを作成してください。</div>'}</div>
     </section>
   `, 'subject');
+  module.folders.forEach(folder => renderIftySocialPendingImage(folder.id));
 }
 
 window.createIftySocialFolder = function() {
@@ -1424,8 +1545,100 @@ window.deleteIftySocialFolder = function(folderId) {
   if (!confirm(`「${folder.name}」を削除しますか？中の項目も削除されます。`)) return;
   recordUndoState('社会フォルダ削除');
   module.folders = module.folders.filter(item => item.id !== folderId);
+  delete iftySocialTopicDrafts[folderId];
+  delete iftySocialImageDrafts[folderId];
   savePracticeData();
   renderIftySocialStudiesPage();
+};
+
+function loadIftyImageElement(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('画像を読み込めませんでした。'));
+    img.src = dataUrl;
+  });
+}
+
+async function makeIftySocialStoredImage(dataUrl, maxSide = 900, maxChars = 240000) {
+  const img = await loadIftyImageElement(dataUrl);
+  let width = img.naturalWidth || img.width;
+  let height = img.naturalHeight || img.height;
+  const largest = Math.max(width, height);
+  if (largest > maxSide) {
+    const scale = maxSide / largest;
+    width = Math.max(1, Math.round(width * scale));
+    height = Math.max(1, Math.round(height * scale));
+  }
+
+  for (let pass = 0; pass < 5; pass += 1) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return dataUrl;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+
+    for (const quality of [0.84, 0.76, 0.68, 0.6, 0.52]) {
+      const out = canvas.toDataURL('image/jpeg', quality);
+      if (out.length <= maxChars) return out;
+    }
+    width = Math.max(320, Math.round(width * 0.82));
+    height = Math.max(240, Math.round(height * 0.82));
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return dataUrl;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(img, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', 0.5);
+}
+
+window.handleIftySocialImageSelect = async function(event, folderId) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (file.type && !file.type.startsWith('image/')) {
+    alert('画像ファイルを選択してください。');
+    event.target.value = '';
+    return;
+  }
+  if (file.size > 14 * 1024 * 1024) {
+    alert('画像が大きすぎます。14MB以下の画像を選択してください。');
+    event.target.value = '';
+    return;
+  }
+
+  try {
+    const rawDataUrl = await readFileAsDataUrl(file);
+    const [aiDataUrl, storedDataUrl] = await Promise.all([
+      resizeImageDataUrl(rawDataUrl, 1600),
+      makeIftySocialStoredImage(rawDataUrl)
+    ]);
+    iftySocialImageDrafts[folderId] = {
+      name: String(file.name || 'image').trim(),
+      aiDataUrl,
+      storedDataUrl
+    };
+    renderIftySocialPendingImage(folderId);
+    keepIftySocialTopicFocused(folderId);
+  } catch (error) {
+    delete iftySocialImageDrafts[folderId];
+    alert(String(error.message || error));
+  } finally {
+    event.target.value = '';
+  }
+};
+
+window.clearIftySocialImageDraft = function(folderId) {
+  delete iftySocialImageDrafts[folderId];
+  renderIftySocialPendingImage(folderId);
+  keepIftySocialTopicFocused(folderId);
 };
 
 window.generateIftySocialItem = async function(folderId) {
@@ -1433,9 +1646,19 @@ window.generateIftySocialItem = async function(folderId) {
   const input = document.getElementById(`iftySocialTopic_${folderId}`);
   const status = document.getElementById(`iftySocialStatus_${folderId}`);
   const topic = String(input?.value || '').trim();
-  if (!folder || !topic) return;
-  if (!ensureIftyOnline('社会5W1H生成')) return;
-  if (status) status.textContent = 'ALLIAが5W1Hを整理中…';
+  const imageDraft = iftySocialImageDrafts[folderId] ? { ...iftySocialImageDrafts[folderId] } : null;
+  if (!folder || (!topic && !imageDraft?.aiDataUrl)) return;
+  if (!ensureIftyOnline('社会データ生成')) return;
+
+  // ENGLISHと同じく、Enter/生成ボタンで確定した瞬間に入力内容を消し、
+  // ALLIA処理中も次の項目を続けて入力できるようにする。
+  iftySocialTopicDrafts[folderId] = '';
+  if (input) input.value = '';
+  delete iftySocialImageDrafts[folderId];
+  renderIftySocialPendingImage(folderId);
+  keepIftySocialTopicFocused(folderId);
+  if (status) status.textContent = imageDraft?.aiDataUrl ? 'ALLIAが画像と5W1Hを整理中…' : 'ALLIAが5W1Hを整理中…';
+
   try {
     const response = await fetch(WORKER_URL, {
       method: 'POST',
@@ -1443,6 +1666,7 @@ window.generateIftySocialItem = async function(folderId) {
       body: JSON.stringify({
         type: 'social_generate',
         topic,
+        image: imageDraft?.aiDataUrl || '',
         subjects: folder.subjects,
         subject: 'SOCIAL STUDIES',
         order: getIftySubjectOrder('SOCIAL STUDIES')
@@ -1456,33 +1680,80 @@ window.generateIftySocialItem = async function(folderId) {
       id: makeId('socialitem'),
       topic,
       subjects: folder.subjects,
+      imageData: imageDraft?.storedDataUrl || '',
+      imageName: imageDraft?.name || '',
       source: 'ALLIA',
       createdAt: Date.now(),
       updatedAt: Date.now()
     }));
     savePracticeData();
     renderIftySocialStudiesPage();
+    keepIftySocialTopicFocused(folderId);
   } catch (error) {
     console.error('社会5W1H生成エラー:', error);
-    if (status) status.textContent = String(error.message || error);
+    // 失敗時だけ、確定前の入力を復元する。処理中に次の入力を始めていた場合は上書きしない。
+    if (!String(iftySocialTopicDrafts[folderId] || '').trim()) iftySocialTopicDrafts[folderId] = topic;
+    if (!iftySocialImageDrafts[folderId] && imageDraft) iftySocialImageDrafts[folderId] = imageDraft;
+    const currentInput = document.getElementById(`iftySocialTopic_${folderId}`);
+    if (currentInput && !currentInput.value.trim()) currentInput.value = iftySocialTopicDrafts[folderId] || '';
+    renderIftySocialPendingImage(folderId);
+    const currentStatus = document.getElementById(`iftySocialStatus_${folderId}`);
+    if (currentStatus) currentStatus.textContent = String(error.message || error);
+    keepIftySocialTopicFocused(folderId);
   }
 };
 
 window.addBlankIftySocialItem = function(folderId) {
   const folder = getIftySocialFolder(folderId);
   if (!folder) return;
+  const imageDraft = iftySocialImageDrafts[folderId] ? { ...iftySocialImageDrafts[folderId] } : null;
   recordUndoState('社会白紙項目追加');
   const item = normalizeIftySocialItem({
     id: makeId('socialitem'),
     subjects: folder.subjects,
+    imageData: imageDraft?.storedDataUrl || '',
+    imageName: imageDraft?.name || '',
     source: 'MANUAL',
     createdAt: Date.now(),
     updatedAt: Date.now()
   });
   folder.items.push(item);
+  delete iftySocialImageDrafts[folderId];
   savePracticeData();
   renderIftySocialStudiesPage();
   setTimeout(() => window.openIftySocialItemEditor(folderId, item.id), 0);
+};
+
+function ensureIftySocialImageViewerModal() {
+  let modal = document.getElementById('iftySocialImageViewerModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'iftySocialImageViewerModal';
+  modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(2,6,23,.82);z-index:12150;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+  modal.innerHTML = '<div id="iftySocialImageViewerCard" style="width:min(980px,96vw);max-height:94vh;overflow:auto;background:#0f172a;border-radius:12px;padding:12px;box-shadow:0 20px 60px rgba(0,0,0,.4);"></div>';
+  modal.addEventListener('click', event => { if (event.target === modal) window.closeIftySocialImageViewer(); });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+window.openIftySocialImageViewer = function(itemId) {
+  const ref = getIftySocialItemById(itemId);
+  if (!ref?.item?.imageData) return;
+  const modal = ensureIftySocialImageViewerModal();
+  const card = document.getElementById('iftySocialImageViewerCard');
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px;color:white;">
+      <div style="font-weight:900;">${escapeHtml(ref.item.workTitle || ref.item.title || '画像')}</div>
+      <button type="button" onclick="closeIftySocialImageViewer()" style="border:none;background:#334155;color:white;border-radius:999px;width:34px;height:34px;font-size:1.2em;cursor:pointer;">×</button>
+    </div>
+    <img src="${ref.item.imageData}" alt="${escapeHtml(ref.item.imageName || ref.item.title || '社会画像')}" style="display:block;max-width:100%;max-height:78vh;margin:auto;object-fit:contain;background:white;border-radius:8px;">
+    ${ref.item.imageFocus ? `<div style="margin-top:9px;color:#e9d5ff;line-height:1.5;white-space:pre-wrap;">${escapeHtml(ref.item.imageFocus)}</div>` : ''}`;
+  modal.style.display = 'flex';
+};
+
+window.closeIftySocialImageViewer = function() {
+  const modal = document.getElementById('iftySocialImageViewerModal');
+  if (modal) modal.style.display = 'none';
 };
 
 function ensureIftySocialItemModal() {
@@ -1497,38 +1768,112 @@ function ensureIftySocialItemModal() {
   return modal;
 }
 
+function renderIftySocialEditorImagePreview() {
+  const container = document.getElementById('iftySocialEditImagePreview');
+  if (!container) return;
+  const imageData = normalizeIftySocialImageData(iftySocialEditorImageDraft?.imageData);
+  if (!imageData) {
+    container.innerHTML = '<div style="padding:12px;border:1px dashed #cbd5e1;border-radius:8px;color:#94a3b8;text-align:center;font-size:.8em;">画像なし</div>';
+    return;
+  }
+  container.innerHTML = `
+    <div style="display:flex;gap:9px;align-items:center;padding:8px;border:1px solid #e9d5ff;border-radius:8px;background:#faf5ff;">
+      <img src="${imageData}" alt="画像プレビュー" style="width:96px;height:80px;object-fit:contain;background:white;border:1px solid #e9d5ff;border-radius:7px;">
+      <div style="min-width:0;flex:1;font-size:.76em;color:#6b21a8;">${escapeHtml(iftySocialEditorImageDraft?.imageName || '添付画像')}</div>
+      <button type="button" onclick="removeIftySocialEditorImage()" style="border:none;background:#ef4444;color:white;border-radius:7px;padding:6px 8px;font-weight:900;cursor:pointer;">画像削除</button>
+    </div>`;
+}
+
 window.openIftySocialItemEditor = function(folderId, itemId) {
   const folder = getIftySocialFolder(folderId);
   const item = folder?.items?.find(entry => entry.id === itemId);
   if (!folder || !item) return;
+  iftySocialEditorImageDraft = {
+    imageData: normalizeIftySocialImageData(item.imageData),
+    imageName: String(item.imageName || '').trim()
+  };
   const modal = ensureIftySocialItemModal();
   const card = document.getElementById('iftySocialItemModalCard');
   const field = (id, label, value, rows = 1) => `<label style="display:block;margin-top:9px;font-size:.78em;font-weight:900;color:#475569;">${label}</label>${rows > 1 ? `<textarea id="${id}" rows="${rows}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.95em;resize:vertical;">${escapeHtml(value || '')}</textarea>` : `<input id="${id}" value="${escapeHtml(value || '')}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.95em;">`}`;
   card.innerHTML = `
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
-      <div><div style="font-size:1.15em;font-weight:900;color:#0f172a;">社会項目を編集</div><div style="font-size:.75em;color:#64748b;">5W1Hを必要に応じて自分で修正できます。</div></div>
+      <div><div style="font-size:1.15em;font-weight:900;color:#0f172a;">社会項目を編集</div><div style="font-size:.75em;color:#64748b;">5W1Hと画像の覚える核を必要に応じて修正できます。</div></div>
       <button type="button" onclick="closeIftySocialItemEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:999px;width:34px;height:34px;font-size:1.2em;font-weight:900;cursor:pointer;">×</button>
     </div>
     ${field('iftySocialEditTitle','タイトル',item.title)}
     ${field('iftySocialEditSummary','要約',item.summary,3)}
-    ${field('iftySocialEditWho','Who / 誰・主体',item.who,2)}
+    ${field('iftySocialEditWho','Who / 誰・主体・建国者・首謀者',item.who,2)}
     ${field('iftySocialEditWhen','When / いつ',item.when,2)}
     ${field('iftySocialEditWhere','Where / どこで',item.where,2)}
     ${field('iftySocialEditWhat','What / 何を・何か',item.what,3)}
     ${field('iftySocialEditWhy','Why / なぜ',item.why,3)}
     ${field('iftySocialEditHow','How / どのように',item.how,3)}
     ${field('iftySocialEditKeyPoints','重要ポイント（1行1項目）',item.keyPoints.join('\n'),4)}
+    <div style="margin-top:12px;padding:10px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:9px;">
+      <div style="font-size:.8em;font-weight:900;color:#6b21a8;">画像資産</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:7px;align-items:center;">
+        <button type="button" onclick="document.getElementById('iftySocialEditImageInput').click()" style="border:1px solid #c084fc;background:white;color:#7e22ce;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">画像を選択</button>
+        <input id="iftySocialEditImageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleIftySocialEditorImageSelect(event)" style="display:none;">
+      </div>
+      <div id="iftySocialEditImagePreview" style="margin-top:7px;"></div>
+      <label style="display:block;margin-top:9px;font-size:.78em;font-weight:900;color:#6b21a8;">画像種別</label>
+      <select id="iftySocialEditImageKind" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #d8b4fe;border-radius:7px;background:white;">
+        <option value="" ${!item.imageKind ? 'selected' : ''}>未設定</option>
+        <option value="MAP" ${item.imageKind === 'MAP' ? 'selected' : ''}>地図</option>
+        <option value="ARTWORK" ${item.imageKind === 'ARTWORK' ? 'selected' : ''}>作品・建築</option>
+        <option value="PHOTO" ${item.imageKind === 'PHOTO' ? 'selected' : ''}>写真</option>
+        <option value="DOCUMENT" ${item.imageKind === 'DOCUMENT' ? 'selected' : ''}>史料・文書</option>
+        <option value="CHART" ${item.imageKind === 'CHART' ? 'selected' : ''}>図表・グラフ</option>
+        <option value="OTHER" ${item.imageKind === 'OTHER' ? 'selected' : ''}>その他</option>
+      </select>
+      ${field('iftySocialEditImageFocus','画像から押さえる核（地図なら場所・範囲、作品なら特徴など）',item.imageFocus,3)}
+      ${field('iftySocialEditWorkTitle','作品名・建築名・史料名',item.workTitle)}
+    </div>
     <div style="position:sticky;bottom:-16px;margin:14px -16px -16px;padding:10px 16px;background:rgba(255,255,255,.97);border-top:1px solid #e2e8f0;display:flex;gap:8px;justify-content:flex-end;">
       <button type="button" onclick="closeIftySocialItemEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">キャンセル</button>
       <button type="button" onclick="saveIftySocialItemEditor('${folderId}','${itemId}')" data-ifty-enter-primary="true" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 14px;font-weight:900;cursor:pointer;">保存</button>
     </div>`;
   modal.style.display = 'flex';
+  renderIftySocialEditorImagePreview();
   setTimeout(() => document.getElementById('iftySocialEditTitle')?.focus(), 0);
+};
+
+window.handleIftySocialEditorImageSelect = async function(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (file.type && !file.type.startsWith('image/')) {
+    alert('画像ファイルを選択してください。');
+    event.target.value = '';
+    return;
+  }
+  if (file.size > 14 * 1024 * 1024) {
+    alert('画像が大きすぎます。14MB以下の画像を選択してください。');
+    event.target.value = '';
+    return;
+  }
+  try {
+    const rawDataUrl = await readFileAsDataUrl(file);
+    iftySocialEditorImageDraft = {
+      imageData: await makeIftySocialStoredImage(rawDataUrl),
+      imageName: String(file.name || 'image').trim()
+    };
+    renderIftySocialEditorImagePreview();
+  } catch (error) {
+    alert(String(error.message || error));
+  } finally {
+    event.target.value = '';
+  }
+};
+
+window.removeIftySocialEditorImage = function() {
+  iftySocialEditorImageDraft = { imageData: '', imageName: '' };
+  renderIftySocialEditorImagePreview();
 };
 
 window.closeIftySocialItemEditor = function() {
   const modal = document.getElementById('iftySocialItemModal');
   if (modal) modal.style.display = 'none';
+  iftySocialEditorImageDraft = null;
 };
 
 window.saveIftySocialItemEditor = function(folderId, itemId) {
@@ -1546,6 +1891,17 @@ window.saveIftySocialItemEditor = function(folderId, itemId) {
   item.why = val('iftySocialEditWhy');
   item.how = val('iftySocialEditHow');
   item.keyPoints = val('iftySocialEditKeyPoints').split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 12);
+  item.imageData = normalizeIftySocialImageData(iftySocialEditorImageDraft?.imageData);
+  item.imageName = String(iftySocialEditorImageDraft?.imageName || '').trim();
+  item.imageKind = normalizeIftySocialImageKind(val('iftySocialEditImageKind'));
+  item.imageFocus = val('iftySocialEditImageFocus');
+  item.workTitle = val('iftySocialEditWorkTitle');
+  if (!item.imageData) {
+    item.imageName = '';
+    item.imageKind = '';
+    item.imageFocus = '';
+    item.workTitle = '';
+  }
   item.updatedAt = Date.now();
   savePracticeData();
   window.closeIftySocialItemEditor();
@@ -1563,6 +1919,191 @@ window.deleteIftySocialItem = function(folderId, itemId) {
   renderIftySocialStudiesPage();
 };
 
+function ensureIftySocialVisualQuizModal() {
+  let modal = document.getElementById('iftySocialVisualQuizModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'iftySocialVisualQuizModal';
+  modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(15,23,42,.65);z-index:12080;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;';
+  modal.innerHTML = '<div id="iftySocialVisualQuizCard" style="width:min(820px,96vw);max-height:92vh;overflow:auto;background:white;border-radius:12px;padding:16px;box-shadow:0 20px 50px rgba(0,0,0,.3);"></div>';
+  modal.addEventListener('click', event => { if (event.target === modal) window.closeIftySocialVisualQuiz(); });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function getIftySocialVisualQuizCandidates(folderId, mode) {
+  const folder = getIftySocialFolder(folderId);
+  if (!folder) return [];
+  if (mode === 'text_to_image') {
+    return (folder.items || []).filter(item => !!item.imageData && !!String(item.title || '').trim());
+  }
+  return (folder.items || []).filter(item => !!item.imageData && !!String(item.title || '').trim());
+}
+
+function buildIftySocialVisualOptionIds(folderId, targetId, mode) {
+  const localFolder = getIftySocialFolder(folderId);
+  let pool = [];
+  if (mode === 'text_to_image') {
+    pool = getIftySocialImageEntries().map(ref => ref.item);
+  } else {
+    pool = getIftySocialModule().folders.flatMap(folder => folder.items || []);
+  }
+
+  const target = getIftySocialItemById(targetId)?.item;
+  if (!target) return [];
+  const seenLabels = new Set([String(target.title || '').trim().toLowerCase()]);
+  const distractors = [];
+
+  // 同じフォルダを優先し、足りない分だけ社会全体から補う。
+  const prioritized = [
+    ...(localFolder?.items || []).filter(item => String(item.id) !== String(targetId)),
+    ...pool.filter(item => !localFolder?.items?.some(local => String(local.id) === String(item.id)))
+  ];
+
+  for (const item of shuffleArray(prioritized)) {
+    if (String(item.id) === String(targetId)) continue;
+    if (mode === 'text_to_image' && !item.imageData) continue;
+    const label = String(item.title || '').trim();
+    if (!label) continue;
+    const normalized = label.toLowerCase();
+    if (seenLabels.has(normalized)) continue;
+    seenLabels.add(normalized);
+    distractors.push(String(item.id));
+    if (distractors.length >= 3) break;
+  }
+  return shuffleArray([String(targetId), ...distractors]);
+}
+
+window.startIftySocialVisualQuiz = function(folderId, mode) {
+  const normalizedMode = mode === 'text_to_image' ? 'text_to_image' : 'image_to_text';
+  const candidates = getIftySocialVisualQuizCandidates(folderId, normalizedMode);
+  if (candidates.length < 2) {
+    alert('この画像クイズには、画像付きの項目が2件以上必要です。');
+    return;
+  }
+  iftySocialVisualQuizState = {
+    mode: normalizedMode,
+    folderId,
+    queue: shuffleArray(candidates.map(item => String(item.id))),
+    index: 0,
+    correct: 0,
+    wrong: 0,
+    answered: false,
+    selectedId: '',
+    optionIds: []
+  };
+  ensureIftySocialVisualQuizModal().style.display = 'flex';
+  renderIftySocialVisualQuiz();
+};
+
+function renderIftySocialVisualQuiz() {
+  const state = iftySocialVisualQuizState;
+  const card = document.getElementById('iftySocialVisualQuizCard');
+  if (!card) return;
+
+  if (state.index >= state.queue.length) {
+    const total = state.correct + state.wrong;
+    const rate = total ? Math.round((state.correct / total) * 100) : 0;
+    card.innerHTML = `
+      <div style="text-align:center;padding:16px 4px;">
+        <div style="font-size:1.25em;font-weight:900;color:#0f172a;">画像クイズ完了</div>
+        <div style="margin-top:12px;font-size:1.05em;color:#334155;">正解 ${state.correct} / ${total}　正答率 ${rate}%</div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px;">
+          <button type="button" onclick="startIftySocialVisualQuiz('${state.folderId}','${state.mode}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">もう一度</button>
+          <button type="button" onclick="closeIftySocialVisualQuiz()" data-ifty-enter-primary="true" style="border:none;background:#334155;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">閉じる</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const targetRef = getIftySocialItemById(state.queue[state.index]);
+  if (!targetRef?.item?.imageData) {
+    state.index += 1;
+    renderIftySocialVisualQuiz();
+    return;
+  }
+  const target = targetRef.item;
+  if (!state.optionIds.length) state.optionIds = buildIftySocialVisualOptionIds(state.folderId, target.id, state.mode);
+  const optionRefs = state.optionIds.map(id => getIftySocialItemById(id)).filter(Boolean);
+
+  const resultBlock = state.answered ? `<div style="margin-top:13px;padding:10px;border-radius:9px;background:${state.selectedId === String(target.id) ? '#ecfdf5' : '#fff1f2'};border:1px solid ${state.selectedId === String(target.id) ? '#86efac' : '#fda4af'};">
+      <div style="font-weight:900;color:${state.selectedId === String(target.id) ? '#166534' : '#9f1239'};">${state.selectedId === String(target.id) ? '正解' : `正解：${escapeHtml(target.title || '無題')}`}</div>
+      ${target.workTitle ? `<div style="margin-top:5px;font-size:.83em;color:#581c87;"><strong>作品名・資料名：</strong>${escapeHtml(target.workTitle)}</div>` : ''}
+      ${target.imageFocus ? `<div style="margin-top:5px;font-size:.83em;color:#3b0764;line-height:1.5;"><strong>画像の核：</strong>${escapeHtml(target.imageFocus)}</div>` : ''}
+      ${target.summary ? `<div style="margin-top:5px;font-size:.82em;color:#475569;line-height:1.5;">${escapeHtml(target.summary)}</div>` : ''}
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySocialVisualQuiz()" data-ifty-enter-primary="true" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
+    </div>` : '';
+
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+      <div>
+        <div style="font-size:1.12em;font-weight:900;color:#0f172a;">${state.mode === 'image_to_text' ? '画像を見て選ぶ' : '画像を選ぶ'}</div>
+        <div style="font-size:.75em;color:#64748b;margin-top:2px;">${state.index + 1} / ${state.queue.length}</div>
+      </div>
+      <button type="button" onclick="closeIftySocialVisualQuiz()" style="border:none;background:#e2e8f0;color:#475569;border-radius:999px;width:34px;height:34px;font-size:1.2em;font-weight:900;cursor:pointer;">×</button>
+    </div>
+
+    ${state.mode === 'image_to_text' ? `
+      <div style="margin-top:13px;text-align:center;">
+        <img src="${target.imageData}" alt="問題画像" style="max-width:100%;max-height:340px;object-fit:contain;border:1px solid #e2e8f0;border-radius:10px;background:#fff;">
+        <div style="margin-top:9px;font-weight:900;color:#334155;">この画像に最も対応する項目は？</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-top:12px;">
+        ${optionRefs.map(ref => {
+          const id = String(ref.item.id);
+          const disabled = state.answered ? 'disabled' : '';
+          const isCorrect = id === String(target.id);
+          const isSelected = id === state.selectedId;
+          let bg = '#f8fafc', border = '#cbd5e1', color = '#0f172a';
+          if (state.answered && isCorrect) { bg = '#dcfce7'; border = '#22c55e'; color = '#166534'; }
+          else if (state.answered && isSelected) { bg = '#ffe4e6'; border = '#f43f5e'; color = '#9f1239'; }
+          return `<button type="button" ${disabled} data-ifty-enter-ignore="true" onclick="answerIftySocialVisualQuiz('${id}')" style="border:2px solid ${border};background:${bg};color:${color};border-radius:9px;padding:11px;text-align:left;font-weight:900;cursor:${state.answered ? 'default' : 'pointer'};">${escapeHtml(ref.item.title || '無題')}</button>`;
+        }).join('')}
+      </div>` : `
+      <div style="margin-top:13px;padding:12px;border:1px solid #ddd6fe;border-radius:10px;background:#f5f3ff;text-align:center;">
+        <div style="font-size:.78em;color:#6d28d9;font-weight:900;">次の項目に対応する画像を選べ</div>
+        <div style="margin-top:5px;font-size:1.2em;font-weight:900;color:#3b0764;">${escapeHtml(target.title || '無題')}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px;">
+        ${optionRefs.map(ref => {
+          const id = String(ref.item.id);
+          const disabled = state.answered ? 'disabled' : '';
+          const isCorrect = id === String(target.id);
+          const isSelected = id === state.selectedId;
+          let border = '#cbd5e1', bg = '#fff';
+          if (state.answered && isCorrect) { border = '#22c55e'; bg = '#f0fdf4'; }
+          else if (state.answered && isSelected) { border = '#f43f5e'; bg = '#fff1f2'; }
+          return `<button type="button" ${disabled} data-ifty-enter-ignore="true" onclick="answerIftySocialVisualQuiz('${id}')" style="border:3px solid ${border};background:${bg};border-radius:10px;padding:7px;cursor:${state.answered ? 'default' : 'pointer'};min-width:0;"><img src="${ref.item.imageData}" alt="選択肢画像" style="display:block;width:100%;height:180px;object-fit:contain;background:white;border-radius:6px;"></button>`;
+        }).join('')}
+      </div>`}
+    ${resultBlock}`;
+}
+
+window.answerIftySocialVisualQuiz = function(itemId) {
+  const state = iftySocialVisualQuizState;
+  if (state.answered || state.index >= state.queue.length) return;
+  const correctId = String(state.queue[state.index]);
+  state.selectedId = String(itemId);
+  state.answered = true;
+  if (state.selectedId === correctId) state.correct += 1;
+  else state.wrong += 1;
+  renderIftySocialVisualQuiz();
+};
+
+window.nextIftySocialVisualQuiz = function() {
+  const state = iftySocialVisualQuizState;
+  if (!state.answered) return;
+  state.index += 1;
+  state.answered = false;
+  state.selectedId = '';
+  state.optionIds = [];
+  renderIftySocialVisualQuiz();
+};
+
+window.closeIftySocialVisualQuiz = function() {
+  const modal = document.getElementById('iftySocialVisualQuizModal');
+  if (modal) modal.style.display = 'none';
+};
 window.openIftySubject = function(subject) {
   const normalized = normalizeIftySubject(subject);
   currentIftySubject = normalized;
@@ -2507,6 +3048,9 @@ async function applyIftyRecoveryPayload(payload) {
     clearAllIftySpellingSuggestionTimers();
     pendingSpellingSuggestions = {};
     wordInputDrafts = {};
+    iftySocialTopicDrafts = {};
+    iftySocialImageDrafts = {};
+    iftySocialEditorImageDraft = null;
     iftyGlobalVocabSearchQuery = '';
     iftyFolderSearchQueries = {};
     undoStack = [];
@@ -3712,6 +4256,9 @@ async function applyIftyCloudPayload(payload) {
     clearAllIftySpellingSuggestionTimers();
     pendingSpellingSuggestions = {};
     wordInputDrafts = {};
+    iftySocialTopicDrafts = {};
+    iftySocialImageDrafts = {};
+    iftySocialEditorImageDraft = null;
     undoStack = [];
     redoStack = [];
 
@@ -4133,6 +4680,8 @@ const IFTY_ENTER_MODAL_IDS = [
   'iftyBasicSentenceModal',
   'iftyBasicSentencePracticeModal',
   'iftySocialItemModal',
+  'iftySocialVisualQuizModal',
+  'iftySocialImageViewerModal',
   'practiceModal',
   'flashcardModal',
   'mainLauncherModal',
@@ -4173,6 +4722,7 @@ function normalizeIftyEnterButtonText(button) {
 
 function getIftyEnterButtonPriority(button) {
   if (!button || button.disabled || button.getAttribute('aria-disabled') === 'true') return -1;
+  if (button.getAttribute('data-ifty-enter-ignore') === 'true') return -1;
   if (!isIftyElementVisible(button)) return -1;
 
   const text = normalizeIftyEnterButtonText(button);
