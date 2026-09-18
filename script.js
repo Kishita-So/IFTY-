@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP18 2026-09-11：生成データ再利用・語彙検索・ENGLISH ORDER入口統一 ★★★
+// ★★★ IFTY Q3 STEP20 2026-09-18：自動復習・学習統計・苦手抽出・リスニング操作強化 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -30,6 +30,15 @@ let cardMode = 'front';
 const IFTY_REVIEW_INTERVAL_DAYS = [1, 3, 7, 14, 30];
 const IFTY_REVIEW_DAY_MS = 24 * 60 * 60 * 1000;
 const IFTY_REVIEW_QUIZ_SET_ID = '__ifty_review_quiz__';
+const IFTY_STUDY_HISTORY_MAX_DAYS = 60;
+const IFTY_WEAK_MIN_ATTEMPTS = 3;
+const IFTY_WEAK_MIN_WRONG = 2;
+const IFTY_WEAK_MAX_ACCURACY = 0.7;
+const IFTY_LISTENING_RATE_KEY = 'ifty_listening_rate';
+let iftyListeningRate = (() => {
+  const value = Number(localStorage.getItem(IFTY_LISTENING_RATE_KEY));
+  return [0.75, 0.9, 1].includes(value) ? value : 0.9;
+})();
 
 let chatSessions = [];
 let currentChatSessionId = null;
@@ -1012,12 +1021,14 @@ function getIftyHomeStats() {
       ? practiceData.modules.questions.sets.length
       : 0;
 
+  const learning = getIftyLearningStats();
   return {
     folders: Array.isArray(folders) ? folders.length : 0,
     words: wordCount,
     flashSets,
     quizSets,
-    chats: Array.isArray(chatSessions) ? chatSessions.length : 0
+    chats: Array.isArray(chatSessions) ? chatSessions.length : 0,
+    ...learning
   };
 }
 
@@ -1082,14 +1093,27 @@ window.openIftyHome = function() {
         </button>
       </div>
 
+      <div style="margin-top:18px;padding:15px;border:1px solid #cbd5e1;border-radius:12px;background:rgba(248,250,252,.82);">
+        <div style="font-weight:900;color:#0f172a;margin-bottom:10px;">📊 TODAY / REVIEW</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;">
+          <div style="padding:10px;border-radius:9px;background:white;border:1px solid #e2e8f0;"><div style="font-size:.72em;color:#64748b;">今日学習した単語</div><div style="font-size:1.35em;font-weight:900;color:#0f172a;">${stats.studiedToday}語</div></div>
+          <div style="padding:10px;border-radius:9px;background:white;border:1px solid #e2e8f0;"><div style="font-size:.72em;color:#64748b;">今日の回答</div><div style="font-size:1.35em;font-weight:900;color:#0f172a;">${stats.answersToday}回</div></div>
+          <div style="padding:10px;border-radius:9px;background:white;border:1px solid #e2e8f0;"><div style="font-size:.72em;color:#64748b;">今日の正答率</div><div style="font-size:1.35em;font-weight:900;color:#0f172a;">${stats.answersToday ? stats.accuracyToday + '%' : '—'}</div></div>
+          <div style="padding:10px;border-radius:9px;background:#fff7ed;border:1px solid #fed7aa;"><div style="font-size:.72em;color:#9a3412;">今日の復習</div><div style="font-size:1.35em;font-weight:900;color:#c2410c;">${stats.dueReview}語</div></div>
+          <div style="padding:10px;border-radius:9px;background:#fff1f2;border:1px solid #fecdd3;"><div style="font-size:.72em;color:#9f1239;">苦手候補</div><div style="font-size:1.35em;font-weight:900;color:#be123c;">${stats.weakWords}語</div></div>
+        </div>
+        ${stats.dueReview ? `<button type="button" onclick="switchToVocabView(); setTimeout(()=>startIftyDueReviewFlashcards('front'),0);" style="width:100%;margin-top:10px;border:none;background:#ea580c;color:white;border-radius:8px;padding:10px;font-weight:900;cursor:pointer;">🔁 今日の復習を始める（${stats.dueReview}語）</button>` : ''}
+      </div>
+
       <div class="ifty-home-quick">
         <button type="button" onclick="switchToChatView()" style="background:#0284c7;color:white;">🤖 ALLIA</button>
         <button type="button" onclick="openPracticeHome()" style="background:#7c3aed;color:white;">⚔️ 実践</button>
+        <button type="button" onclick="openIftyLearningStats()" style="background:#0f766e;color:white;">📊 学習統計</button>
         <button type="button" onclick="openIftyRecoveryCenter()" style="background:#334155;color:white;">🛟 バックアップ / 復元</button>
       </div>
 
       <div class="ifty-settings-note" style="margin-top:14px;">
-        実践：Flash ${stats.flashSets} / Quiz ${stats.quizSets}　・　ALLIAチャット ${stats.chats}
+        実践：Flash ${stats.flashSets} / Quiz ${stats.quizSets}　・　ALLIAチャット ${stats.chats}　・　復習管理 ${stats.reviewActive}語 / 卒業 ${stats.reviewGraduated}語
       </div>
     </section>
   `, 'home');
@@ -1260,7 +1284,7 @@ window.openIftySettings = function() {
         </div>
       </div>
 
-      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP19</div>
+      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP20</div>
     </section>
   `, 'settings');
 
@@ -3566,6 +3590,39 @@ function makeId(prefix) {
   return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
 }
 
+function getIftyLocalDateKey(timestamp = Date.now()) {
+  const date = new Date(Number(timestamp || Date.now()));
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function normalizeIftyStudyState(word) {
+  if (!word || typeof word !== 'object') return null;
+  if (!word.study || typeof word.study !== 'object') word.study = {};
+  const study = word.study;
+  ['total','correct','wrong'].forEach(key => {
+    const value = Number(study[key]);
+    study[key] = Number.isFinite(value) && value >= 0 ? Math.trunc(value) : 0;
+  });
+  study.firstStudiedAt = Number.isFinite(Number(study.firstStudiedAt)) && Number(study.firstStudiedAt) > 0 ? Number(study.firstStudiedAt) : 0;
+  study.lastStudiedAt = Number.isFinite(Number(study.lastStudiedAt)) && Number(study.lastStudiedAt) > 0 ? Number(study.lastStudiedAt) : 0;
+  if (!study.daily || typeof study.daily !== 'object' || Array.isArray(study.daily)) study.daily = {};
+  Object.keys(study.daily).forEach(key => {
+    const row = study.daily[key];
+    if (!row || typeof row !== 'object') { delete study.daily[key]; return; }
+    ['attempts','correct','wrong'].forEach(name => {
+      const value = Number(row[name]);
+      row[name] = Number.isFinite(value) && value >= 0 ? Math.trunc(value) : 0;
+    });
+  });
+  const dayKeys = Object.keys(study.daily).sort().reverse();
+  dayKeys.slice(IFTY_STUDY_HISTORY_MAX_DAYS).forEach(key => delete study.daily[key]);
+  if (!study.sources || typeof study.sources !== 'object' || Array.isArray(study.sources)) study.sources = {};
+  return study;
+}
+
 function normalizeIftyReviewState(word) {
   if (!word || typeof word !== 'object') return null;
   if (!word.review || typeof word.review !== 'object') return null;
@@ -3581,7 +3638,8 @@ function normalizeIftyReviewState(word) {
   review.lastReviewed = Number.isFinite(lastReviewed) && lastReviewed > 0 ? lastReviewed : 0;
 
   const nextReview = Number(review.nextReview);
-  review.nextReview = Number.isFinite(nextReview) && nextReview > 0 ? nextReview : Date.now();
+  review.nextReview = Number.isFinite(nextReview) && nextReview > 0 ? nextReview : 0;
+  if (review.active && !review.nextReview) review.nextReview = Date.now();
 
   const correctCount = Number(review.correctCount);
   review.correctCount = Number.isFinite(correctCount) && correctCount >= 0 ? Math.trunc(correctCount) : 0;
@@ -3589,7 +3647,165 @@ function normalizeIftyReviewState(word) {
   const wrongCount = Number(review.wrongCount);
   review.wrongCount = Number.isFinite(wrongCount) && wrongCount >= 0 ? Math.trunc(wrongCount) : 0;
 
+  review.source = review.source === 'auto' ? 'auto' : 'manual';
+  const graduatedAt = Number(review.graduatedAt);
+  review.graduatedAt = Number.isFinite(graduatedAt) && graduatedAt > 0 ? graduatedAt : 0;
+  const manuallyRemovedAt = Number(review.manuallyRemovedAt);
+  review.manuallyRemovedAt = Number.isFinite(manuallyRemovedAt) && manuallyRemovedAt > 0 ? manuallyRemovedAt : 0;
   return review;
+}
+
+function recordIftyStudyEvent(wordId, correct, source = 'practice') {
+  const word = getIftyReviewWordById(wordId);
+  if (!word) return false;
+  const study = normalizeIftyStudyState(word);
+  const now = Date.now();
+  const dayKey = getIftyLocalDateKey(now);
+  if (!study.firstStudiedAt) study.firstStudiedAt = now;
+  study.lastStudiedAt = now;
+  study.total += 1;
+  if (correct) study.correct += 1;
+  else study.wrong += 1;
+  if (!study.daily[dayKey]) study.daily[dayKey] = { attempts: 0, correct: 0, wrong: 0 };
+  study.daily[dayKey].attempts += 1;
+  if (correct) study.daily[dayKey].correct += 1;
+  else study.daily[dayKey].wrong += 1;
+  const sourceKey = String(source || 'practice').slice(0, 40);
+  study.sources[sourceKey] = (Number(study.sources[sourceKey]) || 0) + 1;
+  normalizeIftyStudyState(word);
+  return true;
+}
+
+function correctIftyLastStudyOutcome(wordId) {
+  const word = getIftyReviewWordById(wordId);
+  if (!word) return false;
+  const study = normalizeIftyStudyState(word);
+  if (!study || study.wrong <= 0) return false;
+  study.wrong -= 1;
+  study.correct += 1;
+  const dayKey = getIftyLocalDateKey();
+  const row = study.daily[dayKey];
+  if (row && row.wrong > 0) {
+    row.wrong -= 1;
+    row.correct += 1;
+  }
+  return true;
+}
+
+function isIftyWeakWord(word) {
+  const study = normalizeIftyStudyState(word);
+  if (!study || study.total < IFTY_WEAK_MIN_ATTEMPTS || study.wrong < IFTY_WEAK_MIN_WRONG) return false;
+  const accuracy = study.total ? study.correct / study.total : 1;
+  return accuracy < IFTY_WEAK_MAX_ACCURACY;
+}
+
+function getIftyWeakEntries() {
+  const entries = [];
+  folders.forEach(folder => {
+    (folder.words || []).forEach((word, index) => {
+      if (!isIftyWeakWord(word)) return;
+      const study = normalizeIftyStudyState(word);
+      entries.push({ folder, word, index, study, accuracy: study.total ? study.correct / study.total : 0 });
+    });
+  });
+  entries.sort((a, b) => a.accuracy - b.accuracy || b.study.wrong - a.study.wrong || String(a.word.word || '').localeCompare(String(b.word.word || ''), 'en'));
+  return entries;
+}
+
+function getIftyLearningStats() {
+  const today = getIftyLocalDateKey();
+  let studiedToday = 0;
+  let answersToday = 0;
+  let correctToday = 0;
+  let reviewActive = 0;
+  let reviewGraduated = 0;
+  folders.forEach(folder => {
+    (folder.words || []).forEach(word => {
+      const study = normalizeIftyStudyState(word);
+      const row = study && study.daily ? study.daily[today] : null;
+      if (row && row.attempts > 0) {
+        studiedToday += 1;
+        answersToday += row.attempts;
+        correctToday += row.correct;
+      }
+      const review = normalizeIftyReviewState(word);
+      if (review && review.active) reviewActive += 1;
+      if (review && review.graduatedAt > 0) reviewGraduated += 1;
+    });
+  });
+  return {
+    studiedToday,
+    answersToday,
+    correctToday,
+    accuracyToday: answersToday ? Math.round(correctToday / answersToday * 100) : 0,
+    dueReview: getIftyReviewEntries({ dueOnly: true }).length,
+    reviewActive,
+    reviewGraduated,
+    weakWords: getIftyWeakEntries().length
+  };
+}
+
+function getIftyRecentDailyStats(days = 7) {
+  const result = [];
+  for (let offset = days - 1; offset >= 0; offset--) {
+    const date = new Date();
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() - offset);
+    const key = getIftyLocalDateKey(date.getTime());
+    let attempts = 0, correct = 0, studiedWords = 0;
+    folders.forEach(folder => (folder.words || []).forEach(word => {
+      const study = normalizeIftyStudyState(word);
+      const row = study && study.daily ? study.daily[key] : null;
+      if (!row || !row.attempts) return;
+      studiedWords += 1;
+      attempts += row.attempts;
+      correct += row.correct;
+    }));
+    result.push({ key, attempts, correct, studiedWords, accuracy: attempts ? Math.round(correct / attempts * 100) : 0 });
+  }
+  return result;
+}
+
+function enrollIftyReviewFromStudy(wordId, correct) {
+  const word = getIftyReviewWordById(wordId);
+  if (!word) return false;
+  const now = Date.now();
+  let review = normalizeIftyReviewState(word);
+  if (review && review.active) {
+    if (!correct) {
+      review.level = 0;
+      review.lastReviewed = now;
+      review.nextReview = now + IFTY_REVIEW_INTERVAL_DAYS[0] * IFTY_REVIEW_DAY_MS;
+      review.graduatedAt = 0;
+      review.wrongCount += 1;
+      word.mastery = 'unfixed';
+      return true;
+    }
+    return false;
+  }
+  if (review && review.graduatedAt > 0 && correct) return false;
+  if (!review) {
+    word.review = {
+      active: true,
+      level: 0,
+      lastReviewed: now,
+      nextReview: now + IFTY_REVIEW_INTERVAL_DAYS[0] * IFTY_REVIEW_DAY_MS,
+      correctCount: 0,
+      wrongCount: 0,
+      source: 'auto',
+      graduatedAt: 0,
+      manuallyRemovedAt: 0
+    };
+    return true;
+  }
+  review.active = true;
+  review.level = 0;
+  review.lastReviewed = now;
+  review.nextReview = now + IFTY_REVIEW_INTERVAL_DAYS[0] * IFTY_REVIEW_DAY_MS;
+  review.source = 'auto';
+  review.graduatedAt = 0;
+  review.manuallyRemovedAt = 0;
+  return true;
 }
 
 function isIftyReviewTagged(word) {
@@ -3671,16 +3887,24 @@ function applyIftyReviewResult(wordId, correct) {
   if (!review || !review.active) return false;
 
   const now = Date.now();
+  review.lastReviewed = now;
   if (correct) {
-    review.level = Math.min(review.level + 1, IFTY_REVIEW_INTERVAL_DAYS.length - 1);
     review.correctCount += 1;
+    if (review.level >= IFTY_REVIEW_INTERVAL_DAYS.length - 1) {
+      review.active = false;
+      review.nextReview = 0;
+      review.graduatedAt = now;
+      word.mastery = 'fixed';
+      return true;
+    }
+    review.level = Math.min(review.level + 1, IFTY_REVIEW_INTERVAL_DAYS.length - 1);
   } else {
     review.level = 0;
     review.wrongCount += 1;
+    review.graduatedAt = 0;
   }
 
   const intervalIndex = Math.max(0, review.level);
-  review.lastReviewed = now;
   review.nextReview = now + IFTY_REVIEW_INTERVAL_DAYS[intervalIndex] * IFTY_REVIEW_DAY_MS;
   word.mastery = correct ? 'fixed' : 'unfixed';
   return true;
@@ -3695,6 +3919,7 @@ window.toggleIftyWordReview = function(folderId, wordId) {
 
   if (isIftyReviewTagged(word)) {
     word.review.active = false;
+    word.review.manuallyRemovedAt = Date.now();
   } else {
     const review = normalizeIftyReviewState(word);
     if (!review) {
@@ -3704,13 +3929,19 @@ window.toggleIftyWordReview = function(folderId, wordId) {
         lastReviewed: 0,
         nextReview: Date.now(),
         correctCount: 0,
-        wrongCount: 0
+        wrongCount: 0,
+        source: 'manual',
+        graduatedAt: 0,
+        manuallyRemovedAt: 0
       };
     } else {
       review.active = true;
-      if (!Number.isFinite(Number(review.nextReview)) || Number(review.nextReview) <= 0) {
-        review.nextReview = Date.now();
-      }
+      review.level = -1;
+      review.lastReviewed = 0;
+      review.nextReview = Date.now();
+      review.source = 'manual';
+      review.graduatedAt = 0;
+      review.manuallyRemovedAt = 0;
     }
   }
 
@@ -3722,28 +3953,30 @@ function renderIftyReviewFolder() {
   const allEntries = getIftyReviewEntries();
   const dueEntries = getIftyReviewEntries({ dueOnly: true });
   const nextReview = getIftyNextReviewTimestamp();
+  const stats = getIftyLearningStats();
 
   const dueList = dueEntries.length
     ? dueEntries.map(({ folder, word, review }) => {
         const meanings = Array.isArray(word.meanings) ? word.meanings : (word.meanings ? [word.meanings] : []);
+        const stage = review.level < 0 ? '手動・今すぐ' : `${IFTY_REVIEW_INTERVAL_DAYS[Math.max(0, review.level)]}日段階`;
         return `
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid #fed7aa;">
             <div style="min-width:0;">
               <div style="font-weight:900;color:#7c2d12;">${escapeHtml(word.word || '')}</div>
               <div style="margin-top:2px;color:#9a3412;font-size:.82em;line-height:1.4;">${escapeHtml(meanings.join(' / '))}</div>
-              <div style="margin-top:3px;color:#a16207;font-size:.72em;">📁 ${escapeHtml(folder.name || '')} ・ 復習段階 ${Math.max(0, Number(review.level || 0)) + 1}</div>
+              <div style="margin-top:3px;color:#a16207;font-size:.72em;">📁 ${escapeHtml(folder.name || '')} ・ ${escapeHtml(stage)} ・ ${review.source === 'auto' ? '自動登録' : '手動登録'}</div>
             </div>
             <button type="button" onclick="toggleIftyWordReview('${folder.id}','${word.id}')" style="border:none;background:#ffedd5;color:#9a3412;border-radius:6px;padding:6px 8px;font-size:.74em;font-weight:800;cursor:pointer;flex:none;">解除</button>
           </div>`;
       }).join('')
-    : `<div style="padding:16px 4px;text-align:center;color:#a16207;font-size:.86em;">今日の復習はありません。${nextReview ? `次回は ${escapeHtml(formatIftyReviewDate(nextReview))} です。` : '単語カードの「復習登録」から追加できます。'}</div>`;
+    : `<div style="padding:16px 4px;text-align:center;color:#a16207;font-size:.86em;">今日の復習はありません。${nextReview ? `次回は ${escapeHtml(formatIftyReviewDate(nextReview))} です。` : 'フラッシュカードやクイズで学習すると自動登録されます。手動登録も可能です。'}</div>`;
 
   return `
     <div id="iftyReviewFolder" style="background:#fff7ed;border:2px solid #fb923c;border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 2px 5px rgba(154,52,18,.08);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
         <div>
-          <h3 style="margin:0;color:#7c2d12;font-size:1.12em;">🔁 復習 <span style="font-size:.82em;color:#c2410c;">(今日 ${dueEntries.length}件 / 登録 ${allEntries.length}件)</span></h3>
-          <div style="margin-top:4px;color:#9a3412;font-size:.78em;">間隔：1日 → 3日 → 7日 → 14日 → 30日</div>
+          <h3 style="margin:0;color:#7c2d12;font-size:1.12em;">🔁 復習 <span style="font-size:.82em;color:#c2410c;">(今日 ${dueEntries.length}件 / 管理 ${allEntries.length}件 / 卒業 ${stats.reviewGraduated}件)</span></h3>
+          <div style="margin-top:4px;color:#9a3412;font-size:.78em;">自動：学習 → 1日 → 3日 → 7日 → 14日 → 30日 → 卒業　／　間違いは1日段階へ戻る</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button type="button" onclick="startIftyDueReviewFlashcards('front')" ${dueEntries.length ? '' : 'disabled'} style="border:none;background:#ea580c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${dueEntries.length ? 'pointer' : 'default'};opacity:${dueEntries.length ? '1' : '.45'};">📇 今日の復習</button>
@@ -3753,6 +3986,49 @@ function renderIftyReviewFolder() {
       <div style="margin-top:10px;">${dueList}</div>
     </div>`;
 }
+
+function renderIftyWeakFolder() {
+  const entries = getIftyWeakEntries();
+  if (!entries.length) return '';
+  const list = entries.slice(0, 12).map(({ folder, word, study, accuracy }) => {
+    const meanings = Array.isArray(word.meanings) ? word.meanings : (word.meanings ? [word.meanings] : []);
+    return `<div style="padding:8px 0;border-bottom:1px solid #fecdd3;display:flex;justify-content:space-between;gap:10px;align-items:flex-start;"><div><div style="font-weight:900;color:#881337;">${escapeHtml(word.word || '')}</div><div style="font-size:.8em;color:#9f1239;margin-top:2px;">${escapeHtml(meanings.join(' / '))}</div><div style="font-size:.72em;color:#be123c;margin-top:3px;">📁 ${escapeHtml(folder.name || '')} ・ ${study.correct}/${study.total}正解 ・ 正答率${Math.round(accuracy * 100)}%</div></div></div>`;
+  }).join('');
+  return `<div id="iftyWeakFolder" style="background:#fff1f2;border:2px solid #fb7185;border-radius:10px;padding:16px;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><h3 style="margin:0;color:#881337;font-size:1.08em;">🎯 苦手候補 <span style="font-size:.82em;color:#be123c;">${entries.length}語</span></h3><div style="font-size:.76em;color:#9f1239;margin-top:4px;">3回以上学習・2回以上不正解・正答率70%未満を自動抽出</div></div><button type="button" onclick="startIftyWeakFlashcards('front')" style="border:none;background:#be123c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">📇 苦手だけ学習</button></div><div style="margin-top:9px;">${list}${entries.length > 12 ? `<div style="padding-top:8px;color:#9f1239;font-size:.76em;">ほか ${entries.length - 12}語</div>` : ''}</div></div>`;
+}
+
+window.startIftyWeakFlashcards = function(direction = 'front') {
+  const entries = getIftyWeakEntries();
+  if (!entries.length) { alert('現在、苦手候補はありません。'); return; }
+  currentFlashcardMode = 'weak';
+  isRandomMode = true;
+  cardMode = direction === 'back' ? 'back' : 'front';
+  flashcardList = shuffleArray(entries.map(({ word }) => ({ ...deepClone(word) })));
+  currentFlashcardIndex = 0;
+  isCardFlipped = false;
+  renderFlashcardModal();
+};
+
+window.openIftyLearningStats = function() {
+  window.closeIftySideMenu();
+  const stats = getIftyLearningStats();
+  const daily = getIftyRecentDailyStats(7);
+  const weak = getIftyWeakEntries().slice(0, 20);
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;"><div><h1 class="ifty-portal-title">LEARNING STATS</h1><div class="ifty-portal-subtitle">端末・クラウドに保存された単語ごとの学習記録から集計。</div></div><button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-top:16px;">
+        <div class="ifty-settings-section"><div class="ifty-settings-note">今日学習</div><div style="font-size:1.6em;font-weight:900;">${stats.studiedToday}語</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">今日の回答</div><div style="font-size:1.6em;font-weight:900;">${stats.answersToday}回</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">今日の正答率</div><div style="font-size:1.6em;font-weight:900;">${stats.answersToday ? stats.accuracyToday + '%' : '—'}</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">今日の復習</div><div style="font-size:1.6em;font-weight:900;color:#c2410c;">${stats.dueReview}語</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">復習卒業</div><div style="font-size:1.6em;font-weight:900;color:#047857;">${stats.reviewGraduated}語</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">苦手候補</div><div style="font-size:1.6em;font-weight:900;color:#be123c;">${stats.weakWords}語</div></div>
+      </div>
+      <div class="ifty-settings-section"><h3>直近7日</h3><div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.86em;"><thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #cbd5e1;">日付</th><th style="padding:7px;border-bottom:1px solid #cbd5e1;">学習語</th><th style="padding:7px;border-bottom:1px solid #cbd5e1;">回答</th><th style="padding:7px;border-bottom:1px solid #cbd5e1;">正答率</th></tr></thead><tbody>${daily.map(row => `<tr><td style="padding:7px;border-bottom:1px solid #e2e8f0;">${escapeHtml(row.key.slice(5).replace('-', '/'))}</td><td style="text-align:center;padding:7px;border-bottom:1px solid #e2e8f0;">${row.studiedWords}</td><td style="text-align:center;padding:7px;border-bottom:1px solid #e2e8f0;">${row.attempts}</td><td style="text-align:center;padding:7px;border-bottom:1px solid #e2e8f0;">${row.attempts ? row.accuracy + '%' : '—'}</td></tr>`).join('')}</tbody></table></div></div>
+      <div class="ifty-settings-section"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div><h3 style="margin-bottom:4px;">苦手候補</h3><div class="ifty-settings-note">回答履歴から自動判定。</div></div>${weak.length ? '<button class="ifty-settings-action" type="button" onclick="switchToVocabView(); setTimeout(()=>startIftyWeakFlashcards(\'front\'),0);" style="background:#be123c;color:white;">苦手だけ学習</button>' : ''}</div><div style="margin-top:10px;display:grid;gap:6px;">${weak.length ? weak.map(({ folder, word, study, accuracy }) => `<div style="padding:9px;border:1px solid #fecdd3;border-radius:8px;background:#fff1f2;"><b>${escapeHtml(word.word || '')}</b><span style="margin-left:8px;color:#be123c;font-size:.8em;">${Math.round(accuracy*100)}% (${study.correct}/${study.total})</span><div style="font-size:.72em;color:#9f1239;margin-top:2px;">${escapeHtml(folder.name || '')}</div></div>`).join('') : '<div class="ifty-settings-note">現在、苦手候補はありません。</div>'}</div></div>
+    </section>`, 'stats');
+};
 
 window.startIftyDueReviewFlashcards = function(direction = 'front') {
   const entries = getIftyReviewEntries({ dueOnly: true });
@@ -3832,6 +4108,7 @@ function normalizeFoldersData() {
     folder.words.forEach(word => {
       if (!word.id) word.id = makeId('word');
       word.quizAnswers = deriveQuizAnswers(word);
+      normalizeIftyStudyState(word);
       normalizeIftyReviewState(word);
     });
   });
@@ -3990,6 +4267,7 @@ function renderFolders() {
   const folderOptions = folders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
 
   const reviewFolder = renderIftyReviewFolder();
+  const weakFolder = renderIftyWeakFolder();
 
   const selectionToolbar = `
     <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:10px;margin-bottom:12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
@@ -4003,7 +4281,7 @@ function renderFolders() {
   `;
 
   if (folders.length === 0) {
-    container.innerHTML = reviewFolder + selectionToolbar + `
+    container.innerHTML = reviewFolder + weakFolder + selectionToolbar + `
       <p style="color:#94a3b8;text-align:center;padding:30px;background:white;border-radius:8px;border:1px dashed #cbd5e1;">
         フォルダがありません。下のフォームからフォルダを作成してください。
       </p>
@@ -4017,14 +4295,14 @@ function renderFolders() {
     .filter(({ folder }) => !globalSearchActive || getIftyVisibleWordEntries(folder).length > 0);
 
   if (globalSearchActive && renderedFolders.length === 0) {
-    container.innerHTML = reviewFolder + selectionToolbar + `
+    container.innerHTML = reviewFolder + weakFolder + selectionToolbar + `
       <p style="color:#64748b;text-align:center;padding:28px;background:white;border-radius:8px;border:1px dashed #cbd5e1;">
         全フォルダ検索に一致する単語がありません。
       </p>`;
     return;
   }
 
-  container.innerHTML = reviewFolder + selectionToolbar + renderedFolders.map(({ folder, fIndex }) => {
+  container.innerHTML = reviewFolder + weakFolder + selectionToolbar + renderedFolders.map(({ folder, fIndex }) => {
     const suggestion = pendingSpellingSuggestions[folder.id];
     const words = folder.words || [];
     const allWordsSelected = words.length > 0 && words.every(w => selectedWordIds.has(w.id));
@@ -4174,8 +4452,10 @@ function renderWordItem(w, folderId, wIndex) {
         <div style="flex: 1; min-width: 0;">
           <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
             <div style="font-size: 1.25em; font-weight: bold; color: #0f172a;">${escapeHtml(w.word || '')}</div>
-            ${isIftyReviewTagged(w) ? `<span style="display:inline-block;padding:2px 6px;border-radius:999px;background:${isIftyReviewDue(w) ? '#ffedd5' : '#fef3c7'};color:${isIftyReviewDue(w) ? '#c2410c' : '#a16207'};font-size:.68em;font-weight:900;">${isIftyReviewDue(w) ? '🔁 復習：今日' : `🔁 次回 ${escapeHtml(formatIftyReviewDate(w.review.nextReview))}`}</span>` : ''}
+            ${isIftyReviewTagged(w) ? `<span style="display:inline-block;padding:2px 6px;border-radius:999px;background:${isIftyReviewDue(w) ? '#ffedd5' : '#fef3c7'};color:${isIftyReviewDue(w) ? '#c2410c' : '#a16207'};font-size:.68em;font-weight:900;">${isIftyReviewDue(w) ? '🔁 復習：今日' : `🔁 次回 ${escapeHtml(formatIftyReviewDate(w.review.nextReview))}`}</span>` : (w.review && Number(w.review.graduatedAt) > 0 ? '<span style="display:inline-block;padding:2px 6px;border-radius:999px;background:#dcfce7;color:#047857;font-size:.68em;font-weight:900;">✅ 復習卒業</span>' : '')}
+            ${isIftyWeakWord(w) ? '<span style="display:inline-block;padding:2px 6px;border-radius:999px;background:#ffe4e6;color:#be123c;font-size:.68em;font-weight:900;">🎯 苦手候補</span>' : ''}
           </div>
+          ${(() => { const st=normalizeIftyStudyState(w); return st && st.total ? `<div style="margin-top:3px;color:#64748b;font-size:.72em;">学習 ${st.total}回 ・ 正解 ${st.correct} ・ 不正解 ${st.wrong} ・ 正答率 ${Math.round(st.correct/st.total*100)}%</div>` : ''; })()}
 
           ${(w.pronunciation || w.partOfSpeech) ? `
             <div style="margin-top: 2px; color: #64748b; font-size: 0.85em;">
@@ -4231,7 +4511,7 @@ function renderWordItem(w, folderId, wIndex) {
 
         <div style="display: flex; gap: 3px; align-items: center; margin-left: 8px;">
           ${w.word ? `<button onclick="speakWord('${escapeHtml(String(w.word).replace(/'/g, "\\'"))}')" style="background: #0284c7; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="単語を発音">🔊</button>` : ''}
-          <button onclick="toggleIftyWordReview('${folderId}','${w.id}')" style="background:${isIftyReviewTagged(w) ? '#ea580c' : '#f59e0b'};color:white;border:none;padding:3px 6px;border-radius:4px;font-size:.75em;cursor:pointer;" title="${isIftyReviewTagged(w) ? '復習登録を解除' : 'この単語を復習に登録'}">${isIftyReviewTagged(w) ? '🔁 復習中' : '🔁 復習登録'}</button>
+          <button onclick="toggleIftyWordReview('${folderId}','${w.id}')" style="background:${isIftyReviewTagged(w) ? '#ea580c' : '#f59e0b'};color:white;border:none;padding:3px 6px;border-radius:4px;font-size:.75em;cursor:pointer;" title="${isIftyReviewTagged(w) ? '復習登録を解除' : 'この単語を復習に登録'}">${isIftyReviewTagged(w) ? '🔁 復習中' : '🔁 手動で復習登録'}</button>
           <button onclick="openEditWordModal('${folderId}', ${wIndex})" style="background: #64748b; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="編集">編集</button>
           <button onclick="moveWordWithinFolder('${folderId}', ${wIndex}, -1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="上へ">⬆️</button>
           <button onclick="moveWordWithinFolder('${folderId}', ${wIndex}, 1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="下へ">⬇️</button>
@@ -4996,7 +5276,17 @@ function renderPracticePlayer(setId) {
 }
 
 window.togglePracticeCard = function(setId) { const set=getPracticeSet(setId); if(!set||!set.progress)return; set.progress.showingBack=!set.progress.showingBack; savePracticeData(); renderPracticePlayer(setId); };
-window.answerPracticeCard = function(setId, remembered) { const set=getPracticeSet(setId); if(!set||!set.progress)return; const p=set.progress; const id=p.queue[p.index]; if(!remembered && !p.missed.includes(id)) p.missed.push(id); p.index++; p.showingBack=false; savePracticeData(); renderPracticePlayer(setId); };
+window.answerPracticeCard = function(setId, remembered) {
+  const set=getPracticeSet(setId); if(!set||!set.progress)return;
+  const p=set.progress; const id=p.queue[p.index];
+  if(!remembered && !p.missed.includes(id)) p.missed.push(id);
+  const sourceWord = getIftyReviewWordById(id);
+  if (sourceWord) sourceWord.mastery = remembered ? 'fixed' : 'unfixed';
+  recordIftyStudyEvent(id, !!remembered, 'practice_flashcard');
+  enrollIftyReviewFromStudy(id, !!remembered);
+  saveUserData();
+  p.index++; p.showingBack=false; savePracticeData(); renderPracticePlayer(setId);
+};
 window.pausePracticeSet = function(setId) { savePracticeData(); openPracticeFlashcardSet(setId); };
 window.restartPracticeConfirm = function(setId) { if(confirm('このセットを最初からやり直しますか？')) startPracticeSet(setId,true); };
 
@@ -5257,20 +5547,45 @@ async function renderQuizPlayer(setId) {
 
   const q=p.currentQuestion;
   modal.innerHTML=`
-    <div style="background:white;border-radius:14px;width:min(700px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+    <div tabindex="0" onkeydown="handleIftyQuizKeydown(event,'${set.id}')" style="background:white;border-radius:14px;width:min(700px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);outline:none;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div style="color:#7c3aed;font-size:.88em;font-weight:bold;">${escapeHtml(set.name)} ・ ${p.index+1}/${p.queue.length} ・ ${quizTypeLabel(q.quizType)}${q.quizType==='listening'?'':` ・ ${quizDirectionLabel(q.direction==='jp_to_en'?'jp_to_en':'en_to_jp')}`}</div><button onclick="pauseQuizSet('${set.id}')" style="background:#ede9fe;color:#5b21b6;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;">${set.systemReview?'✕ 終了':'⏸ 一時中断'}</button></div>
       <div style="margin-top:15px;padding:18px;background:#faf5ff;border:2px solid #ddd6fe;border-radius:10px;color:#2e1065;line-height:1.65;font-size:1.08em;white-space:pre-wrap;">${escapeHtml(q.question||'')}</div>
-      ${q.audioText?`<div style="margin-top:10px;display:flex;justify-content:center;"><button onclick="speakQuizAudio('${set.id}')" style="background:#0ea5e9;color:white;border:none;border-radius:8px;padding:10px 16px;font-weight:bold;cursor:pointer;">🔊 音声を再生</button></div>`:''}
+      ${q.audioText?`<div style="margin-top:10px;display:flex;justify-content:center;gap:6px;align-items:center;flex-wrap:wrap;"><button onclick="speakQuizAudio('${set.id}')" style="background:#0ea5e9;color:white;border:none;border-radius:8px;padding:10px 16px;font-weight:bold;cursor:pointer;">🔊 音声を再生</button><span style="font-size:.72em;color:#64748b;font-weight:800;">速度</span>${[0.75,0.9,1].map(rate=>`<button type="button" onclick="setIftyListeningRate(${rate}); speakQuizAudio('${set.id}')" style="border:1px solid ${iftyListeningRate===rate?'#0284c7':'#cbd5e1'};background:${iftyListeningRate===rate?'#e0f2fe':'white'};color:#0369a1;border-radius:6px;padding:6px 8px;font-size:.76em;cursor:pointer;">${rate}×</button>`).join('')}</div>`:''}
       ${q.instruction?`<div style="margin-top:7px;color:#64748b;font-size:.82em;">${escapeHtml(q.instruction)}</div>`:''}
-      ${Array.isArray(q.options)&&q.options.length?`<div id="quizChoiceArea" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;">${q.options.map((option,i)=>`<label style="display:flex;gap:8px;align-items:center;border:2px solid #ddd6fe;background:white;border-radius:8px;padding:10px;cursor:pointer;"><input type="radio" name="quizChoice" value="${escapeHtml(option)}" style="accent-color:#7c3aed;"><span>${String.fromCharCode(65+i)}. ${escapeHtml(option)}</span></label>`).join('')}</div>`:(q.localAnswerMode==='spelling'?`<input id="quizAnswerInput" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="スペルを入力してEnter" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1.05em;">`:`<textarea id="quizAnswerInput" rows="4" placeholder="答えを入力（Enterで確定 / Shift+Enterで改行）" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1em;resize:vertical;"></textarea>`)}
+      ${Array.isArray(q.options)&&q.options.length?`<div id="quizChoiceArea" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;">${q.options.map((option,i)=>`<label style="display:flex;gap:8px;align-items:center;border:2px solid #ddd6fe;background:white;border-radius:8px;padding:10px;cursor:pointer;"><input type="radio" name="quizChoice" value="${escapeHtml(option)}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuizAnswer('${set.id}');}" style="accent-color:#7c3aed;"><span>${String.fromCharCode(65+i)}. ${escapeHtml(option)}</span></label>`).join('')}</div>`:(q.localAnswerMode==='spelling'?`<input id="quizAnswerInput" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="スペルを入力してEnter" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1.05em;">`:`<textarea id="quizAnswerInput" rows="4" placeholder="答えを入力（Enterで確定 / Shift+Enterで改行）" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1em;resize:vertical;"></textarea>`)}
       <div style="display:flex;gap:8px;margin-top:10px;"><button onclick="submitQuizAnswer('${set.id}')" style="flex:1;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${q.localGrade?'端末内で判定':(Array.isArray(q.options)&&q.options.length?'回答する':'ALLIAに判定してもらう')}</button><button onclick="skipQuizQuestion('${set.id}')" style="background:#e2e8f0;color:#475569;border:none;border-radius:7px;padding:11px;cursor:pointer;">スキップ</button></div>
-      <div style="margin-top:9px;color:#94a3b8;font-size:.78em;text-align:center;">「選択」と「リスニング」は端末内で問題生成・採点するためALLIAを使いません。リスニングは英単語だけを再生し、単語4択・意味4択・スペル記述の3形式から出題します。その他の記述回答はALLIAが表記ゆれ・複数の意味・自然さを含めて判定します。</div>
+      <div style="margin-top:9px;color:#94a3b8;font-size:.78em;text-align:center;">「選択」と「リスニング」は端末内で問題生成・採点するためALLIAを使いません。リスニングは英単語だけを再生し、単語4択・意味4択・スペル記述の3形式のみ。4択は A〜D / 1〜4、Enterで判定、リスニング中はRで再生できます。その他の記述回答はALLIAが表記ゆれ・複数の意味・自然さを含めて判定します。</div>
     </div>`;
-  const input=document.getElementById('quizAnswerInput'); if(input)setTimeout(()=>input.focus(),30); if(q.audioText)setTimeout(()=>window.speakQuizAudio(set.id),180);
+  const input=document.getElementById('quizAnswerInput');
+  if(input) setTimeout(()=>input.focus(),30);
+  else setTimeout(()=>{ const panel=modal.querySelector('[tabindex="0"]'); if(panel) panel.focus(); },30);
+  if(q.audioText)setTimeout(()=>window.speakQuizAudio(set.id),180);
 }
 
 window.retryCurrentQuizQuestion = function(setId){ const set=getQuizSet(setId); if(!set||!set.progress)return; set.progress.currentQuestion=null; savePracticeData(); renderQuizPlayer(setId); };
-window.speakQuizAudio = function(setId){ const set=getQuizSet(setId); const q=set&&set.progress&&set.progress.currentQuestion; if(!q||!q.audioText||!('speechSynthesis' in window))return; window.speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(q.audioText); u.lang=q.audioLang==='ja'?'ja-JP':'en-US'; u.rate=q.audioLang==='ja'?0.95:0.9; window.speechSynthesis.speak(u); };
+window.setIftyListeningRate = function(rate) {
+  const value = Number(rate);
+  if (![0.75, 0.9, 1].includes(value)) return;
+  iftyListeningRate = value;
+  localStorage.setItem(IFTY_LISTENING_RATE_KEY, String(value));
+};
+window.speakQuizAudio = function(setId){ const set=getQuizSet(setId); const q=set&&set.progress&&set.progress.currentQuestion; if(!q||!q.audioText||!('speechSynthesis' in window))return; window.speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(q.audioText); u.lang=q.audioLang==='ja'?'ja-JP':'en-US'; u.rate=q.audioLang==='ja'?0.95:iftyListeningRate; window.speechSynthesis.speak(u); };
+window.handleIftyQuizKeydown = function(event, setId) {
+  const target = event && event.target;
+  const tag = target && target.tagName ? String(target.tagName).toLowerCase() : '';
+  if (tag === 'input' || tag === 'textarea' || (target && target.isContentEditable)) return;
+  const key = String(event.key || '').toLowerCase();
+  const radios = Array.from(document.querySelectorAll('input[name="quizChoice"]'));
+  const map = { '1':0, 'a':0, '2':1, 'b':1, '3':2, 'c':2, '4':3, 'd':3 };
+  if (Object.prototype.hasOwnProperty.call(map, key) && radios[map[key]]) {
+    event.preventDefault();
+    radios[map[key]].checked = true;
+    radios[map[key]].focus();
+    return;
+  }
+  if (key === 'enter') { event.preventDefault(); submitQuizAnswer(setId); }
+  if (key === 'r') { event.preventDefault(); speakQuizAudio(setId); }
+};
 window.pauseQuizSet = function(setId){ const set=getQuizSet(setId); savePracticeData(); if(set&&set.systemReview){ closePracticeModal(); renderFolders(); return; } openQuizSet(setId); };
 window.skipQuizQuestion = function(setId){ const set=getQuizSet(setId); if(!set||!set.progress)return; set.progress.index++; set.progress.currentQuestion=null; savePracticeData(); renderQuizPlayer(setId); };
 
@@ -5310,7 +5625,14 @@ window.submitQuizAnswer = async function(setId) {
       challenged:false,
       reviewStateBefore
     };
-    if (set.systemReview && applyIftyReviewResult(q.wordId, correct)) saveUserData();
+    if (set.systemReview) {
+      applyIftyReviewResult(q.wordId, correct);
+      recordIftyStudyEvent(q.wordId, correct, 'review_quiz');
+    } else {
+      recordIftyStudyEvent(q.wordId, correct, q.quizType === 'listening' ? 'listening_quiz' : 'quiz');
+      enrollIftyReviewFromStudy(q.wordId, correct);
+    }
+    saveUserData();
     savePracticeData();
     renderQuizFeedback(setId, correct, data.feedback||'', data.modelAnswer||q.referenceAnswer||'', answer);
     return;
@@ -5347,7 +5669,14 @@ window.submitQuizAnswer = async function(setId) {
       challenged:false,
       reviewStateBefore
     };
-    if (set.systemReview && applyIftyReviewResult(q.wordId, correct)) saveUserData();
+    if (set.systemReview) {
+      applyIftyReviewResult(q.wordId, correct);
+      recordIftyStudyEvent(q.wordId, correct, 'review_quiz');
+    } else {
+      recordIftyStudyEvent(q.wordId, correct, q.quizType === 'listening' ? 'listening_quiz' : 'quiz');
+      enrollIftyReviewFromStudy(q.wordId, correct);
+    }
+    saveUserData();
     savePracticeData();
     renderQuizFeedback(setId, correct, data.feedback||'', data.modelAnswer||q.referenceAnswer||'', answer);
   }catch(error){
@@ -5420,8 +5749,10 @@ window.submitQuizChallenge = async function(setId) {
 
       if (set.systemReview) {
         restoreIftyReviewState(q.wordId, last.reviewStateBefore || null);
-        if (applyIftyReviewResult(q.wordId, true)) saveUserData();
+        applyIftyReviewResult(q.wordId, true);
       }
+      correctIftyLastStudyOutcome(q.wordId);
+      saveUserData();
 
       if(last.wasInReviewBefore){
         if(!set.reviewWordIds.includes(q.wordId))set.reviewWordIds.push(q.wordId);
@@ -6061,14 +6392,15 @@ window.renderFlashcardModal = function() {
 
   if (currentFlashcardIndex >= flashcardList.length) {
     const isReviewSession = currentFlashcardMode === 'review_due';
-    if (isReviewSession) renderFolders();
+    const isWeakSession = currentFlashcardMode === 'weak';
+    if (isReviewSession || isWeakSession) renderFolders();
     modal.innerHTML = `
       <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
         <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 10px;">🎉 完了！</h3>
-        <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">${isReviewSession ? '今日の復習を終了しました。' : 'すべてのカードを終了しました。'}</p>
+        <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">${isReviewSession ? '今日の復習を終了しました。' : (isWeakSession ? '苦手候補の学習を終了しました。' : 'すべてのカードを終了しました。')}</p>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-          ${isReviewSession ? '' : '<button onclick="closeFlashcardModal(); openMenuModal(); openPlaySubMenu();" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>'}
-          <button onclick="closeFlashcardModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">${isReviewSession ? '復習フォルダへ戻る' : '閉じる'}</button>
+          ${(isReviewSession || isWeakSession) ? '' : '<button onclick="closeFlashcardModal(); openMenuModal(); openPlaySubMenu();" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>'}
+          <button onclick="closeFlashcardModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">${isReviewSession ? '復習フォルダへ戻る' : (isWeakSession ? '単語帳へ戻る' : '閉じる')}</button>
         </div>
       </div>
     `;
@@ -6108,12 +6440,19 @@ window.toggleCardFlip = function() {
 window.setMasteryAndNext = function(status) {
   const current = flashcardList[currentFlashcardIndex];
   if (current) {
+    const correct = status === 'fixed';
     current.mastery = status;
+    const sourceId = current.__iftyReviewWordId || current.id;
+    const sourceWord = sourceId ? getIftyReviewWordById(sourceId) : null;
+    if (sourceWord) sourceWord.mastery = status;
     if (currentFlashcardMode === 'review_due' && current.__iftyReviewWordId) {
-      if (applyIftyReviewResult(current.__iftyReviewWordId, status === 'fixed')) {
-        saveUserData();
-      }
+      applyIftyReviewResult(current.__iftyReviewWordId, correct);
+      recordIftyStudyEvent(current.__iftyReviewWordId, correct, 'review_flashcard');
+    } else if (sourceId) {
+      recordIftyStudyEvent(sourceId, correct, currentFlashcardMode === 'weak' ? 'weak_flashcard' : 'flashcard');
+      enrollIftyReviewFromStudy(sourceId, correct);
     }
+    saveUserData();
   }
 
   currentFlashcardIndex++;
