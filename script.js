@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP31 2026-09-19：プロフィールメニュー修正 + HOMEアイコン反映修正 ★★★
+// ★★★ IFTY Q3 STEP32 2026-09-19：社会説明簡略化 + 例文学習UI整理 + 連続例文追加 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -57,27 +57,10 @@ let iftyDailyGoalWords = IFTY_DAILY_GOAL_DEFAULT_WORDS;
 
 // Q3 STEP23：保存済み例文をAIなしで再利用する「例文資産」
 let iftyExampleSearchQuery = '';
-let iftyExamplePracticeState = {
-  mode: '',
-  queue: [],
-  index: 0,
-  revealed: false,
-  answered: false,
-  resultText: ''
-};
 
 // Q3 STEP25：BASIC SENTENCES
-// 自分で登録した英文、またはEXAMPLE BANKから取り込んだ英文をALLIAなしで学習する。
+// 自分で登録した英文、またはEXAMPLE BANKから取り込んだ英文を保存・整理する。
 let iftyBasicSentenceSearchQuery = '';
-let iftyBasicSentencePracticeState = {
-  mode: '',
-  queue: [],
-  index: 0,
-  revealed: false,
-  answered: false,
-  correct: 0,
-  wrong: 0
-};
 
 // Q3 STEP26：SOCIAL STUDIES
 // 社会は1教科として保持し、フォルダごとに日本史・世界史・地理・公共を複数設定できる。
@@ -4868,9 +4851,7 @@ const IFTY_ENTER_MODAL_IDS = [
   'iftyPasswordRecoveryModal',
   'iftyRecoveryModal',
   'practiceNameModal',
-  'iftyExamplePracticeModal',
   'iftyBasicSentenceModal',
-  'iftyBasicSentencePracticeModal',
   'iftySocialItemModal',
   'iftySocialVisualQuizModal',
   'iftySocialImageViewerModal',
@@ -5618,7 +5599,7 @@ window.openIftyExampleBank = function() {
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <div>
           <h1 class="ifty-portal-title">EXAMPLE BANK</h1>
-          <div class="ifty-portal-subtitle">保存済みの例文を一覧・検索・学習。ここでのフラッシュと穴埋めはALLIAを使用しません。</div>
+          <div class="ifty-portal-subtitle">保存済みの例文を一覧・検索し、必要なものをBASIC SENTENCESへ取り込めます。</div>
         </div>
         <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
       </div>
@@ -5630,11 +5611,9 @@ window.openIftyExampleBank = function() {
           <span id="iftyExampleBankCount" class="ifty-settings-note">${total}件</span>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
-          <button class="ifty-settings-action" type="button" onclick="startIftyExampleFlashcards()" style="background:#2563eb;color:white;">📇 例文フラッシュ</button>
-          <button class="ifty-settings-action" type="button" onclick="startIftyExampleClozeQuiz()" style="background:#7c3aed;color:white;">🧩 AIなし穴埋め4択</button>
           <button class="ifty-settings-action" type="button" onclick="addVisibleIftyExamplesToBasicSentences()" style="background:#059669;color:white;">＋ 表示中をBASICへ追加</button>
         </div>
-        <div class="ifty-settings-note" style="margin-top:8px;">検索中は、表示中の例文だけを学習対象にできます。</div>
+        <div class="ifty-settings-note" style="margin-top:8px;">検索中は、検索条件に一致する例文をまとめてBASIC SENTENCESへ追加できます。</div>
       </div>
 
       <div id="iftyExampleBankList" style="display:grid;gap:8px;margin-top:12px;"></div>
@@ -5819,13 +5798,18 @@ function ensureIftyBasicSentenceModal() {
 
 window.closeIftyBasicSentenceEditor = function() {
   const modal = document.getElementById('iftyBasicSentenceModal');
-  if (modal) modal.style.display = 'none';
+  if (!modal) return;
+  const shouldRefresh = modal.dataset.savedDuringSession === '1';
+  modal.style.display = 'none';
+  modal.dataset.savedDuringSession = '0';
+  if (shouldRefresh) window.openIftyBasicSentences();
 };
 
 window.openIftyBasicSentenceEditor = function(sentenceId = '') {
   const item = sentenceId ? findIftyBasicSentenceById(sentenceId) : null;
   const modal = ensureIftyBasicSentenceModal();
   modal.dataset.sentenceId = item ? String(item.id) : '';
+  modal.dataset.savedDuringSession = '0';
   modal.innerHTML = `
     <div style="width:min(94vw,700px);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:20px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
       <button type="button" onclick="closeIftyBasicSentenceEditor()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
@@ -5841,11 +5825,12 @@ window.openIftyBasicSentenceEditor = function(sentenceId = '') {
           <textarea id="iftyBasicSentenceNote" rows="2" placeholder="文法・語法・覚え方など（任意）" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.note : '')}</textarea>
         </label>
       </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;position:sticky;bottom:-20px;background:white;padding:14px 0 2px;margin-top:10px;border-top:1px solid #e2e8f0;">
-        <button type="button" onclick="closeIftyBasicSentenceEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;padding:10px 13px;font-weight:900;cursor:pointer;">キャンセル</button>
-        <button type="button" onclick="saveIftyBasicSentenceEditor()" style="border:none;background:#059669;color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">保存</button>
+      <div id="iftyBasicSentenceSaveStatus" style="min-height:1.2em;margin-top:10px;color:#047857;font-size:.8em;font-weight:800;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;position:sticky;bottom:-20px;background:white;padding:14px 0 2px;margin-top:4px;border-top:1px solid #e2e8f0;">
+        <button type="button" onclick="closeIftyBasicSentenceEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;padding:10px 13px;font-weight:900;cursor:pointer;">${item ? 'キャンセル' : '終了'}</button>
+        <button type="button" onclick="saveIftyBasicSentenceEditor()" style="border:none;background:#059669;color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">${item ? '保存' : '保存して次へ'}</button>
       </div>
-      <div style="margin-top:7px;color:#64748b;font-size:.76em;">Ctrl/Cmd + Enterでも保存できます。ALLIAは使用しません。</div>
+      <div style="margin-top:7px;color:#64748b;font-size:.76em;">${item ? 'Ctrl/Cmd + Enterでも保存できます。' : 'Ctrl/Cmd + Enterで保存すると、そのまま次の英文を続けて入力できます。'} ALLIAは使用しません。</div>
     </div>`;
   modal.onkeydown = event => {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) {
@@ -5894,8 +5879,22 @@ window.saveIftyBasicSentenceEditor = function() {
     }));
   }
   savePracticeData();
-  window.closeIftyBasicSentenceEditor();
-  window.openIftyBasicSentences();
+  modal.dataset.savedDuringSession = '1';
+
+  if (current) {
+    window.closeIftyBasicSentenceEditor();
+    return;
+  }
+
+  const enInput = document.getElementById('iftyBasicSentenceEn');
+  const jaInput = document.getElementById('iftyBasicSentenceJa');
+  const noteInput = document.getElementById('iftyBasicSentenceNote');
+  if (enInput) enInput.value = '';
+  if (jaInput) jaInput.value = '';
+  if (noteInput) noteInput.value = '';
+  const status = document.getElementById('iftyBasicSentenceSaveStatus');
+  if (status) status.textContent = '保存しました。続けて次の英文を入力できます。';
+  setTimeout(() => enInput?.focus(), 0);
 };
 
 window.deleteIftyBasicSentence = function(sentenceId) {
@@ -5973,16 +5972,13 @@ window.openIftyBasicSentences = function() {
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <div>
           <h1 class="ifty-portal-title">BASIC SENTENCES</h1>
-          <div class="ifty-portal-subtitle">覚えたい英文を自分で作るか、EXAMPLE BANKから取り込んで反復学習します。生成・採点にALLIAは使いません。</div>
+          <div class="ifty-portal-subtitle">覚えたい英文を自分で作るか、EXAMPLE BANKから取り込んで保存・整理します。ALLIAは使用しません。</div>
         </div>
         <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;margin-top:15px;">
         <div class="ifty-settings-section"><div class="ifty-settings-note">登録英文</div><div style="font-size:1.45em;font-weight:900;color:#047857;">${stats.total}</div></div>
-        <div class="ifty-settings-section"><div class="ifty-settings-note">今日学習</div><div style="font-size:1.45em;font-weight:900;">${stats.studiedToday}</div></div>
-        <div class="ifty-settings-section"><div class="ifty-settings-note">今日の回答</div><div style="font-size:1.45em;font-weight:900;">${stats.attemptsToday}</div></div>
-        <div class="ifty-settings-section"><div class="ifty-settings-note">今日の正答率</div><div style="font-size:1.45em;font-weight:900;">${stats.attemptsToday ? stats.accuracyToday + '%' : '—'}</div></div>
       </div>
 
       <div class="ifty-settings-section">
@@ -5993,11 +5989,9 @@ window.openIftyBasicSentences = function() {
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
           <button class="ifty-settings-action" type="button" onclick="openIftyBasicSentenceEditor()" style="background:#059669;color:white;">＋ 白紙から追加</button>
-          <button class="ifty-settings-action" type="button" onclick="startIftyBasicSentenceFlashcards()" style="background:#2563eb;color:white;">📇 英文フラッシュ</button>
-          <button class="ifty-settings-action" type="button" onclick="startIftyBasicSentenceTyping()" style="background:#7c3aed;color:white;">⌨️ 和訳→英作文</button>
           <button class="ifty-settings-action" type="button" onclick="openIftyExampleBank()" style="background:#0f766e;color:white;">📚 EXAMPLE BANK</button>
         </div>
-        <div class="ifty-settings-note" style="margin-top:8px;">検索中は表示中の英文だけを学習対象にします。英作文は大文字・文末記号・連続スペースの違いを無視して端末内で判定します。</div>
+        <div class="ifty-settings-note" style="margin-top:8px;">英文・和訳・メモで検索できます。「白紙から追加」では保存後も画面を閉じず、続けて次の例文を入力できます。</div>
       </div>
 
       <div id="iftyBasicSentenceList" style="display:grid;gap:8px;margin-top:12px;"></div>
@@ -6069,476 +6063,6 @@ window.addVisibleIftyExamplesToBasicSentences = function() {
   renderIftyExampleBankList();
   alert(`${addable.length}件をBASIC SENTENCESへ追加しました。`);
 };
-
-function ensureIftyBasicSentencePracticeModal() {
-  let modal = document.getElementById('iftyBasicSentencePracticeModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'iftyBasicSentencePracticeModal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.72);display:none;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;z-index:10075;';
-    modal.addEventListener('click', event => {
-      if (event.target === modal) window.closeIftyBasicSentencePractice();
-    });
-    document.body.appendChild(modal);
-  }
-  modal.style.display = 'flex';
-  return modal;
-}
-
-window.closeIftyBasicSentencePractice = function() {
-  const modal = document.getElementById('iftyBasicSentencePracticeModal');
-  if (modal) modal.style.display = 'none';
-  iftyBasicSentencePracticeState.mode = '';
-};
-
-function renderIftyBasicSentencePracticeDone(title) {
-  const state = iftyBasicSentencePracticeState;
-  const total = Number(state.correct || 0) + Number(state.wrong || 0);
-  const modal = ensureIftyBasicSentencePracticeModal();
-  modal.innerHTML = `
-    <div style="width:min(92vw,620px);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:22px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
-      <button type="button" onclick="closeIftyBasicSentencePractice()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
-      <h2 style="margin:0;padding-right:44px;color:#065f46;">${escapeHtml(title)}</h2>
-      <div style="margin-top:12px;color:#475569;">正解 ${state.correct || 0} / もう一度 ${state.wrong || 0}${total ? `　・　${Math.round((state.correct || 0) / total * 100)}%` : ''}</div>
-      <div style="margin-top:7px;color:#64748b;font-size:.84em;">端末内だけで学習・判定しました。ALLIAは使用していません。</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px;">
-        <button type="button" onclick="closeIftyBasicSentencePractice(); openIftyBasicSentences();" style="border:none;background:#059669;color:white;border-radius:8px;padding:10px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCESへ戻る</button>
-      </div>
-    </div>`;
-}
-
-window.startIftyBasicSentenceFlashcards = function() {
-  const ids = shuffleArray(getIftyFilteredBasicSentences().map(item => String(item.id)));
-  if (!ids.length) {
-    alert('学習できる英文がありません。');
-    return;
-  }
-  iftyBasicSentencePracticeState = {
-    mode: 'flash',
-    queue: ids,
-    index: 0,
-    revealed: false,
-    answered: false,
-    correct: 0,
-    wrong: 0
-  };
-  renderIftyBasicSentenceFlashcard();
-};
-
-function renderIftyBasicSentenceFlashcard() {
-  const state = iftyBasicSentencePracticeState;
-  if (state.mode !== 'flash') return;
-  if (state.index >= state.queue.length) {
-    renderIftyBasicSentencePracticeDone('BASIC SENTENCES フラッシュ完了');
-    return;
-  }
-  const item = findIftyBasicSentenceById(state.queue[state.index]);
-  if (!item) {
-    state.index += 1;
-    renderIftyBasicSentenceFlashcard();
-    return;
-  }
-  const modal = ensureIftyBasicSentencePracticeModal();
-  modal.innerHTML = `
-    <div style="width:min(94vw,720px);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:22px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
-      <button type="button" onclick="closeIftyBasicSentencePractice()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
-      <div style="font-size:.8em;font-weight:900;color:#059669;padding-right:44px;">BASIC FLASH ${state.index + 1}/${state.queue.length}</div>
-      <div style="margin-top:20px;font-size:1.25em;font-weight:900;line-height:1.75;color:#0f172a;">${escapeHtml(item.en)}</div>
-      <button type="button" onclick="speakIftyBasicSentence('${escapeHtml(String(item.id))}')" style="margin-top:12px;border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">🔊 音声</button>
-      ${state.revealed ? `
-        <div style="margin-top:18px;padding:14px;border-radius:10px;background:#f0fdf4;border:1px solid #bbf7d0;color:#14532d;line-height:1.65;">${item.ja ? escapeHtml(item.ja) : '和訳は登録されていません。'}</div>
-        ${item.note ? `<div style="margin-top:9px;padding:10px;border-radius:8px;background:#f8fafc;color:#475569;font-size:.86em;">${escapeHtml(item.note)}</div>` : ''}
-        <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:18px;">
-          <button type="button" onclick="answerIftyBasicSentenceFlash(true)" style="flex:1;min-width:150px;border:none;background:#059669;color:white;border-radius:9px;padding:12px;font-weight:900;cursor:pointer;">覚えた</button>
-          <button type="button" onclick="answerIftyBasicSentenceFlash(false)" style="flex:1;min-width:150px;border:none;background:#ea580c;color:white;border-radius:9px;padding:12px;font-weight:900;cursor:pointer;">もう一度</button>
-        </div>` : `
-        <button type="button" onclick="revealIftyBasicSentenceFlash()" style="width:100%;margin-top:18px;border:none;background:#2563eb;color:white;border-radius:9px;padding:12px;font-weight:900;cursor:pointer;">答えを見る</button>`}
-    </div>`;
-};
-
-window.revealIftyBasicSentenceFlash = function() {
-  iftyBasicSentencePracticeState.revealed = true;
-  renderIftyBasicSentenceFlashcard();
-};
-
-window.answerIftyBasicSentenceFlash = function(correct) {
-  const state = iftyBasicSentencePracticeState;
-  if (state.mode !== 'flash') return;
-  const id = state.queue[state.index];
-  recordIftyBasicSentenceStudy(id, !!correct);
-  if (correct) state.correct += 1;
-  else state.wrong += 1;
-  state.index += 1;
-  state.revealed = false;
-  renderIftyBasicSentenceFlashcard();
-};
-
-window.startIftyBasicSentenceTyping = function() {
-  const ids = shuffleArray(getIftyFilteredBasicSentences().filter(item => !!String(item.ja || '').trim()).map(item => String(item.id)));
-  if (!ids.length) {
-    alert('和訳が登録された英文がありません。');
-    return;
-  }
-  iftyBasicSentencePracticeState = {
-    mode: 'typing',
-    queue: ids,
-    index: 0,
-    revealed: false,
-    answered: false,
-    correct: 0,
-    wrong: 0
-  };
-  renderIftyBasicSentenceTyping();
-};
-
-function renderIftyBasicSentenceTyping() {
-  const state = iftyBasicSentencePracticeState;
-  if (state.mode !== 'typing') return;
-  if (state.index >= state.queue.length) {
-    renderIftyBasicSentencePracticeDone('BASIC SENTENCES 英作文完了');
-    return;
-  }
-  const item = findIftyBasicSentenceById(state.queue[state.index]);
-  if (!item) {
-    state.index += 1;
-    renderIftyBasicSentenceTyping();
-    return;
-  }
-  const modal = ensureIftyBasicSentencePracticeModal();
-  const result = state.answered ? state.lastResult : null;
-  modal.innerHTML = `
-    <div style="width:min(94vw,720px);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:22px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
-      <button type="button" onclick="closeIftyBasicSentencePractice()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
-      <div style="font-size:.8em;font-weight:900;color:#7c3aed;padding-right:44px;">JP → EN ${state.index + 1}/${state.queue.length}</div>
-      <div style="margin-top:20px;padding:15px;border-radius:10px;background:#f5f3ff;border:1px solid #ddd6fe;color:#4c1d95;font-size:1.08em;font-weight:800;line-height:1.65;">${escapeHtml(item.ja)}</div>
-      ${state.answered ? `
-        <div style="margin-top:15px;padding:12px;border-radius:9px;background:${result && result.correct ? '#ecfdf5' : '#fff7ed'};border:1px solid ${result && result.correct ? '#a7f3d0' : '#fed7aa'};">
-          <div style="font-weight:900;color:${result && result.correct ? '#047857' : '#c2410c'};">${result && result.correct ? '正解' : 'もう一度'}</div>
-          <div style="margin-top:7px;color:#334155;line-height:1.6;">正答：${escapeHtml(item.en)}</div>
-          ${result && result.userAnswer ? `<div style="margin-top:5px;color:#64748b;font-size:.85em;">あなたの回答：${escapeHtml(result.userAnswer)}</div>` : ''}
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
-          <button id="iftyBasicTypingNextBtn" type="button" onclick="nextIftyBasicSentenceTyping()" style="border:none;background:#7c3aed;color:white;border-radius:9px;padding:11px 15px;font-weight:900;cursor:pointer;">次へ</button>
-          <button type="button" onclick="speakIftyBasicSentence('${escapeHtml(String(item.id))}')" style="border:none;background:#0284c7;color:white;border-radius:9px;padding:11px 13px;font-weight:900;cursor:pointer;">🔊 音声</button>
-        </div>` : `
-        <textarea id="iftyBasicTypingInput" rows="3" autocomplete="off" autocapitalize="sentences" spellcheck="false" placeholder="英文を入力" style="width:100%;box-sizing:border-box;margin-top:15px;padding:12px;border:2px solid #c4b5fd;border-radius:9px;font:inherit;font-size:1.05em;resize:vertical;"></textarea>
-        <button type="button" onclick="submitIftyBasicSentenceTyping()" style="width:100%;margin-top:10px;border:none;background:#7c3aed;color:white;border-radius:9px;padding:12px;font-weight:900;cursor:pointer;">端末内で判定</button>
-        <div style="margin-top:7px;color:#64748b;font-size:.76em;">入力欄ではEnterで判定。大文字・文末記号・連続スペースの違いは無視します。</div>`}
-    </div>`;
-  if (!state.answered) {
-    const input = document.getElementById('iftyBasicTypingInput');
-    if (input) {
-      input.addEventListener('keydown', event => {
-        if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
-          event.preventDefault();
-          window.submitIftyBasicSentenceTyping();
-        }
-      });
-      setTimeout(() => input.focus(), 0);
-    }
-  } else {
-    setTimeout(() => document.getElementById('iftyBasicTypingNextBtn')?.focus(), 0);
-  }
-}
-
-window.submitIftyBasicSentenceTyping = function() {
-  const state = iftyBasicSentencePracticeState;
-  if (state.mode !== 'typing' || state.answered) return;
-  const item = findIftyBasicSentenceById(state.queue[state.index]);
-  if (!item) return;
-  const input = document.getElementById('iftyBasicTypingInput');
-  const userAnswer = String(input ? input.value : '').trim();
-  if (!userAnswer) {
-    alert('英文を入力してください。');
-    input?.focus();
-    return;
-  }
-  const correct = normalizeIftyBasicSentenceText(userAnswer) === normalizeIftyBasicSentenceText(item.en);
-  recordIftyBasicSentenceStudy(item.id, correct);
-  if (correct) state.correct += 1;
-  else state.wrong += 1;
-  state.answered = true;
-  state.lastResult = { correct, userAnswer };
-  renderIftyBasicSentenceTyping();
-};
-
-window.nextIftyBasicSentenceTyping = function() {
-  const state = iftyBasicSentencePracticeState;
-  if (state.mode !== 'typing') return;
-  state.index += 1;
-  state.answered = false;
-  state.lastResult = null;
-  renderIftyBasicSentenceTyping();
-};
-
-function ensureIftyExamplePracticeModal() {
-  let modal = document.getElementById('iftyExamplePracticeModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'iftyExamplePracticeModal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.68);display:none;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;z-index:10070;';
-    modal.addEventListener('click', event => {
-      if (event.target === modal) window.closeIftyExamplePractice();
-    });
-    document.body.appendChild(modal);
-  }
-  modal.style.display = 'flex';
-  installIftyExamplePracticeKeyboard();
-  return modal;
-}
-
-window.closeIftyExamplePractice = function() {
-  const modal = document.getElementById('iftyExamplePracticeModal');
-  if (modal) modal.style.display = 'none';
-  iftyExamplePracticeState.mode = '';
-};
-
-function renderIftyExamplePracticeDone(title) {
-  const modal = ensureIftyExamplePracticeModal();
-  modal.innerHTML = `
-    <div style="width:min(92vw,620px);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:20px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
-      <button type="button" onclick="closeIftyExamplePractice()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
-      <div style="font-size:1.25em;font-weight:900;color:#0f172a;padding-right:44px;">${escapeHtml(title)}</div>
-      <div style="margin-top:8px;color:#64748b;">保存済み例文だけで学習しました。ALLIAは使用していません。</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px;">
-        <button type="button" onclick="closeIftyExamplePractice()" style="border:none;background:#334155;color:white;border-radius:8px;padding:10px 13px;font-weight:900;cursor:pointer;">閉じる</button>
-        <button type="button" onclick="closeIftyExamplePractice(); openIftyExampleBank();" style="border:none;background:#2563eb;color:white;border-radius:8px;padding:10px 13px;font-weight:900;cursor:pointer;">例文資産へ戻る</button>
-      </div>
-    </div>`;
-}
-
-window.startIftyExampleFlashcards = function() {
-  const entries = shuffleArray(getIftyExampleEntries(iftyExampleSearchQuery).map(entry => ({ ...entry })));
-  if (!entries.length) {
-    alert('学習できる例文がありません。');
-    return;
-  }
-  iftyExamplePracticeState = {
-    mode: 'flash',
-    queue: entries,
-    index: 0,
-    revealed: false,
-    answered: false,
-    resultText: ''
-  };
-  renderIftyExampleFlashcard();
-};
-
-function renderIftyExampleFlashcard() {
-  const state = iftyExamplePracticeState;
-  if (state.mode !== 'flash') return;
-  if (state.index >= state.queue.length) {
-    renderIftyExamplePracticeDone('例文フラッシュ完了');
-    return;
-  }
-  const entry = state.queue[state.index];
-  const modal = ensureIftyExamplePracticeModal();
-  modal.innerHTML = `
-    <div style="width:min(94vw,680px);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:20px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
-      <button type="button" onclick="closeIftyExamplePractice()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
-      <div style="font-size:.8em;font-weight:900;color:#2563eb;padding-right:44px;">EXAMPLE FLASH ${state.index + 1}/${state.queue.length}</div>
-      <div style="margin-top:18px;font-size:1.18em;font-weight:800;line-height:1.7;color:#0f172a;">${escapeHtml(entry.en)}</div>
-      <button type="button" onclick="speakIftyExampleByKey('${escapeHtml(entry.key)}')" style="margin-top:12px;border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">🔊 音声</button>
-
-      ${state.revealed ? `
-        <div style="margin-top:18px;border-top:1px solid #e2e8f0;padding-top:16px;">
-          <div style="font-size:1.1em;font-weight:900;color:#1e3a8a;">${escapeHtml(entry.word.word || '')}</div>
-          <div style="margin-top:7px;line-height:1.6;color:#334155;">${escapeHtml(entry.ja || '和訳は未登録です。')}</div>
-          <div style="margin-top:5px;color:#64748b;font-size:.78em;">📁 ${escapeHtml(entry.folder.name || '')}</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:18px;">
-          <button type="button" onclick="answerIftyExampleFlashcard(false)" style="border:none;background:#e11d48;color:white;border-radius:9px;padding:12px;font-weight:900;cursor:pointer;">△ 怪しい</button>
-          <button type="button" onclick="answerIftyExampleFlashcard(true)" style="border:none;background:#059669;color:white;border-radius:9px;padding:12px;font-weight:900;cursor:pointer;">○ わかった</button>
-        </div>
-      ` : `
-        <button type="button" onclick="revealIftyExampleFlashcard()" style="width:100%;margin-top:20px;border:none;background:#2563eb;color:white;border-radius:9px;padding:12px;font-weight:900;cursor:pointer;">意味を見る</button>
-      `}
-      <div style="margin-top:12px;color:#94a3b8;font-size:.72em;">Space / Enter：表示　・　表示後 ←：怪しい / →：わかった</div>
-    </div>`;
-};
-
-window.revealIftyExampleFlashcard = function() {
-  if (iftyExamplePracticeState.mode !== 'flash') return;
-  iftyExamplePracticeState.revealed = true;
-  renderIftyExampleFlashcard();
-};
-
-window.answerIftyExampleFlashcard = function(correct) {
-  const state = iftyExamplePracticeState;
-  if (state.mode !== 'flash') return;
-  const entry = state.queue[state.index];
-  if (!entry) return;
-  recordIftyStudyEvent(entry.word.id, !!correct, 'example_flashcard');
-  enrollIftyReviewFromStudy(entry.word.id, !!correct);
-  saveUserData();
-  state.index += 1;
-  state.revealed = false;
-  renderIftyExampleFlashcard();
-};
-
-function makeIftyExampleClozeText(sentence, headword) {
-  const text = String(sentence || '');
-  const needle = String(headword || '').trim();
-  if (!text || !needle) return '';
-  const lower = text.toLowerCase();
-  const target = needle.toLowerCase();
-  let start = 0;
-
-  while (start <= lower.length - target.length) {
-    const index = lower.indexOf(target, start);
-    if (index < 0) return '';
-    const before = index > 0 ? text[index - 1] : '';
-    const afterIndex = index + needle.length;
-    const after = afterIndex < text.length ? text[afterIndex] : '';
-    const beforeOk = !before || !/[A-Za-z]/.test(before);
-    const afterOk = !after || !/[A-Za-z]/.test(after);
-    if (beforeOk && afterOk) {
-      return text.slice(0, index) + '□□□□' + text.slice(index + needle.length);
-    }
-    start = index + Math.max(1, needle.length);
-  }
-  return '';
-}
-
-function buildIftyExampleClozeQueue(entries) {
-  const allHeads = [];
-  folders.forEach(folder => (folder.words || []).forEach(word => {
-    const head = String(word.word || '').trim();
-    if (head && !allHeads.some(value => value.toLowerCase() === head.toLowerCase())) allHeads.push(head);
-  }));
-  if (allHeads.length < 4) return [];
-
-  const questions = [];
-  entries.forEach(entry => {
-    const target = String(entry.word.word || '').trim();
-    const question = makeIftyExampleClozeText(entry.en, target);
-    if (!question) return;
-    const distractors = shuffleArray(allHeads.filter(head => head.toLowerCase() !== target.toLowerCase())).slice(0, 3);
-    if (distractors.length < 3) return;
-    questions.push({
-      ...entry,
-      clozeText: question,
-      options: shuffleArray([target, ...distractors])
-    });
-  });
-  return shuffleArray(questions);
-}
-
-window.startIftyExampleClozeQuiz = function() {
-  const entries = getIftyExampleEntries(iftyExampleSearchQuery);
-  const queue = buildIftyExampleClozeQueue(entries);
-  if (!queue.length) {
-    alert('穴埋め4択を作れる例文がありません。英文内に見出し語がそのまま含まれ、異なる単語が4語以上必要です。');
-    return;
-  }
-  iftyExamplePracticeState = {
-    mode: 'cloze',
-    queue,
-    index: 0,
-    revealed: false,
-    answered: false,
-    resultText: ''
-  };
-  renderIftyExampleClozeQuiz();
-};
-
-function renderIftyExampleClozeQuiz() {
-  const state = iftyExamplePracticeState;
-  if (state.mode !== 'cloze') return;
-  if (state.index >= state.queue.length) {
-    renderIftyExamplePracticeDone('例文穴埋め完了');
-    return;
-  }
-
-  const item = state.queue[state.index];
-  const modal = ensureIftyExamplePracticeModal();
-  const optionButtons = item.options.map((option, index) => `
-    <button type="button" ${state.answered ? 'disabled' : ''} onclick="answerIftyExampleCloze(${index})" style="text-align:left;border:1px solid #c4b5fd;background:${state.answered && option.toLowerCase() === String(item.word.word || '').toLowerCase() ? '#dcfce7' : 'white'};color:#0f172a;border-radius:9px;padding:11px 12px;font-weight:800;cursor:${state.answered ? 'default' : 'pointer'};">${String.fromCharCode(65 + index)}. ${escapeHtml(option)}</button>
-  `).join('');
-
-  modal.innerHTML = `
-    <div style="width:min(94vw,700px);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:20px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
-      <button type="button" onclick="closeIftyExamplePractice()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
-      <div style="font-size:.8em;font-weight:900;color:#7c3aed;padding-right:44px;">LOCAL CLOZE ${state.index + 1}/${state.queue.length}</div>
-      <div style="margin-top:18px;font-size:1.15em;font-weight:800;line-height:1.7;color:#0f172a;">${escapeHtml(item.clozeText)}</div>
-      <div style="margin-top:16px;display:grid;gap:8px;">${optionButtons}</div>
-      ${state.answered ? `
-        <div style="margin-top:14px;padding:11px;border-radius:9px;background:${state.resultText === '正解' ? '#ecfdf5' : '#fff1f2'};color:${state.resultText === '正解' ? '#047857' : '#be123c'};font-weight:900;">${escapeHtml(state.resultText)}　答え：${escapeHtml(item.word.word || '')}${item.ja ? `<div style="font-weight:500;font-size:.86em;margin-top:5px;">${escapeHtml(item.ja)}</div>` : ''}</div>
-        <button type="button" onclick="nextIftyExampleCloze()" style="width:100%;margin-top:12px;border:none;background:#7c3aed;color:white;border-radius:9px;padding:11px;font-weight:900;cursor:pointer;">次へ</button>
-      ` : ''}
-      <div style="margin-top:12px;color:#94a3b8;font-size:.72em;">A-D / 1-4：選択　・　回答後 Enter：次へ</div>
-    </div>`;
-}
-
-window.answerIftyExampleCloze = function(optionIndex) {
-  const state = iftyExamplePracticeState;
-  if (state.mode !== 'cloze' || state.answered) return;
-  const item = state.queue[state.index];
-  if (!item) return;
-  const selected = String(item.options[Number(optionIndex)] || '');
-  const correct = selected.toLowerCase() === String(item.word.word || '').trim().toLowerCase();
-  state.answered = true;
-  state.resultText = correct ? '正解' : '不正解';
-  recordIftyStudyEvent(item.word.id, correct, 'example_cloze');
-  enrollIftyReviewFromStudy(item.word.id, correct);
-  saveUserData();
-  renderIftyExampleClozeQuiz();
-};
-
-window.nextIftyExampleCloze = function() {
-  const state = iftyExamplePracticeState;
-  if (state.mode !== 'cloze' || !state.answered) return;
-  state.index += 1;
-  state.answered = false;
-  state.resultText = '';
-  renderIftyExampleClozeQuiz();
-};
-
-function installIftyExamplePracticeKeyboard() {
-  if (window.__iftyExamplePracticeKeyboardInstalled) return;
-  window.__iftyExamplePracticeKeyboardInstalled = true;
-  document.addEventListener('keydown', event => {
-    const modal = document.getElementById('iftyExamplePracticeModal');
-    if (!modal || modal.style.display === 'none') return;
-    const active = document.activeElement;
-    if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) return;
-
-    const state = iftyExamplePracticeState;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      window.closeIftyExamplePractice();
-      return;
-    }
-
-    if (state.mode === 'flash') {
-      if (!state.revealed && (event.key === ' ' || event.key === 'Enter')) {
-        event.preventDefault();
-        window.revealIftyExampleFlashcard();
-      } else if (state.revealed && event.key === 'ArrowLeft') {
-        event.preventDefault();
-        window.answerIftyExampleFlashcard(false);
-      } else if (state.revealed && event.key === 'ArrowRight') {
-        event.preventDefault();
-        window.answerIftyExampleFlashcard(true);
-      }
-      return;
-    }
-
-    if (state.mode === 'cloze') {
-      if (!state.answered) {
-        const key = String(event.key || '').toLowerCase();
-        const indexMap = { a: 0, b: 1, c: 2, d: 3, '1': 0, '2': 1, '3': 2, '4': 3 };
-        if (Object.prototype.hasOwnProperty.call(indexMap, key)) {
-          event.preventDefault();
-          window.answerIftyExampleCloze(indexMap[key]);
-        }
-      } else if (event.key === 'Enter') {
-        event.preventDefault();
-        window.nextIftyExampleCloze();
-      }
-    }
-  });
-}
 
 window.startIftyDueReviewFlashcards = function(direction = 'front') {
   const entries = getIftyReviewEntries({ dueOnly: true });
