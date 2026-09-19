@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP30 2026-09-19：プロフィール画像 + HOMEアイコン設定 ★★★
+// ★★★ IFTY Q3 STEP31 2026-09-19：プロフィールメニュー修正 + HOMEアイコン反映修正 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -198,6 +198,7 @@ const IFTY_HOME_ICON_PATHS = {
   white: './ifty-home-icon-white.png',
   black: './ifty-home-icon-black.png'
 };
+let iftyHomeManifestObjectUrl = '';
 const IFTY_PROFILE_PRESETS = [
   ['mint', '#14b8a6', '#ecfeff'],
   ['blue', '#2563eb', '#eff6ff'],
@@ -240,17 +241,63 @@ function applyIftyProfileVisual() {
 }
 function applyIftyHomeIcon() {
   const bg = getIftyHomeIconBackground();
-  const href = IFTY_HOME_ICON_PATHS[bg];
-  [['icon','iftyDynamicFavicon'], ['apple-touch-icon','iftyDynamicAppleIcon']].forEach(([rel,id]) => {
-    let link = document.getElementById(id);
-    if (!link) {
-      link = document.createElement('link');
-      link.id = id;
-      link.rel = rel;
-      document.head.appendChild(link);
-    }
-    link.href = href + '?v=30-' + bg;
-  });
+  const relativeHref = IFTY_HOME_ICON_PATHS[bg];
+  const versionedHref = `${relativeHref}?v=31-${bg}`;
+  const absoluteHref = new URL(versionedHref, window.location.href).href;
+
+  // 旧いHTMLや旧STEPが置いたアイコン指定を残すと、iOS Safariが先頭の古い
+  // apple-touch-iconを採用することがあるため、いったんすべて外してから1つだけ入れ直す。
+  document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"], link[rel="apple-touch-icon-precomposed"]').forEach(link => link.remove());
+
+  const favicon = document.createElement('link');
+  favicon.id = 'iftyDynamicFavicon';
+  favicon.rel = 'icon';
+  favicon.type = 'image/png';
+  favicon.sizes = '512x512';
+  favicon.href = versionedHref;
+  document.head.appendChild(favicon);
+
+  const apple = document.createElement('link');
+  apple.id = 'iftyDynamicAppleIcon';
+  apple.rel = 'apple-touch-icon';
+  apple.sizes = '512x512';
+  apple.href = versionedHref;
+  document.head.appendChild(apple);
+
+  // Manifestも選択中の背景に合わせる。既存の固定manifest指定は競合するので置き換える。
+  document.querySelectorAll('link[rel="manifest"]').forEach(link => link.remove());
+  if (iftyHomeManifestObjectUrl) {
+    try { URL.revokeObjectURL(iftyHomeManifestObjectUrl); } catch (_) {}
+    iftyHomeManifestObjectUrl = '';
+  }
+
+  try {
+    const manifest = {
+      name: 'IFTY',
+      short_name: 'IFTY',
+      start_url: new URL('./', window.location.href).href,
+      scope: new URL('./', window.location.href).href,
+      display: 'standalone',
+      background_color: bg === 'black' ? '#000000' : '#ffffff',
+      theme_color: bg === 'black' ? '#000000' : '#ffffff',
+      icons: [
+        { src: absoluteHref, sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: absoluteHref, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+      ]
+    };
+    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+    iftyHomeManifestObjectUrl = URL.createObjectURL(blob);
+    const manifestLink = document.createElement('link');
+    manifestLink.id = 'iftyDynamicManifest';
+    manifestLink.rel = 'manifest';
+    manifestLink.href = iftyHomeManifestObjectUrl;
+    document.head.appendChild(manifestLink);
+  } catch (error) {
+    console.warn('IFTY HOMEアイコンmanifest生成エラー:', error);
+  }
+
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeMeta) themeMeta.content = bg === 'black' ? '#000000' : '#ffffff';
 }
 window.setIftyProfilePreset = function(index) {
   index = Number(index);
@@ -435,7 +482,7 @@ function ensureIftySideMenuStyles() {
     #iftySideMenuOverlay {
       position: fixed;
       inset: 0;
-      z-index: 10150;
+      z-index: 13050;
       background: rgba(15, 23, 42, .46);
       opacity: 0;
       pointer-events: none;
@@ -474,10 +521,11 @@ function ensureIftySideMenuStyles() {
     }
     .ifty-side-menu-logo {
       width: 50px;
-      height: 62px;
-      object-fit: contain;
-      border-radius: 9px;
-      background: #000;
+      height: 50px;
+      object-fit: cover;
+      border-radius: 50%;
+      background: #fff;
+      border: 1px solid #cbd5e1;
       flex: 0 0 auto;
     }
     .ifty-side-menu-title {
@@ -595,7 +643,7 @@ function renderIftySideMenu() {
   overlay.innerHTML = `
     <nav id="iftySideMenuDrawer" aria-label="IFTYメニュー" onclick="event.stopPropagation()">
       <div class="ifty-side-menu-header">
-        <img class="ifty-side-menu-logo" src="${IFTY_LOGO_PATH}" alt="IFTY" onerror="this.onerror=null;this.src='${IFTY_LOGO_FALLBACK_DATA}'">
+        <img class="ifty-side-menu-logo" src="${getIftyProfileImageSrc()}" alt="プロフィール">
         <div style="min-width:0;">
           <div class="ifty-side-menu-title">IFTY</div>
           <div class="ifty-side-menu-user">${accountName}</div>
@@ -626,16 +674,22 @@ function renderIftySideMenu() {
   return overlay;
 }
 
-window.openIftySideMenu = function() {
-  const mainPortal = document.getElementById('mainPortal');
-  if (!mainPortal || mainPortal.style.display === 'none') return;
+window.openIftySideMenu = function(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  // 左上プロフィールが表示されているログイン後画面なら、個別ページのdisplay状態に
+  // 依存せず必ずメニューを開けるようにする。
+  if (!currentUser && !iftyAccount && !iftyDeveloperMode) return;
   if (typeof window.closeMainLauncher === 'function') window.closeMainLauncher();
   const overlay = renderIftySideMenu();
   overlay.style.display = 'block';
   overlay.setAttribute('aria-hidden', 'false');
-  requestAnimationFrame(() => {
-    overlay.classList.add('ifty-side-menu-open');
-  });
+  overlay.classList.remove('ifty-side-menu-open');
+  // Safari/PWAでも確実にトランジションを開始させる。
+  void overlay.offsetWidth;
+  overlay.classList.add('ifty-side-menu-open');
 };
 
 window.closeIftySideMenu = function() {
@@ -648,7 +702,11 @@ window.closeIftySideMenu = function() {
   }, 230);
 };
 
-window.toggleIftySideMenu = function() {
+window.toggleIftySideMenu = function(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
   const overlay = document.getElementById('iftySideMenuOverlay');
   if (overlay && overlay.classList.contains('ifty-side-menu-open')) {
     window.closeIftySideMenu();
@@ -2359,7 +2417,7 @@ window.openIftySettings = function() {
           <button type="button" onclick="setIftyHomeIconBackground('white')" style="padding:8px;border:${getIftyHomeIconBackground()==='white'?'3px solid #14b8a6':'1px solid #94a3b8'};border-radius:12px;background:white;cursor:pointer;"><img src="${IFTY_HOME_ICON_PATHS.white}" alt="白背景" style="width:68px;height:68px;border-radius:12px;display:block;"><span style="display:block;margin-top:5px;font-weight:800;color:#0f172a;">白</span></button>
           <button type="button" onclick="setIftyHomeIconBackground('black')" style="padding:8px;border:${getIftyHomeIconBackground()==='black'?'3px solid #14b8a6':'1px solid #94a3b8'};border-radius:12px;background:#111827;cursor:pointer;"><img src="${IFTY_HOME_ICON_PATHS.black}" alt="黒背景" style="width:68px;height:68px;border-radius:12px;display:block;"><span style="display:block;margin-top:5px;font-weight:800;color:white;">黒</span></button>
         </div>
-        <div class="ifty-settings-note" style="margin-top:8px;">iPhone / iPadですでにホーム画面へ追加済みの場合、アイコン変更の反映には一度削除して再追加が必要なことがあります。</div>
+        <div class="ifty-settings-note" style="margin-top:8px;">設定後にSafariからホーム画面へ追加すると選択中のアイコンを使います。iPhone / iPadですでに追加済みのIFTYはアイコンだけを後から差し替えられないため、変更する場合はホーム画面のIFTYを削除してからSafariで再追加してください。</div>
       </div>
 
       <div class="ifty-settings-section">
@@ -2432,7 +2490,7 @@ window.openIftySettings = function() {
         </div>
       </div>
 
-      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP30</div>
+      <div class="ifty-settings-note" style="margin-top:14px;">IFTY Q3 STEP31</div>
     </section>
   `, 'settings');
 
@@ -2450,8 +2508,8 @@ function ensureIftyBrandUi() {
     logo.id = 'iftyGlobalLogo';
     logo.type = 'button';
     logo.title = 'IFTYメニュー';
-    logo.onclick = window.toggleIftySideMenu;
-    logo.style.cssText = 'position:fixed;left:10px;top:10px;width:58px;height:58px;padding:0;border:2px solid rgba(255,255,255,.75);background:#fff;border-radius:50%;overflow:hidden;cursor:pointer;z-index:10090;box-shadow:0 5px 18px rgba(0,0,0,.28);';
+    logo.onclick = event => window.toggleIftySideMenu(event);
+    logo.style.cssText = 'position:fixed;left:10px;top:10px;width:58px;height:58px;padding:0;border:2px solid rgba(255,255,255,.75);background:#fff;border-radius:50%;overflow:hidden;cursor:pointer;z-index:12090;box-shadow:0 5px 18px rgba(0,0,0,.28);pointer-events:auto;touch-action:manipulation;-webkit-tap-highlight-color:transparent;';
     const logoImg = document.createElement('img');
     logoImg.src = getIftyProfileImageSrc();
     logoImg.alt = 'プロフィール';
@@ -2463,7 +2521,9 @@ function ensureIftyBrandUi() {
   const globalLogo = document.getElementById('iftyGlobalLogo');
   if (globalLogo) {
     globalLogo.title = 'IFTYメニュー';
-    globalLogo.onclick = window.toggleIftySideMenu;
+    globalLogo.onclick = event => window.toggleIftySideMenu(event);
+    globalLogo.style.pointerEvents = 'auto';
+    globalLogo.style.touchAction = 'manipulation';
   }
 
   if (!document.getElementById('iftyQuickControls')) {
@@ -3327,24 +3387,14 @@ function startIftyAutoBackup() {
 }
 
 function ensureIftyPwaHeadLinks() {
-  if (!document.querySelector('link[rel="apple-touch-icon"]')) {
-    const apple = document.createElement('link');
-    apple.rel = 'apple-touch-icon';
-    apple.href = './apple-touch-icon.png';
-    document.head.appendChild(apple);
-  }
-  if (!document.querySelector('link[rel="manifest"]')) {
-    const manifest = document.createElement('link');
-    manifest.rel = 'manifest';
-    manifest.href = './manifest.webmanifest';
-    document.head.appendChild(manifest);
-  }
   if (!document.querySelector('meta[name="theme-color"]')) {
     const meta = document.createElement('meta');
     meta.name = 'theme-color';
-    meta.content = '#000000';
     document.head.appendChild(meta);
   }
+  // STEP30までの固定apple-touch-icon / manifestと競合させず、
+  // 現在の白・黒設定を唯一のPWAアイコン指定として反映する。
+  applyIftyHomeIcon();
 }
 
 
@@ -3678,11 +3728,13 @@ function setIftyAuthenticatedUiVisible(visible) {
   const mainPortal = document.getElementById('mainPortal');
   const floatingAiBtn = document.getElementById('floatingAiBtn');
   const quickControls = document.getElementById('iftyQuickControls');
+  const globalLogo = document.getElementById('iftyGlobalLogo');
 
   if (landingPage) landingPage.style.display = visible ? 'none' : 'block';
   if (mainPortal) mainPortal.style.display = visible ? 'block' : 'none';
   if (floatingAiBtn) floatingAiBtn.style.display = visible ? 'flex' : 'none';
   if (quickControls) quickControls.style.display = visible ? 'flex' : 'none';
+  if (globalLogo) globalLogo.style.display = visible ? 'block' : 'none';
 }
 
 function setIftyAccountFormStatus(message, isError = false) {
