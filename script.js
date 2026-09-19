@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP33 2026-09-19：社会連続生成の非同期競合修正 ★★★
+// ★★★ IFTY Q3 STEP34 2026-09-19：社会連続生成の非同期競合修正 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -1817,16 +1817,33 @@ window.clearIftySocialImageDraft = function(folderId) {
 window.generateIftySocialItem = async function(folderId) {
   const folder = getIftySocialFolder(folderId);
   const input = document.getElementById(`iftySocialTopic_${folderId}`);
-  const topic = String(input?.value || '').trim();
+  // DOMの値を最優先し、再描画直後などinput参照が取れない場合はdraftを使う。
+  const topic = String(input?.value ?? iftySocialTopicDrafts[folderId] ?? '').trim();
   const imageDraft = iftySocialImageDrafts[folderId] ? { ...iftySocialImageDrafts[folderId] } : null;
-  if (!folder || (!topic && !imageDraft?.aiDataUrl)) return;
+
+  if (!folder) {
+    alert('対象の社会フォルダを取得できませんでした。画面を開き直してください。');
+    return;
+  }
+  // STEP33までは空欄時に無言returnしていたため、ボタンが壊れたように見えた。
+  // 用語または画像のどちらかを必須にし、足りない場合は明示する。
+  if (!topic && !imageDraft?.aiDataUrl) {
+    const status = document.getElementById(`iftySocialStatus_${folderId}`);
+    if (status) status.textContent = '用語を入力するか、画像を添付してください。';
+    if (input) {
+      input.focus({ preventScroll: true });
+      input.style.outline = '2px solid #7c3aed';
+      setTimeout(() => { if (input) input.style.outline = ''; }, 1200);
+    }
+    return;
+  }
   if (!ensureIftyOnline('社会データ生成')) return;
 
   // 送信時点の科目設定を固定する。生成待ちの間にフォルダ設定が変わっても、
   // このリクエスト自体の条件は途中で変えない。
   const requestSubjects = [...folder.subjects];
 
-  // ENGLISHと同じく、確定した瞬間に入力欄を空にする。
+  // クリック送信でもEnter送信でも、確定した値をここで固定してから空にする。
   // 前の生成完了を待たず、次の用語を続けて入力・送信できる。
   iftySocialTopicDrafts[folderId] = '';
   if (input) input.value = '';
