@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP32 2026-09-19：社会説明簡略化 + 例文学習UI整理 + 連続例文追加 ★★★
+// ★★★ IFTY Q3 STEP33 2026-09-19：社会連続生成の非同期競合修正 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -76,6 +76,10 @@ const IFTY_SOCIAL_SUBJECT_KEYS = IFTY_SOCIAL_SUBJECTS.map(item => item.key);
 // AI解析用画像は一時的に高解像度、保存用画像はクラウド容量を抑えるため縮小して保持する。
 let iftySocialTopicDrafts = {};
 let iftySocialImageDrafts = {};
+// 同じ社会フォルダで複数のALLIA生成を連続送信した時の進行数。
+// savePracticeData() は正規化時にフォルダオブジェクトを作り直すため、
+// 非同期処理では古いfolder参照を保持せず、完了時にfolderIdから取り直す。
+let iftySocialGenerationPending = {};
 let iftySocialEditorImageDraft = null;
 let iftySocialVisualQuizState = {
   mode: '',
@@ -1597,7 +1601,7 @@ function renderIftySocialFolder(folder) {
         <button type="button" onclick="addBlankIftySocialItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">白紙</button>
       </div>
       <div id="iftySocialImagePreview_${folder.id}" style="display:${iftySocialImageDrafts[folder.id]?.storedDataUrl ? 'flex' : 'none'};align-items:center;gap:8px;margin-top:7px;padding:7px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:8px;"></div>
-      <div id="iftySocialStatus_${folder.id}" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;"></div>
+      <div id="iftySocialStatus_${folder.id}" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;">${Number(iftySocialGenerationPending[folder.id] || 0) > 0 ? `ALLIA生成中… ${Number(iftySocialGenerationPending[folder.id] || 0)}件` : ''}</div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:7px;padding:8px;border:1px solid #ede9fe;border-radius:8px;background:#fafaff;">
         <span style="font-size:.76em;font-weight:900;color:#6d28d9;">画像クイズ ${imageCount}枚</span>
         <button type="button" onclick="startIftySocialVisualQuiz('${folder.id}','image_to_text')" ${imageCount < 2 ? 'disabled' : ''} style="border:none;background:${imageCount < 2 ? '#cbd5e1' : '#7c3aed'};color:white;border-radius:7px;padding:6px 9px;font-weight:900;cursor:${imageCount < 2 ? 'not-allowed' : 'pointer'};">画像を見て選ぶ</button>
@@ -1813,20 +1817,35 @@ window.clearIftySocialImageDraft = function(folderId) {
 window.generateIftySocialItem = async function(folderId) {
   const folder = getIftySocialFolder(folderId);
   const input = document.getElementById(`iftySocialTopic_${folderId}`);
-  const status = document.getElementById(`iftySocialStatus_${folderId}`);
   const topic = String(input?.value || '').trim();
   const imageDraft = iftySocialImageDrafts[folderId] ? { ...iftySocialImageDrafts[folderId] } : null;
   if (!folder || (!topic && !imageDraft?.aiDataUrl)) return;
   if (!ensureIftyOnline('社会データ生成')) return;
 
-  // ENGLISHと同じく、Enter/生成ボタンで確定した瞬間に入力内容を消し、
-  // ALLIA処理中も次の項目を続けて入力できるようにする。
+  // 送信時点の科目設定を固定する。生成待ちの間にフォルダ設定が変わっても、
+  // このリクエスト自体の条件は途中で変えない。
+  const requestSubjects = [...folder.subjects];
+
+  // ENGLISHと同じく、確定した瞬間に入力欄を空にする。
+  // 前の生成完了を待たず、次の用語を続けて入力・送信できる。
   iftySocialTopicDrafts[folderId] = '';
   if (input) input.value = '';
   delete iftySocialImageDrafts[folderId];
   renderIftySocialPendingImage(folderId);
   keepIftySocialTopicFocused(folderId);
-  if (status) status.textContent = imageDraft?.aiDataUrl ? 'ALLIAが画像と暗記用説明文を作成中…' : 'ALLIAが暗記用説明文を作成中…';
+
+  iftySocialGenerationPending[folderId] = Number(iftySocialGenerationPending[folderId] || 0) + 1;
+  const setPendingStatus = (message = '') => {
+    const status = document.getElementById(`iftySocialStatus_${folderId}`);
+    if (!status) return;
+    const pending = Number(iftySocialGenerationPending[folderId] || 0);
+    if (message) {
+      status.textContent = pending > 0 ? `${message}（残り ${pending}件生成中）` : message;
+    } else {
+      status.textContent = pending > 0 ? `ALLIA生成中… ${pending}件` : '';
+    }
+  };
+  setPendingStatus(imageDraft?.aiDataUrl ? 'ALLIAが画像と暗記用説明文を作成中…' : 'ALLIAが暗記用説明文を作成中…');
 
   try {
     const response = await fetch(WORKER_URL, {
@@ -1836,19 +1855,29 @@ window.generateIftySocialItem = async function(folderId) {
         type: 'social_generate',
         topic,
         image: imageDraft?.aiDataUrl || '',
-        subjects: folder.subjects,
+        subjects: requestSubjects,
         subject: 'SOCIAL STUDIES',
         order: getIftySubjectOrder('SOCIAL STUDIES')
       })
     });
     const data = await response.json();
     if (!response.ok) throw alliaHttpError(response, data, '社会データ生成に失敗しました。');
+
+    // 重要：savePracticeData()/normalizePracticeData() はフォルダオブジェクトを
+    // 新しく作り直す。連続生成中に先のリクエストが保存すると、送信開始時に取得した
+    // folder参照は古くなるため、必ず完了時点でfolderIdから最新フォルダを取り直す。
+    const currentFolder = getIftySocialFolder(folderId);
+    if (!currentFolder) {
+      iftySocialGenerationPending[folderId] = Math.max(0, Number(iftySocialGenerationPending[folderId] || 0) - 1);
+      return;
+    }
+
     recordUndoState('社会項目追加');
-    folder.items.push(normalizeIftySocialItem({
+    currentFolder.items.push(normalizeIftySocialItem({
       ...data,
       id: makeId('socialitem'),
       topic,
-      subjects: folder.subjects,
+      subjects: requestSubjects,
       imageData: imageDraft?.storedDataUrl || '',
       imageName: imageDraft?.name || '',
       source: 'ALLIA',
@@ -1856,18 +1885,22 @@ window.generateIftySocialItem = async function(folderId) {
       updatedAt: Date.now()
     }));
     savePracticeData();
+
+    iftySocialGenerationPending[folderId] = Math.max(0, Number(iftySocialGenerationPending[folderId] || 0) - 1);
     renderIftySocialStudiesPage({ preserveScroll: true });
     keepIftySocialTopicFocused(folderId);
   } catch (error) {
     console.error('社会暗記用説明文生成エラー:', error);
-    // 失敗時だけ、確定前の入力を復元する。処理中に次の入力を始めていた場合は上書きしない。
+    iftySocialGenerationPending[folderId] = Math.max(0, Number(iftySocialGenerationPending[folderId] || 0) - 1);
+
+    // 失敗時だけ、送信した内容を復元する。
+    // ただし、その後に入力した新しい内容がある場合は絶対に上書きしない。
     if (!String(iftySocialTopicDrafts[folderId] || '').trim()) iftySocialTopicDrafts[folderId] = topic;
     if (!iftySocialImageDrafts[folderId] && imageDraft) iftySocialImageDrafts[folderId] = imageDraft;
     const currentInput = document.getElementById(`iftySocialTopic_${folderId}`);
     if (currentInput && !currentInput.value.trim()) currentInput.value = iftySocialTopicDrafts[folderId] || '';
     renderIftySocialPendingImage(folderId);
-    const currentStatus = document.getElementById(`iftySocialStatus_${folderId}`);
-    if (currentStatus) currentStatus.textContent = String(error.message || error);
+    setPendingStatus(String(error.message || error));
     keepIftySocialTopicFocused(folderId);
   }
 };
@@ -3233,6 +3266,7 @@ async function applyIftyRecoveryPayload(payload) {
     wordInputDrafts = {};
     iftySocialTopicDrafts = {};
     iftySocialImageDrafts = {};
+    iftySocialGenerationPending = {};
     iftySocialEditorImageDraft = null;
     iftyGlobalVocabSearchQuery = '';
     iftyFolderSearchQueries = {};
@@ -4433,6 +4467,7 @@ async function applyIftyCloudPayload(payload) {
     wordInputDrafts = {};
     iftySocialTopicDrafts = {};
     iftySocialImageDrafts = {};
+    iftySocialGenerationPending = {};
     iftySocialEditorImageDraft = null;
     undoStack = [];
     redoStack = [];
