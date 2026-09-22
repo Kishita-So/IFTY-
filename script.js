@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP34 2026-09-19：社会連続生成の非同期競合修正 ★★★
+// ★★★ IFTY Q3 STEP35 2026-09-19：SOCIAL STUDIES 専用PRACTICE ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -91,6 +91,27 @@ let iftySocialVisualQuizState = {
   answered: false,
   selectedId: '',
   optionIds: []
+};
+
+
+// Q3 STEP35：SOCIAL STUDIES 専用PRACTICE
+// シンプル / 時代 / 並べ替え / 説明 / 画像関連を、社会フォルダから直接出題する。
+let iftySocialPracticeSelectedFolderIds = new Set();
+let iftySocialPracticeSelectionInitialized = false;
+let iftySocialPracticeQuestionCount = 5;
+let iftySocialPracticeState = {
+  mode: '',
+  questions: [],
+  index: 0,
+  correct: 0,
+  wrong: 0,
+  answered: false,
+  selectedIds: [],
+  orderIds: [],
+  grading: false,
+  feedback: '',
+  score: null,
+  modelAnswer: ''
 };
 
 let chatSessions = [];
@@ -1635,6 +1656,7 @@ function renderIftySocialStudiesPage(options = {}) {
             <div class="ifty-settings-note">${escapeHtml(getIftyOrderStatus('SOCIAL STUDIES'))}。社会のALLIAは、Who / When / Where / What / Why / Howを項目ごとに分断せず、必要な要素を自然につないだ暗記用説明文にします。人物は抽象的な主体だけで済ませず、判明している場合は建国者・創始者・首謀者・初代就任者・中心人物などの具体的人名を優先します。画像の地図・作品名・覚える核も整理します。</div>
           </div>
           <div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;">
+            <button class="ifty-settings-action" type="button" onclick="openIftySocialPractice()" style="background:#0f766e;color:white;">⚔️ PRACTICE</button>
             <button class="ifty-settings-action" type="button" onclick="openIftySubjectOrder('SOCIAL STUDIES')" style="background:#0284c7;color:white;">ORDERを編集</button>
             <button class="ifty-settings-action" type="button" onclick="openIftySubjectAllia('SOCIAL STUDIES')" style="background:#7c3aed;color:white;">🤖 ALLIA</button>
           </div>
@@ -2310,6 +2332,736 @@ window.nextIftySocialVisualQuiz = function() {
 window.closeIftySocialVisualQuiz = function() {
   const modal = document.getElementById('iftySocialVisualQuizModal');
   if (modal) modal.style.display = 'none';
+};
+
+
+// ==========================================
+// Q3 STEP35：SOCIAL STUDIES 専用PRACTICE
+// ==========================================
+function getIftySocialPracticeFolders() {
+  return getIftySocialModule().folders.filter(folder => Array.isArray(folder.items) && folder.items.length);
+}
+
+function ensureIftySocialPracticeFolderSelection() {
+  const foldersWithItems = getIftySocialPracticeFolders();
+  const validIds = new Set(foldersWithItems.map(folder => String(folder.id)));
+  iftySocialPracticeSelectedFolderIds = new Set(
+    [...iftySocialPracticeSelectedFolderIds].filter(id => validIds.has(String(id)))
+  );
+  if (!iftySocialPracticeSelectionInitialized) {
+    foldersWithItems.forEach(folder => iftySocialPracticeSelectedFolderIds.add(String(folder.id)));
+    iftySocialPracticeSelectionInitialized = true;
+  }
+}
+
+function getIftySocialPracticeSelectedFolders() {
+  ensureIftySocialPracticeFolderSelection();
+  return getIftySocialPracticeFolders().filter(folder => iftySocialPracticeSelectedFolderIds.has(String(folder.id)));
+}
+
+function getIftySocialPracticeItems() {
+  return getIftySocialPracticeSelectedFolders().flatMap(folder => (folder.items || [])
+    .filter(item => String(item?.title || item?.topic || '').trim())
+    .map(item => ({ folder, item })));
+}
+
+function getIftySocialPracticeImageItems() {
+  return getIftySocialPracticeItems().filter(ref => !!normalizeIftySocialImageData(ref.item.imageData));
+}
+
+function getIftySocialPracticeModeMeta(mode) {
+  const meta = {
+    simple: {
+      title: 'シンプル',
+      description: '用語→説明、または説明→用語。保存済みデータだけで出題します。',
+      color: '#2563eb'
+    },
+    era: {
+      title: '時代',
+      description: '用語→時代、または時代→用語。正解が複数になる問題にも対応します。',
+      color: '#7c3aed'
+    },
+    order: {
+      title: '並べ替え',
+      description: '用語に関係する出来事を、古いものから順に並べます。',
+      color: '#d97706'
+    },
+    explanation: {
+      title: '説明',
+      description: '提示された用語を、指定された語句を使って説明します。ALLIAが採点します。',
+      color: '#059669'
+    },
+    image: {
+      title: '画像関連',
+      description: '画像から用語を答える、または用語から正しい画像を選びます。',
+      color: '#db2777'
+    }
+  };
+  return meta[mode] || { title: 'PRACTICE', description: '', color: '#334155' };
+}
+
+function resetIftySocialPracticeAnswerState() {
+  iftySocialPracticeState.answered = false;
+  iftySocialPracticeState.selectedIds = [];
+  iftySocialPracticeState.orderIds = [];
+  iftySocialPracticeState.grading = false;
+  iftySocialPracticeState.feedback = '';
+  iftySocialPracticeState.score = null;
+  iftySocialPracticeState.modelAnswer = '';
+  iftySocialPracticeState.answerText = '';
+}
+
+window.openIftySocialPractice = function() {
+  currentIftySubject = 'SOCIAL STUDIES';
+  window.closeIftySideMenu();
+  ensureIftySocialPracticeFolderSelection();
+  renderIftySocialPracticeHome();
+};
+
+window.toggleIftySocialPracticeFolder = function(folderId, checked) {
+  iftySocialPracticeSelectionInitialized = true;
+  const id = String(folderId || '');
+  if (checked) iftySocialPracticeSelectedFolderIds.add(id);
+  else iftySocialPracticeSelectedFolderIds.delete(id);
+  renderIftySocialPracticeHome();
+};
+
+window.selectAllIftySocialPracticeFolders = function(selected) {
+  iftySocialPracticeSelectionInitialized = true;
+  iftySocialPracticeSelectedFolderIds.clear();
+  if (selected) getIftySocialPracticeFolders().forEach(folder => iftySocialPracticeSelectedFolderIds.add(String(folder.id)));
+  renderIftySocialPracticeHome();
+};
+
+window.setIftySocialPracticeQuestionCount = function(value) {
+  const count = Number(value);
+  iftySocialPracticeQuestionCount = [5, 10].includes(count) ? count : 5;
+  renderIftySocialPracticeHome();
+};
+
+function renderIftySocialPracticeHome() {
+  currentIftySubject = 'SOCIAL STUDIES';
+  const foldersWithItems = getIftySocialPracticeFolders();
+  ensureIftySocialPracticeFolderSelection();
+  const selectedFolders = getIftySocialPracticeSelectedFolders();
+  const selectedItems = getIftySocialPracticeItems();
+  const imageItems = getIftySocialPracticeImageItems();
+  const selectedSubjects = [...new Set(selectedFolders.flatMap(folder => normalizeIftySocialSubjects(folder.subjects)))]
+    .map(getIftySocialSubjectLabel);
+
+  const folderChoices = foldersWithItems.length
+    ? foldersWithItems.map(folder => {
+        const checked = iftySocialPracticeSelectedFolderIds.has(String(folder.id));
+        return `<label style="display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid ${checked ? '#38bdf8' : '#cbd5e1'};border-radius:9px;background:${checked ? '#f0f9ff' : '#fff'};cursor:pointer;min-width:0;">
+          <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleIftySocialPracticeFolder('${folder.id}',this.checked)">
+          <span style="font-weight:900;color:#0f172a;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(folder.name)}</span>
+          <span style="font-size:.72em;color:#64748b;white-space:nowrap;">${folder.items.length}件</span>
+        </label>`;
+      }).join('')
+    : '<div style="color:#94a3b8;padding:10px 0;">項目のある社会フォルダがありません。</div>';
+
+  const modeCard = mode => {
+    const meta = getIftySocialPracticeModeMeta(mode);
+    let disabledReason = '';
+    if (mode === 'image' && imageItems.length < 2) disabledReason = '画像付き項目が2件以上必要です。';
+    else if (mode === 'simple' && selectedItems.length < 2) disabledReason = '項目が2件以上必要です。';
+    else if (!selectedItems.length) disabledReason = '学習する項目を選択してください。';
+    const disabled = !!disabledReason;
+    return `<button type="button" onclick="startIftySocialPractice('${mode}')" ${disabled ? 'disabled' : ''} style="text-align:left;border:1px solid ${disabled ? '#e2e8f0' : meta.color};background:${disabled ? '#f8fafc' : '#fff'};border-radius:12px;padding:14px;cursor:${disabled ? 'not-allowed' : 'pointer'};min-height:126px;opacity:${disabled ? '.62' : '1'};">
+      <div style="font-size:1.08em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(meta.title)}</div>
+      <div style="margin-top:7px;color:#475569;font-size:.84em;line-height:1.55;">${escapeHtml(meta.description)}</div>
+      ${disabledReason ? `<div style="margin-top:8px;font-size:.72em;color:#94a3b8;font-weight:800;">${escapeHtml(disabledReason)}</div>` : ''}
+    </button>`;
+  };
+
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">SOCIAL STUDIES / PRACTICE</h1>
+          <div class="ifty-portal-subtitle">社会専用の5種類の問題で、登録した用語を確認します。</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="renderIftySocialStudiesPage()">SOCIAL STUDIESへ戻る</button>
+      </div>
+
+      <div style="margin-top:14px;padding:13px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:900;color:#0f172a;">出題するフォルダ</div>
+            <div style="font-size:.76em;color:#64748b;margin-top:3px;">選択 ${selectedFolders.length}フォルダ / ${selectedItems.length}項目${selectedSubjects.length ? ` ・ ${escapeHtml(selectedSubjects.join('・'))}` : ''}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button type="button" onclick="selectAllIftySocialPracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">すべて</button>
+            <button type="button" onclick="selectAllIftySocialPracticeFolders(false)" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">解除</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin-top:10px;">${folderChoices}</div>
+      </div>
+
+      <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+        <strong style="color:#334155;">問題数</strong>
+        <select onchange="setIftySocialPracticeQuestionCount(this.value)" style="padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
+          <option value="5" ${iftySocialPracticeQuestionCount === 5 ? 'selected' : ''}>5問</option>
+          <option value="10" ${iftySocialPracticeQuestionCount === 10 ? 'selected' : ''}>10問</option>
+        </select>
+        <span style="font-size:.74em;color:#64748b;">時代・並べ替え・説明は開始時にALLIAが問題を作ります。</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:14px;">
+        ${modeCard('simple')}
+        ${modeCard('era')}
+        ${modeCard('order')}
+        ${modeCard('explanation')}
+        ${modeCard('image')}
+      </div>
+    </section>
+  `, 'social-practice');
+}
+
+function makeIftySocialPracticeSimpleQuestions(items, requestedCount) {
+  const refs = items.filter(ref => String(ref.item.title || '').trim() && String(ref.item.memoryText || '').trim());
+  if (refs.length < 2) return [];
+  const targets = shuffleArray(refs).slice(0, Math.min(requestedCount, refs.length));
+  return targets.map((targetRef, index) => {
+    const direction = index % 2 === 0 ? 'term_to_description' : 'description_to_term';
+    const target = targetRef.item;
+    const targetLabel = direction === 'term_to_description' ? target.memoryText : target.title;
+    const seen = new Set([String(targetLabel).trim().toLowerCase()]);
+    const distractors = [];
+    for (const ref of shuffleArray(refs.filter(ref => String(ref.item.id) !== String(target.id)))) {
+      const label = direction === 'term_to_description' ? String(ref.item.memoryText || '').trim() : String(ref.item.title || '').trim();
+      const key = label.toLowerCase();
+      if (!label || seen.has(key)) continue;
+      seen.add(key);
+      distractors.push({ id: String(ref.item.id), itemId: String(ref.item.id), label });
+      if (distractors.length >= 3) break;
+    }
+    const options = shuffleArray([
+      { id: String(target.id), itemId: String(target.id), label: String(targetLabel) },
+      ...distractors
+    ]);
+    return {
+      id: `simple_${index}_${String(target.id)}`,
+      type: 'simple',
+      direction,
+      prompt: direction === 'term_to_description'
+        ? `「${target.title}」の説明として最も適切なものを選べ。`
+        : '次の説明に当てはまる用語を選べ。',
+      sourceText: direction === 'description_to_term' ? target.memoryText : '',
+      targetItemId: String(target.id),
+      options,
+      correctIds: [String(target.id)],
+      explanation: target.memoryText
+    };
+  }).filter(question => question.options.length >= 2);
+}
+
+function makeIftySocialPracticeImageQuestions(items, requestedCount) {
+  const refs = items.filter(ref => !!normalizeIftySocialImageData(ref.item.imageData) && String(ref.item.title || '').trim());
+  if (refs.length < 2) return [];
+  const targets = shuffleArray(refs).slice(0, Math.min(requestedCount, refs.length));
+  return targets.map((targetRef, index) => {
+    const target = targetRef.item;
+    const direction = index % 2 === 0 ? 'image_to_text' : 'text_to_image';
+    let optionPool = refs;
+    let labelField = 'title';
+    let prompt = '';
+
+    if (direction === 'image_to_text') {
+      const workTitleRefs = refs.filter(ref => String(ref.item.workTitle || '').trim());
+      const focusRefs = refs.filter(ref => String(ref.item.imageFocus || '').trim());
+      if (String(target.workTitle || '').trim() && workTitleRefs.length >= 2) {
+        optionPool = workTitleRefs;
+        labelField = 'workTitle';
+        prompt = 'この画像の作品名・建築名・史料名として最も適切なものを選べ。';
+      } else if (String(target.imageFocus || '').trim() && focusRefs.length >= 2) {
+        optionPool = focusRefs;
+        labelField = 'imageFocus';
+        prompt = 'この画像から押さえるべき内容として最も適切なものを選べ。';
+      } else {
+        prompt = 'この画像に最も対応する用語を選べ。';
+      }
+    } else {
+      prompt = `「${target.title}」に対応する画像を選べ。`;
+    }
+
+    const candidatePool = optionPool.some(ref => String(ref.item.id) === String(target.id)) ? optionPool : refs;
+    const others = shuffleArray(candidatePool.filter(ref => String(ref.item.id) !== String(target.id))).slice(0, 3);
+    const optionRefs = shuffleArray([targetRef, ...others]);
+    return {
+      id: `image_${index}_${String(target.id)}`,
+      type: 'image',
+      direction,
+      prompt,
+      targetItemId: String(target.id),
+      imageItemId: direction === 'image_to_text' ? String(target.id) : '',
+      options: optionRefs.map(ref => ({
+        id: String(ref.item.id),
+        itemId: String(ref.item.id),
+        label: direction === 'image_to_text'
+          ? String(ref.item[labelField] || ref.item.title || '').trim()
+          : String(ref.item.title || '').trim()
+      })).filter(option => direction === 'text_to_image' || option.label),
+      correctIds: [String(target.id)],
+      explanation: String(target.memoryText || ''),
+      imageFocus: String(target.imageFocus || ''),
+      workTitle: String(target.workTitle || '')
+    };
+  }).filter(question => question.options.length >= 2);
+}
+
+function serializeIftySocialPracticeItems(items) {
+  return items.slice(0, 60).map(ref => ({
+    id: String(ref.item.id || ''),
+    title: String(ref.item.title || ref.item.topic || '').trim(),
+    memoryText: String(ref.item.memoryText || '').trim(),
+    keyPoints: Array.isArray(ref.item.keyPoints) ? ref.item.keyPoints.slice(0, 4) : [],
+    subjects: normalizeIftySocialSubjects(ref.item.subjects?.length ? ref.item.subjects : ref.folder.subjects)
+  })).filter(item => item.id && item.title);
+}
+
+function normalizeIftySocialPracticeAiQuestions(mode, rawQuestions) {
+  const questions = Array.isArray(rawQuestions) ? rawQuestions : [];
+  return questions.map((raw, questionIndex) => {
+    const source = raw && typeof raw === 'object' ? raw : {};
+    const base = {
+      id: `ai_${mode}_${questionIndex}_${Date.now()}`,
+      type: mode,
+      prompt: String(source.prompt || '').trim(),
+      targetItemId: String(source.targetItemId || '').trim(),
+      explanation: String(source.explanation || '').trim()
+    };
+
+    if (mode === 'era') {
+      const originalOptions = Array.isArray(source.options) ? source.options : [];
+      const originalCorrect = new Set((Array.isArray(source.correctIds) ? source.correctIds : []).map(value => String(value)));
+      const options = originalOptions.map((option, optionIndex) => {
+        const originalId = String(option?.id || `opt${optionIndex + 1}`);
+        return {
+          id: `era_${questionIndex}_${optionIndex}`,
+          originalId,
+          label: String(option?.label || '').trim()
+        };
+      }).filter(option => option.label);
+      const correctIds = options.filter(option => originalCorrect.has(option.originalId)).map(option => option.id);
+      if (!base.prompt || options.length < 2 || !correctIds.length) return null;
+      return { ...base, direction: String(source.direction || ''), options, correctIds };
+    }
+
+    if (mode === 'order') {
+      const originalEvents = Array.isArray(source.events) ? source.events : [];
+      const originalCorrectOrder = (Array.isArray(source.correctOrder) ? source.correctOrder : []).map(value => String(value));
+      const events = originalEvents.map((event, eventIndex) => ({
+        id: `order_${questionIndex}_${eventIndex}`,
+        originalId: String(event?.id || `event${eventIndex + 1}`),
+        text: String(event?.text || '').trim()
+      })).filter(event => event.text);
+      const byOriginal = new Map(events.map(event => [event.originalId, event.id]));
+      const correctOrder = originalCorrectOrder.map(id => byOriginal.get(id)).filter(Boolean);
+      if (!base.prompt || events.length < 3 || correctOrder.length !== events.length) return null;
+      return { ...base, events: shuffleArray(events), correctOrder };
+    }
+
+    if (mode === 'explanation') {
+      const requiredTerms = [...new Set((Array.isArray(source.requiredTerms) ? source.requiredTerms : [])
+        .map(value => String(value || '').trim()).filter(Boolean))].slice(0, 5);
+      const referenceAnswer = String(source.referenceAnswer || '').trim();
+      const gradingPoints = (Array.isArray(source.gradingPoints) ? source.gradingPoints : [])
+        .map(value => String(value || '').trim()).filter(Boolean).slice(0, 5);
+      if (!base.prompt || !requiredTerms.length || !referenceAnswer) return null;
+      return { ...base, requiredTerms, referenceAnswer, gradingPoints };
+    }
+
+    return null;
+  }).filter(Boolean);
+}
+
+function renderIftySocialPracticeLoading(mode) {
+  const meta = getIftySocialPracticeModeMeta(mode);
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">${escapeHtml(meta.title)}</h1>
+          <div class="ifty-portal-subtitle">ALLIAが社会PRACTICE用の問題を作成しています。</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="openIftySocialPractice()">PRACTICEへ戻る</button>
+      </div>
+      <div style="margin-top:20px;padding:28px;border:1px solid #ddd6fe;border-radius:12px;background:#faf5ff;text-align:center;">
+        <div style="font-size:1.15em;font-weight:900;color:#6d28d9;">問題を生成中…</div>
+        <div style="margin-top:7px;color:#64748b;font-size:.82em;">登録済みの用語と社会のORDERを使っています。</div>
+      </div>
+    </section>
+  `, 'social-practice');
+}
+
+window.startIftySocialPractice = async function(mode) {
+  const normalizedMode = ['simple', 'era', 'order', 'explanation', 'image'].includes(mode) ? mode : 'simple';
+  const items = getIftySocialPracticeItems();
+  if (!items.length) {
+    alert('出題するフォルダを選択してください。');
+    return;
+  }
+
+  let questions = [];
+  if (normalizedMode === 'simple') {
+    questions = makeIftySocialPracticeSimpleQuestions(items, iftySocialPracticeQuestionCount);
+  } else if (normalizedMode === 'image') {
+    questions = makeIftySocialPracticeImageQuestions(items, iftySocialPracticeQuestionCount);
+  } else {
+    if (!ensureIftyOnline('社会PRACTICE問題生成')) return;
+    renderIftySocialPracticeLoading(normalizedMode);
+    try {
+      const selectedFolders = getIftySocialPracticeSelectedFolders();
+      const subjects = [...new Set(selectedFolders.flatMap(folder => normalizeIftySocialSubjects(folder.subjects)))];
+      const response = await fetch(WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'social_practice_generate',
+          mode: normalizedMode,
+          count: iftySocialPracticeQuestionCount,
+          items: serializeIftySocialPracticeItems(items),
+          subjects,
+          subject: 'SOCIAL STUDIES',
+          order: getIftySubjectOrder('SOCIAL STUDIES')
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw alliaHttpError(response, data, '社会PRACTICEの問題生成に失敗しました。');
+      questions = normalizeIftySocialPracticeAiQuestions(normalizedMode, data.questions);
+    } catch (error) {
+      console.error('社会PRACTICE問題生成エラー:', error);
+      alert(String(error.message || error));
+      renderIftySocialPracticeHome();
+      return;
+    }
+  }
+
+  if (!questions.length) {
+    alert(normalizedMode === 'image'
+      ? '画像付き項目が2件以上必要です。'
+      : 'この条件では問題を作れませんでした。別のフォルダを選ぶか、項目を増やしてください。');
+    renderIftySocialPracticeHome();
+    return;
+  }
+
+  iftySocialPracticeState = {
+    mode: normalizedMode,
+    questions,
+    index: 0,
+    correct: 0,
+    wrong: 0,
+    answered: false,
+    selectedIds: [],
+    orderIds: normalizedMode === 'order' ? questions[0].events.map(event => event.id) : [],
+    grading: false,
+    feedback: '',
+    score: null,
+    modelAnswer: '',
+    answerText: ''
+  };
+  renderIftySocialPracticePlayer();
+};
+
+function getCurrentIftySocialPracticeQuestion() {
+  return iftySocialPracticeState.questions[iftySocialPracticeState.index] || null;
+}
+
+function renderIftySocialPracticeResult() {
+  const state = iftySocialPracticeState;
+  const total = state.correct + state.wrong;
+  const rate = total ? Math.round((state.correct / total) * 100) : 0;
+  const meta = getIftySocialPracticeModeMeta(state.mode);
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="text-align:center;padding:28px 8px;">
+        <div style="font-size:1.4em;font-weight:900;color:${meta.color};">${escapeHtml(meta.title)} 完了</div>
+        <div style="margin-top:12px;color:#334155;font-size:1.05em;">正解 ${state.correct} / ${total}　正答率 ${rate}%</div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:18px;">
+          <button type="button" onclick="startIftySocialPractice('${state.mode}')" style="border:none;background:${meta.color};color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">もう一度</button>
+          <button type="button" onclick="openIftySocialPractice()" data-ifty-enter-primary="true" style="border:none;background:#334155;color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">PRACTICEへ戻る</button>
+        </div>
+      </div>
+    </section>
+  `, 'social-practice');
+}
+
+function renderIftySocialPracticeChoiceQuestion(question) {
+  const state = iftySocialPracticeState;
+  const isEra = state.mode === 'era';
+  const isImage = state.mode === 'image';
+  const targetRef = question.targetItemId ? getIftySocialItemById(question.targetItemId) : null;
+  const imageRef = question.imageItemId ? getIftySocialItemById(question.imageItemId) : null;
+
+  const promptVisual = isImage && question.direction === 'image_to_text' && imageRef?.item?.imageData
+    ? `<div style="margin-top:12px;text-align:center;"><img src="${imageRef.item.imageData}" alt="問題画像" style="max-width:100%;max-height:330px;object-fit:contain;border:1px solid #e2e8f0;border-radius:10px;background:white;"></div>`
+    : '';
+  const sourceText = question.sourceText
+    ? `<div style="margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:10px;background:#f8fbff;color:#0f172a;line-height:1.65;">${escapeHtml(question.sourceText)}</div>`
+    : '';
+
+  const optionHtml = (question.options || []).map(option => {
+    const selected = state.selectedIds.includes(String(option.id));
+    const correct = (question.correctIds || []).includes(String(option.id));
+    let border = selected ? '#0ea5e9' : '#cbd5e1';
+    let bg = selected ? '#f0f9ff' : '#fff';
+    let color = '#0f172a';
+    if (state.answered && correct) { border = '#22c55e'; bg = '#f0fdf4'; color = '#166534'; }
+    else if (state.answered && selected && !correct) { border = '#f43f5e'; bg = '#fff1f2'; color = '#9f1239'; }
+
+    if (isImage && question.direction === 'text_to_image') {
+      const ref = getIftySocialItemById(option.itemId || option.id);
+      const imageData = ref?.item?.imageData || '';
+      return `<button type="button" ${state.answered ? 'disabled' : ''} data-ifty-enter-ignore="true" onclick="answerIftySocialPracticeChoice('${option.id}')" style="border:3px solid ${border};background:${bg};border-radius:10px;padding:7px;cursor:${state.answered ? 'default' : 'pointer'};min-width:0;">
+        <img src="${imageData}" alt="選択肢画像" style="display:block;width:100%;height:170px;object-fit:contain;background:white;border-radius:6px;">
+      </button>`;
+    }
+
+    return `<button type="button" ${state.answered ? 'disabled' : ''} data-ifty-enter-ignore="true" onclick="${isEra ? `toggleIftySocialPracticeEraChoice('${option.id}')` : `answerIftySocialPracticeChoice('${option.id}')`}" style="border:2px solid ${border};background:${bg};color:${color};border-radius:9px;padding:11px;text-align:left;font-weight:800;line-height:1.5;cursor:${state.answered ? 'default' : 'pointer'};">${escapeHtml(option.label)}</button>`;
+  }).join('');
+
+  const allCorrect = state.answered && arraysAsSetsEqual(state.selectedIds, question.correctIds || []);
+  const feedback = state.answered ? `
+    <div style="margin-top:13px;padding:11px;border-radius:9px;background:${allCorrect ? '#ecfdf5' : '#fff1f2'};border:1px solid ${allCorrect ? '#86efac' : '#fda4af'};">
+      <div style="font-weight:900;color:${allCorrect ? '#166534' : '#9f1239'};">${allCorrect ? '正解' : '不正解'}</div>
+      ${question.explanation ? `<div style="margin-top:6px;color:#475569;line-height:1.6;">${escapeHtml(question.explanation)}</div>` : ''}
+      ${isImage && targetRef?.item?.workTitle ? `<div style="margin-top:5px;color:#581c87;font-size:.85em;"><strong>作品名・資料名：</strong>${escapeHtml(targetRef.item.workTitle)}</div>` : ''}
+      ${isImage && targetRef?.item?.imageFocus ? `<div style="margin-top:5px;color:#3b0764;font-size:.85em;"><strong>画像の核：</strong>${escapeHtml(targetRef.item.imageFocus)}</div>` : ''}
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySocialPracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
+    </div>` : '';
+
+  return `
+    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
+    ${promptVisual}
+    ${sourceText}
+    ${isEra && !state.answered ? '<div style="margin-top:7px;color:#7c3aed;font-size:.76em;font-weight:800;">正しいものをすべて選択してください。複数正解の場合があります。</div>' : ''}
+    <div style="display:grid;grid-template-columns:${isImage && question.direction === 'text_to_image' ? 'repeat(2,minmax(0,1fr))' : 'repeat(auto-fit,minmax(220px,1fr))'};gap:8px;margin-top:12px;">${optionHtml}</div>
+    ${isEra && !state.answered ? `<div style="text-align:right;margin-top:11px;"><button type="button" onclick="submitIftySocialPracticeEra()" ${state.selectedIds.length ? '' : 'disabled'} style="border:none;background:${state.selectedIds.length ? '#7c3aed' : '#cbd5e1'};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:${state.selectedIds.length ? 'pointer' : 'not-allowed'};">回答する</button></div>` : ''}
+    ${feedback}`;
+}
+
+function arraysAsSetsEqual(a, b) {
+  const left = [...new Set((Array.isArray(a) ? a : []).map(String))].sort();
+  const right = [...new Set((Array.isArray(b) ? b : []).map(String))].sort();
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function renderIftySocialPracticeOrderQuestion(question) {
+  const state = iftySocialPracticeState;
+  if (!state.orderIds.length) state.orderIds = (question.events || []).map(event => event.id);
+  const eventMap = new Map((question.events || []).map(event => [String(event.id), event]));
+  const rows = state.orderIds.map((id, index) => {
+    const event = eventMap.get(String(id));
+    if (!event) return '';
+    const correctPosition = state.answered ? (question.correctOrder || []).indexOf(String(id)) : -1;
+    const isCorrectPosition = state.answered && correctPosition === index;
+    return `<div style="display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;padding:9px;border:1px solid ${state.answered ? (isCorrectPosition ? '#86efac' : '#fda4af') : '#cbd5e1'};background:${state.answered ? (isCorrectPosition ? '#f0fdf4' : '#fff1f2') : '#fff'};border-radius:9px;">
+      <div style="font-weight:900;color:#64748b;text-align:center;">${index + 1}</div>
+      <div style="color:#0f172a;line-height:1.5;">${escapeHtml(event.text)}</div>
+      ${state.answered ? '' : `<div style="display:flex;gap:4px;">
+        <button type="button" data-ifty-enter-ignore="true" onclick="moveIftySocialPracticeOrder(${index},-1)" ${index === 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;border-radius:6px;width:34px;height:34px;cursor:${index === 0 ? 'not-allowed' : 'pointer'};">↑</button>
+        <button type="button" data-ifty-enter-ignore="true" onclick="moveIftySocialPracticeOrder(${index},1)" ${index === state.orderIds.length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;border-radius:6px;width:34px;height:34px;cursor:${index === state.orderIds.length - 1 ? 'not-allowed' : 'pointer'};">↓</button>
+      </div>`}
+    </div>`;
+  }).join('');
+  const correct = state.answered && arraysAsSetsEqual(state.orderIds, question.correctOrder || []) && state.orderIds.every((id, index) => String(id) === String(question.correctOrder[index]));
+  return `
+    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
+    <div style="margin-top:7px;color:#64748b;font-size:.76em;">古いものから新しいものの順に並べてください。</div>
+    <div style="display:grid;gap:7px;margin-top:12px;">${rows}</div>
+    ${state.answered ? `<div style="margin-top:12px;padding:11px;border-radius:9px;background:${correct ? '#ecfdf5' : '#fff1f2'};border:1px solid ${correct ? '#86efac' : '#fda4af'};">
+      <div style="font-weight:900;color:${correct ? '#166534' : '#9f1239'};">${correct ? '正解' : '不正解'}</div>
+      ${question.explanation ? `<div style="margin-top:6px;color:#475569;line-height:1.6;">${escapeHtml(question.explanation)}</div>` : ''}
+      ${!correct ? `<div style="margin-top:8px;color:#334155;font-size:.84em;"><strong>正しい順：</strong>${(question.correctOrder || []).map((id, i) => `${i + 1}. ${escapeHtml(eventMap.get(String(id))?.text || '')}`).join(' → ')}</div>` : ''}
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySocialPracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
+    </div>` : `<div style="text-align:right;margin-top:11px;"><button type="button" onclick="submitIftySocialPracticeOrder()" style="border:none;background:#d97706;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">回答する</button></div>`}`;
+}
+
+function renderIftySocialPracticeExplanationQuestion(question) {
+  const state = iftySocialPracticeState;
+  const required = (question.requiredTerms || []).map(term => `<span style="display:inline-block;padding:5px 8px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:900;font-size:.82em;">${escapeHtml(term)}</span>`).join(' ');
+  return `
+    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
+    <div style="margin-top:10px;padding:10px;border:1px solid #bbf7d0;border-radius:9px;background:#f0fdf4;">
+      <div style="font-size:.76em;color:#166534;font-weight:900;margin-bottom:6px;">必ず使う語句</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">${required}</div>
+    </div>
+    ${state.answered ? `<div style="margin-top:12px;padding:11px;border:1px solid ${state.correctLast ? '#86efac' : '#fda4af'};background:${state.correctLast ? '#ecfdf5' : '#fff1f2'};border-radius:9px;">
+      <div style="font-weight:900;color:${state.correctLast ? '#166534' : '#9f1239'};">${state.correctLast ? '正解' : '要復習'}${Number.isFinite(Number(state.score)) ? `　${Math.round(Number(state.score))}点` : ''}</div>
+      <div style="margin-top:7px;color:#334155;line-height:1.6;white-space:pre-wrap;">${escapeHtml(state.feedback)}</div>
+      ${state.modelAnswer ? `<div style="margin-top:9px;padding:9px;background:white;border:1px solid #d1fae5;border-radius:8px;color:#0f172a;line-height:1.6;"><strong>模範：</strong>${escapeHtml(state.modelAnswer)}</div>` : ''}
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySocialPracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
+    </div>` : `<div style="margin-top:12px;">
+      <textarea id="iftySocialPracticeExplanationInput" placeholder="ここに説明を書く" oninput="iftySocialPracticeState.answerText=this.value" style="width:100%;min-height:150px;box-sizing:border-box;padding:11px;border:1px solid #94a3b8;border-radius:9px;font:inherit;line-height:1.6;resize:vertical;">${escapeHtml(state.answerText || '')}</textarea>
+      <div id="iftySocialPracticeGradeStatus" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;">${state.grading ? 'ALLIAが採点中…' : 'Ctrl/Cmd + Enterでも回答できます。'}</div>
+      <div style="text-align:right;margin-top:7px;"><button type="button" onclick="submitIftySocialPracticeExplanation()" ${state.grading ? 'disabled' : ''} style="border:none;background:${state.grading ? '#94a3b8' : '#059669'};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:${state.grading ? 'wait' : 'pointer'};">${state.grading ? '採点中…' : '回答する'}</button></div>
+    </div>`}`;
+}
+
+function renderIftySocialPracticePlayer() {
+  const state = iftySocialPracticeState;
+  if (state.index >= state.questions.length) {
+    renderIftySocialPracticeResult();
+    return;
+  }
+  const question = getCurrentIftySocialPracticeQuestion();
+  if (!question) {
+    state.index += 1;
+    renderIftySocialPracticePlayer();
+    return;
+  }
+  const meta = getIftySocialPracticeModeMeta(state.mode);
+  let body = '';
+  if (state.mode === 'simple' || state.mode === 'era' || state.mode === 'image') body = renderIftySocialPracticeChoiceQuestion(question);
+  else if (state.mode === 'order') body = renderIftySocialPracticeOrderQuestion(question);
+  else if (state.mode === 'explanation') body = renderIftySocialPracticeExplanationQuestion(question);
+
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title" style="color:${meta.color};">${escapeHtml(meta.title)}</h1>
+          <div class="ifty-portal-subtitle">${state.index + 1} / ${state.questions.length}　正解 ${state.correct}　要復習 ${state.wrong}</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="openIftySocialPractice()">終了</button>
+      </div>
+      <div style="margin-top:15px;padding:15px;border:1px solid #cbd5e1;border-radius:12px;background:white;">${body}</div>
+    </section>
+  `, 'social-practice');
+
+  if (state.mode === 'explanation' && !state.answered && !state.grading) {
+    const textarea = document.getElementById('iftySocialPracticeExplanationInput');
+    if (textarea) {
+      textarea.addEventListener('keydown', event => {
+        if (event.isComposing) return;
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          window.submitIftySocialPracticeExplanation();
+        }
+      });
+      setTimeout(() => textarea.focus({ preventScroll: true }), 0);
+    }
+  }
+}
+
+window.answerIftySocialPracticeChoice = function(optionId) {
+  const state = iftySocialPracticeState;
+  const question = getCurrentIftySocialPracticeQuestion();
+  if (!question || state.answered) return;
+  state.selectedIds = [String(optionId)];
+  state.answered = true;
+  const correct = arraysAsSetsEqual(state.selectedIds, question.correctIds || []);
+  if (correct) state.correct += 1; else state.wrong += 1;
+  renderIftySocialPracticePlayer();
+};
+
+window.toggleIftySocialPracticeEraChoice = function(optionId) {
+  const state = iftySocialPracticeState;
+  if (state.answered) return;
+  const id = String(optionId);
+  if (state.selectedIds.includes(id)) state.selectedIds = state.selectedIds.filter(value => value !== id);
+  else state.selectedIds = [...state.selectedIds, id];
+  renderIftySocialPracticePlayer();
+};
+
+window.submitIftySocialPracticeEra = function() {
+  const state = iftySocialPracticeState;
+  const question = getCurrentIftySocialPracticeQuestion();
+  if (!question || state.answered || !state.selectedIds.length) return;
+  state.answered = true;
+  const correct = arraysAsSetsEqual(state.selectedIds, question.correctIds || []);
+  if (correct) state.correct += 1; else state.wrong += 1;
+  renderIftySocialPracticePlayer();
+};
+
+window.moveIftySocialPracticeOrder = function(index, direction) {
+  const state = iftySocialPracticeState;
+  if (state.answered) return;
+  const from = Number(index);
+  const to = from + Number(direction);
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= state.orderIds.length || to >= state.orderIds.length) return;
+  [state.orderIds[from], state.orderIds[to]] = [state.orderIds[to], state.orderIds[from]];
+  renderIftySocialPracticePlayer();
+};
+
+window.submitIftySocialPracticeOrder = function() {
+  const state = iftySocialPracticeState;
+  const question = getCurrentIftySocialPracticeQuestion();
+  if (!question || state.answered) return;
+  state.answered = true;
+  const correct = state.orderIds.length === (question.correctOrder || []).length
+    && state.orderIds.every((id, index) => String(id) === String(question.correctOrder[index]));
+  if (correct) state.correct += 1; else state.wrong += 1;
+  renderIftySocialPracticePlayer();
+};
+
+window.submitIftySocialPracticeExplanation = async function() {
+  const state = iftySocialPracticeState;
+  const question = getCurrentIftySocialPracticeQuestion();
+  if (!question || state.answered || state.grading) return;
+  const textarea = document.getElementById('iftySocialPracticeExplanationInput');
+  const answer = String(textarea?.value ?? state.answerText ?? '').trim();
+  if (!answer) {
+    if (textarea) textarea.focus();
+    return;
+  }
+  if (!ensureIftyOnline('社会PRACTICE採点')) return;
+  state.answerText = answer;
+  state.grading = true;
+  const status = document.getElementById('iftySocialPracticeGradeStatus');
+  if (status) status.textContent = 'ALLIAが採点中…';
+  const button = status?.parentElement?.querySelector('button');
+  if (button) button.disabled = true;
+
+  try {
+    const target = question.targetItemId ? getIftySocialItemById(question.targetItemId)?.item : null;
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'social_practice_grade',
+        question: {
+          prompt: question.prompt,
+          title: String(target?.title || ''),
+          memoryText: String(target?.memoryText || ''),
+          requiredTerms: question.requiredTerms || [],
+          referenceAnswer: question.referenceAnswer || '',
+          gradingPoints: question.gradingPoints || []
+        },
+        answer,
+        subject: 'SOCIAL STUDIES',
+        order: getIftySubjectOrder('SOCIAL STUDIES')
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw alliaHttpError(response, data, '社会PRACTICEの採点に失敗しました。');
+    state.grading = false;
+    state.answered = true;
+    state.correctLast = !!data.correct;
+    state.score = Number.isFinite(Number(data.score)) ? Number(data.score) : null;
+    state.feedback = String(data.feedback || '').trim();
+    state.modelAnswer = String(data.modelAnswer || question.referenceAnswer || '').trim();
+    if (state.correctLast) state.correct += 1; else state.wrong += 1;
+    renderIftySocialPracticePlayer();
+  } catch (error) {
+    console.error('社会PRACTICE採点エラー:', error);
+    state.grading = false;
+    const currentStatus = document.getElementById('iftySocialPracticeGradeStatus');
+    if (currentStatus) currentStatus.textContent = String(error.message || error);
+    const currentButton = currentStatus?.parentElement?.querySelector('button');
+    if (currentButton) currentButton.disabled = false;
+  }
+};
+
+window.nextIftySocialPracticeQuestion = function() {
+  const state = iftySocialPracticeState;
+  if (!state.answered) return;
+  state.index += 1;
+  resetIftySocialPracticeAnswerState();
+  const nextQuestion = getCurrentIftySocialPracticeQuestion();
+  if (state.mode === 'order' && nextQuestion?.events) state.orderIds = nextQuestion.events.map(event => event.id);
+  renderIftySocialPracticePlayer();
 };
 window.openIftySubject = function(subject) {
   const normalized = normalizeIftySubject(subject);
