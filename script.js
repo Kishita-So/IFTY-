@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP35 2026-09-19：SOCIAL STUDIES 専用PRACTICE ★★★
+// ★★★ IFTY Q3 STEP36 2026-09-22：PRACTICE統合・全モーダル外側タップ・ENGLISH編集UI ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -672,7 +672,7 @@ function renderIftySideMenu() {
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); switchToChatView();">ALLIA</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyExampleBank();">EXAMPLES</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyBasicSentences();">BASIC SENTENCES</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openPracticeHome();">PRACTICE</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openPracticeHome(currentIftySubject);">PRACTICE</button>
 
       <div class="ifty-side-menu-separator"></div>
       <button class="ifty-side-menu-item" type="button" onclick="openIftySettings()">SETTINGS</button>
@@ -919,12 +919,20 @@ function ensureIftyEnglishVocabTools() {
   const vocabPage = document.getElementById('vocabPage');
   if (!vocabPage) return;
 
+  let subjectPanel = document.getElementById('iftyEnglishSubjectPanel');
+  if (!subjectPanel) {
+    subjectPanel = document.createElement('div');
+    subjectPanel.id = 'iftyEnglishSubjectPanel';
+    subjectPanel.style.cssText = 'background:white;border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:12px;box-shadow:0 1px 3px rgba(15,23,42,.05);';
+    vocabPage.insertBefore(subjectPanel, vocabPage.firstChild);
+  }
+
   let orderPanel = document.getElementById('iftyEnglishOrderPanel');
   if (!orderPanel) {
     orderPanel = document.createElement('div');
     orderPanel.id = 'iftyEnglishOrderPanel';
     orderPanel.style.cssText = 'background:white;border:1px solid #cbd5e1;border-radius:10px;padding:12px;margin-bottom:12px;box-shadow:0 1px 3px rgba(15,23,42,.05);';
-    vocabPage.insertBefore(orderPanel, vocabPage.firstChild);
+    subjectPanel.insertAdjacentElement('afterend', orderPanel);
   }
 
   let searchPanel = document.getElementById('iftyVocabSearchPanel');
@@ -935,9 +943,64 @@ function ensureIftyEnglishVocabTools() {
     orderPanel.insertAdjacentElement('afterend', searchPanel);
   }
 
+  refreshIftyEnglishSubjectPanel();
   refreshIftyEnglishOrderPanel();
   refreshIftyVocabSearchPanel();
 }
+
+function refreshIftyEnglishSubjectPanel() {
+  const panel = document.getElementById('iftyEnglishSubjectPanel');
+  if (!panel) return;
+  const wordCount = folders.reduce((sum, folder) => sum + (Array.isArray(folder.words) ? folder.words.length : 0), 0);
+  panel.innerHTML = `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <div>
+        <h1 style="margin:0;color:#0f172a;font-size:1.55rem;font-weight:900;letter-spacing:.015em;">ENGLISH</h1>
+        <div style="margin-top:6px;color:#64748b;font-size:.9em;">英単語をフォルダごとに追加・編集し、ALLIA・復習・PRACTICEへつなげます。</div>
+      </div>
+      <button type="button" onclick="openIftyHome()" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">HOMEへ戻る</button>
+    </div>
+
+    <div style="margin-top:14px;padding:13px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:900;color:#0f172a;">ORDER / ALLIA</div>
+          <div style="font-size:.78em;color:#64748b;margin-top:3px;">${escapeHtml(getIftyOrderStatus('ENGLISH'))}。ENGLISH専用の生成・編集を行います。</div>
+        </div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;">
+          <button type="button" onclick="openPracticeHome('ENGLISH')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">⚔️ PRACTICE</button>
+          <button type="button" onclick="openIftySubjectOrder('ENGLISH')" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">ORDERを編集</button>
+          <button type="button" onclick="openIftySubjectAllia('ENGLISH')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">🤖 ALLIA</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;padding:13px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;">
+      <div style="font-weight:900;color:#0c4a6e;">新しい英語フォルダ</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;align-items:center;">
+        <input id="iftyEnglishFolderName" placeholder="例：鉄壁 / 英検1級 / 学校長文" onkeydown="if(event.key==='Enter'){event.preventDefault();createIftyEnglishFolder();}" style="flex:1;min-width:210px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;font-size:.95em;">
+        <button type="button" onclick="createIftyEnglishFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">作成</button>
+      </div>
+      <div style="margin-top:8px;color:#64748b;font-size:.76em;">フォルダ ${folders.length} / 単語 ${wordCount}</div>
+    </div>`;
+}
+
+window.createIftyEnglishFolder = function() {
+  const input = document.getElementById('iftyEnglishFolderName');
+  const name = String(input?.value || '').trim();
+  if (!name) {
+    alert('フォルダ名を入力してください。');
+    input?.focus();
+    return;
+  }
+  recordUndoState('英語フォルダ作成');
+  folders.push({ id: makeId('folder'), name, collapsed: false, words: [] });
+  if (input) input.value = '';
+  saveUserData();
+  renderFolders();
+  refreshIftyEnglishSubjectPanel();
+  setTimeout(() => document.getElementById('iftyEnglishFolderName')?.focus(), 0);
+};
 
 function refreshIftyEnglishOrderPanel() {
   const panel = document.getElementById('iftyEnglishOrderPanel');
@@ -1656,7 +1719,7 @@ function renderIftySocialStudiesPage(options = {}) {
             <div class="ifty-settings-note">${escapeHtml(getIftyOrderStatus('SOCIAL STUDIES'))}。社会のALLIAは、Who / When / Where / What / Why / Howを項目ごとに分断せず、必要な要素を自然につないだ暗記用説明文にします。人物は抽象的な主体だけで済ませず、判明している場合は建国者・創始者・首謀者・初代就任者・中心人物などの具体的人名を優先します。画像の地図・作品名・覚える核も整理します。</div>
           </div>
           <div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;">
-            <button class="ifty-settings-action" type="button" onclick="openIftySocialPractice()" style="background:#0f766e;color:white;">⚔️ PRACTICE</button>
+            <button class="ifty-settings-action" type="button" onclick="openPracticeHome('SOCIAL STUDIES')" style="background:#0f766e;color:white;">⚔️ PRACTICE</button>
             <button class="ifty-settings-action" type="button" onclick="openIftySubjectOrder('SOCIAL STUDIES')" style="background:#0284c7;color:white;">ORDERを編集</button>
             <button class="ifty-settings-action" type="button" onclick="openIftySubjectAllia('SOCIAL STUDIES')" style="background:#7c3aed;color:white;">🤖 ALLIA</button>
           </div>
@@ -2415,7 +2478,7 @@ window.openIftySocialPractice = function() {
   currentIftySubject = 'SOCIAL STUDIES';
   window.closeIftySideMenu();
   ensureIftySocialPracticeFolderSelection();
-  renderIftySocialPracticeHome();
+  window.openPracticeHome('SOCIAL STUDIES');
 };
 
 window.toggleIftySocialPracticeFolder = function(folderId, checked) {
@@ -2423,20 +2486,26 @@ window.toggleIftySocialPracticeFolder = function(folderId, checked) {
   const id = String(folderId || '');
   if (checked) iftySocialPracticeSelectedFolderIds.add(id);
   else iftySocialPracticeSelectedFolderIds.delete(id);
-  renderIftySocialPracticeHome();
+  const practiceModal = document.getElementById('practiceModal');
+  if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
+  else renderIftySocialPracticeHome();
 };
 
 window.selectAllIftySocialPracticeFolders = function(selected) {
   iftySocialPracticeSelectionInitialized = true;
   iftySocialPracticeSelectedFolderIds.clear();
   if (selected) getIftySocialPracticeFolders().forEach(folder => iftySocialPracticeSelectedFolderIds.add(String(folder.id)));
-  renderIftySocialPracticeHome();
+  const practiceModal = document.getElementById('practiceModal');
+  if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
+  else renderIftySocialPracticeHome();
 };
 
 window.setIftySocialPracticeQuestionCount = function(value) {
   const count = Number(value);
   iftySocialPracticeQuestionCount = [5, 10].includes(count) ? count : 5;
-  renderIftySocialPracticeHome();
+  const practiceModal = document.getElementById('practiceModal');
+  if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
+  else renderIftySocialPracticeHome();
 };
 
 function renderIftySocialPracticeHome() {
@@ -2733,7 +2802,7 @@ window.startIftySocialPractice = async function(mode) {
     } catch (error) {
       console.error('社会PRACTICE問題生成エラー:', error);
       alert(String(error.message || error));
-      renderIftySocialPracticeHome();
+      window.openPracticeHome('SOCIAL STUDIES');
       return;
     }
   }
@@ -2742,7 +2811,7 @@ window.startIftySocialPractice = async function(mode) {
     alert(normalizedMode === 'image'
       ? '画像付き項目が2件以上必要です。'
       : 'この条件では問題を作れませんでした。別のフォルダを選ぶか、項目を増やしてください。');
-    renderIftySocialPracticeHome();
+    window.openPracticeHome('SOCIAL STUDIES');
     return;
   }
 
@@ -4518,9 +4587,21 @@ function setIftyAuthenticatedUiVisible(visible) {
 
   if (landingPage) landingPage.style.display = visible ? 'none' : 'block';
   if (mainPortal) mainPortal.style.display = visible ? 'block' : 'none';
-  if (floatingAiBtn) floatingAiBtn.style.display = visible ? 'flex' : 'none';
+  if (floatingAiBtn) {
+    floatingAiBtn.style.display = 'none';
+    floatingAiBtn.setAttribute('aria-hidden', 'true');
+    floatingAiBtn.tabIndex = -1;
+  }
   if (quickControls) quickControls.style.display = visible ? 'flex' : 'none';
   if (globalLogo) globalLogo.style.display = visible ? 'block' : 'none';
+  removeIftyBottomRightLauncher();
+}
+
+function removeIftyBottomRightLauncher() {
+  const button = document.getElementById('floatingAiBtn');
+  if (button) button.remove();
+  const launcher = document.getElementById('mainLauncherModal');
+  if (launcher) launcher.remove();
 }
 
 function setIftyAccountFormStatus(message, isError = false) {
@@ -5614,6 +5695,7 @@ function applyAlliaBranding() {
 
 // 1. 初期化処理
 document.addEventListener("DOMContentLoaded", function() {
+  removeIftyBottomRightLauncher();
   applyAlliaBranding();
   ensureIftyPwaHeadLinks();
   ensureIftyBrandUi();
@@ -5642,6 +5724,34 @@ document.addEventListener('keydown', function(event) {
   }
 });
 
+
+// ==========================================
+// Q3 STEP36：全モーダル「画面外タップで閉じる」
+// 背景オーバーレイそのものをタップした時だけ閉じるため、カード内部の操作には干渉しない。
+// ==========================================
+const IFTY_OUTSIDE_CLOSE_HANDLERS = {
+  editWordModal: () => window.closeEditWordModal?.(),
+  iftySecurityModal: () => window.closeIftySecurityModal?.(),
+  iftyPasswordRecoveryModal: () => window.closeIftyPasswordRecoveryInfo?.(),
+  iftyRecoveryModal: () => window.closeIftyRecoveryCenter?.(),
+  practiceNameModal: () => { const el = document.getElementById('practiceNameModal'); if (el) el.style.display = 'none'; },
+  iftyBasicSentenceModal: () => window.closeIftyBasicSentenceEditor?.(),
+  iftySocialItemModal: () => window.closeIftySocialItemEditor?.(),
+  iftySocialVisualQuizModal: () => window.closeIftySocialVisualQuiz?.(),
+  iftySocialImageViewerModal: () => window.closeIftySocialImageViewer?.(),
+  practiceModal: () => window.closePracticeModal?.(),
+  flashcardModal: () => window.closeFlashcardModal?.(),
+  mainLauncherModal: () => window.closeMainLauncher?.(),
+  appMenuModal: () => window.closeMenuModal?.(),
+  iftyOrderModal: () => window.closeIftyOrderModal?.()
+};
+
+document.addEventListener('click', function(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const handler = IFTY_OUTSIDE_CLOSE_HANDLERS[target.id];
+  if (typeof handler === 'function') handler();
+});
 
 // ==========================================
 // Q3 STEP24：全画面スマートEnter確定
@@ -7128,6 +7238,7 @@ function renderFolders() {
   if (!container) return;
 
   normalizeFoldersData();
+  refreshIftyEnglishSubjectPanel();
 
   const selectedCount = selectedWordIds.size;
   const folderOptions = folders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
@@ -8120,8 +8231,15 @@ function getPracticeSet(setId) {
   return getFlashcardSets().find(set => set.id === setId) || null;
 }
 
-window.openPracticeHome = function() {
+let iftyUnifiedPracticeSubject = 'ENGLISH';
+
+window.openPracticeHome = function(subject) {
   closeMainLauncher();
+  const requested = String(subject || '').trim().toUpperCase();
+  if (requested === 'SOCIAL STUDIES') iftyUnifiedPracticeSubject = 'SOCIAL STUDIES';
+  else if (requested === 'ENGLISH') iftyUnifiedPracticeSubject = 'ENGLISH';
+  else if (currentIftySubject === 'SOCIAL STUDIES') iftyUnifiedPracticeSubject = 'SOCIAL STUDIES';
+  else iftyUnifiedPracticeSubject = 'ENGLISH';
   let modal = document.getElementById('practiceModal');
   if (!modal) {
     modal = document.createElement('div');
@@ -8138,16 +8256,29 @@ window.closePracticeModal = function() {
   if (modal) modal.style.display = 'none';
 };
 
+window.setIftyUnifiedPracticeSubject = function(subject) {
+  iftyUnifiedPracticeSubject = String(subject || '').toUpperCase() === 'SOCIAL STUDIES' ? 'SOCIAL STUDIES' : 'ENGLISH';
+  renderPracticeHome();
+};
+
 function renderPracticeHome() {
   const modal = document.getElementById('practiceModal');
   if (!modal) return;
+  if (iftyUnifiedPracticeSubject === 'SOCIAL STUDIES') {
+    renderIftyUnifiedSocialPracticeHome(modal);
+    return;
+  }
   const sets = getFlashcardSets();
   const quizSets = getQuizSets().filter(set => !set.systemReview);
   modal.innerHTML = `
     <div style="background:white;border-radius:14px;width:min(760px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;">
-        <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">⚔️ 実践</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">実践モジュール</div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;">
+        <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">⚔️ PRACTICE</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">教科を切り替えて実践できます。</div></div>
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
+      </div>
+      <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ENGLISH</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
       </div>
 
       <div style="border:1px solid #cbd5e1;border-radius:10px;padding:14px;background:#f8fafc;">
@@ -8192,6 +8323,83 @@ function renderPracticeHome() {
               </div>
             </div>`).join('') : '<div style="color:#a78bfa;text-align:center;padding:16px;">まだクイズフォルダがありません。</div>'}
         </div>
+      </div>
+    </div>`;
+}
+
+function renderIftyUnifiedSocialPracticeHome(modal) {
+  ensureIftySocialPracticeFolderSelection();
+  const foldersWithItems = getIftySocialPracticeFolders();
+  const selectedFolders = getIftySocialPracticeSelectedFolders();
+  const selectedItems = getIftySocialPracticeItems();
+  const imageItems = getIftySocialPracticeImageItems();
+  const selectedSubjects = [...new Set(selectedFolders.flatMap(folder => normalizeIftySocialSubjects(folder.subjects)))].map(getIftySocialSubjectLabel);
+
+  const folderChoices = foldersWithItems.length
+    ? foldersWithItems.map(folder => {
+        const checked = iftySocialPracticeSelectedFolderIds.has(String(folder.id));
+        return `<label style="display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid ${checked ? '#38bdf8' : '#cbd5e1'};border-radius:9px;background:${checked ? '#f0f9ff' : '#fff'};cursor:pointer;min-width:0;">
+          <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleIftySocialPracticeFolder('${folder.id}',this.checked)">
+          <span style="font-weight:900;color:#0f172a;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(folder.name)}</span>
+          <span style="font-size:.72em;color:#64748b;white-space:nowrap;">${folder.items.length}件</span>
+        </label>`;
+      }).join('')
+    : '<div style="color:#94a3b8;padding:10px 0;">項目のある社会フォルダがありません。</div>';
+
+  const modeCard = mode => {
+    const meta = getIftySocialPracticeModeMeta(mode);
+    let disabledReason = '';
+    if (mode === 'image' && imageItems.length < 2) disabledReason = '画像付き項目が2件以上必要です。';
+    else if (mode === 'simple' && selectedItems.length < 2) disabledReason = '項目が2件以上必要です。';
+    else if (!selectedItems.length) disabledReason = '学習する項目を選択してください。';
+    const disabled = !!disabledReason;
+    return `<button type="button" onclick="closePracticeModal();startIftySocialPractice('${mode}')" ${disabled ? 'disabled' : ''} style="text-align:left;border:1px solid ${disabled ? '#e2e8f0' : meta.color};background:${disabled ? '#f8fafc' : '#fff'};border-radius:12px;padding:12px;cursor:${disabled ? 'not-allowed' : 'pointer'};min-height:112px;opacity:${disabled ? '.62' : '1'};">
+      <div style="font-size:1.04em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(meta.title)}</div>
+      <div style="margin-top:6px;color:#475569;font-size:.82em;line-height:1.5;">${escapeHtml(meta.description)}</div>
+      ${disabledReason ? `<div style="margin-top:7px;font-size:.7em;color:#94a3b8;font-weight:800;">${escapeHtml(disabledReason)}</div>` : ''}
+    </button>`;
+  };
+
+  modal.innerHTML = `
+    <div style="background:white;border-radius:14px;width:min(820px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;">
+        <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">⚔️ PRACTICE</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">教科を切り替えて実践できます。</div></div>
+        <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
+      </div>
+      <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ENGLISH</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
+      </div>
+
+      <div style="padding:13px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:900;color:#0f172a;">出題するフォルダ</div>
+            <div style="font-size:.76em;color:#64748b;margin-top:3px;">選択 ${selectedFolders.length}フォルダ / ${selectedItems.length}項目${selectedSubjects.length ? ` ・ ${escapeHtml(selectedSubjects.join('・'))}` : ''}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button type="button" onclick="selectAllIftySocialPracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">すべて</button>
+            <button type="button" onclick="selectAllIftySocialPracticeFolders(false)" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">解除</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin-top:10px;">${folderChoices}</div>
+      </div>
+
+      <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+        <strong style="color:#334155;">問題数</strong>
+        <select onchange="setIftySocialPracticeQuestionCount(this.value)" style="padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
+          <option value="5" ${iftySocialPracticeQuestionCount === 5 ? 'selected' : ''}>5問</option>
+          <option value="10" ${iftySocialPracticeQuestionCount === 10 ? 'selected' : ''}>10問</option>
+        </select>
+        <span style="font-size:.74em;color:#64748b;">時代・並べ替え・説明は開始時にALLIAが問題を作ります。</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:14px;">
+        ${modeCard('simple')}
+        ${modeCard('era')}
+        ${modeCard('order')}
+        ${modeCard('explanation')}
+        ${modeCard('image')}
       </div>
     </div>`;
 }
