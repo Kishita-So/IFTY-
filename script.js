@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP37 2026-09-22：PRACTICE統合・全モーダル外側タップ・ENGLISH編集UI ★★★
+// ★★★ IFTY Q3 STEP38 2026-09-23：YEARS / 年号学習 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -61,6 +61,10 @@ let iftyExampleSearchQuery = '';
 // Q3 STEP25：BASIC SENTENCES
 // 自分で登録した英文、またはEXAMPLE BANKから取り込んだ英文を保存・整理する。
 let iftyBasicSentenceSearchQuery = '';
+
+// Q3 STEP38：YEARS / 年号学習
+// SOCIAL STUDIESとは独立した年号暗記ツール。数字から、その年と前後の重要事項をALLIAで取得・保存する。
+let iftyYearLookupPending = false;
 
 // Q3 STEP26：SOCIAL STUDIES
 // 社会は1教科として保持し、フォルダごとに日本史・世界史・地理・公共を複数設定できる。
@@ -389,6 +393,9 @@ function restoreLearningState(snapshot) {
     if (currentIftySubject === 'SOCIAL STUDIES' && iftyPortalPage === 'subject') {
       renderIftySocialStudiesPage();
     }
+    if (iftyPortalPage === 'years' && typeof window.openIftyYears === 'function') {
+      window.openIftyYears();
+    }
     const practiceModal = document.getElementById('practiceModal');
     if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
   } finally {
@@ -672,6 +679,7 @@ function renderIftySideMenu() {
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); switchToChatView();">ALLIA</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyExampleBank();">EXAMPLES</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyBasicSentences();">BASIC SENTENCES</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyYears();">YEARS</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openPracticeHome(currentIftySubject);">PRACTICE</button>
 
       <div class="ifty-side-menu-separator"></div>
@@ -1341,6 +1349,7 @@ function getIftyHomeStats() {
     chats: Array.isArray(chatSessions) ? chatSessions.length : 0,
     examples: countIftyExampleAssets(),
     basicSentences: countIftyBasicSentences(),
+    years: countIftyYearEntries(),
     socialFolders: socialFolders.length,
     socialItems,
     ...learning
@@ -1434,13 +1443,14 @@ window.openIftyHome = function() {
         <button type="button" onclick="switchToChatView()" style="background:#0284c7;color:white;">🤖 ALLIA</button>
         <button type="button" onclick="openIftyExampleBank()" style="background:#2563eb;color:white;">📚 例文資産 ${stats.examples}</button>
         <button type="button" onclick="openIftyBasicSentences()" style="background:#059669;color:white;">📝 BASIC SENTENCES ${stats.basicSentences}</button>
+        <button type="button" onclick="openIftyYears()" style="background:#b45309;color:white;">📅 YEARS ${stats.years}</button>
         <button type="button" onclick="openPracticeHome()" style="background:#7c3aed;color:white;">⚔️ 実践</button>
         <button type="button" onclick="openIftyLearningStats()" style="background:#0f766e;color:white;">📊 学習統計</button>
         <button type="button" onclick="openIftyRecoveryCenter()" style="background:#334155;color:white;">🛟 バックアップ / 復元</button>
       </div>
 
       <div class="ifty-settings-note" style="margin-top:14px;">
-        実践：Flash ${stats.flashSets} / Quiz ${stats.quizSets}　・　例文資産 ${stats.examples}件　・　BASIC SENTENCES ${stats.basicSentences}件　・　ALLIAチャット ${stats.chats}　・　復習管理 ${stats.reviewActive}語 / 卒業 ${stats.reviewGraduated}語
+        実践：Flash ${stats.flashSets} / Quiz ${stats.quizSets}　・　例文資産 ${stats.examples}件　・　BASIC SENTENCES ${stats.basicSentences}件　・　YEARS ${stats.years}件　・　ALLIAチャット ${stats.chats}　・　復習管理 ${stats.reviewActive}語 / 卒業 ${stats.reviewGraduated}語
       </div>
     </section>
   `, 'home');
@@ -1449,6 +1459,329 @@ window.openIftyHome = function() {
 window.openIftySideMenuHome = function() {
   window.closeIftySideMenu();
   window.openIftyHome();
+};
+
+// ==========================================
+// Q3 STEP38：YEARS / 年号学習
+// SOCIAL STUDIESとは別ページで、数字からその年と前後の重要事項を調べて保存する。
+// practiceData.modules.years に保存するため、既存クラウド同期・バックアップ対象に自動で含まれる。
+// ==========================================
+function normalizeIftyYearEra(value) {
+  return String(value || '').trim().toUpperCase() === 'BCE' ? 'BCE' : 'CE';
+}
+
+function formatIftyYearLabel(era, year) {
+  const value = Math.max(1, Math.abs(Number(year) || 0));
+  return normalizeIftyYearEra(era) === 'BCE' ? `紀元前${value}年` : `${value}年`;
+}
+
+function normalizeIftyYearSubject(value) {
+  const key = String(value || '').trim().toUpperCase();
+  return ['JAPANESE_HISTORY', 'WORLD_HISTORY'].includes(key) ? key : 'WORLD_HISTORY';
+}
+
+function getIftyYearSubjectLabel(value) {
+  return normalizeIftyYearSubject(value) === 'JAPANESE_HISTORY' ? '日本史' : '世界史';
+}
+
+function normalizeIftyYearEvent(value, includeYear = false) {
+  const source = value && typeof value === 'object' ? value : {};
+  const yearNumber = Math.max(1, Math.abs(Number(source.year) || 0));
+  return {
+    id: String(source.id || makeId('yearevent')),
+    subject: normalizeIftyYearSubject(source.subject),
+    title: String(source.title || '').trim(),
+    memoryText: String(source.memoryText || '').trim(),
+    era: includeYear ? normalizeIftyYearEra(source.era) : '',
+    year: includeYear ? yearNumber : 0,
+    yearLabel: includeYear
+      ? (String(source.yearLabel || '').trim() || formatIftyYearLabel(source.era, yearNumber))
+      : ''
+  };
+}
+
+function normalizeIftyYearEntry(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  const era = normalizeIftyYearEra(source.era);
+  const year = Math.max(1, Math.abs(Number(source.year) || 0));
+  return {
+    id: String(source.id || makeId('yearentry')),
+    era,
+    year,
+    yearLabel: String(source.yearLabel || '').trim() || formatIftyYearLabel(era, year),
+    periodLabel: String(source.periodLabel || '').trim(),
+    exactEvents: Array.isArray(source.exactEvents)
+      ? source.exactEvents.map(item => normalizeIftyYearEvent(item, false)).filter(item => item.title)
+      : [],
+    nearbyEvents: Array.isArray(source.nearbyEvents)
+      ? source.nearbyEvents.map(item => normalizeIftyYearEvent(item, true)).filter(item => item.title && item.year)
+      : [],
+    note: String(source.note || '').trim(),
+    source: String(source.source || 'ALLIA').trim() || 'ALLIA',
+    createdAt: Number(source.createdAt) || Date.now(),
+    updatedAt: Number(source.updatedAt) || Number(source.createdAt) || Date.now()
+  };
+}
+
+function getIftyYearEntries() {
+  const module = practiceData && practiceData.modules && practiceData.modules.years;
+  return module && Array.isArray(module.entries) ? module.entries : [];
+}
+
+function countIftyYearEntries() {
+  return getIftyYearEntries().length;
+}
+
+function parseIftyYearInput(rawValue, selectedEra = 'CE') {
+  let raw = String(rawValue ?? '').normalize('NFKC').trim();
+  if (!raw) return null;
+
+  let era = normalizeIftyYearEra(selectedEra);
+  if (/紀元前|\bB\.?C\.?E?\.?\b/i.test(raw)) era = 'BCE';
+  if (/西暦|\bA\.?D\.?\b|\bC\.?E\.?\b/i.test(raw)) era = 'CE';
+
+  const hasNegative = /^\s*-/.test(raw);
+  if (hasNegative) era = 'BCE';
+
+  raw = raw
+    .replace(/紀元前|西暦/gi, '')
+    .replace(/\bB\.?C\.?E?\.?\b/gi, '')
+    .replace(/\bA\.?D\.?\b|\bC\.?E\.?\b/gi, '')
+    .replace(/年/g, '')
+    .replace(/,/g, '')
+    .replace(/\s+/g, '');
+
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric) || !Number.isInteger(numeric)) return null;
+  const year = Math.abs(numeric);
+  if (year < 1 || year > 9999) return null;
+  return { era, year };
+}
+
+function ensureIftyYearsStyles() {
+  if (document.getElementById('iftyYearsStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'iftyYearsStyles';
+  style.textContent = `
+    .ifty-years-form { margin-top:18px; border:1px solid #e2e8f0; border-radius:12px; background:#f8fafc; padding:14px; }
+    .ifty-years-form-row { display:grid; grid-template-columns:120px minmax(0,1fr) auto; gap:8px; align-items:center; }
+    .ifty-years-form select, .ifty-years-form input { width:100%; box-sizing:border-box; min-height:44px; border:1px solid #cbd5e1; border-radius:9px; padding:9px 11px; font:inherit; background:white; color:#0f172a; }
+    .ifty-years-primary { min-height:44px; border:none; border-radius:9px; padding:9px 14px; background:#b45309; color:white; font-weight:900; cursor:pointer; }
+    .ifty-years-primary:disabled { opacity:.55; cursor:default; }
+    .ifty-years-status { min-height:1.4em; margin-top:8px; color:#64748b; font-size:.82rem; }
+    .ifty-year-list { margin-top:16px; display:grid; gap:12px; }
+    .ifty-year-card { border:1px solid #e2e8f0; border-radius:13px; padding:14px; background:white; }
+    .ifty-year-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; }
+    .ifty-year-title { font-size:1.35rem; font-weight:900; color:#92400e; }
+    .ifty-year-period { color:#64748b; font-size:.8rem; margin-top:3px; }
+    .ifty-year-actions { display:flex; gap:6px; flex-wrap:wrap; }
+    .ifty-year-actions button { border:none; border-radius:8px; padding:7px 10px; font-weight:800; cursor:pointer; }
+    .ifty-year-section-title { margin:13px 0 7px; font-size:.83rem; font-weight:900; color:#475569; }
+    .ifty-year-events { display:grid; gap:7px; }
+    .ifty-year-event { border:1px solid #e2e8f0; border-radius:10px; padding:10px; background:#f8fafc; }
+    .ifty-year-event-top { display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
+    .ifty-year-badge { display:inline-flex; align-items:center; border-radius:999px; padding:3px 7px; font-size:.68rem; font-weight:900; background:#e0f2fe; color:#075985; }
+    .ifty-year-event-title { font-weight:900; color:#0f172a; }
+    .ifty-year-event-text { margin-top:4px; color:#475569; line-height:1.55; font-size:.88rem; }
+    .ifty-year-nearby-year { font-weight:900; color:#b45309; margin-right:5px; }
+    .ifty-year-note { margin-top:10px; padding:9px 10px; border-radius:9px; background:#fffbeb; color:#92400e; font-size:.82rem; line-height:1.5; }
+    body[data-ifty-theme="dark"] .ifty-years-form,
+    body[data-ifty-theme="dark"] .ifty-year-event { background:#0f172a; border-color:#334155; }
+    body[data-ifty-theme="dark"] .ifty-year-card { background:#111827; border-color:#334155; }
+    body[data-ifty-theme="dark"] .ifty-year-event-title { color:#e5e7eb; }
+    body[data-ifty-theme="dark"] .ifty-year-event-text,
+    body[data-ifty-theme="dark"] .ifty-year-period,
+    body[data-ifty-theme="dark"] .ifty-years-status,
+    body[data-ifty-theme="dark"] .ifty-year-section-title { color:#94a3b8; }
+    body[data-ifty-theme="dark"] .ifty-year-title,
+    body[data-ifty-theme="dark"] .ifty-year-nearby-year { color:#fbbf24; }
+    body[data-ifty-theme="dark"] .ifty-year-note { background:#422006; color:#fde68a; }
+    @media (max-width:620px) { .ifty-years-form-row { grid-template-columns:1fr; } }
+  `;
+  document.head.appendChild(style);
+}
+
+function renderIftyYearEventCard(event, nearby = false) {
+  const subjectLabel = getIftyYearSubjectLabel(event.subject);
+  const yearPrefix = nearby ? `<span class="ifty-year-nearby-year">${escapeHtml(event.yearLabel || formatIftyYearLabel(event.era, event.year))}</span>` : '';
+  return `
+    <div class="ifty-year-event">
+      <div class="ifty-year-event-top">
+        ${yearPrefix}
+        <span class="ifty-year-badge">${escapeHtml(subjectLabel)}</span>
+        <span class="ifty-year-event-title">${escapeHtml(event.title)}</span>
+      </div>
+      ${event.memoryText ? `<div class="ifty-year-event-text">${escapeHtml(event.memoryText)}</div>` : ''}
+    </div>`;
+}
+
+function renderIftyYearEntryCard(entry) {
+  const exact = Array.isArray(entry.exactEvents) ? entry.exactEvents : [];
+  const nearby = Array.isArray(entry.nearbyEvents) ? entry.nearbyEvents : [];
+  return `
+    <article class="ifty-year-card" id="iftyYearEntry_${escapeHtml(entry.id)}">
+      <div class="ifty-year-head">
+        <div>
+          <div class="ifty-year-title">${escapeHtml(entry.yearLabel)}</div>
+          ${entry.periodLabel ? `<div class="ifty-year-period">${escapeHtml(entry.periodLabel)}</div>` : ''}
+        </div>
+        <div class="ifty-year-actions">
+          <button type="button" onclick="regenerateIftyYearEntry('${escapeHtml(entry.id)}')" style="background:#f59e0b;color:#111827;">再生成</button>
+          <button type="button" onclick="deleteIftyYearEntry('${escapeHtml(entry.id)}')" style="background:#ef4444;color:white;">削除</button>
+        </div>
+      </div>
+      <div class="ifty-year-section-title">この年の重要事項</div>
+      <div class="ifty-year-events">
+        ${exact.length ? exact.map(event => renderIftyYearEventCard(event, false)).join('') : '<div class="ifty-year-event-text">高校範囲で特に重要な同年事項は見つかりませんでした。</div>'}
+      </div>
+      ${nearby.length ? `
+        <div class="ifty-year-section-title">前後の重要事項</div>
+        <div class="ifty-year-events">${nearby.map(event => renderIftyYearEventCard(event, true)).join('')}</div>
+      ` : ''}
+      ${entry.note ? `<div class="ifty-year-note">${escapeHtml(entry.note)}</div>` : ''}
+    </article>`;
+}
+
+function renderIftyYearEntries() {
+  const root = document.getElementById('iftyYearList');
+  if (!root) return;
+  const entries = [...getIftyYearEntries()].sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+  root.innerHTML = entries.length
+    ? entries.map(renderIftyYearEntryCard).join('')
+    : '<div class="ifty-settings-note">まだ年号はありません。上に数字を入力すると、その年と前後の重要事項をALLIAが整理します。</div>';
+}
+
+window.openIftyYears = function() {
+  ensureIftyYearsStyles();
+  const count = countIftyYearEntries();
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">YEARS</h1>
+          <div class="ifty-portal-subtitle">数字から年号を調べ、その年と前後の高校範囲で重要な出来事を覚えるためのページです。SOCIAL STUDIESのフォルダとは別に保存します。</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+      </div>
+
+      <form class="ifty-years-form" onsubmit="event.preventDefault(); lookupIftyYear();">
+        <div class="ifty-years-form-row">
+          <select id="iftyYearEra" aria-label="年代">
+            <option value="CE">西暦</option>
+            <option value="BCE">紀元前</option>
+          </select>
+          <input id="iftyYearInput" type="text" inputmode="numeric" autocomplete="off" placeholder="例：1600" aria-label="年号">
+          <button id="iftyYearLookupBtn" class="ifty-years-primary" type="submit">ALLIAで調べる</button>
+        </div>
+        <div id="iftyYearStatus" class="ifty-years-status">例：1600 → 関ヶ原の戦い。紀元前は左の選択か「-221」「紀元前221」でも入力できます。</div>
+      </form>
+
+      <div style="margin-top:14px;font-weight:900;color:#475569;">保存済み ${count}件</div>
+      <div id="iftyYearList" class="ifty-year-list"></div>
+    </section>
+  `, 'years');
+  renderIftyYearEntries();
+  setTimeout(() => document.getElementById('iftyYearInput')?.focus({ preventScroll: true }), 0);
+};
+
+async function requestIftyYearLookup(era, year) {
+  const response = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'year_lookup',
+      era,
+      year,
+      subject: 'SOCIAL STUDIES',
+      order: getIftySubjectOrder('SOCIAL STUDIES')
+    })
+  });
+  const data = await response.json();
+  if (!response.ok) throw alliaHttpError(response, data, '年号データの生成に失敗しました。');
+  return data;
+}
+
+window.lookupIftyYear = async function(forcedEra = '', forcedYear = null) {
+  if (iftyYearLookupPending) return;
+  if (!ensureIftyOnline('年号検索')) return;
+
+  const input = document.getElementById('iftyYearInput');
+  const eraSelect = document.getElementById('iftyYearEra');
+  let parsed = null;
+  if (forcedYear !== null && forcedYear !== undefined) {
+    const y = Math.max(1, Math.abs(Number(forcedYear) || 0));
+    if (y) parsed = { era: normalizeIftyYearEra(forcedEra), year: y };
+  } else {
+    parsed = parseIftyYearInput(input?.value || '', eraSelect?.value || 'CE');
+  }
+
+  if (!parsed) {
+    const status = document.getElementById('iftyYearStatus');
+    if (status) status.textContent = '1〜9999の整数を入力してください。0年は扱いません。';
+    input?.focus({ preventScroll: true });
+    return;
+  }
+
+  const status = document.getElementById('iftyYearStatus');
+  const btn = document.getElementById('iftyYearLookupBtn');
+  iftyYearLookupPending = true;
+  if (btn) btn.disabled = true;
+  if (status) status.textContent = `${formatIftyYearLabel(parsed.era, parsed.year)}をALLIAが整理中…`;
+
+  try {
+    const data = await requestIftyYearLookup(parsed.era, parsed.year);
+    const entries = getIftyYearEntries();
+    const existingIndex = entries.findIndex(entry => normalizeIftyYearEra(entry.era) === parsed.era && Number(entry.year) === parsed.year);
+    const existing = existingIndex >= 0 ? entries[existingIndex] : null;
+    recordUndoState(existing ? '年号データ更新' : '年号データ追加');
+    const normalized = normalizeIftyYearEntry({
+      ...data,
+      id: existing?.id || makeId('yearentry'),
+      era: parsed.era,
+      year: parsed.year,
+      yearLabel: data.yearLabel || formatIftyYearLabel(parsed.era, parsed.year),
+      source: 'ALLIA',
+      createdAt: existing?.createdAt || Date.now(),
+      updatedAt: Date.now()
+    });
+    if (existingIndex >= 0) entries.splice(existingIndex, 1, normalized);
+    else entries.push(normalized);
+    savePracticeData();
+
+    if (input) input.value = '';
+    if (eraSelect) eraSelect.value = 'CE';
+    if (status) status.textContent = `${normalized.yearLabel}を保存しました。続けて別の数字を入力できます。`;
+    renderIftyYearEntries();
+    setTimeout(() => input?.focus({ preventScroll: true }), 0);
+  } catch (error) {
+    console.error('YEARS生成エラー:', error);
+    if (status) status.textContent = String(error.message || error);
+  } finally {
+    iftyYearLookupPending = false;
+    if (btn) btn.disabled = false;
+  }
+};
+
+window.regenerateIftyYearEntry = function(entryId) {
+  const entry = getIftyYearEntries().find(item => item.id === entryId);
+  if (!entry) return;
+  const eraSelect = document.getElementById('iftyYearEra');
+  const input = document.getElementById('iftyYearInput');
+  if (eraSelect) eraSelect.value = normalizeIftyYearEra(entry.era);
+  if (input) input.value = String(entry.year || '');
+  window.lookupIftyYear(entry.era, entry.year);
+};
+
+window.deleteIftyYearEntry = function(entryId) {
+  const entries = getIftyYearEntries();
+  const index = entries.findIndex(item => item.id === entryId);
+  if (index < 0) return;
+  const entry = entries[index];
+  if (!confirm(`${entry.yearLabel}の年号データを削除しますか？`)) return;
+  recordUndoState('年号データ削除');
+  entries.splice(index, 1);
+  savePracticeData();
+  renderIftyYearEntries();
 };
 
 // ==========================================
@@ -7135,6 +7468,16 @@ function normalizePracticeData() {
   practiceData.modules.basicSentences.items = practiceData.modules.basicSentences.items
     .map(normalizeIftyBasicSentenceItem)
     .filter(Boolean);
+
+  if (!practiceData.modules.years || typeof practiceData.modules.years !== 'object') {
+    practiceData.modules.years = { entries: [] };
+  }
+  if (!Array.isArray(practiceData.modules.years.entries)) {
+    practiceData.modules.years.entries = [];
+  }
+  practiceData.modules.years.entries = practiceData.modules.years.entries
+    .map(normalizeIftyYearEntry)
+    .filter(entry => entry.year >= 1);
 
   if (!practiceData.modules.socialStudies || typeof practiceData.modules.socialStudies !== 'object') {
     practiceData.modules.socialStudies = { folders: [] };
