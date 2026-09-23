@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP38 2026-09-23：YEARS / 年号学習 ★★★
+// ★★★ IFTY Q3 STEP40 2026-09-23：YEARS 折りたたみ対応 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -64,7 +64,9 @@ let iftyBasicSentenceSearchQuery = '';
 
 // Q3 STEP38：YEARS / 年号学習
 // SOCIAL STUDIESとは独立した年号暗記ツール。数字から、その年と前後の重要事項をALLIAで取得・保存する。
-let iftyYearLookupPending = false;
+let iftyYearLookupPending = 0;
+// Q3 STEP40：年号カードの開閉状態（表示中のみ保持）
+const iftyCollapsedYearEntryIds = new Set();
 
 // Q3 STEP26：SOCIAL STUDIES
 // 社会は1教科として保持し、フォルダごとに日本史・世界史・地理・公共を複数設定できる。
@@ -1517,6 +1519,7 @@ function normalizeIftyYearEntry(value) {
       ? source.nearbyEvents.map(item => normalizeIftyYearEvent(item, true)).filter(item => item.title && item.year)
       : [],
     note: String(source.note || '').trim(),
+    mnemonic: String(source.mnemonic || '').trim(),
     source: String(source.source || 'ALLIA').trim() || 'ALLIA',
     createdAt: Number(source.createdAt) || Date.now(),
     updatedAt: Number(source.updatedAt) || Number(source.createdAt) || Date.now()
@@ -1576,6 +1579,8 @@ function ensureIftyYearsStyles() {
     .ifty-year-period { color:#64748b; font-size:.8rem; margin-top:3px; }
     .ifty-year-actions { display:flex; gap:6px; flex-wrap:wrap; }
     .ifty-year-actions button { border:none; border-radius:8px; padding:7px 10px; font-weight:800; cursor:pointer; }
+    .ifty-year-collapse { background:#e2e8f0; color:#334155; }
+    .ifty-year-body[hidden] { display:none !important; }
     .ifty-year-section-title { margin:13px 0 7px; font-size:.83rem; font-weight:900; color:#475569; }
     .ifty-year-events { display:grid; gap:7px; }
     .ifty-year-event { border:1px solid #e2e8f0; border-radius:10px; padding:10px; background:#f8fafc; }
@@ -1585,9 +1590,14 @@ function ensureIftyYearsStyles() {
     .ifty-year-event-text { margin-top:4px; color:#475569; line-height:1.55; font-size:.88rem; }
     .ifty-year-nearby-year { font-weight:900; color:#b45309; margin-right:5px; }
     .ifty-year-note { margin-top:10px; padding:9px 10px; border-radius:9px; background:#fffbeb; color:#92400e; font-size:.82rem; line-height:1.5; }
+    .ifty-year-mnemonic { margin-top:10px; padding:10px; border:1px solid #fed7aa; border-radius:10px; background:#fff7ed; color:#7c2d12; }
+    .ifty-year-mnemonic-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px; font-size:.78rem; font-weight:900; }
+    .ifty-year-mnemonic-edit { border:none; border-radius:7px; padding:5px 8px; background:#ea580c; color:white; font-weight:800; cursor:pointer; }
+    .ifty-year-mnemonic-text { line-height:1.5; font-size:.9rem; white-space:pre-wrap; }
     body[data-ifty-theme="dark"] .ifty-years-form,
     body[data-ifty-theme="dark"] .ifty-year-event { background:#0f172a; border-color:#334155; }
     body[data-ifty-theme="dark"] .ifty-year-card { background:#111827; border-color:#334155; }
+    body[data-ifty-theme="dark"] .ifty-year-collapse { background:#334155; color:#e5e7eb; }
     body[data-ifty-theme="dark"] .ifty-year-event-title { color:#e5e7eb; }
     body[data-ifty-theme="dark"] .ifty-year-event-text,
     body[data-ifty-theme="dark"] .ifty-year-period,
@@ -1596,6 +1606,7 @@ function ensureIftyYearsStyles() {
     body[data-ifty-theme="dark"] .ifty-year-title,
     body[data-ifty-theme="dark"] .ifty-year-nearby-year { color:#fbbf24; }
     body[data-ifty-theme="dark"] .ifty-year-note { background:#422006; color:#fde68a; }
+    body[data-ifty-theme="dark"] .ifty-year-mnemonic { background:#431407; border-color:#9a3412; color:#fed7aa; }
     @media (max-width:620px) { .ifty-years-form-row { grid-template-columns:1fr; } }
   `;
   document.head.appendChild(style);
@@ -1618,6 +1629,7 @@ function renderIftyYearEventCard(event, nearby = false) {
 function renderIftyYearEntryCard(entry) {
   const exact = Array.isArray(entry.exactEvents) ? entry.exactEvents : [];
   const nearby = Array.isArray(entry.nearbyEvents) ? entry.nearbyEvents : [];
+  const collapsed = iftyCollapsedYearEntryIds.has(String(entry.id));
   return `
     <article class="ifty-year-card" id="iftyYearEntry_${escapeHtml(entry.id)}">
       <div class="ifty-year-head">
@@ -1626,21 +1638,59 @@ function renderIftyYearEntryCard(entry) {
           ${entry.periodLabel ? `<div class="ifty-year-period">${escapeHtml(entry.periodLabel)}</div>` : ''}
         </div>
         <div class="ifty-year-actions">
+          <button
+            id="iftyYearCollapseBtn_${escapeHtml(entry.id)}"
+            class="ifty-year-collapse"
+            type="button"
+            aria-expanded="${collapsed ? 'false' : 'true'}"
+            onclick="toggleIftyYearEntryCollapse('${escapeHtml(entry.id)}')"
+          >${collapsed ? '▼ 展開' : '▲ 折りたたむ'}</button>
           <button type="button" onclick="regenerateIftyYearEntry('${escapeHtml(entry.id)}')" style="background:#f59e0b;color:#111827;">再生成</button>
           <button type="button" onclick="deleteIftyYearEntry('${escapeHtml(entry.id)}')" style="background:#ef4444;color:white;">削除</button>
         </div>
       </div>
-      <div class="ifty-year-section-title">この年の重要事項</div>
-      <div class="ifty-year-events">
-        ${exact.length ? exact.map(event => renderIftyYearEventCard(event, false)).join('') : '<div class="ifty-year-event-text">高校範囲で特に重要な同年事項は見つかりませんでした。</div>'}
+      <div id="iftyYearBody_${escapeHtml(entry.id)}" class="ifty-year-body" ${collapsed ? 'hidden' : ''}>
+        <div class="ifty-year-section-title">この年の重要事項</div>
+        <div class="ifty-year-events">
+          ${exact.length ? exact.map(event => renderIftyYearEventCard(event, false)).join('') : '<div class="ifty-year-event-text">高校範囲で特に重要な同年事項は見つかりませんでした。</div>'}
+        </div>
+        ${nearby.length ? `
+          <div class="ifty-year-section-title">前後の重要事項</div>
+          <div class="ifty-year-events">${nearby.map(event => renderIftyYearEventCard(event, true)).join('')}</div>
+        ` : ''}
+        <div class="ifty-year-mnemonic">
+          <div class="ifty-year-mnemonic-head">
+            <span>語呂合わせ</span>
+            <button class="ifty-year-mnemonic-edit" type="button" onclick="editIftyYearMnemonic('${escapeHtml(entry.id)}')">編集</button>
+          </div>
+          <div class="ifty-year-mnemonic-text">${entry.mnemonic ? escapeHtml(entry.mnemonic) : 'まだ語呂合わせはありません。編集から自分で追加できます。'}</div>
+        </div>
+        ${entry.note ? `<div class="ifty-year-note">${escapeHtml(entry.note)}</div>` : ''}
       </div>
-      ${nearby.length ? `
-        <div class="ifty-year-section-title">前後の重要事項</div>
-        <div class="ifty-year-events">${nearby.map(event => renderIftyYearEventCard(event, true)).join('')}</div>
-      ` : ''}
-      ${entry.note ? `<div class="ifty-year-note">${escapeHtml(entry.note)}</div>` : ''}
     </article>`;
 }
+
+window.toggleIftyYearEntryCollapse = function(entryId) {
+  const id = String(entryId || '');
+  if (!id) return;
+
+  const body = document.getElementById(`iftyYearBody_${id}`);
+  const button = document.getElementById(`iftyYearCollapseBtn_${id}`);
+  if (!body || !button) return;
+
+  const willCollapse = !body.hidden;
+  body.hidden = willCollapse;
+
+  if (willCollapse) {
+    iftyCollapsedYearEntryIds.add(id);
+    button.textContent = '▼ 展開';
+    button.setAttribute('aria-expanded', 'false');
+  } else {
+    iftyCollapsedYearEntryIds.delete(id);
+    button.textContent = '▲ 折りたたむ';
+    button.setAttribute('aria-expanded', 'true');
+  }
+};
 
 function renderIftyYearEntries() {
   const root = document.getElementById('iftyYearList');
@@ -1702,7 +1752,6 @@ async function requestIftyYearLookup(era, year) {
 }
 
 window.lookupIftyYear = async function(forcedEra = '', forcedYear = null) {
-  if (iftyYearLookupPending) return;
   if (!ensureIftyOnline('年号検索')) return;
 
   const input = document.getElementById('iftyYearInput');
@@ -1723,10 +1772,16 @@ window.lookupIftyYear = async function(forcedEra = '', forcedYear = null) {
   }
 
   const status = document.getElementById('iftyYearStatus');
-  const btn = document.getElementById('iftyYearLookupBtn');
-  iftyYearLookupPending = true;
-  if (btn) btn.disabled = true;
-  if (status) status.textContent = `${formatIftyYearLabel(parsed.era, parsed.year)}をALLIAが整理中…`;
+  const requestLabel = formatIftyYearLabel(parsed.era, parsed.year);
+
+  // 通常入力は送信した瞬間に空にし、ALLIAの応答を待たず次の年号を入力できるようにする。
+  if (forcedYear === null || forcedYear === undefined) {
+    if (input) input.value = '';
+    input?.focus({ preventScroll: true });
+  }
+
+  iftyYearLookupPending += 1;
+  if (status) status.textContent = `${requestLabel}をALLIAが整理中…（生成中 ${iftyYearLookupPending}件）`;
 
   try {
     const data = await requestIftyYearLookup(parsed.era, parsed.year);
@@ -1739,7 +1794,9 @@ window.lookupIftyYear = async function(forcedEra = '', forcedYear = null) {
       id: existing?.id || makeId('yearentry'),
       era: parsed.era,
       year: parsed.year,
-      yearLabel: data.yearLabel || formatIftyYearLabel(parsed.era, parsed.year),
+      yearLabel: data.yearLabel || requestLabel,
+      // 自分で編集済みの語呂合わせは、通常の再検索では保持する。
+      mnemonic: existing?.mnemonic || data.mnemonic || '',
       source: 'ALLIA',
       createdAt: existing?.createdAt || Date.now(),
       updatedAt: Date.now()
@@ -1748,17 +1805,23 @@ window.lookupIftyYear = async function(forcedEra = '', forcedYear = null) {
     else entries.push(normalized);
     savePracticeData();
 
-    if (input) input.value = '';
-    if (eraSelect) eraSelect.value = 'CE';
-    if (status) status.textContent = `${normalized.yearLabel}を保存しました。続けて別の数字を入力できます。`;
     renderIftyYearEntries();
+    if (status) {
+      const remaining = Math.max(0, iftyYearLookupPending - 1);
+      status.textContent = remaining
+        ? `${normalized.yearLabel}を保存しました。ほか ${remaining}件を生成中…`
+        : `${normalized.yearLabel}を保存しました。続けて別の数字を入力できます。`;
+    }
     setTimeout(() => input?.focus({ preventScroll: true }), 0);
   } catch (error) {
     console.error('YEARS生成エラー:', error);
-    if (status) status.textContent = String(error.message || error);
+    if (status) status.textContent = `${requestLabel}: ${String(error.message || error)}`;
   } finally {
-    iftyYearLookupPending = false;
-    if (btn) btn.disabled = false;
+    iftyYearLookupPending = Math.max(0, iftyYearLookupPending - 1);
+    const currentStatus = document.getElementById('iftyYearStatus');
+    if (currentStatus && iftyYearLookupPending > 0 && !/生成中/.test(currentStatus.textContent || '')) {
+      currentStatus.textContent += `（生成中 ${iftyYearLookupPending}件）`;
+    }
   }
 };
 
@@ -1780,6 +1843,18 @@ window.deleteIftyYearEntry = function(entryId) {
   if (!confirm(`${entry.yearLabel}の年号データを削除しますか？`)) return;
   recordUndoState('年号データ削除');
   entries.splice(index, 1);
+  savePracticeData();
+  renderIftyYearEntries();
+};
+
+window.editIftyYearMnemonic = function(entryId) {
+  const entry = getIftyYearEntries().find(item => item.id === entryId);
+  if (!entry) return;
+  const next = prompt(`${entry.yearLabel}の語呂合わせを編集`, entry.mnemonic || '');
+  if (next === null) return;
+  recordUndoState('年号語呂合わせ編集');
+  entry.mnemonic = String(next).trim();
+  entry.updatedAt = Date.now();
   savePracticeData();
   renderIftyYearEntries();
 };
