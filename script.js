@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP40 2026-09-23：YEARS 折りたたみ対応 ★★★
+// ★★★ IFTY Q3 STEP41 2026-09-23：YEARS / BASIC SENTENCES フォルダ整理・並べ替え ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -58,13 +58,15 @@ let iftyDailyGoalWords = IFTY_DAILY_GOAL_DEFAULT_WORDS;
 // Q3 STEP23：保存済み例文をAIなしで再利用する「例文資産」
 let iftyExampleSearchQuery = '';
 
-// Q3 STEP25：BASIC SENTENCES
-// 自分で登録した英文、またはEXAMPLE BANKから取り込んだ英文を保存・整理する。
+// Q3 STEP25 / STEP41：BASIC SENTENCES
+// 自分で登録した英文、またはEXAMPLE BANKから取り込んだ英文をフォルダ単位で保存・整理する。
 let iftyBasicSentenceSearchQuery = '';
+let iftyBasicSentenceActiveFolderId = '';
 
-// Q3 STEP38：YEARS / 年号学習
-// SOCIAL STUDIESとは独立した年号暗記ツール。数字から、その年と前後の重要事項をALLIAで取得・保存する。
+// Q3 STEP38 / STEP41：YEARS / 年号学習
+// SOCIAL STUDIESとは独立した年号暗記ツール。年号をフォルダ単位で保存・整理する。
 let iftyYearLookupPending = 0;
+let iftyYearActiveFolderId = '';
 // Q3 STEP40：年号カードの開閉状態（表示中のみ保持）
 const iftyCollapsedYearEntryIds = new Set();
 
@@ -1464,10 +1466,21 @@ window.openIftySideMenuHome = function() {
 };
 
 // ==========================================
-// Q3 STEP38：YEARS / 年号学習
-// SOCIAL STUDIESとは別ページで、数字からその年と前後の重要事項を調べて保存する。
+// Q3 STEP38 / STEP41：YEARS / 年号学習
+// SOCIAL STUDIESとは別ページ。年号をフォルダで整理し、フォルダ・年号の並べ替えにも対応する。
 // practiceData.modules.years に保存するため、既存クラウド同期・バックアップ対象に自動で含まれる。
 // ==========================================
+function normalizeIftyCollectionFolder(folder, prefix = 'collection_folder', defaultName = '未分類', index = 0) {
+  const source = folder && typeof folder === 'object' ? folder : {};
+  return {
+    id: String(source.id || makeId(prefix)),
+    name: String(source.name || defaultName).trim() || defaultName,
+    collapsed: !!source.collapsed,
+    order: Number.isFinite(Number(source.order)) ? Number(source.order) : index,
+    createdAt: Math.max(0, Number(source.createdAt) || Date.now())
+  };
+}
+
 function normalizeIftyYearEra(value) {
   return String(value || '').trim().toUpperCase() === 'BCE' ? 'BCE' : 'CE';
 }
@@ -1507,7 +1520,10 @@ function normalizeIftyYearEntry(value) {
   const era = normalizeIftyYearEra(source.era);
   const year = Math.max(1, Math.abs(Number(source.year) || 0));
   return {
+    ...source,
     id: String(source.id || makeId('yearentry')),
+    folderId: String(source.folderId || ''),
+    order: Number.isFinite(Number(source.order)) ? Number(source.order) : null,
     era,
     year,
     yearLabel: String(source.yearLabel || '').trim() || formatIftyYearLabel(era, year),
@@ -1526,9 +1542,43 @@ function normalizeIftyYearEntry(value) {
   };
 }
 
+function getIftyYearModule() {
+  normalizePracticeData();
+  return practiceData.modules.years;
+}
+
+function getIftyYearFolders() {
+  const module = practiceData && practiceData.modules && practiceData.modules.years;
+  return module && Array.isArray(module.folders) ? module.folders : [];
+}
+
+function getIftySortedYearFolders() {
+  return getIftyYearFolders().slice().sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+}
+
+function getIftyYearFolderById(folderId) {
+  return getIftyYearFolders().find(folder => String(folder.id) === String(folderId)) || null;
+}
+
+function getIftyYearDefaultFolderId() {
+  const folders = getIftySortedYearFolders();
+  return folders[0] ? String(folders[0].id) : '';
+}
+
 function getIftyYearEntries() {
   const module = practiceData && practiceData.modules && practiceData.modules.years;
   return module && Array.isArray(module.entries) ? module.entries : [];
+}
+
+function getIftyYearEntriesForFolder(folderId) {
+  return getIftyYearEntries()
+    .filter(entry => String(entry.folderId || '') === String(folderId || ''))
+    .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+}
+
+function getIftyNextYearOrder(folderId) {
+  const rows = getIftyYearEntriesForFolder(folderId);
+  return rows.length ? Math.max(...rows.map(row => Number(row.order || 0))) + 1 : 0;
 }
 
 function countIftyYearEntries() {
@@ -1542,9 +1592,7 @@ function parseIftyYearInput(rawValue, selectedEra = 'CE') {
   let era = normalizeIftyYearEra(selectedEra);
   if (/紀元前|\bB\.?C\.?E?\.?\b/i.test(raw)) era = 'BCE';
   if (/西暦|\bA\.?D\.?\b|\bC\.?E\.?\b/i.test(raw)) era = 'CE';
-
-  const hasNegative = /^\s*-/.test(raw);
-  if (hasNegative) era = 'BCE';
+  if (/^\s*-/.test(raw)) era = 'BCE';
 
   raw = raw
     .replace(/紀元前|西暦/gi, '')
@@ -1567,12 +1615,17 @@ function ensureIftyYearsStyles() {
   style.id = 'iftyYearsStyles';
   style.textContent = `
     .ifty-years-form { margin-top:18px; border:1px solid #e2e8f0; border-radius:12px; background:#f8fafc; padding:14px; }
-    .ifty-years-form-row { display:grid; grid-template-columns:120px minmax(0,1fr) auto; gap:8px; align-items:center; }
+    .ifty-years-form-row { display:grid; grid-template-columns:110px minmax(0,1fr) minmax(150px,220px) auto; gap:8px; align-items:center; }
     .ifty-years-form select, .ifty-years-form input { width:100%; box-sizing:border-box; min-height:44px; border:1px solid #cbd5e1; border-radius:9px; padding:9px 11px; font:inherit; background:white; color:#0f172a; }
     .ifty-years-primary { min-height:44px; border:none; border-radius:9px; padding:9px 14px; background:#b45309; color:white; font-weight:900; cursor:pointer; }
-    .ifty-years-primary:disabled { opacity:.55; cursor:default; }
     .ifty-years-status { min-height:1.4em; margin-top:8px; color:#64748b; font-size:.82rem; }
-    .ifty-year-list { margin-top:16px; display:grid; gap:12px; }
+    .ifty-year-folder-list { margin-top:16px; display:grid; gap:12px; }
+    .ifty-year-folder { border:1px solid #fed7aa; border-radius:14px; background:#fffaf5; padding:12px; }
+    .ifty-year-folder-head { display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap; }
+    .ifty-year-folder-title { font-weight:900; color:#7c2d12; font-size:1.02rem; }
+    .ifty-year-folder-actions { display:flex; gap:5px; flex-wrap:wrap; }
+    .ifty-year-folder-actions button { border:none; border-radius:7px; padding:6px 9px; font-weight:800; cursor:pointer; }
+    .ifty-year-list { margin-top:10px; display:grid; gap:10px; }
     .ifty-year-card { border:1px solid #e2e8f0; border-radius:13px; padding:14px; background:white; }
     .ifty-year-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; }
     .ifty-year-title { font-size:1.35rem; font-weight:900; color:#92400e; }
@@ -1587,27 +1640,14 @@ function ensureIftyYearsStyles() {
     .ifty-year-event-top { display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
     .ifty-year-badge { display:inline-flex; align-items:center; border-radius:999px; padding:3px 7px; font-size:.68rem; font-weight:900; background:#e0f2fe; color:#075985; }
     .ifty-year-event-title { font-weight:900; color:#0f172a; }
-    .ifty-year-event-text { margin-top:4px; color:#475569; line-height:1.55; font-size:.88rem; }
-    .ifty-year-nearby-year { font-weight:900; color:#b45309; margin-right:5px; }
-    .ifty-year-note { margin-top:10px; padding:9px 10px; border-radius:9px; background:#fffbeb; color:#92400e; font-size:.82rem; line-height:1.5; }
-    .ifty-year-mnemonic { margin-top:10px; padding:10px; border:1px solid #fed7aa; border-radius:10px; background:#fff7ed; color:#7c2d12; }
-    .ifty-year-mnemonic-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px; font-size:.78rem; font-weight:900; }
-    .ifty-year-mnemonic-edit { border:none; border-radius:7px; padding:5px 8px; background:#ea580c; color:white; font-weight:800; cursor:pointer; }
-    .ifty-year-mnemonic-text { line-height:1.5; font-size:.9rem; white-space:pre-wrap; }
-    body[data-ifty-theme="dark"] .ifty-years-form,
-    body[data-ifty-theme="dark"] .ifty-year-event { background:#0f172a; border-color:#334155; }
-    body[data-ifty-theme="dark"] .ifty-year-card { background:#111827; border-color:#334155; }
-    body[data-ifty-theme="dark"] .ifty-year-collapse { background:#334155; color:#e5e7eb; }
-    body[data-ifty-theme="dark"] .ifty-year-event-title { color:#e5e7eb; }
-    body[data-ifty-theme="dark"] .ifty-year-event-text,
-    body[data-ifty-theme="dark"] .ifty-year-period,
-    body[data-ifty-theme="dark"] .ifty-years-status,
-    body[data-ifty-theme="dark"] .ifty-year-section-title { color:#94a3b8; }
-    body[data-ifty-theme="dark"] .ifty-year-title,
-    body[data-ifty-theme="dark"] .ifty-year-nearby-year { color:#fbbf24; }
-    body[data-ifty-theme="dark"] .ifty-year-note { background:#422006; color:#fde68a; }
-    body[data-ifty-theme="dark"] .ifty-year-mnemonic { background:#431407; border-color:#9a3412; color:#fed7aa; }
-    @media (max-width:620px) { .ifty-years-form-row { grid-template-columns:1fr; } }
+    .ifty-year-event-text { margin-top:5px; color:#475569; font-size:.84rem; line-height:1.55; }
+    .ifty-year-nearby-year { font-weight:900; color:#b45309; }
+    .ifty-year-note { margin-top:11px; padding:9px 10px; border-radius:9px; background:#fffbeb; color:#92400e; font-size:.82rem; line-height:1.55; }
+    .ifty-year-mnemonic { margin-top:11px; padding:10px; border:1px solid #fde68a; border-radius:10px; background:#fffdf2; }
+    .ifty-year-mnemonic-head { display:flex; justify-content:space-between; gap:8px; align-items:center; font-size:.8rem; font-weight:900; color:#92400e; }
+    .ifty-year-mnemonic-text { margin-top:5px; color:#78350f; line-height:1.55; }
+    .ifty-year-mnemonic-edit { border:none; border-radius:7px; padding:5px 8px; background:#f59e0b; color:#111827; font-weight:900; cursor:pointer; }
+    @media (max-width:760px) { .ifty-years-form-row { grid-template-columns:1fr; } }
   `;
   document.head.appendChild(style);
 }
@@ -1615,18 +1655,17 @@ function ensureIftyYearsStyles() {
 function renderIftyYearEventCard(event, nearby = false) {
   const subjectLabel = getIftyYearSubjectLabel(event.subject);
   const yearPrefix = nearby ? `<span class="ifty-year-nearby-year">${escapeHtml(event.yearLabel || formatIftyYearLabel(event.era, event.year))}</span>` : '';
-  return `
-    <div class="ifty-year-event">
-      <div class="ifty-year-event-top">
-        ${yearPrefix}
-        <span class="ifty-year-badge">${escapeHtml(subjectLabel)}</span>
-        <span class="ifty-year-event-title">${escapeHtml(event.title)}</span>
-      </div>
-      ${event.memoryText ? `<div class="ifty-year-event-text">${escapeHtml(event.memoryText)}</div>` : ''}
-    </div>`;
+  return `<div class="ifty-year-event">
+    <div class="ifty-year-event-top">
+      ${yearPrefix}
+      <span class="ifty-year-badge">${escapeHtml(subjectLabel)}</span>
+      <span class="ifty-year-event-title">${escapeHtml(event.title)}</span>
+    </div>
+    ${event.memoryText ? `<div class="ifty-year-event-text">${escapeHtml(event.memoryText)}</div>` : ''}
+  </div>`;
 }
 
-function renderIftyYearEntryCard(entry) {
+function renderIftyYearEntryCard(entry, index, total) {
   const exact = Array.isArray(entry.exactEvents) ? entry.exactEvents : [];
   const nearby = Array.isArray(entry.nearbyEvents) ? entry.nearbyEvents : [];
   const collapsed = iftyCollapsedYearEntryIds.has(String(entry.id));
@@ -1638,13 +1677,9 @@ function renderIftyYearEntryCard(entry) {
           ${entry.periodLabel ? `<div class="ifty-year-period">${escapeHtml(entry.periodLabel)}</div>` : ''}
         </div>
         <div class="ifty-year-actions">
-          <button
-            id="iftyYearCollapseBtn_${escapeHtml(entry.id)}"
-            class="ifty-year-collapse"
-            type="button"
-            aria-expanded="${collapsed ? 'false' : 'true'}"
-            onclick="toggleIftyYearEntryCollapse('${escapeHtml(entry.id)}')"
-          >${collapsed ? '▼ 展開' : '▲ 折りたたむ'}</button>
+          <button type="button" ${index <= 0 ? 'disabled' : ''} onclick="moveIftyYearEntry('${escapeHtml(entry.id)}',-1)" title="上へ">↑</button>
+          <button type="button" ${index >= total - 1 ? 'disabled' : ''} onclick="moveIftyYearEntry('${escapeHtml(entry.id)}',1)" title="下へ">↓</button>
+          <button id="iftyYearCollapseBtn_${escapeHtml(entry.id)}" class="ifty-year-collapse" type="button" aria-expanded="${collapsed ? 'false' : 'true'}" onclick="toggleIftyYearEntryCollapse('${escapeHtml(entry.id)}')">${collapsed ? '▼ 展開' : '▲ 折りたたむ'}</button>
           <button type="button" onclick="regenerateIftyYearEntry('${escapeHtml(entry.id)}')" style="background:#f59e0b;color:#111827;">再生成</button>
           <button type="button" onclick="deleteIftyYearEntry('${escapeHtml(entry.id)}')" style="background:#ef4444;color:white;">削除</button>
         </div>
@@ -1654,15 +1689,9 @@ function renderIftyYearEntryCard(entry) {
         <div class="ifty-year-events">
           ${exact.length ? exact.map(event => renderIftyYearEventCard(event, false)).join('') : '<div class="ifty-year-event-text">高校範囲で特に重要な同年事項は見つかりませんでした。</div>'}
         </div>
-        ${nearby.length ? `
-          <div class="ifty-year-section-title">前後の重要事項</div>
-          <div class="ifty-year-events">${nearby.map(event => renderIftyYearEventCard(event, true)).join('')}</div>
-        ` : ''}
+        ${nearby.length ? `<div class="ifty-year-section-title">前後の重要事項</div><div class="ifty-year-events">${nearby.map(event => renderIftyYearEventCard(event, true)).join('')}</div>` : ''}
         <div class="ifty-year-mnemonic">
-          <div class="ifty-year-mnemonic-head">
-            <span>語呂合わせ</span>
-            <button class="ifty-year-mnemonic-edit" type="button" onclick="editIftyYearMnemonic('${escapeHtml(entry.id)}')">編集</button>
-          </div>
+          <div class="ifty-year-mnemonic-head"><span>語呂合わせ</span><button class="ifty-year-mnemonic-edit" type="button" onclick="editIftyYearMnemonic('${escapeHtml(entry.id)}')">編集</button></div>
           <div class="ifty-year-mnemonic-text">${entry.mnemonic ? escapeHtml(entry.mnemonic) : 'まだ語呂合わせはありません。編集から自分で追加できます。'}</div>
         </div>
         ${entry.note ? `<div class="ifty-year-note">${escapeHtml(entry.note)}</div>` : ''}
@@ -1672,15 +1701,11 @@ function renderIftyYearEntryCard(entry) {
 
 window.toggleIftyYearEntryCollapse = function(entryId) {
   const id = String(entryId || '');
-  if (!id) return;
-
   const body = document.getElementById(`iftyYearBody_${id}`);
   const button = document.getElementById(`iftyYearCollapseBtn_${id}`);
   if (!body || !button) return;
-
   const willCollapse = !body.hidden;
   body.hidden = willCollapse;
-
   if (willCollapse) {
     iftyCollapsedYearEntryIds.add(id);
     button.textContent = '▼ 展開';
@@ -1692,42 +1717,155 @@ window.toggleIftyYearEntryCollapse = function(entryId) {
   }
 };
 
+function refreshIftyYearFolderSelect() {
+  const select = document.getElementById('iftyYearFolderSelect');
+  if (!select) return;
+  const folders = getIftySortedYearFolders();
+  if (!getIftyYearFolderById(iftyYearActiveFolderId)) iftyYearActiveFolderId = getIftyYearDefaultFolderId();
+  select.innerHTML = folders.map(folder => `<option value="${escapeHtml(folder.id)}" ${String(folder.id) === String(iftyYearActiveFolderId) ? 'selected' : ''}>${escapeHtml(folder.name)}</option>`).join('');
+}
+
 function renderIftyYearEntries() {
   const root = document.getElementById('iftyYearList');
   if (!root) return;
-  const entries = [...getIftyYearEntries()].sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
-  root.innerHTML = entries.length
-    ? entries.map(renderIftyYearEntryCard).join('')
-    : '<div class="ifty-settings-note">まだ年号はありません。上に数字を入力すると、その年と前後の重要事項をALLIAが整理します。</div>';
+  const folders = getIftySortedYearFolders();
+  root.innerHTML = folders.map((folder, folderIndex) => {
+    const entries = getIftyYearEntriesForFolder(folder.id);
+    return `<section class="ifty-year-folder">
+      <div class="ifty-year-folder-head">
+        <button type="button" onclick="toggleIftyYearFolder('${escapeHtml(folder.id)}')" style="border:none;background:transparent;padding:0;cursor:pointer;text-align:left;">
+          <span class="ifty-year-folder-title">${folder.collapsed ? '▶' : '▼'} 📁 ${escapeHtml(folder.name)} (${entries.length}件)</span>
+        </button>
+        <div class="ifty-year-folder-actions">
+          <button type="button" ${folderIndex <= 0 ? 'disabled' : ''} onclick="moveIftyYearFolder('${escapeHtml(folder.id)}',-1)" style="background:#e2e8f0;color:#334155;">↑</button>
+          <button type="button" ${folderIndex >= folders.length - 1 ? 'disabled' : ''} onclick="moveIftyYearFolder('${escapeHtml(folder.id)}',1)" style="background:#e2e8f0;color:#334155;">↓</button>
+          <button type="button" onclick="renameIftyYearFolder('${escapeHtml(folder.id)}')" style="background:#f59e0b;color:#111827;">名前変更</button>
+          <button type="button" onclick="deleteIftyYearFolder('${escapeHtml(folder.id)}')" style="background:#ef4444;color:white;">削除</button>
+        </div>
+      </div>
+      ${folder.collapsed ? '' : `<div class="ifty-year-list">${entries.length ? entries.map((entry, index) => renderIftyYearEntryCard(entry, index, entries.length)).join('') : '<div class="ifty-settings-note">このフォルダにはまだ年号がありません。</div>'}</div>`}
+    </section>`;
+  }).join('');
+  refreshIftyYearFolderSelect();
 }
+
+window.createIftyYearFolder = function() {
+  const name = prompt('YEARSの新しいフォルダ名', '新しいフォルダ');
+  if (name === null) return;
+  const trimmed = String(name).trim();
+  if (!trimmed) return;
+  recordUndoState('YEARSフォルダ作成');
+  const folders = getIftyYearFolders();
+  const folder = normalizeIftyCollectionFolder({ id: makeId('yearfolder'), name: trimmed, order: folders.length, collapsed: false }, 'yearfolder', '未分類', folders.length);
+  folders.push(folder);
+  iftyYearActiveFolderId = folder.id;
+  savePracticeData();
+  renderIftyYearEntries();
+};
+
+window.renameIftyYearFolder = function(folderId) {
+  const folder = getIftyYearFolderById(folderId);
+  if (!folder) return;
+  const next = prompt('フォルダ名を変更', folder.name);
+  if (next === null || !String(next).trim()) return;
+  recordUndoState('YEARSフォルダ名変更');
+  folder.name = String(next).trim();
+  savePracticeData();
+  renderIftyYearEntries();
+};
+
+window.toggleIftyYearFolder = function(folderId) {
+  const folder = getIftyYearFolderById(folderId);
+  if (!folder) return;
+  folder.collapsed = !folder.collapsed;
+  savePracticeData();
+  renderIftyYearEntries();
+};
+
+window.moveIftyYearFolder = function(folderId, direction) {
+  const folders = getIftySortedYearFolders();
+  const index = folders.findIndex(folder => String(folder.id) === String(folderId));
+  const nextIndex = index + Number(direction || 0);
+  if (index < 0 || nextIndex < 0 || nextIndex >= folders.length) return;
+  recordUndoState('YEARSフォルダ並べ替え');
+  [folders[index], folders[nextIndex]] = [folders[nextIndex], folders[index]];
+  folders.forEach((folder, idx) => { folder.order = idx; });
+  savePracticeData();
+  renderIftyYearEntries();
+};
+
+window.deleteIftyYearFolder = function(folderId) {
+  const folders = getIftySortedYearFolders();
+  const folder = folders.find(row => String(row.id) === String(folderId));
+  if (!folder) return;
+  if (folders.length <= 1) {
+    alert('YEARSには最低1つのフォルダが必要です。');
+    return;
+  }
+  const entries = getIftyYearEntriesForFolder(folderId);
+  const target = folders.find(row => String(row.id) !== String(folderId));
+  const message = entries.length
+    ? `「${folder.name}」を削除しますか？ 中の${entries.length}件は「${target.name}」へ移動します。`
+    : `「${folder.name}」を削除しますか？`;
+  if (!confirm(message)) return;
+  recordUndoState('YEARSフォルダ削除');
+  const baseOrder = getIftyNextYearOrder(target.id);
+  entries.forEach((entry, index) => {
+    entry.folderId = target.id;
+    entry.order = baseOrder + index;
+  });
+  const raw = getIftyYearFolders();
+  const rawIndex = raw.findIndex(row => String(row.id) === String(folderId));
+  if (rawIndex >= 0) raw.splice(rawIndex, 1);
+  iftyYearActiveFolderId = target.id;
+  savePracticeData();
+  renderIftyYearEntries();
+};
+
+window.moveIftyYearEntry = function(entryId, direction) {
+  const entry = getIftyYearEntries().find(row => String(row.id) === String(entryId));
+  if (!entry) return;
+  const rows = getIftyYearEntriesForFolder(entry.folderId);
+  const index = rows.findIndex(row => String(row.id) === String(entryId));
+  const nextIndex = index + Number(direction || 0);
+  if (index < 0 || nextIndex < 0 || nextIndex >= rows.length) return;
+  recordUndoState('YEARS年号並べ替え');
+  [rows[index], rows[nextIndex]] = [rows[nextIndex], rows[index]];
+  rows.forEach((row, idx) => { row.order = idx; });
+  savePracticeData();
+  renderIftyYearEntries();
+};
 
 window.openIftyYears = function() {
   ensureIftyYearsStyles();
+  normalizePracticeData();
+  if (!getIftyYearFolderById(iftyYearActiveFolderId)) iftyYearActiveFolderId = getIftyYearDefaultFolderId();
   const count = countIftyYearEntries();
   showIftyHubContent(`
     <section class="ifty-portal-shell">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
         <div>
           <h1 class="ifty-portal-title">YEARS</h1>
-          <div class="ifty-portal-subtitle">数字から年号を調べ、その年と前後の高校範囲で重要な出来事を覚えるためのページです。SOCIAL STUDIESのフォルダとは別に保存します。</div>
+          <div class="ifty-portal-subtitle">年号をフォルダで整理できます。フォルダと年号は↑↓で並べ替えられます。</div>
         </div>
         <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
       </div>
 
       <form class="ifty-years-form" onsubmit="event.preventDefault(); lookupIftyYear();">
         <div class="ifty-years-form-row">
-          <select id="iftyYearEra" aria-label="年代">
-            <option value="CE">西暦</option>
-            <option value="BCE">紀元前</option>
-          </select>
+          <select id="iftyYearEra" aria-label="年代"><option value="CE">西暦</option><option value="BCE">紀元前</option></select>
           <input id="iftyYearInput" type="text" inputmode="numeric" autocomplete="off" placeholder="例：1600" aria-label="年号">
+          <select id="iftyYearFolderSelect" aria-label="保存先フォルダ" onchange="iftyYearActiveFolderId=this.value;"></select>
           <button id="iftyYearLookupBtn" class="ifty-years-primary" type="submit">ALLIAで調べる</button>
         </div>
-        <div id="iftyYearStatus" class="ifty-years-status">例：1600 → 関ヶ原の戦い。紀元前は左の選択か「-221」「紀元前221」でも入力できます。</div>
+        <div id="iftyYearStatus" class="ifty-years-status">Enterで連続入力できます。保存先フォルダも選べます。</div>
       </form>
 
-      <div style="margin-top:14px;font-weight:900;color:#475569;">保存済み ${count}件</div>
-      <div id="iftyYearList" class="ifty-year-list"></div>
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px;">
+        <div style="font-weight:900;color:#475569;">保存済み ${count}件</div>
+        <button class="ifty-settings-action" type="button" onclick="createIftyYearFolder()" style="background:#b45309;color:white;">＋ フォルダ</button>
+      </div>
+      <div id="iftyYearList" class="ifty-year-folder-list"></div>
     </section>
   `, 'years');
   renderIftyYearEntries();
@@ -1738,24 +1876,19 @@ async function requestIftyYearLookup(era, year) {
   const response = await fetch(WORKER_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      type: 'year_lookup',
-      era,
-      year,
-      subject: 'SOCIAL STUDIES',
-      order: getIftySubjectOrder('SOCIAL STUDIES')
-    })
+    body: JSON.stringify({ type: 'year_lookup', era, year, subject: 'SOCIAL STUDIES', order: getIftySubjectOrder('SOCIAL STUDIES') })
   });
   const data = await response.json();
   if (!response.ok) throw alliaHttpError(response, data, '年号データの生成に失敗しました。');
   return data;
 }
 
-window.lookupIftyYear = async function(forcedEra = '', forcedYear = null) {
+window.lookupIftyYear = async function(forcedEra = '', forcedYear = null, forcedFolderId = '') {
   if (!ensureIftyOnline('年号検索')) return;
 
   const input = document.getElementById('iftyYearInput');
   const eraSelect = document.getElementById('iftyYearEra');
+  const folderSelect = document.getElementById('iftyYearFolderSelect');
   let parsed = null;
   if (forcedYear !== null && forcedYear !== undefined) {
     const y = Math.max(1, Math.abs(Number(forcedYear) || 0));
@@ -1771,10 +1904,12 @@ window.lookupIftyYear = async function(forcedEra = '', forcedYear = null) {
     return;
   }
 
+  let folderId = String(forcedFolderId || folderSelect?.value || iftyYearActiveFolderId || getIftyYearDefaultFolderId());
+  if (!getIftyYearFolderById(folderId)) folderId = getIftyYearDefaultFolderId();
+  iftyYearActiveFolderId = folderId;
+
   const status = document.getElementById('iftyYearStatus');
   const requestLabel = formatIftyYearLabel(parsed.era, parsed.year);
-
-  // 通常入力は送信した瞬間に空にし、ALLIAの応答を待たず次の年号を入力できるようにする。
   if (forcedYear === null || forcedYear === undefined) {
     if (input) input.value = '';
     input?.focus({ preventScroll: true });
@@ -1786,16 +1921,17 @@ window.lookupIftyYear = async function(forcedEra = '', forcedYear = null) {
   try {
     const data = await requestIftyYearLookup(parsed.era, parsed.year);
     const entries = getIftyYearEntries();
-    const existingIndex = entries.findIndex(entry => normalizeIftyYearEra(entry.era) === parsed.era && Number(entry.year) === parsed.year);
+    const existingIndex = entries.findIndex(entry => String(entry.folderId || '') === folderId && normalizeIftyYearEra(entry.era) === parsed.era && Number(entry.year) === parsed.year);
     const existing = existingIndex >= 0 ? entries[existingIndex] : null;
     recordUndoState(existing ? '年号データ更新' : '年号データ追加');
     const normalized = normalizeIftyYearEntry({
       ...data,
       id: existing?.id || makeId('yearentry'),
+      folderId,
+      order: existing?.order ?? getIftyNextYearOrder(folderId),
       era: parsed.era,
       year: parsed.year,
       yearLabel: data.yearLabel || requestLabel,
-      // 自分で編集済みの語呂合わせは、通常の再検索では保持する。
       mnemonic: existing?.mnemonic || data.mnemonic || '',
       source: 'ALLIA',
       createdAt: existing?.createdAt || Date.now(),
@@ -1804,13 +1940,10 @@ window.lookupIftyYear = async function(forcedEra = '', forcedYear = null) {
     if (existingIndex >= 0) entries.splice(existingIndex, 1, normalized);
     else entries.push(normalized);
     savePracticeData();
-
     renderIftyYearEntries();
     if (status) {
       const remaining = Math.max(0, iftyYearLookupPending - 1);
-      status.textContent = remaining
-        ? `${normalized.yearLabel}を保存しました。ほか ${remaining}件を生成中…`
-        : `${normalized.yearLabel}を保存しました。続けて別の数字を入力できます。`;
+      status.textContent = remaining ? `${normalized.yearLabel}を保存しました。ほか ${remaining}件を生成中…` : `${normalized.yearLabel}を保存しました。続けて別の数字を入力できます。`;
     }
     setTimeout(() => input?.focus({ preventScroll: true }), 0);
   } catch (error) {
@@ -1818,26 +1951,25 @@ window.lookupIftyYear = async function(forcedEra = '', forcedYear = null) {
     if (status) status.textContent = `${requestLabel}: ${String(error.message || error)}`;
   } finally {
     iftyYearLookupPending = Math.max(0, iftyYearLookupPending - 1);
-    const currentStatus = document.getElementById('iftyYearStatus');
-    if (currentStatus && iftyYearLookupPending > 0 && !/生成中/.test(currentStatus.textContent || '')) {
-      currentStatus.textContent += `（生成中 ${iftyYearLookupPending}件）`;
-    }
   }
 };
 
 window.regenerateIftyYearEntry = function(entryId) {
-  const entry = getIftyYearEntries().find(item => item.id === entryId);
+  const entry = getIftyYearEntries().find(item => String(item.id) === String(entryId));
   if (!entry) return;
   const eraSelect = document.getElementById('iftyYearEra');
   const input = document.getElementById('iftyYearInput');
+  const folderSelect = document.getElementById('iftyYearFolderSelect');
   if (eraSelect) eraSelect.value = normalizeIftyYearEra(entry.era);
   if (input) input.value = String(entry.year || '');
-  window.lookupIftyYear(entry.era, entry.year);
+  if (folderSelect) folderSelect.value = entry.folderId;
+  iftyYearActiveFolderId = entry.folderId;
+  window.lookupIftyYear(entry.era, entry.year, entry.folderId);
 };
 
 window.deleteIftyYearEntry = function(entryId) {
   const entries = getIftyYearEntries();
-  const index = entries.findIndex(item => item.id === entryId);
+  const index = entries.findIndex(item => String(item.id) === String(entryId));
   if (index < 0) return;
   const entry = entries[index];
   if (!confirm(`${entry.yearLabel}の年号データを削除しますか？`)) return;
@@ -1848,7 +1980,7 @@ window.deleteIftyYearEntry = function(entryId) {
 };
 
 window.editIftyYearMnemonic = function(entryId) {
-  const entry = getIftyYearEntries().find(item => item.id === entryId);
+  const entry = getIftyYearEntries().find(item => String(item.id) === String(entryId));
   if (!entry) return;
   const next = prompt(`${entry.yearLabel}の語呂合わせを編集`, entry.mnemonic || '');
   if (next === null) return;
@@ -6964,9 +7096,9 @@ window.speakIftyExampleByKey = function(key) {
 
 
 // ==========================================
-// Q3 STEP25：BASIC SENTENCES
-// ALLIAを呼ばず、自作英文とEXAMPLE BANK由来の英文を保存・検索・音読・反復学習する。
-// practiceData.modules.basicSentences に保存するため、既存のクラウド同期・バックアップ対象に自動で含まれる。
+// Q3 STEP25 / STEP41：BASIC SENTENCES
+// ALLIAを呼ばず、自作英文とEXAMPLE BANK由来の英文をフォルダ単位で保存・整理する。
+// practiceData.modules.basicSentences に保存するため、既存クラウド同期・バックアップ対象に自動で含まれる。
 // ==========================================
 function normalizeIftyBasicSentenceStudy(study) {
   const source = study && typeof study === 'object' ? study : {};
@@ -6977,9 +7109,7 @@ function normalizeIftyBasicSentenceStudy(study) {
     const attempts = Math.max(0, Math.trunc(Number(row.attempts) || 0));
     const correct = Math.max(0, Math.trunc(Number(row.correct) || 0));
     const wrong = Math.max(0, Math.trunc(Number(row.wrong) || 0));
-    if (attempts > 0 || correct > 0 || wrong > 0) {
-      normalizedDaily[String(key)] = { attempts, correct, wrong };
-    }
+    if (attempts > 0 || correct > 0 || wrong > 0) normalizedDaily[String(key)] = { attempts, correct, wrong };
   });
   return {
     total: Math.max(0, Math.trunc(Number(source.total) || 0)),
@@ -7002,6 +7132,8 @@ function normalizeIftyBasicSentenceItem(item) {
   return {
     ...item,
     id: String(item.id || makeId('basic_sentence')),
+    folderId: String(item.folderId || ''),
+    order: Number.isFinite(Number(item.order)) ? Number(item.order) : null,
     en,
     ja,
     note,
@@ -7012,9 +7144,38 @@ function normalizeIftyBasicSentenceItem(item) {
   };
 }
 
+function getIftyBasicSentenceFolders() {
+  const module = practiceData && practiceData.modules && practiceData.modules.basicSentences;
+  return module && Array.isArray(module.folders) ? module.folders : [];
+}
+
+function getIftySortedBasicSentenceFolders() {
+  return getIftyBasicSentenceFolders().slice().sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+}
+
+function getIftyBasicSentenceFolderById(folderId) {
+  return getIftyBasicSentenceFolders().find(folder => String(folder.id) === String(folderId)) || null;
+}
+
+function getIftyBasicSentenceDefaultFolderId() {
+  const folder = getIftySortedBasicSentenceFolders()[0];
+  return folder ? String(folder.id) : '';
+}
+
 function getIftyBasicSentenceItems() {
   const module = practiceData && practiceData.modules && practiceData.modules.basicSentences;
   return module && Array.isArray(module.items) ? module.items : [];
+}
+
+function getIftyBasicSentenceItemsForFolder(folderId) {
+  return getIftyBasicSentenceItems()
+    .filter(item => String(item.folderId || '') === String(folderId || ''))
+    .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+}
+
+function getIftyNextBasicSentenceOrder(folderId) {
+  const rows = getIftyBasicSentenceItemsForFolder(folderId);
+  return rows.length ? Math.max(...rows.map(row => Number(row.order || 0))) + 1 : 0;
 }
 
 function countIftyBasicSentences() {
@@ -7026,15 +7187,7 @@ function findIftyBasicSentenceById(id) {
 }
 
 function normalizeIftyBasicSentenceText(value) {
-  return String(value || '')
-    .normalize('NFKC')
-    .replace(/[’‘]/g, "'")
-    .replace(/[“”]/g, '"')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/[.!?。！？]+$/g, '')
-    .trim();
+  return String(value || '').normalize('NFKC').replace(/[’‘]/g, "'").replace(/[“”]/g, '"').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.!?。！？]+$/g, '').trim();
 }
 
 function isIftyBasicSentenceDuplicate(en, ja = '') {
@@ -7053,33 +7206,11 @@ function getIftyFilteredBasicSentences() {
   const query = normalizeIftyVocabSearchText(iftyBasicSentenceSearchQuery);
   const items = getIftyBasicSentenceItems();
   if (!query) return items.slice();
-  return items.filter(item => normalizeIftyVocabSearchText([
-    item.en || '',
-    item.ja || '',
-    item.note || ''
-  ].join(' ')).includes(query));
+  return items.filter(item => normalizeIftyVocabSearchText([item.en || '', item.ja || '', item.note || ''].join(' ')).includes(query));
 }
 
 function getIftyBasicSentenceStats() {
-  const today = getIftyLocalDateKey();
-  let attempts = 0;
-  let correct = 0;
-  let studied = 0;
-  getIftyBasicSentenceItems().forEach(item => {
-    const study = normalizeIftyBasicSentenceStudy(item.study);
-    const row = study.daily[today];
-    if (!row || !row.attempts) return;
-    studied += 1;
-    attempts += row.attempts;
-    correct += row.correct;
-  });
-  return {
-    total: countIftyBasicSentences(),
-    studiedToday: studied,
-    attemptsToday: attempts,
-    correctToday: correct,
-    accuracyToday: attempts ? Math.round(correct / attempts * 100) : 0
-  };
+  return { total: countIftyBasicSentences() };
 }
 
 function recordIftyBasicSentenceStudy(sentenceId, correct) {
@@ -7091,12 +7222,10 @@ function recordIftyBasicSentenceStudy(sentenceId, correct) {
   if (!study.firstStudiedAt) study.firstStudiedAt = now;
   study.lastStudiedAt = now;
   study.total += 1;
-  if (correct) study.correct += 1;
-  else study.wrong += 1;
+  if (correct) study.correct += 1; else study.wrong += 1;
   if (!study.daily[dayKey]) study.daily[dayKey] = { attempts: 0, correct: 0, wrong: 0 };
   study.daily[dayKey].attempts += 1;
-  if (correct) study.daily[dayKey].correct += 1;
-  else study.daily[dayKey].wrong += 1;
+  if (correct) study.daily[dayKey].correct += 1; else study.daily[dayKey].wrong += 1;
   item.study = study;
   item.updatedAt = Math.max(Number(item.updatedAt) || 0, now);
   savePracticeData();
@@ -7109,9 +7238,7 @@ function ensureIftyBasicSentenceModal() {
     modal = document.createElement('div');
     modal.id = 'iftyBasicSentenceModal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.72);display:none;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;z-index:10080;';
-    modal.addEventListener('click', event => {
-      if (event.target === modal) window.closeIftyBasicSentenceEditor();
-    });
+    modal.addEventListener('click', event => { if (event.target === modal) window.closeIftyBasicSentenceEditor(); });
     document.body.appendChild(modal);
   }
   modal.style.display = 'flex';
@@ -7127,25 +7254,27 @@ window.closeIftyBasicSentenceEditor = function() {
   if (shouldRefresh) window.openIftyBasicSentences();
 };
 
-window.openIftyBasicSentenceEditor = function(sentenceId = '') {
+window.openIftyBasicSentenceEditor = function(sentenceId = '', preferredFolderId = '') {
+  normalizePracticeData();
   const item = sentenceId ? findIftyBasicSentenceById(sentenceId) : null;
+  let folderId = String(item?.folderId || preferredFolderId || iftyBasicSentenceActiveFolderId || getIftyBasicSentenceDefaultFolderId());
+  if (!getIftyBasicSentenceFolderById(folderId)) folderId = getIftyBasicSentenceDefaultFolderId();
+  iftyBasicSentenceActiveFolderId = folderId;
   const modal = ensureIftyBasicSentenceModal();
   modal.dataset.sentenceId = item ? String(item.id) : '';
   modal.dataset.savedDuringSession = '0';
+  const folderOptions = getIftySortedBasicSentenceFolders().map(folder => `<option value="${escapeHtml(folder.id)}" ${String(folder.id) === folderId ? 'selected' : ''}>${escapeHtml(folder.name)}</option>`).join('');
   modal.innerHTML = `
     <div style="width:min(94vw,700px);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:20px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
       <button type="button" onclick="closeIftyBasicSentenceEditor()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
       <h2 style="margin:0;padding-right:46px;color:#065f46;">${item ? 'BASIC SENTENCEを編集' : 'BASIC SENTENCEを追加'}</h2>
       <div style="margin-top:15px;display:grid;gap:11px;">
-        <label style="display:grid;gap:5px;font-weight:800;color:#334155;">英文
-          <textarea id="iftyBasicSentenceEn" rows="3" placeholder="English sentence" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.en : '')}</textarea>
+        <label style="display:grid;gap:5px;font-weight:800;color:#334155;">保存先フォルダ
+          <select id="iftyBasicSentenceFolder" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;background:white;">${folderOptions}</select>
         </label>
-        <label style="display:grid;gap:5px;font-weight:800;color:#334155;">和訳
-          <textarea id="iftyBasicSentenceJa" rows="3" placeholder="日本語訳" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.ja : '')}</textarea>
-        </label>
-        <label style="display:grid;gap:5px;font-weight:800;color:#334155;">メモ
-          <textarea id="iftyBasicSentenceNote" rows="2" placeholder="文法・語法・覚え方など（任意）" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.note : '')}</textarea>
-        </label>
+        <label style="display:grid;gap:5px;font-weight:800;color:#334155;">英文<textarea id="iftyBasicSentenceEn" rows="3" placeholder="English sentence" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.en : '')}</textarea></label>
+        <label style="display:grid;gap:5px;font-weight:800;color:#334155;">和訳<textarea id="iftyBasicSentenceJa" rows="3" placeholder="日本語訳" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.ja : '')}</textarea></label>
+        <label style="display:grid;gap:5px;font-weight:800;color:#334155;">メモ<textarea id="iftyBasicSentenceNote" rows="2" placeholder="文法・語法・覚え方など（任意）" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.note : '')}</textarea></label>
       </div>
       <div id="iftyBasicSentenceSaveStatus" style="min-height:1.2em;margin-top:10px;color:#047857;font-size:.8em;font-weight:800;"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;position:sticky;bottom:-20px;background:white;padding:14px 0 2px;margin-top:4px;border-top:1px solid #e2e8f0;">
@@ -7170,6 +7299,8 @@ window.saveIftyBasicSentenceEditor = function() {
   const en = String(document.getElementById('iftyBasicSentenceEn')?.value || '').trim();
   const ja = String(document.getElementById('iftyBasicSentenceJa')?.value || '').trim();
   const note = String(document.getElementById('iftyBasicSentenceNote')?.value || '').trim();
+  let folderId = String(document.getElementById('iftyBasicSentenceFolder')?.value || getIftyBasicSentenceDefaultFolderId());
+  if (!getIftyBasicSentenceFolderById(folderId)) folderId = getIftyBasicSentenceDefaultFolderId();
   if (!en) {
     alert('英文を入力してください。');
     document.getElementById('iftyBasicSentenceEn')?.focus();
@@ -7184,22 +7315,20 @@ window.saveIftyBasicSentenceEditor = function() {
   recordUndoState(current ? 'BASIC SENTENCE編集' : 'BASIC SENTENCE追加');
   const now = Date.now();
   if (current) {
+    const moved = String(current.folderId || '') !== folderId;
     current.en = en;
     current.ja = ja;
     current.note = note;
+    current.folderId = folderId;
+    if (moved) current.order = getIftyNextBasicSentenceOrder(folderId);
     current.updatedAt = now;
   } else {
     getIftyBasicSentenceItems().push(normalizeIftyBasicSentenceItem({
-      id: makeId('basic_sentence'),
-      en,
-      ja,
-      note,
-      source: { type: 'manual' },
-      createdAt: now,
-      updatedAt: now,
-      study: {}
+      id: makeId('basic_sentence'), folderId, order: getIftyNextBasicSentenceOrder(folderId), en, ja, note,
+      source: { type: 'manual' }, createdAt: now, updatedAt: now, study: {}
     }));
   }
+  iftyBasicSentenceActiveFolderId = folderId;
   savePracticeData();
   modal.dataset.savedDuringSession = '1';
 
@@ -7229,7 +7358,7 @@ window.deleteIftyBasicSentence = function(sentenceId) {
   recordUndoState('BASIC SENTENCE削除');
   items.splice(index, 1);
   savePracticeData();
-  window.openIftyBasicSentences();
+  renderIftyBasicSentenceList();
 };
 
 window.speakIftyBasicSentence = function(sentenceId) {
@@ -7250,59 +7379,152 @@ window.clearIftyBasicSentenceSearch = function() {
   renderIftyBasicSentenceList();
 };
 
+window.createIftyBasicSentenceFolder = function() {
+  const name = prompt('BASIC SENTENCESの新しいフォルダ名', '新しいフォルダ');
+  if (name === null || !String(name).trim()) return;
+  recordUndoState('BASIC SENTENCEフォルダ作成');
+  const folders = getIftyBasicSentenceFolders();
+  const folder = normalizeIftyCollectionFolder({ id: makeId('basicsentencefolder'), name: String(name).trim(), order: folders.length, collapsed: false }, 'basicsentencefolder', '未分類', folders.length);
+  folders.push(folder);
+  iftyBasicSentenceActiveFolderId = folder.id;
+  savePracticeData();
+  renderIftyBasicSentenceList();
+};
+
+window.renameIftyBasicSentenceFolder = function(folderId) {
+  const folder = getIftyBasicSentenceFolderById(folderId);
+  if (!folder) return;
+  const next = prompt('フォルダ名を変更', folder.name);
+  if (next === null || !String(next).trim()) return;
+  recordUndoState('BASIC SENTENCEフォルダ名変更');
+  folder.name = String(next).trim();
+  savePracticeData();
+  renderIftyBasicSentenceList();
+};
+
+window.toggleIftyBasicSentenceFolder = function(folderId) {
+  const folder = getIftyBasicSentenceFolderById(folderId);
+  if (!folder) return;
+  folder.collapsed = !folder.collapsed;
+  savePracticeData();
+  renderIftyBasicSentenceList();
+};
+
+window.moveIftyBasicSentenceFolder = function(folderId, direction) {
+  const folders = getIftySortedBasicSentenceFolders();
+  const index = folders.findIndex(folder => String(folder.id) === String(folderId));
+  const nextIndex = index + Number(direction || 0);
+  if (index < 0 || nextIndex < 0 || nextIndex >= folders.length) return;
+  recordUndoState('BASIC SENTENCEフォルダ並べ替え');
+  [folders[index], folders[nextIndex]] = [folders[nextIndex], folders[index]];
+  folders.forEach((folder, idx) => { folder.order = idx; });
+  savePracticeData();
+  renderIftyBasicSentenceList();
+};
+
+window.deleteIftyBasicSentenceFolder = function(folderId) {
+  const folders = getIftySortedBasicSentenceFolders();
+  const folder = folders.find(row => String(row.id) === String(folderId));
+  if (!folder) return;
+  if (folders.length <= 1) {
+    alert('BASIC SENTENCESには最低1つのフォルダが必要です。');
+    return;
+  }
+  const items = getIftyBasicSentenceItemsForFolder(folderId);
+  const target = folders.find(row => String(row.id) !== String(folderId));
+  const message = items.length ? `「${folder.name}」を削除しますか？ 中の${items.length}件は「${target.name}」へ移動します。` : `「${folder.name}」を削除しますか？`;
+  if (!confirm(message)) return;
+  recordUndoState('BASIC SENTENCEフォルダ削除');
+  let baseOrder = getIftyNextBasicSentenceOrder(target.id);
+  items.forEach((item, index) => { item.folderId = target.id; item.order = baseOrder + index; });
+  const raw = getIftyBasicSentenceFolders();
+  const rawIndex = raw.findIndex(row => String(row.id) === String(folderId));
+  if (rawIndex >= 0) raw.splice(rawIndex, 1);
+  iftyBasicSentenceActiveFolderId = target.id;
+  savePracticeData();
+  renderIftyBasicSentenceList();
+};
+
+window.moveIftyBasicSentence = function(sentenceId, direction) {
+  const item = findIftyBasicSentenceById(sentenceId);
+  if (!item) return;
+  const rows = getIftyBasicSentenceItemsForFolder(item.folderId);
+  const index = rows.findIndex(row => String(row.id) === String(sentenceId));
+  const nextIndex = index + Number(direction || 0);
+  if (index < 0 || nextIndex < 0 || nextIndex >= rows.length) return;
+  recordUndoState('BASIC SENTENCE並べ替え');
+  [rows[index], rows[nextIndex]] = [rows[nextIndex], rows[index]];
+  rows.forEach((row, idx) => { row.order = idx; });
+  savePracticeData();
+  renderIftyBasicSentenceList();
+};
+
+function renderIftyBasicSentenceCard(item, index, total) {
+  const study = normalizeIftyBasicSentenceStudy(item.study);
+  const accuracy = study.total ? Math.round(study.correct / study.total * 100) : null;
+  const sourceLabel = item.source && item.source.type === 'example_bank' ? 'EXAMPLE BANK' : 'MANUAL';
+  return `<div style="border:1px solid #d1fae5;border-radius:10px;padding:12px;background:white;">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+      <div style="min-width:0;flex:1;">
+        <div style="font-size:1em;font-weight:900;line-height:1.6;color:#064e3b;">${escapeHtml(item.en)}</div>
+        ${item.ja ? `<div style="margin-top:5px;color:#475569;line-height:1.55;">${escapeHtml(item.ja)}</div>` : '<div style="margin-top:5px;color:#94a3b8;font-size:.82em;">和訳なし</div>'}
+        ${item.note ? `<div style="margin-top:7px;padding:7px 9px;border-radius:7px;background:#f8fafc;color:#475569;font-size:.82em;line-height:1.5;">${escapeHtml(item.note)}</div>` : ''}
+        <div style="margin-top:7px;font-size:.72em;color:#64748b;">${sourceLabel}${study.total ? ` ・ 学習 ${study.total}回 / 正答率 ${accuracy}%` : ''}</div>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
+        <button type="button" ${index <= 0 ? 'disabled' : ''} onclick="moveIftyBasicSentence('${escapeHtml(String(item.id))}',-1)" title="上へ" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 9px;cursor:pointer;">↑</button>
+        <button type="button" ${index >= total - 1 ? 'disabled' : ''} onclick="moveIftyBasicSentence('${escapeHtml(String(item.id))}',1)" title="下へ" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 9px;cursor:pointer;">↓</button>
+        <button type="button" onclick="speakIftyBasicSentence('${escapeHtml(String(item.id))}')" title="英文を読む" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">🔊</button>
+        <button type="button" onclick="openIftyBasicSentenceEditor('${escapeHtml(String(item.id))}')" title="編集" style="border:none;background:#64748b;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">✏️</button>
+        <button type="button" onclick="deleteIftyBasicSentence('${escapeHtml(String(item.id))}')" title="削除" style="border:none;background:#dc2626;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">削除</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderIftyBasicSentenceList() {
   const list = document.getElementById('iftyBasicSentenceList');
   const count = document.getElementById('iftyBasicSentenceCount');
   if (!list) return;
-  const items = getIftyFilteredBasicSentences();
+  const filteredIds = new Set(getIftyFilteredBasicSentences().map(item => String(item.id)));
+  const queryActive = !!normalizeIftyVocabSearchText(iftyBasicSentenceSearchQuery);
   const total = countIftyBasicSentences();
-  if (count) count.textContent = normalizeIftyVocabSearchText(iftyBasicSentenceSearchQuery) ? `${items.length} / ${total}件` : `${total}件`;
+  const visibleCount = queryActive ? filteredIds.size : total;
+  if (count) count.textContent = queryActive ? `${visibleCount} / ${total}件` : `${total}件`;
 
-  if (!items.length) {
-    list.innerHTML = `<div class="ifty-settings-note" style="padding:16px 4px;">${total ? '検索条件に一致する英文はありません。' : 'まだ英文がありません。「白紙から追加」またはEXAMPLE BANKから追加できます。'}</div>`;
-    return;
-  }
-
-  list.innerHTML = items.slice(0, 250).map(item => {
-    const study = normalizeIftyBasicSentenceStudy(item.study);
-    const accuracy = study.total ? Math.round(study.correct / study.total * 100) : null;
-    const sourceLabel = item.source && item.source.type === 'example_bank' ? 'EXAMPLE BANK' : 'MANUAL';
-    return `
-      <div style="border:1px solid #d1fae5;border-radius:10px;padding:12px;background:white;">
-        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
-          <div style="min-width:0;flex:1;">
-            <div style="font-size:1em;font-weight:900;line-height:1.6;color:#064e3b;">${escapeHtml(item.en)}</div>
-            ${item.ja ? `<div style="margin-top:5px;color:#475569;line-height:1.55;">${escapeHtml(item.ja)}</div>` : '<div style="margin-top:5px;color:#94a3b8;font-size:.82em;">和訳なし</div>'}
-            ${item.note ? `<div style="margin-top:7px;padding:7px 9px;border-radius:7px;background:#f8fafc;color:#475569;font-size:.82em;line-height:1.5;">${escapeHtml(item.note)}</div>` : ''}
-            <div style="margin-top:7px;font-size:.72em;color:#64748b;">${sourceLabel}　${study.total ? `・ 学習 ${study.total}回 / 正答率 ${accuracy}%` : '・ 未学習'}</div>
-          </div>
-          <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
-            <button type="button" onclick="speakIftyBasicSentence('${escapeHtml(String(item.id))}')" title="英文を読む" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">🔊</button>
-            <button type="button" onclick="openIftyBasicSentenceEditor('${escapeHtml(String(item.id))}')" title="編集" style="border:none;background:#64748b;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">✏️</button>
-            <button type="button" onclick="deleteIftyBasicSentence('${escapeHtml(String(item.id))}')" title="削除" style="border:none;background:#dc2626;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">削除</button>
-          </div>
+  const folders = getIftySortedBasicSentenceFolders();
+  list.innerHTML = folders.map((folder, folderIndex) => {
+    const allRows = getIftyBasicSentenceItemsForFolder(folder.id);
+    const rows = queryActive ? allRows.filter(item => filteredIds.has(String(item.id))) : allRows;
+    if (queryActive && !rows.length) return '';
+    return `<section style="border:1px solid #bbf7d0;border-radius:13px;background:#f7fff9;padding:11px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button type="button" onclick="toggleIftyBasicSentenceFolder('${escapeHtml(folder.id)}')" style="border:none;background:transparent;padding:0;cursor:pointer;text-align:left;font-weight:900;color:#065f46;font-size:1rem;">${folder.collapsed ? '▶' : '▼'} 📁 ${escapeHtml(folder.name)} (${allRows.length}件)</button>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+          <button type="button" ${folderIndex <= 0 ? 'disabled' : ''} onclick="moveIftyBasicSentenceFolder('${escapeHtml(folder.id)}',-1)" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:6px 9px;font-weight:800;">↑</button>
+          <button type="button" ${folderIndex >= folders.length - 1 ? 'disabled' : ''} onclick="moveIftyBasicSentenceFolder('${escapeHtml(folder.id)}',1)" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:6px 9px;font-weight:800;">↓</button>
+          <button type="button" onclick="openIftyBasicSentenceEditor('', '${escapeHtml(folder.id)}')" style="border:none;background:#059669;color:white;border-radius:7px;padding:6px 9px;font-weight:800;">＋追加</button>
+          <button type="button" onclick="renameIftyBasicSentenceFolder('${escapeHtml(folder.id)}')" style="border:none;background:#f59e0b;color:#111827;border-radius:7px;padding:6px 9px;font-weight:800;">名前変更</button>
+          <button type="button" onclick="deleteIftyBasicSentenceFolder('${escapeHtml(folder.id)}')" style="border:none;background:#ef4444;color:white;border-radius:7px;padding:6px 9px;font-weight:800;">削除</button>
         </div>
-      </div>`;
-  }).join('') + (items.length > 250 ? '<div class="ifty-settings-note" style="padding:10px 2px;">表示は先頭250件まで。検索で絞り込めます。</div>' : '');
+      </div>
+      ${folder.collapsed && !queryActive ? '' : `<div style="display:grid;gap:8px;margin-top:10px;">${rows.length ? rows.map((item, index) => renderIftyBasicSentenceCard(item, index, rows.length)).join('') : '<div class="ifty-settings-note">このフォルダにはまだ英文がありません。</div>'}</div>`}
+    </section>`;
+  }).join('') || `<div class="ifty-settings-note" style="padding:16px 4px;">${total ? '検索条件に一致する英文はありません。' : 'まだ英文がありません。'}</div>`;
 }
 
 window.openIftyBasicSentences = function() {
   window.closeIftySideMenu();
+  normalizePracticeData();
+  if (!getIftyBasicSentenceFolderById(iftyBasicSentenceActiveFolderId)) iftyBasicSentenceActiveFolderId = getIftyBasicSentenceDefaultFolderId();
   const stats = getIftyBasicSentenceStats();
   showIftyHubContent(`
     <section class="ifty-portal-shell">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-        <div>
-          <h1 class="ifty-portal-title">BASIC SENTENCES</h1>
-          <div class="ifty-portal-subtitle">覚えたい英文を自分で作るか、EXAMPLE BANKから取り込んで保存・整理します。ALLIAは使用しません。</div>
-        </div>
+        <div><h1 class="ifty-portal-title">BASIC SENTENCES</h1><div class="ifty-portal-subtitle">英文をフォルダで整理できます。フォルダと英文は↑↓で並べ替えられます。</div></div>
         <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
       </div>
-
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;margin-top:15px;">
-        <div class="ifty-settings-section"><div class="ifty-settings-note">登録英文</div><div style="font-size:1.45em;font-weight:900;color:#047857;">${stats.total}</div></div>
-      </div>
-
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;margin-top:15px;"><div class="ifty-settings-section"><div class="ifty-settings-note">登録英文</div><div style="font-size:1.45em;font-weight:900;color:#047857;">${stats.total}</div></div></div>
       <div class="ifty-settings-section">
         <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
           <input id="iftyBasicSentenceSearchInput" value="${escapeHtml(iftyBasicSentenceSearchQuery)}" oninput="setIftyBasicSentenceSearch(this.value)" placeholder="英文・和訳・メモで検索" style="flex:1;min-width:210px;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:.94em;">
@@ -7310,13 +7532,12 @@ window.openIftyBasicSentences = function() {
           <span id="iftyBasicSentenceCount" class="ifty-settings-note">${stats.total}件</span>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
-          <button class="ifty-settings-action" type="button" onclick="openIftyBasicSentenceEditor()" style="background:#059669;color:white;">＋ 白紙から追加</button>
+          <button class="ifty-settings-action" type="button" onclick="openIftyBasicSentenceEditor('', iftyBasicSentenceActiveFolderId)" style="background:#059669;color:white;">＋ 白紙から追加</button>
+          <button class="ifty-settings-action" type="button" onclick="createIftyBasicSentenceFolder()" style="background:#047857;color:white;">＋ フォルダ</button>
           <button class="ifty-settings-action" type="button" onclick="openIftyExampleBank()" style="background:#0f766e;color:white;">📚 EXAMPLE BANK</button>
         </div>
-        <div class="ifty-settings-note" style="margin-top:8px;">英文・和訳・メモで検索できます。「白紙から追加」では保存後も画面を閉じず、続けて次の例文を入力できます。</div>
       </div>
-
-      <div id="iftyBasicSentenceList" style="display:grid;gap:8px;margin-top:12px;"></div>
+      <div id="iftyBasicSentenceList" style="display:grid;gap:10px;margin-top:12px;"></div>
     </section>
   `, 'basic_sentences');
   renderIftyBasicSentenceList();
@@ -7329,22 +7550,16 @@ window.addIftyExampleToBasicSentences = function(key) {
     alert('この例文はすでにBASIC SENTENCESにあります。');
     return;
   }
+  normalizePracticeData();
+  let folderId = String(iftyBasicSentenceActiveFolderId || getIftyBasicSentenceDefaultFolderId());
+  if (!getIftyBasicSentenceFolderById(folderId)) folderId = getIftyBasicSentenceDefaultFolderId();
   recordUndoState('例文をBASIC SENTENCESへ追加');
   const now = Date.now();
   getIftyBasicSentenceItems().push(normalizeIftyBasicSentenceItem({
-    id: makeId('basic_sentence'),
-    en: entry.en,
-    ja: entry.ja,
-    note: entry.word && entry.word.word ? `元単語: ${entry.word.word}` : '',
-    source: {
-      type: 'example_bank',
-      exampleKey: entry.key,
-      wordId: entry.word ? String(entry.word.id || '') : '',
-      folderId: entry.folder ? String(entry.folder.id || '') : ''
-    },
-    createdAt: now,
-    updatedAt: now,
-    study: {}
+    id: makeId('basic_sentence'), folderId, order: getIftyNextBasicSentenceOrder(folderId),
+    en: entry.en, ja: entry.ja, note: entry.word && entry.word.word ? `元単語: ${entry.word.word}` : '',
+    source: { type: 'example_bank', exampleKey: entry.key, wordId: entry.word ? String(entry.word.id || '') : '', folderId: entry.folder ? String(entry.folder.id || '') : '' },
+    createdAt: now, updatedAt: now, study: {}
   }));
   savePracticeData();
   renderIftyExampleBankList();
@@ -7352,33 +7567,22 @@ window.addIftyExampleToBasicSentences = function(key) {
 
 window.addVisibleIftyExamplesToBasicSentences = function() {
   const entries = getIftyExampleEntries(iftyExampleSearchQuery);
-  if (!entries.length) {
-    alert('追加できる例文がありません。');
-    return;
-  }
+  if (!entries.length) { alert('追加できる例文がありません。'); return; }
   const addable = entries.filter(entry => entry.en && !isIftyBasicSentenceDuplicate(entry.en, entry.ja));
-  if (!addable.length) {
-    alert('表示中の例文はすべて追加済みです。');
-    return;
-  }
+  if (!addable.length) { alert('表示中の例文はすべて追加済みです。'); return; }
+  normalizePracticeData();
+  let folderId = String(iftyBasicSentenceActiveFolderId || getIftyBasicSentenceDefaultFolderId());
+  if (!getIftyBasicSentenceFolderById(folderId)) folderId = getIftyBasicSentenceDefaultFolderId();
   recordUndoState('表示中の例文をBASIC SENTENCESへ追加');
   const items = getIftyBasicSentenceItems();
   const now = Date.now();
+  let order = getIftyNextBasicSentenceOrder(folderId);
   addable.forEach((entry, index) => {
     items.push(normalizeIftyBasicSentenceItem({
-      id: makeId('basic_sentence'),
-      en: entry.en,
-      ja: entry.ja,
-      note: entry.word && entry.word.word ? `元単語: ${entry.word.word}` : '',
-      source: {
-        type: 'example_bank',
-        exampleKey: entry.key,
-        wordId: entry.word ? String(entry.word.id || '') : '',
-        folderId: entry.folder ? String(entry.folder.id || '') : ''
-      },
-      createdAt: now + index,
-      updatedAt: now + index,
-      study: {}
+      id: makeId('basic_sentence'), folderId, order: order + index,
+      en: entry.en, ja: entry.ja, note: entry.word && entry.word.word ? `元単語: ${entry.word.word}` : '',
+      source: { type: 'example_bank', exampleKey: entry.key, wordId: entry.word ? String(entry.word.id || '') : '', folderId: entry.folder ? String(entry.folder.id || '') : '' },
+      createdAt: now + index, updatedAt: now + index, study: {}
     }));
   });
   savePracticeData();
@@ -7535,24 +7739,62 @@ function normalizePracticeData() {
   });
 
   if (!practiceData.modules.basicSentences || typeof practiceData.modules.basicSentences !== 'object') {
-    practiceData.modules.basicSentences = { items: [] };
+    practiceData.modules.basicSentences = { items: [], folders: [] };
   }
-  if (!Array.isArray(practiceData.modules.basicSentences.items)) {
-    practiceData.modules.basicSentences.items = [];
+  if (!Array.isArray(practiceData.modules.basicSentences.items)) practiceData.modules.basicSentences.items = [];
+  if (!Array.isArray(practiceData.modules.basicSentences.folders)) practiceData.modules.basicSentences.folders = [];
+  if (!practiceData.modules.basicSentences.folders.length) {
+    practiceData.modules.basicSentences.folders.push(normalizeIftyCollectionFolder({ id: 'basic_sentence_default', name: '未分類', order: 0, collapsed: false }, 'basicsentencefolder', '未分類', 0));
   }
-  practiceData.modules.basicSentences.items = practiceData.modules.basicSentences.items
-    .map(normalizeIftyBasicSentenceItem)
-    .filter(Boolean);
+  practiceData.modules.basicSentences.folders = practiceData.modules.basicSentences.folders
+    .map((folder, index) => normalizeIftyCollectionFolder(folder, 'basicsentencefolder', '未分類', index))
+    .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+  practiceData.modules.basicSentences.folders.forEach((folder, index) => { folder.order = index; });
+  const basicFolderIds = new Set(practiceData.modules.basicSentences.folders.map(folder => String(folder.id)));
+  const basicDefaultFolderId = String(practiceData.modules.basicSentences.folders[0].id);
+  practiceData.modules.basicSentences.items = practiceData.modules.basicSentences.items.map(normalizeIftyBasicSentenceItem).filter(Boolean);
+  practiceData.modules.basicSentences.items.forEach(item => {
+    if (!basicFolderIds.has(String(item.folderId || ''))) item.folderId = basicDefaultFolderId;
+  });
+  practiceData.modules.basicSentences.folders.forEach(folder => {
+    const rows = practiceData.modules.basicSentences.items.filter(item => String(item.folderId) === String(folder.id));
+    rows.sort((a, b) => {
+      const ao = Number.isFinite(Number(a.order)) ? Number(a.order) : Number.MAX_SAFE_INTEGER;
+      const bo = Number.isFinite(Number(b.order)) ? Number(b.order) : Number.MAX_SAFE_INTEGER;
+      if (ao !== bo) return ao - bo;
+      return Number(a.createdAt || 0) - Number(b.createdAt || 0);
+    });
+    rows.forEach((item, index) => { item.order = index; });
+  });
 
   if (!practiceData.modules.years || typeof practiceData.modules.years !== 'object') {
-    practiceData.modules.years = { entries: [] };
+    practiceData.modules.years = { entries: [], folders: [] };
   }
-  if (!Array.isArray(practiceData.modules.years.entries)) {
-    practiceData.modules.years.entries = [];
+  if (!Array.isArray(practiceData.modules.years.entries)) practiceData.modules.years.entries = [];
+  if (!Array.isArray(practiceData.modules.years.folders)) practiceData.modules.years.folders = [];
+  if (!practiceData.modules.years.folders.length) {
+    practiceData.modules.years.folders.push(normalizeIftyCollectionFolder({ id: 'years_default', name: '未分類', order: 0, collapsed: false }, 'yearfolder', '未分類', 0));
   }
-  practiceData.modules.years.entries = practiceData.modules.years.entries
-    .map(normalizeIftyYearEntry)
-    .filter(entry => entry.year >= 1);
+  practiceData.modules.years.folders = practiceData.modules.years.folders
+    .map((folder, index) => normalizeIftyCollectionFolder(folder, 'yearfolder', '未分類', index))
+    .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+  practiceData.modules.years.folders.forEach((folder, index) => { folder.order = index; });
+  const yearFolderIds = new Set(practiceData.modules.years.folders.map(folder => String(folder.id)));
+  const yearDefaultFolderId = String(practiceData.modules.years.folders[0].id);
+  practiceData.modules.years.entries = practiceData.modules.years.entries.map(normalizeIftyYearEntry).filter(entry => entry.year >= 1);
+  practiceData.modules.years.entries.forEach(entry => {
+    if (!yearFolderIds.has(String(entry.folderId || ''))) entry.folderId = yearDefaultFolderId;
+  });
+  practiceData.modules.years.folders.forEach(folder => {
+    const rows = practiceData.modules.years.entries.filter(entry => String(entry.folderId) === String(folder.id));
+    rows.sort((a, b) => {
+      const ao = Number.isFinite(Number(a.order)) ? Number(a.order) : Number.MAX_SAFE_INTEGER;
+      const bo = Number.isFinite(Number(b.order)) ? Number(b.order) : Number.MAX_SAFE_INTEGER;
+      if (ao !== bo) return ao - bo;
+      return Number(a.createdAt || 0) - Number(b.createdAt || 0);
+    });
+    rows.forEach((entry, index) => { entry.order = index; });
+  });
 
   if (!practiceData.modules.socialStudies || typeof practiceData.modules.socialStudies !== 'object') {
     practiceData.modules.socialStudies = { folders: [] };
