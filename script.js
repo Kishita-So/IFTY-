@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP36 2026-09-22：PRACTICE統合・全モーダル外側タップ・ENGLISH編集UI ★★★
+// ★★★ IFTY Q3 STEP37 2026-09-22：PRACTICE統合・全モーダル外側タップ・ENGLISH編集UI ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -9486,6 +9486,49 @@ window.clearSelectedImage = function() {
   if (fileInput) fileInput.value = "";
 };
 
+
+function getIftyAlliaSubjectCapabilities(subject) {
+  const key = normalizeIftySubject(subject);
+  const registry = {
+    ENGLISH: {
+      storage: 'vocabularyFolders',
+      moduleKey: '',
+      folderCollection: 'folders',
+      itemCollection: 'words',
+      itemLabelField: 'word',
+      generator: 'english_word',
+      supportsPractice: true
+    },
+    'SOCIAL STUDIES': {
+      storage: 'practiceModule',
+      moduleKey: 'socialStudies',
+      folderCollection: 'folders',
+      itemCollection: 'items',
+      itemLabelField: 'title',
+      generator: 'social_study',
+      folderDefaults: { subjects: ['WORLD_HISTORY'], collapsed: false },
+      itemSchema: ['title','memoryText','keyPoints','subjects','imageData','imageName','imageKind','imageFocus','workTitle','source','createdAt','updatedAt'],
+      supportsPractice: true
+    },
+    ANCIENT: {
+      storage: 'practiceModule', moduleKey: 'ancient', folderCollection: 'folders', itemCollection: 'items',
+      itemLabelField: 'title', generator: 'generic_study_item', supportsPractice: false
+    },
+    SCIENCE: {
+      storage: 'practiceModule', moduleKey: 'science', folderCollection: 'folders', itemCollection: 'items',
+      itemLabelField: 'title', generator: 'generic_study_item', supportsPractice: false
+    }
+  };
+  // Future subjects only need a registry entry. Worker actions use these declared storage
+  // capabilities rather than hard-coding a subject name.
+  return registry[key] || {
+    storage: 'practiceModule',
+    moduleKey: String(key || 'subject').toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+    folderCollection: 'folders', itemCollection: 'items', itemLabelField: 'title',
+    generator: 'generic_study_item', supportsPractice: false
+  };
+}
+
 window.sendChatMessage = async function() {
   const input = document.getElementById("chatInput");
   if (!input) return;
@@ -9533,11 +9576,12 @@ window.sendChatMessage = async function() {
         history,
         subject: activeSubject,
         order: activeOrder,
-        allowAppEdits: activeSubject === 'ENGLISH',
+        // STEP37: ALLIA ACTION SYSTEM is subject-agnostic.  New subjects can opt in by
+        // registering a module below instead of adding a new chat implementation.
+        allowAppEdits: true,
         currentFolders: activeSubject === 'ENGLISH' ? folders : [],
-        practiceData: activeSubject === 'ENGLISH'
-          ? practiceData
-          : { schemaVersion: 1, modules: { flashcards: { sets: [] }, questions: { sets: [] } } },
+        practiceData,
+        subjectCapabilities: getIftyAlliaSubjectCapabilities(activeSubject),
         practiceCapabilities: {
           schemaVersion: 1,
           note: "ALLIA may edit the entire practiceData object. Future practice modules are stored under practiceData.modules and should be preserved unless explicitly changed by the user. Question type selection is generated and graded locally from other words in the same quiz set and must not require AI.",
@@ -9567,7 +9611,7 @@ window.sendChatMessage = async function() {
         saveUserData();
         renderFolders();
       }
-      if (activeSubject === 'ENGLISH' && data.updatedPracticeData && typeof data.updatedPracticeData === 'object') {
+      if (data.updatedPracticeData && typeof data.updatedPracticeData === 'object') {
         practiceData = data.updatedPracticeData;
         normalizePracticeData();
         savePracticeData();
