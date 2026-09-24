@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP47 2026-09-24：SCIENCE 専用学習・PRACTICE対応 ★★★
+// ★★★ IFTY Q3 STEP48 2026-09-24：SCIENCE 起動修正 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -4315,7 +4315,7 @@ function normalizeIftyScienceItem(value) {
 
 function getIftyScienceModule() {
   normalizePracticeData();
-  return practiceData.modules.scienceStudies;
+  return practiceData.modules.science;
 }
 
 function getIftyScienceFolder(folderId) {
