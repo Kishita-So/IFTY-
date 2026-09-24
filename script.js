@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP43 2026-09-24：FOREIGN LANGUAGES + SOCIAL STUDIES FLASHCARDS ★★★
+// ★★★ IFTY Q3 STEP46 2026-09-24：複数ORDER・ORDERなし切替対応 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -9,13 +9,20 @@ let iftyPortalPage = 'home'; // 'home' | 'subject' | 'settings' | 'vocab' | 'cha
 // Q3 STEP17：教科ごとのORDER / ALLIAコンテキスト
 const IFTY_SUBJECT_KEYS = ['ENGLISH', 'ANCIENT', 'SCIENCE', 'SOCIAL STUDIES'];
 const IFTY_ORDER_STORAGE_PREFIX = 'ifty_subject_orders_';
+const IFTY_ORDER_META_STORAGE_PREFIX = 'ifty_subject_order_meta_';
 const IFTY_ORDER_MAX_CHARS = 12000;
 let currentIftySubject = 'ENGLISH';
 let iftySubjectOrders = {
-  ENGLISH: '',
-  ANCIENT: '',
-  SCIENCE: '',
-  'SOCIAL STUDIES': ''
+  ENGLISH: { activeId: null, orders: [] },
+  ANCIENT: { activeId: null, orders: [] },
+  SCIENCE: { activeId: null, orders: [] },
+  'SOCIAL STUDIES': { activeId: null, orders: [] }
+};
+let iftySubjectOrderUpdatedAt = {
+  ENGLISH: 0,
+  ANCIENT: 0,
+  SCIENCE: 0,
+  'SOCIAL STUDIES': 0
 };
 
 let folders = [];
@@ -673,7 +680,7 @@ function renderIftySideMenu() {
       <button class="ifty-side-menu-item" type="button" onclick="openIftySideMenuHome()">HOME</button>
 
       <div class="ifty-side-menu-label">SUBJECTS</div>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ENGLISH')">FOREIGN LANGUAGES</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ENGLISH')">VOCABULARY</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ANCIENT')">ANCIENT</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SCIENCE')">SCIENCE</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SOCIAL STUDIES')">SOCIAL STUDIES</button>
@@ -740,13 +747,17 @@ window.toggleIftySideMenu = function(event) {
 // ==========================================
 function normalizeIftySubject(subject) {
   const normalized = String(subject || '').trim().toUpperCase();
-  if (normalized === 'FOREIGN LANGUAGES' || normalized === 'FOREIGN LANGUAGE') return 'ENGLISH';
+  if (
+    normalized === 'VOCABULARY' ||
+    normalized === 'FOREIGN LANGUAGES' ||
+    normalized === 'FOREIGN LANGUAGE'
+  ) return 'ENGLISH';
   return IFTY_SUBJECT_KEYS.includes(normalized) ? normalized : 'ENGLISH';
 }
 
 function getIftySubjectDisplayName(subject) {
   const key = normalizeIftySubject(subject);
-  return key === 'ENGLISH' ? 'FOREIGN LANGUAGES' : key;
+  return key === 'ENGLISH' ? 'VOCABULARY' : key;
 }
 
 function normalizeIftyLanguageCode(value) {
@@ -808,13 +819,103 @@ function getIftySpeechLocale(languageCode, languageLabel, text = '') {
   return inferIftyLanguageFromText(text).code === 'ja' ? 'ja-JP' : 'en-US';
 }
 
+function makeEmptyIftyOrderSubjectState() {
+  return { activeId: null, orders: [] };
+}
+
 function makeEmptyIftySubjectOrders() {
   return {
-    ENGLISH: '',
-    ANCIENT: '',
-    SCIENCE: '',
-    'SOCIAL STUDIES': ''
+    ENGLISH: makeEmptyIftyOrderSubjectState(),
+    ANCIENT: makeEmptyIftyOrderSubjectState(),
+    SCIENCE: makeEmptyIftyOrderSubjectState(),
+    'SOCIAL STUDIES': makeEmptyIftyOrderSubjectState()
   };
+}
+
+function makeEmptyIftySubjectOrderMeta() {
+  return {
+    ENGLISH: 0,
+    ANCIENT: 0,
+    SCIENCE: 0,
+    'SOCIAL STUDIES': 0
+  };
+}
+
+function makeIftyLegacyOrderId(subject) {
+  return `legacy_${String(subject || 'subject').toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+}
+
+function normalizeIftyOrderEntry(value, subject, index = 0) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+  const text = String(value.text ?? value.order ?? '').trim().slice(0, IFTY_ORDER_MAX_CHARS);
+  let id = String(value.id || '').trim();
+  if (!id) id = `order_${String(subject || 'subject').toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${index + 1}`;
+
+  let name = String(value.name || '').trim().slice(0, 120);
+  if (!name) name = `ORDER ${index + 1}`;
+
+  const createdAtRaw = Number(value.createdAt || 0);
+  const updatedAtRaw = Number(value.updatedAt || 0);
+
+  return {
+    id,
+    name,
+    text,
+    createdAt: Number.isFinite(createdAtRaw) && createdAtRaw > 0 ? Math.floor(createdAtRaw) : 0,
+    updatedAt: Number.isFinite(updatedAtRaw) && updatedAtRaw > 0 ? Math.floor(updatedAtRaw) : 0
+  };
+}
+
+function normalizeIftyOrderSubjectState(value, subject) {
+  // STEP45以前：教科ごとに1本の文字列ORDERを保存していた。
+  // 非空文字列は「ORDER 1」として自動移行し、そのまま使用中にする。
+  if (typeof value === 'string') {
+    const text = value.trim().slice(0, IFTY_ORDER_MAX_CHARS);
+    if (!text) return makeEmptyIftyOrderSubjectState();
+
+    const id = makeIftyLegacyOrderId(subject);
+    return {
+      activeId: id,
+      orders: [{
+        id,
+        name: 'ORDER 1',
+        text,
+        createdAt: 0,
+        updatedAt: 0
+      }]
+    };
+  }
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return makeEmptyIftyOrderSubjectState();
+  }
+
+  const rawOrders = Array.isArray(value.orders) ? value.orders : [];
+  const orders = [];
+  const usedIds = new Set();
+
+  rawOrders.forEach((rawOrder, index) => {
+    const normalized = normalizeIftyOrderEntry(rawOrder, subject, index);
+    if (!normalized) return;
+
+    let id = normalized.id;
+    if (usedIds.has(id)) {
+      let suffix = 2;
+      while (usedIds.has(`${id}_${suffix}`)) suffix += 1;
+      id = `${id}_${suffix}`;
+    }
+    usedIds.add(id);
+    normalized.id = id;
+    orders.push(normalized);
+  });
+
+  const requestedActiveId = value.activeId == null ? null : String(value.activeId);
+  const activeId = requestedActiveId && orders.some(order => order.id === requestedActiveId)
+    ? requestedActiveId
+    : null;
+
+  return { activeId, orders };
 }
 
 function normalizeIftySubjectOrders(value) {
@@ -822,7 +923,19 @@ function normalizeIftySubjectOrders(value) {
   const normalized = makeEmptyIftySubjectOrders();
 
   IFTY_SUBJECT_KEYS.forEach(subject => {
-    normalized[subject] = String(source[subject] || '').trim().slice(0, IFTY_ORDER_MAX_CHARS);
+    normalized[subject] = normalizeIftyOrderSubjectState(source[subject], subject);
+  });
+
+  return normalized;
+}
+
+function normalizeIftySubjectOrderMeta(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const normalized = makeEmptyIftySubjectOrderMeta();
+
+  IFTY_SUBJECT_KEYS.forEach(subject => {
+    const raw = Number(source[subject] || 0);
+    normalized[subject] = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
   });
 
   return normalized;
@@ -832,20 +945,47 @@ function getIftyOrderStorageKey(username = currentUser) {
   return IFTY_ORDER_STORAGE_PREFIX + String(username || 'default_user');
 }
 
+function getIftyOrderMetaStorageKey(username = currentUser) {
+  return IFTY_ORDER_META_STORAGE_PREFIX + String(username || 'default_user');
+}
+
 function loadIftySubjectOrders(username = currentUser) {
   let saved = null;
+  let savedMeta = null;
   try {
     saved = JSON.parse(localStorage.getItem(getIftyOrderStorageKey(username)) || 'null');
   } catch (_) {
     saved = null;
   }
+  try {
+    savedMeta = JSON.parse(localStorage.getItem(getIftyOrderMetaStorageKey(username)) || 'null');
+  } catch (_) {
+    savedMeta = null;
+  }
+
   iftySubjectOrders = normalizeIftySubjectOrders(saved);
+  iftySubjectOrderUpdatedAt = normalizeIftySubjectOrderMeta(savedMeta);
+
+  // 旧「1教科1ORDER」形式は、normalize時にORDER 1へ自動移行する。
+  // 更新時刻はSTEP45と同じく捏造せず、legacy=0のまま扱う。
+  try {
+    localStorage.setItem(getIftyOrderStorageKey(username), JSON.stringify(iftySubjectOrders));
+  } catch (_) {}
+}
+
+function nextIftySubjectOrderTimestamp(subject) {
+  const key = normalizeIftySubject(subject);
+  const known = Number(iftySubjectOrderUpdatedAt[key] || 0);
+  return Math.max(Date.now(), known + 1);
 }
 
 function saveIftySubjectOrders(options = {}) {
   iftySubjectOrders = normalizeIftySubjectOrders(iftySubjectOrders);
+  iftySubjectOrderUpdatedAt = normalizeIftySubjectOrderMeta(iftySubjectOrderUpdatedAt);
+
   try {
     localStorage.setItem(getIftyOrderStorageKey(currentUser), JSON.stringify(iftySubjectOrders));
+    localStorage.setItem(getIftyOrderMetaStorageKey(currentUser), JSON.stringify(iftySubjectOrderUpdatedAt));
   } catch (_) {}
 
   if (options.queueCloud !== false) {
@@ -853,28 +993,126 @@ function saveIftySubjectOrders(options = {}) {
   }
 }
 
-function getIftySubjectOrder(subject = currentIftySubject) {
+function hasIftySavedOrders(subjectState) {
+  return !!(subjectState && Array.isArray(subjectState.orders) && subjectState.orders.length);
+}
+
+function mergeIftySubjectOrderState(localOrdersValue, localMetaValue, remoteOrdersValue, remoteMetaValue) {
+  const localOrders = normalizeIftySubjectOrders(localOrdersValue);
+  const localMeta = normalizeIftySubjectOrderMeta(localMetaValue);
+  const remoteOrders = normalizeIftySubjectOrders(remoteOrdersValue);
+  const remoteMeta = normalizeIftySubjectOrderMeta(remoteMetaValue);
+
+  const orders = makeEmptyIftySubjectOrders();
+  const updatedAt = makeEmptyIftySubjectOrderMeta();
+
+  IFTY_SUBJECT_KEYS.forEach(subject => {
+    const localState = localOrders[subject];
+    const remoteState = remoteOrders[subject];
+    const localTime = Number(localMeta[subject] || 0);
+    const remoteTime = Number(remoteMeta[subject] || 0);
+
+    if (localTime > remoteTime) {
+      orders[subject] = localState;
+      updatedAt[subject] = localTime;
+      return;
+    }
+    if (remoteTime > localTime) {
+      orders[subject] = remoteState;
+      updatedAt[subject] = remoteTime;
+      return;
+    }
+
+    const localHas = hasIftySavedOrders(localState);
+    const remoteHas = hasIftySavedOrders(remoteState);
+
+    // legacy同士など更新時刻が同じ/不明な場合は、
+    // 片方だけに保存ORDERがあるなら、そのORDERを失わない。
+    if (localHas && !remoteHas) {
+      orders[subject] = localState;
+      updatedAt[subject] = localTime || remoteTime;
+      return;
+    }
+    if (remoteHas && !localHas) {
+      orders[subject] = remoteState;
+      updatedAt[subject] = remoteTime || localTime;
+      return;
+    }
+
+    // 両方に保存ORDERがあり時刻が同じ/不明ならSTEP45同様クラウド側を優先。
+    // 両方空ならどちらでも等価。
+    orders[subject] = remoteHas ? remoteState : localState;
+    updatedAt[subject] = remoteTime || localTime;
+  });
+
+  return { orders, updatedAt };
+}
+
+function isSameIftySubjectOrderState(ordersA, metaA, ordersB, metaB) {
+  const aOrders = normalizeIftySubjectOrders(ordersA);
+  const bOrders = normalizeIftySubjectOrders(ordersB);
+  const aMeta = normalizeIftySubjectOrderMeta(metaA);
+  const bMeta = normalizeIftySubjectOrderMeta(metaB);
+
+  return IFTY_SUBJECT_KEYS.every(subject =>
+    JSON.stringify(aOrders[subject]) === JSON.stringify(bOrders[subject]) &&
+    Number(aMeta[subject] || 0) === Number(bMeta[subject] || 0)
+  );
+}
+
+function getIftySubjectOrderState(subject = currentIftySubject) {
   const key = normalizeIftySubject(subject);
-  return String(iftySubjectOrders[key] || '').trim();
+  const state = normalizeIftyOrderSubjectState(iftySubjectOrders[key], key);
+  iftySubjectOrders[key] = state;
+  return state;
+}
+
+function getIftySubjectOrderProfiles(subject = currentIftySubject) {
+  return getIftySubjectOrderState(subject).orders;
+}
+
+function getIftyActiveOrderEntry(subject = currentIftySubject) {
+  const state = getIftySubjectOrderState(subject);
+  if (!state.activeId) return null;
+  return state.orders.find(order => order.id === state.activeId) || null;
+}
+
+function getIftySubjectOrderName(subject = currentIftySubject) {
+  const active = getIftyActiveOrderEntry(subject);
+  return active ? active.name : 'ORDERなし';
+}
+
+function getIftySubjectOrder(subject = currentIftySubject) {
+  const active = getIftyActiveOrderEntry(subject);
+  return active ? String(active.text || '').trim() : '';
 }
 
 function getIftyOrderStatus(subject) {
-  const order = getIftySubjectOrder(subject);
-  return order ? `設定済み（${order.length}文字）` : '未設定';
+  const state = getIftySubjectOrderState(subject);
+  const active = getIftyActiveOrderEntry(subject);
+  const count = state.orders.length;
+  if (!active) return `ORDERなし / 保存 ${count}件`;
+  return `使用中: ${active.name}（${String(active.text || '').length}文字） / 保存 ${count}件`;
 }
 
 function renderIftyOrderSettingsCards() {
   return IFTY_SUBJECT_KEYS.map(subject => {
-    const order = getIftySubjectOrder(subject);
-    const preview = order
-      ? escapeHtml(order.replace(/\s+/g, ' ').slice(0, 72)) + (order.replace(/\s+/g, ' ').length > 72 ? '…' : '')
-      : 'この教科のALLIAに追加指示はありません。';
+    const state = getIftySubjectOrderState(subject);
+    const active = getIftyActiveOrderEntry(subject);
+    const order = active ? String(active.text || '').trim() : '';
+    const preview = active
+      ? (order
+          ? escapeHtml(order.replace(/\s+/g, ' ').slice(0, 72)) + (order.replace(/\s+/g, ' ').length > 72 ? '…' : '')
+          : `${escapeHtml(active.name)} は空です。`)
+      : (state.orders.length
+          ? `ORDERなしを使用中。保存済みORDERは${state.orders.length}件あります。`
+          : '保存済みORDERはありません。');
 
     return `
       <button type="button" onclick="openIftySubjectOrder('${subject.replace(/'/g, "\\'")}')" style="width:100%;text-align:left;border:1px solid #cbd5e1;background:transparent;color:inherit;border-radius:10px;padding:12px;cursor:pointer;">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
           <strong>${escapeHtml(getIftySubjectDisplayName(subject))}</strong>
-          <span style="font-size:.76em;font-weight:900;color:${order ? '#0284c7' : '#94a3b8'};">${escapeHtml(getIftyOrderStatus(subject))}</span>
+          <span style="font-size:.76em;font-weight:900;color:${active ? '#0284c7' : '#64748b'};">${escapeHtml(getIftyOrderStatus(subject))}</span>
         </div>
         <div class="ifty-settings-note" style="margin-top:5px;">${preview}</div>
       </button>`;
@@ -893,41 +1131,101 @@ window.updateIftyOrderCharCount = function() {
   counter.textContent = `${String(textarea.value || '').length} / ${IFTY_ORDER_MAX_CHARS}`;
 };
 
-window.openIftySubjectOrder = function(subject) {
+function getIftyOrderEditorEntry(subject, orderId) {
+  const state = getIftySubjectOrderState(subject);
+  return state.orders.find(order => order.id === String(orderId || '')) || null;
+}
+
+function makeNextIftyOrderName(subject) {
+  const used = new Set(getIftySubjectOrderProfiles(subject).map(order => String(order.name || '').trim()));
+  let number = 1;
+  while (used.has(`ORDER ${number}`)) number += 1;
+  return `ORDER ${number}`;
+}
+
+window.openIftySubjectOrder = function(subject, editOrderId = '') {
   const key = normalizeIftySubject(subject);
+  const state = getIftySubjectOrderState(key);
   window.closeIftyOrderModal();
+
+  let editorId = String(editOrderId || '');
+  if (!state.orders.some(order => order.id === editorId)) {
+    editorId = state.activeId && state.orders.some(order => order.id === state.activeId)
+      ? state.activeId
+      : (state.orders[0]?.id || '');
+  }
+  const editor = getIftyOrderEditorEntry(key, editorId);
+  const activeId = state.activeId || '';
+
+  const activeOptions = [
+    `<option value="" ${!activeId ? 'selected' : ''}>ORDERなし</option>`,
+    ...state.orders.map(order =>
+      `<option value="${escapeHtml(order.id)}" ${activeId === order.id ? 'selected' : ''}>${escapeHtml(order.name)}</option>`
+    )
+  ].join('');
+
+  const editorOptions = state.orders.length
+    ? state.orders.map(order =>
+        `<option value="${escapeHtml(order.id)}" ${editorId === order.id ? 'selected' : ''}>${escapeHtml(order.name)}</option>`
+      ).join('')
+    : '<option value="">（ORDER未作成）</option>';
 
   const modal = document.createElement('div');
   modal.id = 'iftyOrderModal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.70);z-index:12120;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
   modal.innerHTML = `
-    <div role="dialog" aria-modal="true" aria-labelledby="iftyOrderTitle" style="width:min(720px,100%);max-height:88vh;overflow:auto;background:#fff;color:#0f172a;border-radius:16px;padding:20px;box-shadow:0 20px 55px rgba(0,0,0,.35);">
+    <div role="dialog" aria-modal="true" aria-labelledby="iftyOrderTitle" style="width:min(780px,100%);max-height:90vh;overflow:auto;background:#fff;color:#0f172a;border-radius:16px;padding:20px;box-shadow:0 20px 55px rgba(0,0,0,.35);">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
         <div>
-          <h2 id="iftyOrderTitle" style="margin:0;">${escapeHtml(key)} ORDER</h2>
+          <h2 id="iftyOrderTitle" style="margin:0;">${escapeHtml(getIftySubjectDisplayName(key))} ORDER</h2>
           <div style="margin-top:6px;color:#64748b;font-size:.86em;line-height:1.55;">
-            ${escapeHtml(key)} のALLIA・AI生成機能だけに適用する恒常的なカスタム指示です。
-            他の教科のORDERには一切影響しません。
+            複数のORDERを保存し、使用するORDERを切り替えられます。<br>
+            「ORDERなし」を選ぶと、保存済みORDERは残したままALLIA・AI生成にORDERを適用しません。
           </div>
         </div>
         <button type="button" onclick="closeIftyOrderModal()" aria-label="閉じる" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;width:36px;height:36px;font-size:1.15em;cursor:pointer;">×</button>
       </div>
 
-      <div style="margin-top:14px;padding:11px 12px;background:#f1f5f9;border-radius:9px;color:#475569;font-size:.82em;line-height:1.55;">
-        例：英単語では一般的な意味だけでなく、辞書に載る稀な意味・古義・専門用法も示す。<br>
-        例：古文単語では意味を日本語と英語の両方で示す。
+      <div style="margin-top:14px;padding:12px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:10px;">
+        <label for="iftyActiveOrderSelect" style="display:block;font-size:.8em;font-weight:900;color:#0c4a6e;margin-bottom:6px;">現在使用するORDER</label>
+        <select id="iftyActiveOrderSelect" onchange="setIftyActiveSubjectOrder('${key.replace(/'/g, "\\'")}', this.value)" style="width:100%;padding:10px;border:1px solid #7dd3fc;border-radius:8px;background:white;font-weight:800;">
+          ${activeOptions}
+        </select>
+        <div style="margin-top:6px;font-size:.76em;color:#64748b;">切り替えは即時保存され、次のALLIA応答・AI生成から反映されます。</div>
       </div>
 
-      <textarea id="iftyOrderTextarea" maxlength="${IFTY_ORDER_MAX_CHARS}" rows="13" oninput="updateIftyOrderCharCount()" placeholder="この教科のALLIAへのORDERを自由に記述…" style="width:100%;box-sizing:border-box;margin-top:13px;padding:12px;border:2px solid #94a3b8;border-radius:10px;font-size:1em;line-height:1.6;resize:vertical;">${escapeHtml(getIftySubjectOrder(key))}</textarea>
+      <div style="margin-top:14px;padding:12px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:10px;">
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+          <div style="flex:1;min-width:220px;">
+            <label for="iftyOrderEditorSelect" style="display:block;font-size:.8em;font-weight:900;color:#334155;margin-bottom:6px;">編集するORDER</label>
+            <select id="iftyOrderEditorSelect" onchange="selectIftyOrderForEdit('${key.replace(/'/g, "\\'")}', this.value)" ${state.orders.length ? '' : 'disabled'} style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:white;">
+              ${editorOptions}
+            </select>
+          </div>
+          <button type="button" onclick="createIftySubjectOrder('${key.replace(/'/g, "\\'")}')" style="border:none;background:#0f766e;color:white;padding:10px 13px;border-radius:8px;font-weight:900;cursor:pointer;">＋ 新規ORDER</button>
+        </div>
+      </div>
 
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:7px;">
+      <div style="margin-top:14px;">
+        <label for="iftyOrderNameInput" style="display:block;font-size:.8em;font-weight:900;color:#334155;margin-bottom:5px;">ORDER名</label>
+        <input id="iftyOrderNameInput" maxlength="120" value="${escapeHtml(editor?.name || '')}" ${editor ? '' : 'disabled'} placeholder="例：通常 / 詳細重視 / テスト前" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-weight:800;">
+      </div>
+
+      <div style="margin-top:10px;padding:11px 12px;background:#f1f5f9;border-radius:9px;color:#475569;font-size:.82em;line-height:1.55;">
+        例：語彙では一般的な意味だけでなく、辞書に載る稀な意味・古義・専門用法も示す。<br>
+        例：テスト前は学校の授業で問われやすい内容を最優先する。
+      </div>
+
+      <textarea id="iftyOrderTextarea" maxlength="${IFTY_ORDER_MAX_CHARS}" rows="13" oninput="updateIftyOrderCharCount()" ${editor ? '' : 'disabled'} placeholder="${editor ? 'このORDERの指示を自由に記述…' : 'まず「＋ 新規ORDER」でORDERを作成してください。'}" style="width:100%;box-sizing:border-box;margin-top:13px;padding:12px;border:2px solid #94a3b8;border-radius:10px;font-size:1em;line-height:1.6;resize:vertical;${editor ? '' : 'background:#f8fafc;color:#94a3b8;'}">${escapeHtml(editor?.text || '')}</textarea>
+
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:7px;flex-wrap:wrap;">
         <div id="iftyOrderCharCount" style="font-size:.78em;color:#64748b;"></div>
         <div style="font-size:.76em;color:#64748b;">必須の出力形式・データ保護・安全上の制約はORDERより優先されます。</div>
       </div>
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
-        <button type="button" onclick="saveIftySubjectOrderFromModal('${key.replace(/'/g, "\\'")}')" style="flex:1;min-width:150px;border:none;background:#0284c7;color:white;padding:11px;border-radius:9px;font-weight:900;cursor:pointer;">SAVE ORDER</button>
-        <button type="button" onclick="clearIftySubjectOrder('${key.replace(/'/g, "\\'")}')" style="border:none;background:#64748b;color:white;padding:11px 14px;border-radius:9px;font-weight:900;cursor:pointer;">RESET</button>
+        <button type="button" onclick="saveIftySubjectOrderFromModal('${key.replace(/'/g, "\\'")}')" ${editor ? '' : 'disabled'} style="flex:1;min-width:150px;border:none;background:${editor ? '#0284c7' : '#94a3b8'};color:white;padding:11px;border-radius:9px;font-weight:900;cursor:${editor ? 'pointer' : 'not-allowed'};">SAVE ORDER</button>
+        <button type="button" onclick="deleteIftySubjectOrder('${key.replace(/'/g, "\\'")}')" ${editor ? '' : 'disabled'} style="border:none;background:${editor ? '#dc2626' : '#cbd5e1'};color:white;padding:11px 14px;border-radius:9px;font-weight:900;cursor:${editor ? 'pointer' : 'not-allowed'};">DELETE ORDER</button>
       </div>
       <div id="iftyOrderModalStatus" style="min-height:1.25em;margin-top:8px;color:#475569;font-size:.82em;"></div>
     </div>`;
@@ -939,16 +1237,98 @@ window.openIftySubjectOrder = function(subject) {
   window.updateIftyOrderCharCount();
 
   const textarea = document.getElementById('iftyOrderTextarea');
-  if (textarea) setTimeout(() => textarea.focus(), 30);
+  if (textarea && editor) setTimeout(() => textarea.focus(), 30);
+};
+
+window.selectIftyOrderForEdit = function(subject, orderId) {
+  const key = normalizeIftySubject(subject);
+  const id = String(orderId || '');
+  window.openIftySubjectOrder(key, id);
+};
+
+window.setIftyActiveSubjectOrder = function(subject, orderId) {
+  const key = normalizeIftySubject(subject);
+  const state = getIftySubjectOrderState(key);
+  const requestedId = String(orderId || '');
+  const nextActiveId = requestedId && state.orders.some(order => order.id === requestedId)
+    ? requestedId
+    : null;
+
+  if (state.activeId === nextActiveId) return;
+
+  const editorId = String(document.getElementById('iftyOrderEditorSelect')?.value || '');
+  state.activeId = nextActiveId;
+  iftySubjectOrders[key] = state;
+  iftySubjectOrderUpdatedAt[key] = nextIftySubjectOrderTimestamp(key);
+  saveIftySubjectOrders();
+  refreshIftyEnglishOrderPanel();
+  refreshIftyEnglishSubjectPanel();
+
+  window.openIftySubjectOrder(key, editorId || nextActiveId || '');
+  const status = document.getElementById('iftyOrderModalStatus');
+  if (status) {
+    status.textContent = nextActiveId
+      ? `${getIftySubjectDisplayName(key)}で「${getIftySubjectOrderName(key)}」を使用します。`
+      : `${getIftySubjectDisplayName(key)}をORDERなしに切り替えました。`;
+    status.style.color = '#15803d';
+  }
+};
+
+window.createIftySubjectOrder = function(subject) {
+  const key = normalizeIftySubject(subject);
+  const state = getIftySubjectOrderState(key);
+  const now = Date.now();
+  const order = {
+    id: makeId('order'),
+    name: makeNextIftyOrderName(key),
+    text: '',
+    createdAt: now,
+    updatedAt: now
+  };
+
+  state.orders.push(order);
+  state.activeId = order.id;
+  iftySubjectOrders[key] = state;
+  iftySubjectOrderUpdatedAt[key] = nextIftySubjectOrderTimestamp(key);
+  saveIftySubjectOrders();
+  refreshIftyEnglishOrderPanel();
+  refreshIftyEnglishSubjectPanel();
+
+  window.openIftySubjectOrder(key, order.id);
+  const nameInput = document.getElementById('iftyOrderNameInput');
+  if (nameInput) {
+    nameInput.select();
+    nameInput.focus();
+  }
+  const status = document.getElementById('iftyOrderModalStatus');
+  if (status) {
+    status.textContent = `${order.name} を作成し、使用中にしました。`;
+    status.style.color = '#15803d';
+  }
 };
 
 window.saveIftySubjectOrderFromModal = function(subject) {
   const key = normalizeIftySubject(subject);
+  const state = getIftySubjectOrderState(key);
+  const editorId = String(document.getElementById('iftyOrderEditorSelect')?.value || '');
+  const entry = state.orders.find(order => order.id === editorId);
+  const nameInput = document.getElementById('iftyOrderNameInput');
   const textarea = document.getElementById('iftyOrderTextarea');
   const status = document.getElementById('iftyOrderModalStatus');
-  if (!textarea) return;
+  if (!entry || !nameInput || !textarea) return;
 
+  const name = String(nameInput.value || '').trim().slice(0, 120);
   const value = String(textarea.value || '').trim();
+
+  if (!name) {
+    if (status) {
+      status.textContent = 'ORDER名を入力してください。';
+      status.style.color = '#dc2626';
+    }
+    nameInput.focus();
+    return;
+  }
+
   if (value.length > IFTY_ORDER_MAX_CHARS) {
     if (status) {
       status.textContent = `ORDERは${IFTY_ORDER_MAX_CHARS}文字以内にしてください。`;
@@ -957,38 +1337,63 @@ window.saveIftySubjectOrderFromModal = function(subject) {
     return;
   }
 
-  iftySubjectOrders[key] = value;
-  saveIftySubjectOrders();
-  refreshIftyEnglishOrderPanel();
-
-  if (status) {
-    status.textContent = `${getIftySubjectDisplayName(key)} ORDERを保存しました。他の教科には適用されません。`;
-    status.style.color = '#15803d';
+  const duplicate = state.orders.find(order =>
+    order.id !== entry.id &&
+    String(order.name || '').trim().toLowerCase() === name.toLowerCase()
+  );
+  if (duplicate) {
+    if (status) {
+      status.textContent = '同じ名前のORDERがすでにあります。';
+      status.style.color = '#dc2626';
+    }
+    nameInput.focus();
+    return;
   }
 
-  setTimeout(() => {
-    window.closeIftyOrderModal();
-    if (iftyPortalPage === 'settings') window.openIftySettings();
-    else if (iftyPortalPage === 'subject' && currentIftySubject === key) window.openIftySubject(key);
-  }, 450);
+  entry.name = name;
+  entry.text = value;
+  entry.updatedAt = Date.now();
+  iftySubjectOrders[key] = state;
+  iftySubjectOrderUpdatedAt[key] = nextIftySubjectOrderTimestamp(key);
+  saveIftySubjectOrders();
+  refreshIftyEnglishOrderPanel();
+  refreshIftyEnglishSubjectPanel();
+
+  if (status) {
+    status.textContent = `${name} を保存しました。${state.activeId === entry.id ? '現在使用中です。' : '保存済みですが現在は使用していません。'}`;
+    status.style.color = '#15803d';
+  }
 };
 
-window.clearIftySubjectOrder = function(subject) {
+window.deleteIftySubjectOrder = function(subject) {
   const key = normalizeIftySubject(subject);
-  if (!confirm(`${getIftySubjectDisplayName(key)} ORDERを空に戻しますか？\n他の教科のORDERは変更しません。`)) return;
+  const state = getIftySubjectOrderState(key);
+  const editorId = String(document.getElementById('iftyOrderEditorSelect')?.value || '');
+  const entry = state.orders.find(order => order.id === editorId);
+  if (!entry) return;
 
-  iftySubjectOrders[key] = '';
+  if (!confirm(`ORDER「${entry.name}」を削除しますか？\nこの操作では他のORDERは削除されません。`)) return;
+
+  state.orders = state.orders.filter(order => order.id !== entry.id);
+  if (state.activeId === entry.id) state.activeId = null;
+  iftySubjectOrders[key] = state;
+  iftySubjectOrderUpdatedAt[key] = nextIftySubjectOrderTimestamp(key);
   saveIftySubjectOrders();
   refreshIftyEnglishOrderPanel();
-  const textarea = document.getElementById('iftyOrderTextarea');
-  if (textarea) textarea.value = '';
-  window.updateIftyOrderCharCount();
+  refreshIftyEnglishSubjectPanel();
 
+  window.openIftySubjectOrder(key, state.orders[0]?.id || '');
   const status = document.getElementById('iftyOrderModalStatus');
   if (status) {
-    status.textContent = `${getIftySubjectDisplayName(key)} ORDERをリセットしました。`;
+    status.textContent = `「${entry.name}」を削除しました。`;
     status.style.color = '#15803d';
   }
+};
+
+// STEP45までの旧関数名との互換性。
+// 現在は「空にする」ではなく、保存済みORDERを残したままORDERなしへ切り替える。
+window.clearIftySubjectOrder = function(subject) {
+  window.setIftyActiveSubjectOrder(subject, '');
 };
 
 // Q3 STEP18：ENGLISHにも他教科と同じORDER入口を表示する。
@@ -1032,7 +1437,7 @@ function refreshIftyEnglishSubjectPanel() {
   panel.innerHTML = `
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
       <div>
-        <h1 style="margin:0;color:#0f172a;font-size:1.55rem;font-weight:900;letter-spacing:.015em;">FOREIGN LANGUAGES</h1>
+        <h1 style="margin:0;color:#0f172a;font-size:1.55rem;font-weight:900;letter-spacing:.015em;">VOCABULARY</h1>
         <div style="margin-top:6px;color:#64748b;font-size:.9em;">英語を含む外国語と日本語の語彙をフォルダごとに追加・編集し、ALLIA・復習・PRACTICEへつなげます。</div>
       </div>
       <button type="button" onclick="openIftyHome()" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">HOMEへ戻る</button>
@@ -1042,7 +1447,7 @@ function refreshIftyEnglishSubjectPanel() {
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         <div>
           <div style="font-weight:900;color:#0f172a;">ORDER / ALLIA</div>
-          <div style="font-size:.78em;color:#64748b;margin-top:3px;">${escapeHtml(getIftyOrderStatus('ENGLISH'))}。FOREIGN LANGUAGES専用の生成・編集を行います。</div>
+          <div style="font-size:.78em;color:#64748b;margin-top:3px;">${escapeHtml(getIftyOrderStatus('ENGLISH'))}。VOCABULARY専用の生成・編集を行います。</div>
         </div>
         <div style="display:flex;gap:7px;flex-wrap:wrap;">
           <button type="button" onclick="openPracticeHome('ENGLISH')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">⚔️ PRACTICE</button>
@@ -1087,7 +1492,7 @@ function refreshIftyEnglishOrderPanel() {
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
       <div style="min-width:0;">
         <div style="font-weight:900;color:#0f172a;">ORDER</div>
-        <div style="font-size:.82em;color:#64748b;margin-top:3px;">${escapeHtml(status)}。このORDERはFOREIGN LANGUAGESだけに適用されます。</div>
+        <div style="font-size:.82em;color:#64748b;margin-top:3px;">${escapeHtml(status)}。このORDERはVOCABULARYだけに適用されます。</div>
       </div>
       <button type="button" onclick="openIftySubjectOrder('ENGLISH')" style="border:none;background:#0284c7;color:white;padding:9px 12px;border-radius:8px;font-weight:900;cursor:pointer;">ORDERを編集</button>
     </div>`;
@@ -1458,7 +1863,7 @@ window.openIftyHome = function() {
 
       <div class="ifty-home-grid">
         <button class="ifty-home-card" type="button" onclick="openIftySubject('ENGLISH')">
-          <div class="ifty-home-card-title">FOREIGN LANGUAGES</div>
+          <div class="ifty-home-card-title">VOCABULARY</div>
           <div class="ifty-home-card-meta">フォルダ ${stats.folders} / 単語 ${stats.words}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">単語帳を開く →</div>
@@ -3920,7 +4325,7 @@ window.openIftySettings = function() {
       <div class="ifty-settings-section">
         <h3>ORDER</h3>
         <div class="ifty-settings-note">
-          教科ごとのALLIA・AI生成機能にだけ適用するカスタム指示です。FOREIGN LANGUAGESのORDERをSCIENCEなどが読むことはありません。
+          教科ごとのALLIA・AI生成機能にだけ適用するカスタム指示です。VOCABULARYのORDERをSCIENCEなどが読むことはありません。
         </div>
         <div style="display:grid;gap:8px;margin-top:11px;">
           ${renderIftyOrderSettingsCards()}
@@ -4103,7 +4508,7 @@ function idbTransactionDone(transaction) {
 
 // ==========================================
 // Q3 STEP18：生成済み語彙データの端末ローカル再利用
-// 同じIFTYユーザー + FOREIGN LANGUAGES + 同じ語彙 + 同じORDER のときだけ再利用する。
+// 同じIFTYユーザー + VOCABULARY + 同じ語彙 + 同じORDER のときだけ再利用する。
 // ==========================================
 function normalizeIftyGeneratedWordKey(word) {
   return String(word || '').normalize('NFKC').trim().toLowerCase();
@@ -4273,6 +4678,7 @@ function captureIftyRecoveryPayload() {
     chatSessions: sanitizeChatSessionsForBackup(),
     currentChatSessionId: currentChatSessionId || null,
     subjectOrders: deepClone(normalizeIftySubjectOrders(iftySubjectOrders)),
+    subjectOrderUpdatedAt: deepClone(normalizeIftySubjectOrderMeta(iftySubjectOrderUpdatedAt)),
     iftyTheme: iftyTheme
   };
 }
@@ -4285,6 +4691,7 @@ function makeIftyRecoveryFingerprint(payload) {
     chatSessions: payload.chatSessions,
     currentChatSessionId: payload.currentChatSessionId,
     subjectOrders: payload.subjectOrders,
+    subjectOrderUpdatedAt: payload.subjectOrderUpdatedAt,
     iftyTheme: payload.iftyTheme
   });
 
@@ -4726,7 +5133,18 @@ async function applyIftyRecoveryPayload(payload) {
     folders = deepClone(payload.folders);
     practiceData = deepClone(payload.practiceData || { schemaVersion: 1, modules: { flashcards: { sets: [] }, questions: { sets: [] } } });
     chatSessions = deepClone(Array.isArray(payload.chatSessions) ? payload.chatSessions : []);
+    const previousOrderMeta = normalizeIftySubjectOrderMeta(iftySubjectOrderUpdatedAt);
     iftySubjectOrders = normalizeIftySubjectOrders(payload.subjectOrders);
+    const restoredMeta = normalizeIftySubjectOrderMeta(payload.subjectOrderUpdatedAt);
+    const restoreTimestamp = Math.max(
+      Date.now(),
+      ...IFTY_SUBJECT_KEYS.map(subject => Number(previousOrderMeta[subject] || 0) + 1),
+      ...IFTY_SUBJECT_KEYS.map(subject => Number(restoredMeta[subject] || 0) + 1)
+    );
+    iftySubjectOrderUpdatedAt = makeEmptyIftySubjectOrderMeta();
+    IFTY_SUBJECT_KEYS.forEach(subject => {
+      iftySubjectOrderUpdatedAt[subject] = restoreTimestamp;
+    });
     iftyTheme = payload.iftyTheme === 'dark' ? 'dark' : 'light';
 
     normalizeFoldersData();
@@ -5526,6 +5944,7 @@ async function migrateIftyLocalUsernameData(oldUsername, newUsername) {
     [`practice_user_${oldName}`, `practice_user_${newName}`],
     [`chat_sessions_${oldName}`, `chat_sessions_${newName}`],
     [getIftyOrderStorageKey(oldName), getIftyOrderStorageKey(newName)],
+    [getIftyOrderMetaStorageKey(oldName), getIftyOrderMetaStorageKey(newName)],
     [getIftyAutosaveSettingKey(oldName), getIftyAutosaveSettingKey(newName)],
     [getIftySpellingAutoAcceptSettingKey(oldName), getIftySpellingAutoAcceptSettingKey(newName)],
     [getIftyDailyGoalSettingKey(oldName), getIftyDailyGoalSettingKey(newName)],
@@ -5819,6 +6238,7 @@ async function purgeIftyLocalAccountData(username) {
   localStorage.removeItem('practice_user_' + user);
   localStorage.removeItem('chat_sessions_' + user);
   localStorage.removeItem(IFTY_ORDER_STORAGE_PREFIX + user);
+  localStorage.removeItem(IFTY_ORDER_META_STORAGE_PREFIX + user);
   localStorage.removeItem(IFTY_CLOUD_REVISION_PREFIX + user);
   localStorage.removeItem(IFTY_CLOUD_DIRTY_PREFIX + user);
   localStorage.removeItem(IFTY_AUTOSAVE_SETTING_PREFIX + user);
@@ -5895,6 +6315,7 @@ function captureIftyCloudPayload() {
     chatSessions: sanitizeChatSessionsForBackup(),
     currentChatSessionId: currentChatSessionId || null,
     subjectOrders: deepClone(normalizeIftySubjectOrders(iftySubjectOrders)),
+    subjectOrderUpdatedAt: deepClone(normalizeIftySubjectOrderMeta(iftySubjectOrderUpdatedAt)),
     iftyTheme: iftyTheme === 'dark' ? 'dark' : 'light'
   };
 }
@@ -5904,10 +6325,12 @@ function readIftyLocalPayloadForUser(username) {
   let savedPractice = { schemaVersion: 1, modules: { flashcards: { sets: [] }, questions: { sets: [] } } };
   let savedChats = [];
   let savedOrders = makeEmptyIftySubjectOrders();
+  let savedOrderMeta = makeEmptyIftySubjectOrderMeta();
   try { savedFolders = JSON.parse(localStorage.getItem('vocab_user_' + username) || '[]'); } catch (_) {}
   try { savedPractice = JSON.parse(localStorage.getItem('practice_user_' + username) || JSON.stringify(savedPractice)); } catch (_) {}
   try { savedChats = JSON.parse(localStorage.getItem('chat_sessions_' + username) || '[]'); } catch (_) {}
   try { savedOrders = JSON.parse(localStorage.getItem(getIftyOrderStorageKey(username)) || 'null') || savedOrders; } catch (_) {}
+  try { savedOrderMeta = JSON.parse(localStorage.getItem(getIftyOrderMetaStorageKey(username)) || 'null') || savedOrderMeta; } catch (_) {}
   return {
     schemaVersion: 1,
     appVersion: 'Q3_STEP18_LOCAL',
@@ -5917,6 +6340,7 @@ function readIftyLocalPayloadForUser(username) {
     chatSessions: Array.isArray(savedChats) ? savedChats : [],
     currentChatSessionId: Array.isArray(savedChats) && savedChats[0] ? savedChats[0].id : null,
     subjectOrders: normalizeIftySubjectOrders(savedOrders),
+    subjectOrderUpdatedAt: normalizeIftySubjectOrderMeta(savedOrderMeta),
     iftyTheme: localStorage.getItem('ifty_theme') === 'dark' ? 'dark' : 'light'
   };
 }
@@ -5929,19 +6353,44 @@ function hasMeaningfulIftyPayload(payload) {
   if (modules.flashcards && Array.isArray(modules.flashcards.sets) && modules.flashcards.sets.length) return true;
   if (modules.questions && Array.isArray(modules.questions.sets) && modules.questions.sets.length) return true;
   const orders = normalizeIftySubjectOrders(payload.subjectOrders);
-  if (IFTY_SUBJECT_KEYS.some(subject => !!orders[subject])) return true;
+  if (IFTY_SUBJECT_KEYS.some(subject => hasIftySavedOrders(orders[subject]))) return true;
   const chats = Array.isArray(payload.chatSessions) ? payload.chatSessions : [];
   return chats.some(session => Array.isArray(session.messages) && session.messages.some(message => message && message.role === 'user'));
 }
 
-async function applyIftyCloudPayload(payload) {
+async function applyIftyCloudPayload(payload, options = {}) {
   if (!payload || typeof payload !== 'object') throw new Error('クラウドセーブデータが不正です。');
+
+  const remoteOrders = normalizeIftySubjectOrders(payload.subjectOrders);
+  const remoteOrderMeta = normalizeIftySubjectOrderMeta(payload.subjectOrderUpdatedAt);
+  let orderMergeChangedRemote = false;
+
   iftyCloudApplyingRemote = true;
   try {
     folders = deepClone(Array.isArray(payload.folders) ? payload.folders : []);
     practiceData = deepClone(payload.practiceData || { schemaVersion: 1, modules: { flashcards: { sets: [] }, questions: { sets: [] } } });
     chatSessions = deepClone(Array.isArray(payload.chatSessions) ? payload.chatSessions : []);
-    iftySubjectOrders = normalizeIftySubjectOrders(payload.subjectOrders);
+
+    if (options.mergeOrders === false) {
+      iftySubjectOrders = remoteOrders;
+      iftySubjectOrderUpdatedAt = remoteOrderMeta;
+    } else {
+      const mergedOrderState = mergeIftySubjectOrderState(
+        iftySubjectOrders,
+        iftySubjectOrderUpdatedAt,
+        remoteOrders,
+        remoteOrderMeta
+      );
+      iftySubjectOrders = mergedOrderState.orders;
+      iftySubjectOrderUpdatedAt = mergedOrderState.updatedAt;
+      orderMergeChangedRemote = !isSameIftySubjectOrderState(
+        iftySubjectOrders,
+        iftySubjectOrderUpdatedAt,
+        remoteOrders,
+        remoteOrderMeta
+      );
+    }
+
     iftyTheme = payload.iftyTheme === 'dark' ? 'dark' : 'light';
 
     normalizeFoldersData();
@@ -5980,6 +6429,8 @@ async function applyIftyCloudPayload(payload) {
   } finally {
     iftyCloudApplyingRemote = false;
   }
+
+  return { orderMergeChangedRemote };
 }
 
 function markIftyCloudDirty() {
@@ -6012,7 +6463,7 @@ async function resolveIftyCloudConflict(conflictState) {
 
   const useCloud = confirm('別の端末で更新されたクラウドセーブを検出しました。\n\nOK：クラウド版をこの端末へ読み込む\nキャンセル：この端末版をクラウドへ上書きする\n\nどちらを選んでも、この端末の現在状態は復元用バックアップへ保存しています。');
   if (useCloud) {
-    await applyIftyCloudPayload(remotePayload || {});
+    await applyIftyCloudPayload(remotePayload || {}, { mergeOrders: false });
     iftyCloudRevision = remoteRevision;
     localStorage.setItem(getIftyCloudRevisionKey(), String(iftyCloudRevision));
     localStorage.removeItem(getIftyCloudDirtyKey());
@@ -6104,10 +6555,18 @@ async function syncIftyCloudAfterLogin() {
     }
 
     iftyCloudRevision = remoteRevision;
-    await applyIftyCloudPayload(cloud.payload || {});
+    const applyResult = await applyIftyCloudPayload(cloud.payload || {});
     localStorage.setItem(getIftyCloudRevisionKey(), String(iftyCloudRevision));
-    localStorage.removeItem(getIftyCloudDirtyKey());
-    setIftyCloudStatus('☁️ 同期済み', 'ok');
+
+    if (applyResult && applyResult.orderMergeChangedRemote) {
+      // 端末側のORDERを救済した場合、その状態をクラウドにも即時反映して
+      // 次の端末で再び消えることを防ぐ。
+      markIftyCloudDirty();
+      await flushIftyCloudSave({ reason: 'ORDER同期補正' });
+    } else {
+      localStorage.removeItem(getIftyCloudDirtyKey());
+      setIftyCloudStatus('☁️ 同期済み', 'ok');
+    }
     return;
   }
 
@@ -6321,7 +6780,7 @@ function applyAlliaBranding() {
 
   const chatInput = document.getElementById('chatInput');
   if (chatInput) {
-    chatInput.placeholder = `${normalizeIftySubject(currentIftySubject)} ALLIAに質問…`;
+    chatInput.placeholder = `${getIftySubjectDisplayName(currentIftySubject)} ALLIAに質問…`;
 
     const initialValue = String(chatInput.value || '').trim();
     if (initialValue === 'ALLIA' || /^grok$/i.test(initialValue)) {
@@ -7731,7 +8190,7 @@ function getIftyBasicCloze(item) {
 
 function renderIftyBasicPracticeTabs(active = 'BASIC SENTENCES') {
   const btn = (name, label) => `<button type="button" onclick="setIftyUnifiedPracticeSubject('${name}')" style="border:${active===name?'none':'1px solid #cbd5e1'};background:${active===name?'#7c3aed':'white'};color:${active===name?'white':'#334155'};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${label}</button>`;
-  return `<div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">${btn('ENGLISH','FOREIGN LANGUAGES')}${btn('SOCIAL STUDIES','SOCIAL STUDIES')}${btn('BASIC SENTENCES','BASIC SENTENCES')}</div>`;
+  return `<div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">${btn('ENGLISH','VOCABULARY')}${btn('SOCIAL STUDIES','SOCIAL STUDIES')}${btn('BASIC SENTENCES','BASIC SENTENCES')}</div>`;
 }
 
 function renderIftyBasicSentencePracticeHome(modal) {
@@ -9151,7 +9610,12 @@ window.openPracticeHome = function(subject) {
   const requested = String(subject || '').trim().toUpperCase();
   if (requested === 'SOCIAL STUDIES') iftyUnifiedPracticeSubject = 'SOCIAL STUDIES';
   else if (requested === 'BASIC SENTENCES') iftyUnifiedPracticeSubject = 'BASIC SENTENCES';
-  else if (requested === 'ENGLISH' || requested === 'FOREIGN LANGUAGES') iftyUnifiedPracticeSubject = 'ENGLISH';
+  else if (
+    requested === 'ENGLISH' ||
+    requested === 'VOCABULARY' ||
+    requested === 'FOREIGN LANGUAGES' ||
+    requested === 'FOREIGN LANGUAGE'
+  ) iftyUnifiedPracticeSubject = 'ENGLISH';
   else if (currentIftySubject === 'SOCIAL STUDIES') iftyUnifiedPracticeSubject = 'SOCIAL STUDIES';
   else iftyUnifiedPracticeSubject = 'ENGLISH';
   let modal = document.getElementById('practiceModal');
@@ -9196,7 +9660,7 @@ function renderPracticeHome() {
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
       </div>
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">FOREIGN LANGUAGES</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">VOCABULARY</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
       </div>
@@ -9287,7 +9751,7 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
       </div>
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">FOREIGN LANGUAGES</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">VOCABULARY</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
       </div>
 
@@ -9316,7 +9780,7 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
 
       <div style="margin-top:14px;padding:13px;border:1px solid #99f6e4;border-radius:11px;background:#f0fdfa;">
         <div style="font-size:1.04em;font-weight:900;color:#0f766e;">📇 フラッシュカード</div>
-        <div style="margin-top:5px;color:#475569;font-size:.82em;line-height:1.5;">FOREIGN LANGUAGESと同じカードUIで、用語⇄説明を確認します。選択中の社会フォルダだけが対象です。</div>
+        <div style="margin-top:5px;color:#475569;font-size:.82em;line-height:1.5;">VOCABULARYと同じカードUIで、用語⇄説明を確認します。選択中の社会フォルダだけが対象です。</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
           <button type="button" onclick="startIftySocialFlashcards('front',true)" ${selectedItems.length ? '' : 'disabled'} style="border:none;background:#0f766e;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:${selectedItems.length ? 'pointer' : 'not-allowed'};opacity:${selectedItems.length ? '1' : '.55'};">用語 → 説明</button>
           <button type="button" onclick="startIftySocialFlashcards('back',true)" ${selectedItems.length ? '' : 'disabled'} style="border:none;background:#115e59;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:${selectedItems.length ? 'pointer' : 'not-allowed'};opacity:${selectedItems.length ? '1' : '.55'};">説明 → 用語</button>
@@ -10334,7 +10798,7 @@ function renderChatMessages() {
     `).join('')
     : `<div style="margin:16px auto;max-width:560px;padding:13px 15px;background:#f1f5f9;color:#475569;border-radius:10px;text-align:center;font-size:.88em;line-height:1.55;">
          ${escapeHtml(getIftySubjectDisplayName(activeSubject))} ALLIA<br>
-         この教科では${getIftySubjectOrder(activeSubject) ? '専用ORDERを適用します。' : 'ORDERはまだ設定されていません。'}
+         この教科では${getIftyActiveOrderEntry(activeSubject) ? `「${escapeHtml(getIftySubjectOrderName(activeSubject))}」を適用します。` : 'ORDERなしで動作します。'}
        </div>`;
 
   container.scrollTop = container.scrollHeight;
