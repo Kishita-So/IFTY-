@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP54 2026-09-24：SOCIAL/SCIENCE復習システム + スマホ表示改善 ★★★
+// ★★★ IFTY Q3 STEP55 2026-09-24：ANCIENT 古文単語 専用学習実装 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -179,6 +179,13 @@ let iftySciencePracticeState = {
   modelAnswer: ''
 };
 
+
+
+// Q3 STEP55：ANCIENT / 古文単語
+let iftyAncientWordDrafts = {};
+let iftyAncientGenerationPending = {};
+let iftyAncientSearchQuery = '';
+let iftyAncientFolderSearchQueries = {};
 
 let chatSessions = [];
 let currentChatSessionId = null;
@@ -1898,7 +1905,8 @@ function ensureIftyPortalStyles() {
         font-size: 16px !important;
       }
       .ifty-social-item-card,
-      .ifty-science-item-card {
+      .ifty-science-item-card,
+      .ifty-ancient-item-card {
         padding: 9px !important;
         border-radius: 9px !important;
       }
@@ -1989,6 +1997,11 @@ function getIftyHomeStats() {
     : [];
   const scienceItems = scienceFolders.reduce((sum, folder) => sum + (Array.isArray(folder.items) ? folder.items.length : 0), 0);
 
+  const ancientFolders = practiceData && practiceData.modules && practiceData.modules.ancient && Array.isArray(practiceData.modules.ancient.folders)
+    ? practiceData.modules.ancient.folders
+    : [];
+  const ancientItems = ancientFolders.reduce((sum, folder) => sum + (Array.isArray(folder.items) ? folder.items.length : 0), 0);
+
   const learning = getIftyLearningStats();
   return {
     folders: Array.isArray(folders) ? folders.length : 0,
@@ -2005,6 +2018,9 @@ function getIftyHomeStats() {
     scienceFolders: scienceFolders.length,
     scienceItems,
     scienceDueReview: getIftySubjectReviewEntries('SCIENCE', { dueOnly: true }).length,
+    ancientFolders: ancientFolders.length,
+    ancientItems,
+    ancientDueReview: getIftySubjectReviewEntries('ANCIENT', { dueOnly: true }).length,
     ...learning
   };
 }
@@ -2050,9 +2066,9 @@ window.openIftyHome = function() {
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('ANCIENT')">
           <div class="ifty-home-card-title">ANCIENT</div>
-          <div class="ifty-home-card-meta">古文・漢文などの学習領域</div>
+          <div class="ifty-home-card-meta">フォルダ ${stats.ancientFolders} / 古文単語 ${stats.ancientItems}${stats.ancientDueReview ? ` / 🔁 今日 ${stats.ancientDueReview}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
-          <div class="ifty-home-card-soon">科目ページ準備済み / 学習機能は今後追加</div>
+          <div class="ifty-home-card-action">古文単語 →</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('SCIENCE')">
@@ -6487,6 +6503,471 @@ window.nextIftySciencePracticeQuestion = function() {
 };
 
 
+
+function renderIftyAncientItemCard(folder, item) {
+  const itemIndex = Math.max(0, (folder.items || []).findIndex(entry => String(entry.id) === String(item.id)));
+  const lastIndex = Math.max(0, (folder.items || []).length - 1);
+  const searchText = buildIftyAncientSearchText(folder, item);
+  const meanings = Array.isArray(item.meanings) ? item.meanings : [];
+  const examples = Array.isArray(item.examples) ? item.examples : [];
+  const related = Array.isArray(item.relatedWords) ? item.relatedWords : [];
+  const keyPoints = Array.isArray(item.keyPoints) ? item.keyPoints : [];
+
+  return `<article class="ifty-ancient-item-card" data-folder-id="${escapeHtml(String(folder.id))}" data-ifty-search="${escapeHtml(searchText)}" style="border:1px solid #cbd5e1;border-radius:10px;background:white;padding:12px;margin-top:9px;box-shadow:0 1px 3px rgba(15,23,42,.05);">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
+      <div style="min-width:0;flex:1;">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <strong style="font-size:1.16em;color:#0f172a;">${escapeHtml(item.word || item.title || '無題')}</strong>
+          ${item.reading ? `<span style="font-size:.78em;color:#475569;background:#f1f5f9;border-radius:999px;padding:2px 7px;">${escapeHtml(item.reading)}</span>` : ''}
+          ${item.partOfSpeech ? `<span style="font-size:.72em;color:#075985;background:#e0f2fe;border-radius:999px;padding:2px 7px;font-weight:900;">${escapeHtml(item.partOfSpeech)}</span>` : ''}
+          ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
+          ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
+        </div>
+      </div>
+
+      <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
+        <button type="button" onclick="toggleIftyAncientItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
+        <button type="button" onclick="moveIftyAncientItem('${folder.id}','${item.id}',-1)" ${itemIndex <= 0 ? 'disabled' : ''} title="上へ" style="border:none;background:${itemIndex <= 0 ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex <= 0 ? 'not-allowed' : 'pointer'};font-weight:900;">↑</button>
+        <button type="button" onclick="moveIftyAncientItem('${folder.id}','${item.id}',1)" ${itemIndex >= lastIndex ? 'disabled' : ''} title="下へ" style="border:none;background:${itemIndex >= lastIndex ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex >= lastIndex ? 'not-allowed' : 'pointer'};font-weight:900;">↓</button>
+        <button type="button" onclick="openIftyAncientItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
+        <button type="button" onclick="deleteIftyAncientItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">削除</button>
+      </div>
+    </div>
+
+    ${meanings.length ? `<div style="margin-top:10px;padding:10px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:9px;">
+      <div style="font-size:.74em;font-weight:900;color:#0369a1;margin-bottom:4px;">重要語義</div>
+      ${meanings.map((meaning, index) => `<div style="color:#0f172a;line-height:1.5;font-size:.9em;"><strong>${index + 1}.</strong> ${escapeHtml(meaning)}</div>`).join('')}
+    </div>` : ''}
+
+    ${item.modernCaution ? `<div style="margin-top:8px;padding:9px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;font-size:.84em;line-height:1.5;color:#78350f;"><strong>現代語との注意：</strong>${escapeHtml(item.modernCaution)}</div>` : ''}
+
+    ${item.usage ? `<div style="margin-top:8px;padding:9px;border:1px solid #e2e8f0;background:#f8fafc;border-radius:8px;font-size:.84em;line-height:1.5;color:#334155;"><strong>識別・用法：</strong>${escapeHtml(item.usage)}</div>` : ''}
+
+    ${examples.length ? `<div style="margin-top:8px;padding:9px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:8px;">
+      <div style="font-size:.74em;font-weight:900;color:#7e22ce;margin-bottom:5px;">例文</div>
+      ${examples.map(ex => `<div style="margin-top:5px;">
+        ${ex.classical ? `<div style="font-size:.88em;line-height:1.5;color:#3b0764;">${escapeHtml(ex.classical)}</div>` : ''}
+        ${ex.modern ? `<div style="font-size:.78em;line-height:1.45;color:#6b21a8;margin-top:2px;">→ ${escapeHtml(ex.modern)}</div>` : ''}
+      </div>`).join('')}
+    </div>` : ''}
+
+    ${related.length ? `<div style="margin-top:8px;font-size:.8em;color:#475569;"><strong>関連語：</strong>${related.map(escapeHtml).join(' / ')}</div>` : ''}
+    ${keyPoints.length ? `<div style="margin-top:8px;font-size:.8em;color:#334155;">${keyPoints.map(point => `・${escapeHtml(point)}`).join('<br>')}</div>` : ''}
+  </article>`;
+}
+
+function renderIftyAncientItemsHtml(folder) {
+  const items = Array.isArray(folder?.items) ? folder.items : [];
+  return items.length
+    ? items.map(item => renderIftyAncientItemCard(folder, item)).join('')
+    : '<div style="margin-top:12px;padding:18px;text-align:center;border:1px dashed #cbd5e1;border-radius:8px;color:#94a3b8;">まだ古文単語がありません。</div>';
+}
+
+function applyIftyAncientSearchFilters() {
+  const globalQuery = String(iftyAncientSearchQuery || '').trim().toLowerCase();
+  const cards = [...document.querySelectorAll('.ifty-ancient-item-card')];
+  let visibleCount = 0;
+  const folderTotals = {};
+  const folderVisible = {};
+
+  cards.forEach(card => {
+    const folderId = String(card.dataset.folderId || '');
+    const folderQuery = String(iftyAncientFolderSearchQueries[folderId] || '').trim().toLowerCase();
+    const searchText = String(card.dataset.iftySearch || '');
+    const matched = (!globalQuery || searchText.includes(globalQuery)) && (!folderQuery || searchText.includes(folderQuery));
+
+    folderTotals[folderId] = Number(folderTotals[folderId] || 0) + 1;
+    if (matched) {
+      visibleCount += 1;
+      folderVisible[folderId] = Number(folderVisible[folderId] || 0) + 1;
+    }
+    card.style.display = matched ? '' : 'none';
+  });
+
+  const counter = document.getElementById('iftyAncientSearchCount');
+  if (counter) counter.textContent = globalQuery ? `${visibleCount} / ${cards.length}件表示` : `${cards.length}件`;
+
+  Object.keys(folderTotals).forEach(folderId => {
+    const counterEl = document.getElementById(`iftyAncientFolderSearchCount_${folderId}`);
+    if (!counterEl) return;
+    const folderQuery = String(iftyAncientFolderSearchQueries[folderId] || '').trim();
+    counterEl.textContent = folderQuery
+      ? `${Number(folderVisible[folderId] || 0)} / ${folderTotals[folderId]}件`
+      : `${folderTotals[folderId]}件`;
+  });
+}
+
+window.applyIftyAncientSearch = function(value = null) {
+  const input = document.getElementById('iftyAncientSearchInput');
+  iftyAncientSearchQuery = String(value ?? input?.value ?? iftyAncientSearchQuery ?? '').trim();
+  applyIftyAncientSearchFilters();
+};
+
+window.applyIftyAncientFolderSearch = function(folderId, value = null) {
+  const id = String(folderId || '');
+  const input = document.getElementById(`iftyAncientFolderSearch_${id}`);
+  iftyAncientFolderSearchQueries[id] = String(value ?? input?.value ?? iftyAncientFolderSearchQueries[id] ?? '').trim();
+  applyIftyAncientSearchFilters();
+};
+
+function refreshIftyAncientFolderDynamic(folderId) {
+  const folder = getIftyAncientFolder(folderId);
+  if (!folder) return;
+
+  const title = document.getElementById(`iftyAncientFolderTitle_${folderId}`);
+  if (title) title.textContent = `${folder.collapsed ? '▶' : '▼'} 📁 ${folder.name} (${folder.items.length}語)`;
+
+  const items = document.getElementById(`iftyAncientItems_${folderId}`);
+  if (items) items.innerHTML = renderIftyAncientItemsHtml(folder);
+
+  const summary = document.getElementById('iftyAncientModuleSummary');
+  if (summary) {
+    const module = getIftyAncientModule();
+    summary.textContent = `フォルダ ${module.folders.length} / 古文単語 ${countIftyAncientItems()}語`;
+  }
+
+  applyIftyAncientSearchFilters();
+}
+
+function renderIftyAncientFolder(folder, folderIndex) {
+  const items = Array.isArray(folder.items) ? folder.items : [];
+  return `<section id="iftyAncientFolder_${folder.id}" style="margin-top:14px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;padding:13px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+      <div style="min-width:0;flex:1;">
+        <button id="iftyAncientFolderTitle_${folder.id}" type="button" onclick="toggleIftyAncientFolderCollapse('${folder.id}')" style="border:none;background:transparent;padding:0;cursor:pointer;font-size:1.02em;font-weight:900;color:#0f172a;text-align:left;">${folder.collapsed ? '▶' : '▼'} 📁 ${escapeHtml(folder.name)} (${items.length}語)</button>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">
+        <button type="button" onclick="moveIftyAncientFolder(${folderIndex},-1)" ${folderIndex <= 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">↑</button>
+        <button type="button" onclick="moveIftyAncientFolder(${folderIndex},1)" ${folderIndex >= getIftyAncientModule().folders.length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">↓</button>
+        <button type="button" onclick="renameIftyAncientFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">名前変更</button>
+        <button type="button" onclick="deleteIftyAncientFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">削除</button>
+      </div>
+    </div>
+
+    ${folder.collapsed ? '' : `<div style="margin-top:12px;">
+      <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;">
+        <input id="iftyAncientWord_${folder.id}" value="${escapeHtml(iftyAncientWordDrafts[folder.id] || '')}" placeholder="古文単語を入力してEnter（例：あはれ / いみじ / をかし）" oninput="iftyAncientWordDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'){event.preventDefault();generateIftyAncientWord('${folder.id}');}" style="flex:1;min-width:210px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;">
+        <button type="button" onclick="startIftyAncientFlashcards('${folder.id}','front')" ${items.length ? '' : 'disabled'} style="border:none;background:#0f766e;color:white;border-radius:7px;padding:9px 11px;font-weight:900;cursor:${items.length ? 'pointer' : 'default'};opacity:${items.length ? '1' : '.45'};">📇 単語→意味</button>
+        <button type="button" onclick="startIftyAncientFlashcards('${folder.id}','back')" ${items.length ? '' : 'disabled'} style="border:none;background:#115e59;color:white;border-radius:7px;padding:9px 11px;font-weight:900;cursor:${items.length ? 'pointer' : 'default'};opacity:${items.length ? '1' : '.45'};">意味→単語</button>
+      </div>
+      <div id="iftyAncientPending_${folder.id}" style="margin-top:6px;min-height:1.2em;font-size:.76em;color:#7c3aed;font-weight:800;">${Number(iftyAncientGenerationPending[folder.id] || 0) ? `ALLIA生成中… ${Number(iftyAncientGenerationPending[folder.id] || 0)}件` : ''}</div>
+
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;">
+        <input id="iftyAncientFolderSearch_${folder.id}" value="${escapeHtml(iftyAncientFolderSearchQueries[folder.id] || '')}" placeholder="🔎 このフォルダ内を検索" oninput="applyIftyAncientFolderSearch('${folder.id}',this.value)" style="flex:1;min-width:180px;padding:8px 9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.86em;">
+        <button type="button" onclick="document.getElementById('iftyAncientFolderSearch_${folder.id}').value='';applyIftyAncientFolderSearch('${folder.id}','');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-size:.8em;font-weight:900;cursor:pointer;">クリア</button>
+        <span id="iftyAncientFolderSearchCount_${folder.id}" style="font-size:.72em;color:#64748b;font-weight:800;">${items.length}件</span>
+      </div>
+
+      <div id="iftyAncientItems_${folder.id}">${renderIftyAncientItemsHtml(folder)}</div>
+    </div>`}
+  </section>`;
+}
+
+window.renderIftyAncientPage = function(options = {}) {
+  currentIftySubject = 'ANCIENT';
+  const module = getIftyAncientModule();
+
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">ANCIENT</h1>
+          <div class="ifty-portal-subtitle">古文単語。漢文はまだここには入れません。</div>
+        </div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;">
+          <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOME</button>
+          <button class="ifty-portal-back" type="button" onclick="openIftySubjectOrder('ANCIENT')">ORDER</button>
+          <button class="ifty-portal-back" type="button" onclick="openIftySubjectChat('ANCIENT')">ALLIA</button>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;padding:12px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;">
+        <div style="font-weight:900;color:#0f172a;">古文単語</div>
+        <div style="margin-top:5px;color:#64748b;font-size:.82em;line-height:1.5;">単語を入力してEnter。ALLIAが読み・品詞・重要語義・現代語との違い・識別/用法・例文・関連語を生成します。ORDERはANCIENT専用です。</div>
+        <div style="display:flex;gap:7px;margin-top:10px;flex-wrap:wrap;">
+          <input id="iftyAncientNewFolderName" placeholder="新しいフォルダ名（例：重要古文単語315 / 学校教材）" style="flex:1;min-width:220px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.92em;" onkeydown="if(event.key==='Enter'){event.preventDefault();createIftyAncientFolder();}">
+          <button type="button" onclick="createIftyAncientFolder()" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">＋ フォルダ</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:white;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input id="iftyAncientSearchInput" value="${escapeHtml(iftyAncientSearchQuery)}" placeholder="🔎 全フォルダから古文単語・意味・例文を検索" oninput="applyIftyAncientSearch(this.value)" style="flex:1;min-width:220px;padding:9px 10px;border:1px solid #94a3b8;border-radius:8px;font-size:.92em;">
+        <button type="button" onclick="document.getElementById('iftyAncientSearchInput').value='';applyIftyAncientSearch('');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">クリア</button>
+        <span id="iftyAncientSearchCount" style="font-size:.78em;color:#64748b;font-weight:800;">${countIftyAncientItems()}件</span>
+      </div>
+
+      <div id="iftyAncientModuleSummary" style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 古文単語 ${countIftyAncientItems()}語</div>
+      <div id="iftyAncientReviewPanelWrap">${renderIftySubjectReviewPanel('ANCIENT')}</div>
+      <div>${module.folders.length ? module.folders.map((folder, index) => renderIftyAncientFolder(folder, index)).join('') : '<div style="margin-top:16px;padding:24px;text-align:center;color:#94a3b8;border:1px dashed #cbd5e1;border-radius:10px;">まだフォルダがありません。</div>'}</div>
+    </section>
+  `, 'ancient');
+
+  applyIftyAncientSearchFilters();
+};
+
+window.createIftyAncientFolder = function() {
+  const input = document.getElementById('iftyAncientNewFolderName');
+  const name = String(input?.value || '').trim();
+  if (!name) return;
+
+  const module = getIftyAncientModule();
+  if (module.folders.some(folder => String(folder.name).trim().toLowerCase() === name.toLowerCase())) {
+    alert('同じ名前のフォルダがあります。');
+    return;
+  }
+
+  recordUndoState('古文単語フォルダ作成');
+  module.folders.push({ id: makeId('ancientfolder'), name, collapsed: false, items: [] });
+  if (input) input.value = '';
+  savePracticeData();
+  renderIftyAncientPage();
+};
+
+window.renameIftyAncientFolder = function(folderId) {
+  const folder = getIftyAncientFolder(folderId);
+  if (!folder) return;
+  const name = prompt('新しいフォルダ名', folder.name);
+  if (name == null) return;
+  const trimmed = String(name).trim();
+  if (!trimmed || trimmed === folder.name) return;
+
+  recordUndoState('古文単語フォルダ名変更');
+  folder.name = trimmed;
+  savePracticeData();
+  renderIftyAncientPage();
+};
+
+window.deleteIftyAncientFolder = function(folderId) {
+  const module = getIftyAncientModule();
+  const index = module.folders.findIndex(folder => String(folder.id) === String(folderId));
+  if (index < 0) return;
+  const folder = module.folders[index];
+  if (!confirm(`フォルダ「${folder.name}」を削除しますか？\n中の古文単語 ${folder.items.length}語も削除されます。`)) return;
+
+  recordUndoState('古文単語フォルダ削除');
+  module.folders.splice(index, 1);
+  delete iftyAncientWordDrafts[folderId];
+  delete iftyAncientGenerationPending[folderId];
+  delete iftyAncientFolderSearchQueries[folderId];
+  savePracticeData();
+  renderIftyAncientPage();
+};
+
+window.toggleIftyAncientFolderCollapse = function(folderId) {
+  const folder = getIftyAncientFolder(folderId);
+  if (!folder) return;
+  folder.collapsed = !folder.collapsed;
+  savePracticeData();
+  renderIftyAncientPage();
+};
+
+window.moveIftyAncientFolder = function(index, direction) {
+  const module = getIftyAncientModule();
+  const nextIndex = Number(index) + (direction < 0 ? -1 : 1);
+  if (index < 0 || nextIndex < 0 || index >= module.folders.length || nextIndex >= module.folders.length) return;
+
+  recordUndoState('古文単語フォルダ並べ替え');
+  [module.folders[index], module.folders[nextIndex]] = [module.folders[nextIndex], module.folders[index]];
+  savePracticeData();
+  renderIftyAncientPage();
+};
+
+window.moveIftyAncientItem = function(folderId, itemId, direction) {
+  const folder = getIftyAncientFolder(folderId);
+  if (!folder) return;
+  const index = folder.items.findIndex(item => String(item.id) === String(itemId));
+  const nextIndex = index + (direction < 0 ? -1 : 1);
+  if (index < 0 || nextIndex < 0 || nextIndex >= folder.items.length) return;
+
+  recordUndoState('古文単語並べ替え');
+  [folder.items[index], folder.items[nextIndex]] = [folder.items[nextIndex], folder.items[index]];
+  folder.items[index].updatedAt = Date.now();
+  folder.items[nextIndex].updatedAt = Date.now();
+  savePracticeData();
+  refreshIftyAncientFolderDynamic(folderId);
+};
+
+window.deleteIftyAncientItem = function(folderId, itemId) {
+  const folder = getIftyAncientFolder(folderId);
+  if (!folder) return;
+  const index = folder.items.findIndex(item => String(item.id) === String(itemId));
+  if (index < 0) return;
+  if (!confirm(`「${folder.items[index].word}」を削除しますか？`)) return;
+
+  recordUndoState('古文単語削除');
+  folder.items.splice(index, 1);
+  savePracticeData();
+  refreshIftyAncientFolderDynamic(folderId);
+};
+
+window.generateIftyAncientWord = async function(folderId) {
+  const folder = getIftyAncientFolder(folderId);
+  const input = document.getElementById(`iftyAncientWord_${folderId}`);
+  if (!folder || !input) return;
+
+  const word = String(input.value || '').trim();
+  if (!word) {
+    input.focus();
+    return;
+  }
+  if (!ensureIftyOnline('古文単語生成')) return;
+
+  // Enter直後に入力欄を空にする。前の生成を待たず次の単語を入力できる。
+  input.value = '';
+  iftyAncientWordDrafts[folderId] = '';
+  iftyAncientGenerationPending[folderId] = Number(iftyAncientGenerationPending[folderId] || 0) + 1;
+
+  const setPendingStatus = (message = '') => {
+    const status = document.getElementById(`iftyAncientPending_${folderId}`);
+    if (!status) return;
+    const count = Number(iftyAncientGenerationPending[folderId] || 0);
+    status.textContent = message || (count ? `ALLIA生成中… ${count}件` : '');
+    status.style.color = message ? '#dc2626' : '#7c3aed';
+  };
+  setPendingStatus();
+
+  try {
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'ancient_word_generate',
+        word,
+        order: getIftySubjectOrder('ANCIENT')
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+
+    const latestFolder = getIftyAncientFolder(folderId);
+    if (!latestFolder) return;
+
+    const item = normalizeIftyAncientItem({
+      ...data,
+      id: makeId('ancientword'),
+      word,
+      title: word,
+      source: 'ALLIA',
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    });
+
+    if (!item) throw new Error('古文単語データの生成に失敗しました。');
+
+    recordUndoState('古文単語追加');
+    latestFolder.items.push(item);
+    savePracticeData();
+  } catch (error) {
+    setPendingStatus(String(error.message || error));
+  } finally {
+    iftyAncientGenerationPending[folderId] = Math.max(0, Number(iftyAncientGenerationPending[folderId] || 0) - 1);
+    refreshIftyAncientFolderDynamic(folderId);
+    setPendingStatus();
+  }
+};
+
+window.openIftyAncientItemEditor = function(folderId, itemId) {
+  const ref = getIftyAncientItemById(itemId);
+  if (!ref?.item || String(ref.folder.id) !== String(folderId)) return;
+  const item = ref.item;
+
+  const existing = document.getElementById('iftyAncientEditorModal');
+  if (existing) existing.remove();
+
+  const field = (id, label, value, rows = 1) => rows > 1
+    ? `<div><label style="font-size:.78em;font-weight:900;color:#334155;">${label}</label><textarea id="${id}" rows="${rows}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">${escapeHtml(value || '')}</textarea></div>`
+    : `<div><label style="font-size:.78em;font-weight:900;color:#334155;">${label}</label><input id="${id}" value="${escapeHtml(value || '')}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></div>`;
+
+  const modal = document.createElement('div');
+  modal.id = 'iftyAncientEditorModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12140;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';
+  modal.innerHTML = `<div style="width:min(720px,100%);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+      <h2 style="margin:0;font-size:1.2em;">古文単語を編集</h2>
+      <button type="button" onclick="document.getElementById('iftyAncientEditorModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button>
+    </div>
+    <div style="display:grid;gap:10px;margin-top:12px;">
+      ${field('iftyAncientEditWord','単語',item.word)}
+      ${field('iftyAncientEditReading','読み',item.reading)}
+      ${field('iftyAncientEditPos','品詞',item.partOfSpeech)}
+      ${field('iftyAncientEditMeanings','重要語義（1行1つ）',(item.meanings || []).join('\n'),4)}
+      ${field('iftyAncientEditModern','現代語との注意',item.modernCaution,3)}
+      ${field('iftyAncientEditUsage','識別・用法',item.usage,3)}
+      ${field('iftyAncientEditExamples','例文（古文 | 現代語訳、1行1組）',(item.examples || []).map(ex => `${ex.classical || ''} | ${ex.modern || ''}`).join('\n'),5)}
+      ${field('iftyAncientEditRelated','関連語（1行1つ）',(item.relatedWords || []).join('\n'),3)}
+      ${field('iftyAncientEditPoints','重要ポイント（1行1つ）',(item.keyPoints || []).join('\n'),3)}
+    </div>
+    <button type="button" onclick="saveIftyAncientItemEditor('${folderId}','${itemId}')" style="width:100%;margin-top:14px;border:none;background:#0284c7;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">保存</button>
+  </div>`;
+
+  modal.addEventListener('click', event => {
+    if (event.target === modal) modal.remove();
+  });
+  document.body.appendChild(modal);
+};
+
+window.saveIftyAncientItemEditor = function(folderId, itemId) {
+  const ref = getIftyAncientItemById(itemId);
+  if (!ref?.item || String(ref.folder.id) !== String(folderId)) return;
+  const item = ref.item;
+  const value = id => String(document.getElementById(id)?.value || '').trim();
+
+  const word = value('iftyAncientEditWord');
+  if (!word) {
+    alert('単語名を入力してください。');
+    return;
+  }
+
+  recordUndoState('古文単語編集');
+  item.word = word;
+  item.title = word;
+  item.reading = value('iftyAncientEditReading');
+  item.partOfSpeech = value('iftyAncientEditPos');
+  item.meanings = value('iftyAncientEditMeanings').split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 8);
+  item.memoryText = item.meanings.join('／');
+  item.modernCaution = value('iftyAncientEditModern');
+  item.usage = value('iftyAncientEditUsage');
+  item.examples = value('iftyAncientEditExamples').split(/\n+/).map(line => {
+    const parts = line.split('|');
+    const classical = String(parts.shift() || '').trim();
+    const modern = String(parts.join('|') || '').trim();
+    return classical || modern ? { classical, modern } : null;
+  }).filter(Boolean).slice(0, 5);
+  item.relatedWords = value('iftyAncientEditRelated').split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 12);
+  item.keyPoints = value('iftyAncientEditPoints').split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 8);
+  item.updatedAt = Date.now();
+
+  savePracticeData();
+  document.getElementById('iftyAncientEditorModal')?.remove();
+  refreshIftyAncientFolderDynamic(folderId);
+};
+
+window.startIftyAncientFlashcards = function(folderId, direction = 'front') {
+  const folder = getIftyAncientFolder(folderId);
+  if (!folder || !folder.items.length) {
+    alert('古文単語がありません。');
+    return;
+  }
+
+  currentFlashcardMode = 'ancient';
+  cardMode = direction === 'back' ? 'back' : 'front';
+  isRandomMode = true;
+  flashcardList = folder.items.map(item => ({
+    id: String(item.id || ''),
+    word: String(item.word || item.title || ''),
+    meanings: Array.isArray(item.meanings) && item.meanings.length ? item.meanings : [String(item.memoryText || '')],
+    mastery: item.mastery || 'unfixed',
+    language: '日本語（古文）',
+    languageCode: 'ja',
+    __iftyAncientFlashcard: true,
+    __iftyAncientItemId: String(item.id || '')
+  }));
+  flashcardList = shuffleArray(flashcardList);
+  currentFlashcardIndex = 0;
+  isCardFlipped = false;
+  renderFlashcardModal();
+};
+
 window.openIftySubject = function(subject) {
   const normalized = normalizeIftySubject(subject);
   currentIftySubject = normalized;
@@ -6505,6 +6986,11 @@ window.openIftySubject = function(subject) {
 
   if (normalized === 'SCIENCE') {
     renderIftySciencePage();
+    return;
+  }
+
+  if (normalized === 'ANCIENT') {
+    renderIftyAncientPage();
     return;
   }
 
@@ -9740,18 +10226,22 @@ function getIftySubjectReviewModuleKey(subject) {
   const key = normalizeIftySubject(subject);
   if (key === 'SOCIAL STUDIES') return 'socialStudies';
   if (key === 'SCIENCE') return 'science';
+  if (key === 'ANCIENT') return 'ancient';
   return '';
 }
 
 function getIftySubjectReviewLabel(subject) {
   const key = normalizeIftySubject(subject);
-  return key === 'SCIENCE' ? '理科' : '社会';
+  if (key === 'SCIENCE') return '理科';
+  if (key === 'ANCIENT') return '古文単語';
+  return '社会';
 }
 
 function getIftySubjectReviewItemRef(subject, itemId) {
   const key = normalizeIftySubject(subject);
   if (key === 'SOCIAL STUDIES') return getIftySocialItemById(itemId);
   if (key === 'SCIENCE') return getIftyScienceItemById(itemId);
+  if (key === 'ANCIENT') return getIftyAncientItemById(itemId);
   return null;
 }
 
@@ -9913,9 +10403,13 @@ function toggleIftySubjectItemReview(subject, folderId, itemId) {
 
   savePracticeData();
   if (key === 'SCIENCE') refreshIftyScienceFolderDynamic(ref.folder.id);
+  else if (key === 'ANCIENT') refreshIftyAncientFolderDynamic(ref.folder.id);
   else refreshIftySocialFolderDynamic(ref.folder.id);
 
-  const panel = document.getElementById(key === 'SCIENCE' ? 'iftyScienceReviewPanelWrap' : 'iftySocialReviewPanelWrap');
+  const panelId = key === 'SCIENCE'
+    ? 'iftyScienceReviewPanelWrap'
+    : (key === 'ANCIENT' ? 'iftyAncientReviewPanelWrap' : 'iftySocialReviewPanelWrap');
+  const panel = document.getElementById(panelId);
   if (panel) panel.innerHTML = renderIftySubjectReviewPanel(key);
 }
 
@@ -9925,6 +10419,10 @@ window.toggleIftySocialItemReview = function(folderId, itemId) {
 
 window.toggleIftyScienceItemReview = function(folderId, itemId) {
   toggleIftySubjectItemReview('SCIENCE', folderId, itemId);
+};
+
+window.toggleIftyAncientItemReview = function(folderId, itemId) {
+  toggleIftySubjectItemReview('ANCIENT', folderId, itemId);
 };
 
 function renderIftySubjectReviewPanel(subject) {
@@ -9937,7 +10435,7 @@ function renderIftySubjectReviewPanel(subject) {
 
   const dueList = dueEntries.length
     ? dueEntries.slice(0, 12).map(({ folder, item, review }) => {
-        const title = String(item.title || item.topic || '無題');
+        const title = String(item.title || item.word || item.topic || '無題');
         const summary = String(item.memoryText || '').trim().replace(/\s+/g, ' ');
         const stage = review.level < 0 ? '今すぐ' : `${IFTY_REVIEW_INTERVAL_DAYS[Math.max(0, review.level)]}日段階`;
         const toggleFn = key === 'SCIENCE' ? 'toggleIftyScienceItemReview' : 'toggleIftySocialItemReview';
@@ -9972,21 +10470,27 @@ window.startIftySubjectDueReviewFlashcards = function(subject, direction = 'fron
     return;
   }
 
-  currentFlashcardMode = key === 'SCIENCE' ? 'science_review_due' : 'social_review_due';
+  currentFlashcardMode = key === 'SCIENCE'
+    ? 'science_review_due'
+    : (key === 'ANCIENT' ? 'ancient_review_due' : 'social_review_due');
   cardMode = direction === 'back' ? 'back' : 'front';
   isRandomMode = false;
 
   flashcardList = entries.map(({ item }) => ({
     id: String(item.id || ''),
-    word: String(item.title || item.topic || '無題'),
-    meanings: [String(item.memoryText || '').trim()],
+    word: String(item.word || item.title || item.topic || '無題'),
+    meanings: Array.isArray(item.meanings) && item.meanings.length
+      ? item.meanings
+      : [String(item.memoryText || '').trim()],
     mastery: item.mastery || 'unfixed',
-    language: '日本語',
+    language: key === 'ANCIENT' ? '日本語（古文）' : '日本語',
     languageCode: 'ja',
     __iftySubjectReviewDue: true,
     ...(key === 'SCIENCE'
       ? { __iftyScienceFlashcard: true, __iftyScienceItemId: String(item.id || '') }
-      : { __iftySocialFlashcard: true, __iftySocialItemId: String(item.id || '') })
+      : (key === 'ANCIENT'
+          ? { __iftyAncientFlashcard: true, __iftyAncientItemId: String(item.id || '') }
+          : { __iftySocialFlashcard: true, __iftySocialItemId: String(item.id || '') }))
   }));
 
   currentFlashcardIndex = 0;
@@ -10965,6 +11469,100 @@ function saveUserData() {
   } catch (e) {}
 }
 
+
+function normalizeIftyAncientExample(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    const classical = String(value || '').trim();
+    return classical ? { classical, modern: '' } : null;
+  }
+  if (typeof value !== 'object') return null;
+  const classical = String(value.classical || value.text || value.original || '').trim();
+  const modern = String(value.modern || value.translation || value.ja || '').trim();
+  if (!classical && !modern) return null;
+  return { classical, modern };
+}
+
+function normalizeIftyAncientItem(value) {
+  if (!value || typeof value !== 'object') return null;
+  const text = field => String(value[field] || '').trim();
+  const word = text('word') || text('title') || text('topic');
+  if (!word) return null;
+
+  const meanings = Array.isArray(value.meanings)
+    ? value.meanings.map(v => String(v || '').trim()).filter(Boolean).slice(0, 8)
+    : (text('meaning') ? [text('meaning')] : []);
+
+  const examples = Array.isArray(value.examples)
+    ? value.examples.map(normalizeIftyAncientExample).filter(Boolean).slice(0, 5)
+    : [];
+
+  const relatedWords = Array.isArray(value.relatedWords)
+    ? value.relatedWords.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12)
+    : [];
+
+  const keyPoints = Array.isArray(value.keyPoints)
+    ? value.keyPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 8)
+    : [];
+
+  return {
+    id: value.id || makeId('ancientword'),
+    title: word,
+    word,
+    reading: text('reading'),
+    partOfSpeech: text('partOfSpeech'),
+    meanings,
+    modernCaution: text('modernCaution'),
+    usage: text('usage'),
+    examples,
+    relatedWords,
+    keyPoints,
+    memoryText: meanings.join('／') || text('memoryText'),
+    mastery: value.mastery === 'fixed' ? 'fixed' : 'unfixed',
+    review: value.review && typeof value.review === 'object' ? deepClone(value.review) : undefined,
+    source: String(value.source || 'MANUAL').trim(),
+    createdAt: Number(value.createdAt || 0) || Date.now(),
+    updatedAt: Number(value.updatedAt || 0) || Date.now()
+  };
+}
+
+function getIftyAncientModule() {
+  normalizePracticeData();
+  return practiceData.modules.ancient;
+}
+
+function getIftyAncientFolder(folderId) {
+  return getIftyAncientModule().folders.find(folder => String(folder.id) === String(folderId)) || null;
+}
+
+function getIftyAncientItemById(itemId) {
+  const target = String(itemId || '');
+  for (const folder of getIftyAncientModule().folders || []) {
+    const item = (folder.items || []).find(row => String(row?.id || '') === target);
+    if (item) return { folder, item };
+  }
+  return null;
+}
+
+function countIftyAncientItems() {
+  return getIftyAncientModule().folders.reduce((sum, folder) => sum + (Array.isArray(folder.items) ? folder.items.length : 0), 0);
+}
+
+function buildIftyAncientSearchText(folder, item) {
+  return [
+    folder?.name,
+    item?.word,
+    item?.reading,
+    item?.partOfSpeech,
+    ...(Array.isArray(item?.meanings) ? item.meanings : []),
+    item?.modernCaution,
+    item?.usage,
+    ...(Array.isArray(item?.examples) ? item.examples.flatMap(ex => [ex?.classical, ex?.modern]) : []),
+    ...(Array.isArray(item?.relatedWords) ? item.relatedWords : []),
+    ...(Array.isArray(item?.keyPoints) ? item.keyPoints : [])
+  ].map(v => String(v || '').trim()).filter(Boolean).join(' ').toLowerCase();
+}
+
 function normalizePracticeData() {
   if (!practiceData || typeof practiceData !== 'object') practiceData = {};
   if (!practiceData.schemaVersion) practiceData.schemaVersion = 1;
@@ -11097,6 +11695,22 @@ function normalizePracticeData() {
       subjects: normalizedSubjects.length ? normalizedSubjects : ['PHYSICS'],
       collapsed: !!source.collapsed,
       items: Array.isArray(source.items) ? source.items.map(normalizeIftyScienceItem).filter(Boolean) : []
+    };
+  });
+
+  if (!practiceData.modules.ancient || typeof practiceData.modules.ancient !== 'object') {
+    practiceData.modules.ancient = { folders: [] };
+  }
+  if (!Array.isArray(practiceData.modules.ancient.folders)) {
+    practiceData.modules.ancient.folders = [];
+  }
+  practiceData.modules.ancient.folders = practiceData.modules.ancient.folders.map(folder => {
+    const source = folder && typeof folder === 'object' ? folder : {};
+    return {
+      id: source.id || makeId('ancientfolder'),
+      name: String(source.name || '古文単語').trim() || '古文単語',
+      collapsed: !!source.collapsed,
+      items: Array.isArray(source.items) ? source.items.map(normalizeIftyAncientItem).filter(Boolean) : []
     };
   });
 }
@@ -13600,8 +14214,15 @@ function getIftyAlliaSubjectCapabilities(subject) {
       supportsPractice: true
     },
     ANCIENT: {
-      storage: 'practiceModule', moduleKey: 'ancient', folderCollection: 'folders', itemCollection: 'items',
-      itemLabelField: 'title', generator: 'generic_study_item', supportsPractice: false
+      storage: 'practiceModule',
+      moduleKey: 'ancient',
+      folderCollection: 'folders',
+      itemCollection: 'items',
+      itemLabelField: 'title',
+      generator: 'ancient_word',
+      folderDefaults: { collapsed: false },
+      itemSchema: ['title','word','reading','partOfSpeech','meanings','modernCaution','usage','examples','relatedWords','keyPoints','memoryText','source','createdAt','updatedAt'],
+      supportsPractice: true
     },
     SCIENCE: {
       storage: 'practiceModule',
@@ -13849,14 +14470,16 @@ window.renderFlashcardModal = function() {
     const isScienceSession = currentFlashcardMode === 'science';
     const isSocialReviewSession = currentFlashcardMode === 'social_review_due';
     const isScienceReviewSession = currentFlashcardMode === 'science_review_due';
+    const isAncientSession = currentFlashcardMode === 'ancient';
+    const isAncientReviewSession = currentFlashcardMode === 'ancient_review_due';
     if (isReviewSession || isWeakSession) renderFolders();
     modal.innerHTML = `
       <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
         <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 10px;">🎉 完了！</h3>
-        <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">${(isReviewSession || isSocialReviewSession || isScienceReviewSession) ? '今日の復習を終了しました。' : (isWeakSession ? '苦手候補の学習を終了しました。' : 'すべてのカードを終了しました。')}</p>
+        <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">${(isReviewSession || isSocialReviewSession || isScienceReviewSession || isAncientReviewSession) ? '今日の復習を終了しました。' : (isWeakSession ? '苦手候補の学習を終了しました。' : 'すべてのカードを終了しました。')}</p>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-          ${(isReviewSession || isWeakSession || isSocialSession || isScienceSession || isSocialReviewSession || isScienceReviewSession) ? '' : '<button onclick="closeFlashcardModal(); openPracticeHome(\'ENGLISH\');" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>'}
-          <button onclick="closeFlashcardModal();${isSocialReviewSession ? "renderIftySocialStudiesPage();" : (isScienceReviewSession ? "renderIftySciencePage();" : (isSocialSession ? "openPracticeHome('SOCIAL STUDIES');" : (isScienceSession ? "openPracticeHome('SCIENCE');" : '')))}" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">${isReviewSession ? '復習フォルダへ戻る' : (isWeakSession ? '語彙帳へ戻る' : (isSocialReviewSession ? '社会へ戻る' : (isScienceReviewSession ? '理科へ戻る' : (isSocialSession ? '社会PRACTICEへ戻る' : (isScienceSession ? '理科PRACTICEへ戻る' : '閉じる')))))}</button>
+          ${(isReviewSession || isWeakSession || isSocialSession || isScienceSession || isSocialReviewSession || isScienceReviewSession || isAncientSession || isAncientReviewSession) ? '' : '<button onclick="closeFlashcardModal(); openPracticeHome(\'ENGLISH\');" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>'}
+          <button onclick="closeFlashcardModal();${isSocialReviewSession ? "renderIftySocialStudiesPage();" : (isScienceReviewSession ? "renderIftySciencePage();" : (isAncientReviewSession || isAncientSession ? "renderIftyAncientPage();" : (isSocialSession ? "openPracticeHome('SOCIAL STUDIES');" : (isScienceSession ? "openPracticeHome('SCIENCE');" : ''))))}" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">${isReviewSession ? '復習フォルダへ戻る' : (isWeakSession ? '語彙帳へ戻る' : (isSocialReviewSession ? '社会へ戻る' : (isScienceReviewSession ? '理科へ戻る' : (isAncientReviewSession || isAncientSession ? '古文単語へ戻る' : (isSocialSession ? '社会PRACTICEへ戻る' : (isScienceSession ? '理科PRACTICEへ戻る' : '閉じる'))))))}</button>
         </div>
       </div>
     `;
@@ -13908,6 +14531,14 @@ window.setMasteryAndNext = function(status) {
       savePracticeData();
     } else if (current.__iftyScienceFlashcard) {
       const ref = findIftySciencePracticeItemById(current.__iftyScienceItemId || current.id);
+      if (ref && ref.item) {
+        ref.item.mastery = status;
+        if (current.__iftySubjectReviewDue) applyIftyEntityReviewResult(ref.item, correct);
+        else enrollIftyEntityReviewFromStudy(ref.item, correct);
+      }
+      savePracticeData();
+    } else if (current.__iftyAncientFlashcard) {
+      const ref = getIftyAncientItemById(current.__iftyAncientItemId || current.id);
       if (ref && ref.item) {
         ref.item.mastery = status;
         if (current.__iftySubjectReviewDue) applyIftyEntityReviewResult(ref.item, correct);
