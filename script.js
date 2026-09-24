@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP55 2026-09-24：ANCIENT 古文単語 専用学習実装 ★★★
+// ★★★ IFTY Q3 STEP57 2026-09-24：全教科 慎重な再生成 + ANCIENT修正 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -2838,6 +2838,7 @@ function renderIftySocialItemCard(folder, item) {
         </div>
       </div>
       <div style="display:flex;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end;">
+        <button id="iftyRegenSocial_${item.id}" type="button" onclick="regenerateIftySocialItem('${folder.id}','${item.id}')" title="事実関係・意味を最初から慎重に再検討する" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">再生成</button>
         <button type="button" onclick="toggleIftySocialItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
         <button type="button" onclick="moveIftySocialItem('${folder.id}','${item.id}',-1)" ${itemIndex <= 0 ? 'disabled' : ''} title="上へ" style="border:none;background:${itemIndex <= 0 ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex <= 0 ? 'not-allowed' : 'pointer'};font-weight:900;">↑</button>
         <button type="button" onclick="moveIftySocialItem('${folder.id}','${item.id}',1)" ${itemIndex >= lastIndex ? 'disabled' : ''} title="下へ" style="border:none;background:${itemIndex >= lastIndex ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex >= lastIndex ? 'not-allowed' : 'pointer'};font-weight:900;">↓</button>
@@ -2853,6 +2854,67 @@ function renderIftySocialItemCard(folder, item) {
     </div>` : ''}
   </article>`;
 }
+
+window.regenerateIftySocialItem = async function(folderId, itemId) {
+  const ref = getIftySocialItemById(itemId);
+  if (!ref?.item || String(ref.folder.id) !== String(folderId)) return;
+
+  const folder = ref.folder;
+  const item = ref.item;
+  const topic = String(item.topic || item.title || '').trim();
+  if (!topic || !confirmIftyCarefulRegeneration(topic)) return;
+  if (!ensureIftyOnline('社会項目の再生成')) return;
+
+  const buttonId = `iftyRegenSocial_${item.id}`;
+  setIftyRegenerateButtonState(buttonId, true);
+
+  const previousData = {
+    title: item.title,
+    topic: item.topic,
+    memoryText: item.memoryText,
+    keyPoints: item.keyPoints,
+    imageKind: item.imageKind,
+    imageFocus: item.imageFocus,
+    workTitle: item.workTitle
+  };
+
+  try {
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'social_generate',
+        topic,
+        image: item.imageData || '',
+        subjects: Array.isArray(folder.subjects) ? [...folder.subjects] : [],
+        order: getIftySubjectOrder('SOCIAL STUDIES'),
+        carefulRegenerate: true,
+        previousData
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+
+    recordUndoState('社会項目再生成');
+    item.memoryText = String(data.memoryText || '').trim();
+    item.keyPoints = Array.isArray(data.keyPoints) ? data.keyPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12) : [];
+    item.imageKind = String(data.imageKind || '').trim();
+    item.imageFocus = String(data.imageFocus || '').trim();
+    item.workTitle = String(data.workTitle || '').trim();
+    // ユーザーが入力した用語名は変えない。
+    item.source = 'ALLIA';
+    item.regeneratedAt = Date.now();
+    item.updatedAt = Date.now();
+
+    savePracticeData();
+    refreshIftySocialFolderDynamic(folderId);
+  } catch (error) {
+    console.error('社会項目再生成エラー:', error);
+    alert(String(error.message || error));
+  } finally {
+    setIftyRegenerateButtonState(buttonId, false);
+  }
+};
 
 window.moveIftySocialItem = function(folderId, itemId, direction) {
   const folder = getIftySocialFolder(folderId);
@@ -4809,6 +4871,7 @@ function renderIftyScienceItemCard(folder, item) {
         </div>
       </div>
       <div style="display:flex;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end;">
+        <button id="iftyRegenScience_${item.id}" type="button" onclick="regenerateIftyScienceItem('${folder.id}','${item.id}')" title="意味・公式・単位・条件を最初から慎重に再検討する" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">再生成</button>
         <button type="button" onclick="toggleIftyScienceItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
         <button type="button" onclick="moveIftyScienceItem('${folder.id}','${item.id}',-1)" ${itemIndex <= 0 ? 'disabled' : ''} title="上へ" style="border:none;background:${itemIndex <= 0 ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex <= 0 ? 'not-allowed' : 'pointer'};font-weight:900;">↑</button>
         <button type="button" onclick="moveIftyScienceItem('${folder.id}','${item.id}',1)" ${itemIndex >= lastIndex ? 'disabled' : ''} title="下へ" style="border:none;background:${itemIndex >= lastIndex ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex >= lastIndex ? 'not-allowed' : 'pointer'};font-weight:900;">↓</button>
@@ -4829,6 +4892,73 @@ function renderIftyScienceItemCard(folder, item) {
     </div>` : ''}
   </article>`;
 }
+
+window.regenerateIftyScienceItem = async function(folderId, itemId) {
+  const ref = getIftyScienceItemById(itemId);
+  if (!ref?.item || String(ref.folder.id) !== String(folderId)) return;
+
+  const folder = ref.folder;
+  const item = ref.item;
+  const topic = String(item.topic || item.title || '').trim();
+  if (!topic || !confirmIftyCarefulRegeneration(topic)) return;
+  if (!ensureIftyOnline('理科項目の再生成')) return;
+
+  const buttonId = `iftyRegenScience_${item.id}`;
+  setIftyRegenerateButtonState(buttonId, true);
+
+  const previousData = {
+    title: item.title,
+    topic: item.topic,
+    memoryText: item.memoryText,
+    keyPoints: item.keyPoints,
+    formula: item.formula,
+    unit: item.unit,
+    conditions: item.conditions,
+    imageKind: item.imageKind,
+    imageFocus: item.imageFocus,
+    workTitle: item.workTitle
+  };
+
+  try {
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'science_generate',
+        topic,
+        image: item.imageData || '',
+        subjects: Array.isArray(folder.subjects) ? [...folder.subjects] : [],
+        order: getIftySubjectOrder('SCIENCE'),
+        carefulRegenerate: true,
+        previousData
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+
+    recordUndoState('理科項目再生成');
+    item.title = chooseIftyScienceGeneratedTitle(String(item.topic || topic), data.title);
+    item.memoryText = String(data.memoryText || '').trim();
+    item.keyPoints = Array.isArray(data.keyPoints) ? data.keyPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12) : [];
+    item.formula = String(data.formula || '').trim();
+    item.unit = String(data.unit || '').trim();
+    item.conditions = String(data.conditions || '').trim();
+    item.imageKind = String(data.imageKind || '').trim();
+    item.imageFocus = String(data.imageFocus || '').trim();
+    item.workTitle = String(data.workTitle || '').trim();
+    item.source = 'ALLIA';
+    item.regeneratedAt = Date.now();
+    item.updatedAt = Date.now();
+
+    savePracticeData();
+    refreshIftyScienceFolderDynamic(folderId);
+  } catch (error) {
+    console.error('理科項目再生成エラー:', error);
+    alert(String(error.message || error));
+  } finally {
+    setIftyRegenerateButtonState(buttonId, false);
+  }
+};
 
 window.moveIftyScienceItem = function(folderId, itemId, direction) {
   const folder = getIftyScienceFolder(folderId);
@@ -6526,6 +6656,7 @@ function renderIftyAncientItemCard(folder, item) {
       </div>
 
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
+        <button id="iftyRegenAncient_${item.id}" type="button" onclick="regenerateIftyAncientItem('${folder.id}','${item.id}')" title="語義・読み・品詞を最初から慎重に再検討する" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">再生成</button>
         <button type="button" onclick="toggleIftyAncientItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
         <button type="button" onclick="moveIftyAncientItem('${folder.id}','${item.id}',-1)" ${itemIndex <= 0 ? 'disabled' : ''} title="上へ" style="border:none;background:${itemIndex <= 0 ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex <= 0 ? 'not-allowed' : 'pointer'};font-weight:900;">↑</button>
         <button type="button" onclick="moveIftyAncientItem('${folder.id}','${item.id}',1)" ${itemIndex >= lastIndex ? 'disabled' : ''} title="下へ" style="border:none;background:${itemIndex >= lastIndex ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex >= lastIndex ? 'not-allowed' : 'pointer'};font-weight:900;">↓</button>
@@ -6677,7 +6808,6 @@ window.renderIftyAncientPage = function(options = {}) {
         <div style="display:flex;gap:7px;flex-wrap:wrap;">
           <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOME</button>
           <button class="ifty-portal-back" type="button" onclick="openIftySubjectOrder('ANCIENT')">ORDER</button>
-          <button class="ifty-portal-back" type="button" onclick="openIftySubjectChat('ANCIENT')">ALLIA</button>
         </div>
       </div>
 
@@ -6770,6 +6900,76 @@ window.moveIftyAncientFolder = function(index, direction) {
   [module.folders[index], module.folders[nextIndex]] = [module.folders[nextIndex], module.folders[index]];
   savePracticeData();
   renderIftyAncientPage();
+};
+
+window.regenerateIftyAncientItem = async function(folderId, itemId) {
+  const ref = getIftyAncientItemById(itemId);
+  if (!ref?.item || String(ref.folder.id) !== String(folderId)) return;
+
+  const item = ref.item;
+  const word = String(item.word || item.title || '').trim();
+  if (!word || !confirmIftyCarefulRegeneration(word)) return;
+  if (!ensureIftyOnline('古文単語の再生成')) return;
+
+  const buttonId = `iftyRegenAncient_${item.id}`;
+  setIftyRegenerateButtonState(buttonId, true);
+
+  const previousData = {
+    word: item.word,
+    reading: item.reading,
+    partOfSpeech: item.partOfSpeech,
+    meanings: item.meanings,
+    modernCaution: item.modernCaution,
+    usage: item.usage,
+    examples: item.examples,
+    relatedWords: item.relatedWords,
+    keyPoints: item.keyPoints
+  };
+
+  try {
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'ancient_word_generate',
+        word,
+        order: getIftySubjectOrder('ANCIENT'),
+        carefulRegenerate: true,
+        previousData
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+
+    recordUndoState('古文単語再生成');
+    item.word = word;
+    item.title = word;
+    item.reading = String(data.reading || '').trim();
+    item.partOfSpeech = String(data.partOfSpeech || '').trim();
+    item.meanings = Array.isArray(data.meanings) ? data.meanings.map(v => String(v || '').trim()).filter(Boolean).slice(0, 8) : [];
+    item.memoryText = item.meanings.join('／');
+    item.modernCaution = String(data.modernCaution || '').trim();
+    item.usage = String(data.usage || '').trim();
+    item.examples = Array.isArray(data.examples)
+      ? data.examples.map(ex => ({
+          classical: String(ex?.classical || '').trim(),
+          modern: String(ex?.modern || '').trim()
+        })).filter(ex => ex.classical || ex.modern).slice(0, 5)
+      : [];
+    item.relatedWords = Array.isArray(data.relatedWords) ? data.relatedWords.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12) : [];
+    item.keyPoints = Array.isArray(data.keyPoints) ? data.keyPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 8) : [];
+    item.source = 'ALLIA';
+    item.regeneratedAt = Date.now();
+    item.updatedAt = Date.now();
+
+    savePracticeData();
+    refreshIftyAncientFolderDynamic(folderId);
+  } catch (error) {
+    console.error('古文単語再生成エラー:', error);
+    alert(String(error.message || error));
+  } finally {
+    setIftyRegenerateButtonState(buttonId, false);
+  }
 };
 
 window.moveIftyAncientItem = function(folderId, itemId, direction) {
@@ -12030,6 +12230,19 @@ window.cancelSpellingSuggestion = function(folderId) {
 };
 
 // 単語カード表示
+function setIftyRegenerateButtonState(buttonId, loading) {
+  const button = document.getElementById(buttonId);
+  if (!button) return;
+  button.disabled = !!loading;
+  button.textContent = loading ? '再生成中…' : '再生成';
+  button.style.opacity = loading ? '.62' : '1';
+  button.style.cursor = loading ? 'wait' : 'pointer';
+}
+
+function confirmIftyCarefulRegeneration(label) {
+  return confirm(`「${String(label || 'この項目')}」を慎重に再生成しますか？\n現在の生成内容は置き換わりますが、復習状態・並び順・画像は保持します。`);
+}
+
 function renderWordItem(w, folderId, wIndex) {
   const meanings = Array.isArray(w.meanings) ? w.meanings : (w.meanings ? [w.meanings] : []);
   const examples = Array.isArray(w.examples) ? w.examples : [];
@@ -12102,6 +12315,7 @@ function renderWordItem(w, folderId, wIndex) {
 
         <div style="display: flex; gap: 3px; align-items: center; margin-left: 8px;">
           ${w.word ? `<button onclick="speakWord('${escapeHtml(String(w.word).replace(/'/g, "\\'"))}','${escapeHtml(getIftyWordLanguageInfo(w).code)}')" style="background: #0284c7; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="語彙を発音">🔊</button>` : ''}
+          <button id="iftyRegenVocab_${w.id}" onclick="regenerateIftyVocabularyWord('${folderId}','${w.id}')" style="background:#7c3aed;color:white;border:none;padding:3px 6px;border-radius:4px;font-size:.75em;cursor:pointer;font-weight:800;" title="言語・意味・用法を最初から慎重に再検討する">再生成</button>
           <button onclick="toggleIftyWordReview('${folderId}','${w.id}')" style="background:${isIftyReviewTagged(w) ? '#ea580c' : '#f59e0b'};color:white;border:none;padding:3px 6px;border-radius:4px;font-size:.75em;cursor:pointer;" title="${isIftyReviewTagged(w) ? '復習登録を解除' : 'この単語を復習に登録'}">${isIftyReviewTagged(w) ? '🔁 復習中' : '🔁 手動で復習登録'}</button>
           <button onclick="openEditWordModal('${folderId}', ${wIndex})" style="background: #64748b; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="編集">編集</button>
           <button onclick="moveWordWithinFolder('${folderId}', ${wIndex}, -1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="上へ">⬆️</button>
@@ -12364,6 +12578,73 @@ async function generateAndAddWord(folderId, wordText) {
     setTimeout(() => speakWord(newWordObj.word || wordText, newWordObj.languageCode || ''), 300);
   }
 }
+
+window.regenerateIftyVocabularyWord = async function(folderId, wordId) {
+  const folder = folders.find(row => String(row.id) === String(folderId));
+  const wordObj = folder && (folder.words || []).find(row => String(row.id) === String(wordId));
+  if (!folder || !wordObj) return;
+
+  const headword = String(wordObj.word || '').trim();
+  if (!headword || !confirmIftyCarefulRegeneration(headword)) return;
+  if (!ensureIftyOnline('語彙の再生成')) return;
+
+  const buttonId = `iftyRegenVocab_${wordObj.id}`;
+  setIftyRegenerateButtonState(buttonId, true);
+
+  const previousData = {
+    word: wordObj.word,
+    language: wordObj.language,
+    languageCode: wordObj.languageCode,
+    pronunciationSystem: wordObj.pronunciationSystem,
+    pronunciation: wordObj.pronunciation,
+    partOfSpeech: wordObj.partOfSpeech,
+    transitivity: wordObj.transitivity,
+    countability: wordObj.countability,
+    meanings: wordObj.meanings,
+    quizAnswers: wordObj.quizAnswers,
+    examples: wordObj.examples,
+    forms: wordObj.forms,
+    derivatives: wordObj.derivatives,
+    details: wordObj.details
+  };
+  const order = getIftySubjectOrder('ENGLISH');
+
+  try {
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'word',
+        word: headword,
+        subject: 'ENGLISH',
+        order,
+        carefulRegenerate: true,
+        previousData
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+
+    recordUndoState('語彙再生成');
+    const review = wordObj.review ? deepClone(wordObj.review) : undefined;
+    const mastery = wordObj.mastery;
+    applyWordData(wordObj, data);
+    wordObj.word = headword;
+    if (review) wordObj.review = review;
+    if (mastery) wordObj.mastery = mastery;
+    wordObj.regeneratedAt = Date.now();
+
+    saveUserData();
+    await saveIftyGeneratedWordCache(headword, data, 'ENGLISH', order);
+    refreshFolderWordArea(folderId);
+  } catch (error) {
+    console.error('語彙再生成エラー:', error);
+    alert(String(error.message || error));
+  } finally {
+    setIftyRegenerateButtonState(buttonId, false);
+  }
+};
+
 
 function applyWordData(wordObj, data) {
   if (!data) return;
