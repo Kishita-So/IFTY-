@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP53 2026-09-24：SCIENCE ORDER英語時の用語名 英語（日本語）対応 ★★★
+// ★★★ IFTY Q3 STEP54 2026-09-24：SOCIAL/SCIENCE復習システム + スマホ表示改善 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -1650,6 +1650,12 @@ window.openIftySubjectAllia = function(subject) {
 // Q3 STEP15：HOME / SUBJECTS / SETTINGS 実画面
 // ==========================================
 function ensureIftyPortalStyles() {
+  if (!document.querySelector('meta[name="viewport"]')) {
+    const viewport = document.createElement('meta');
+    viewport.name = 'viewport';
+    viewport.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
+    document.head.appendChild(viewport);
+  }
   if (document.getElementById('iftyPortalStyles')) return;
   const style = document.createElement('style');
   style.id = 'iftyPortalStyles';
@@ -1812,8 +1818,121 @@ function ensureIftyPortalStyles() {
       background: #334155;
       color: #cbd5e1;
     }
-    @media (max-width: 620px) {
-      .ifty-home-grid { grid-template-columns: 1fr; }
+    @media (max-width: 700px) {
+      html, body {
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+      }
+      body {
+        min-width: 0 !important;
+      }
+      #mainPortal {
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        padding: 66px 7px 18px !important;
+        box-sizing: border-box !important;
+      }
+      #mainPortal > *,
+      #vocabPage,
+      #iftyHubPage,
+      #aiChatPage {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+      }
+      #iftyGlobalLogo {
+        width: 45px !important;
+        height: 45px !important;
+        left: 6px !important;
+        top: 6px !important;
+      }
+      #iftyQuickControls {
+        right: 6px !important;
+        top: 6px !important;
+        gap: 3px !important;
+      }
+      #iftyQuickControls button {
+        width: 34px !important;
+        height: 34px !important;
+        border-radius: 8px !important;
+        font-size: .92rem !important;
+      }
+      .ifty-portal-shell {
+        padding: 10px !important;
+        border-radius: 10px !important;
+      }
+      .ifty-portal-title {
+        font-size: 1.3rem !important;
+        overflow-wrap: anywhere;
+      }
+      .ifty-portal-subtitle {
+        font-size: .8rem !important;
+      }
+      .ifty-home-grid {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+        margin-top: 12px !important;
+      }
+      .ifty-home-card {
+        min-height: 102px !important;
+        padding: 12px !important;
+      }
+      .ifty-settings-section {
+        padding: 10px !important;
+        border-radius: 9px !important;
+      }
+      .ifty-settings-row {
+        align-items: stretch !important;
+      }
+      .ifty-settings-row > * {
+        max-width: 100% !important;
+      }
+      input, textarea, select, button {
+        max-width: 100%;
+        box-sizing: border-box;
+      }
+      input, textarea, select {
+        font-size: 16px !important;
+      }
+      .ifty-social-item-card,
+      .ifty-science-item-card {
+        padding: 9px !important;
+        border-radius: 9px !important;
+      }
+      .ifty-social-item-card > div:first-child,
+      .ifty-science-item-card > div:first-child {
+        gap: 7px !important;
+      }
+      .ifty-subject-review-panel {
+        padding: 9px !important;
+      }
+      .ifty-subject-visual-asset {
+        grid-template-columns: 1fr !important;
+      }
+      .ifty-subject-visual-asset img {
+        max-height: 230px !important;
+      }
+      #flashcardModal {
+        padding: 8px !important;
+        box-sizing: border-box !important;
+      }
+      #flashcardModal > div {
+        width: 100% !important;
+        max-width: 420px !important;
+        padding: 16px !important;
+        box-sizing: border-box !important;
+      }
+      #practiceModal > div,
+      #iftySocialVisualQuizModal > div,
+      #iftyScienceVisualQuizModal > div {
+        width: calc(100% - 12px) !important;
+        max-width: 100% !important;
+        padding: 12px !important;
+        box-sizing: border-box !important;
+      }
     }
   `;
   document.head.appendChild(style);
@@ -1882,8 +2001,10 @@ function getIftyHomeStats() {
     years: countIftyYearEntries(),
     socialFolders: socialFolders.length,
     socialItems,
+    socialDueReview: getIftySubjectReviewEntries('SOCIAL STUDIES', { dueOnly: true }).length,
     scienceFolders: scienceFolders.length,
     scienceItems,
+    scienceDueReview: getIftySubjectReviewEntries('SCIENCE', { dueOnly: true }).length,
     ...learning
   };
 }
@@ -1936,14 +2057,14 @@ window.openIftyHome = function() {
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('SCIENCE')">
           <div class="ifty-home-card-title">SCIENCE</div>
-          <div class="ifty-home-card-meta">フォルダ ${stats.scienceFolders} / 項目 ${stats.scienceItems}</div>
+          <div class="ifty-home-card-meta">フォルダ ${stats.scienceFolders} / 項目 ${stats.scienceItems}${stats.scienceDueReview ? ` / 🔁 今日 ${stats.scienceDueReview}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">物理・化学・生物・地学 →</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('SOCIAL STUDIES')">
           <div class="ifty-home-card-title">SOCIAL STUDIES</div>
-          <div class="ifty-home-card-meta">フォルダ ${stats.socialFolders} / 項目 ${stats.socialItems}</div>
+          <div class="ifty-home-card-meta">フォルダ ${stats.socialFolders} / 項目 ${stats.socialItems}${stats.socialDueReview ? ` / 🔁 今日 ${stats.socialDueReview}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">日本史・世界史・地理・公共 →</div>
         </button>
@@ -2602,6 +2723,8 @@ function normalizeIftySocialItem(value) {
     imageKind: normalizeIftySocialImageKind(value.imageKind),
     imageFocus: text('imageFocus'),
     workTitle: text('workTitle'),
+    mastery: value.mastery === 'fixed' ? 'fixed' : 'unfixed',
+    review: value.review && typeof value.review === 'object' ? deepClone(value.review) : undefined,
     source: String(value.source || 'MANUAL').trim(),
     createdAt: Number(value.createdAt || 0) || Date.now(),
     updatedAt: Number(value.updatedAt || 0) || Date.now()
@@ -2654,7 +2777,7 @@ function renderIftySocialMemoryText(item) {
 function renderIftySocialVisualAsset(item) {
   const imageData = normalizeIftySocialImageData(item.imageData);
   if (!imageData) return '';
-  return `<div style="margin-top:10px;border:1px solid #d8b4fe;background:#faf5ff;border-radius:10px;padding:9px;display:grid;grid-template-columns:minmax(120px,220px) 1fr;gap:10px;align-items:start;">
+  return `<div class="ifty-subject-visual-asset" style="margin-top:10px;border:1px solid #d8b4fe;background:#faf5ff;border-radius:10px;padding:9px;display:grid;grid-template-columns:minmax(120px,220px) 1fr;gap:10px;align-items:start;">
     <button type="button" onclick="openIftySocialImageViewer('${item.id}')" style="border:none;background:transparent;padding:0;cursor:zoom-in;min-width:0;">
       <img src="${imageData}" alt="${escapeHtml(item.imageName || item.title || '社会画像')}" style="display:block;width:100%;max-height:190px;object-fit:contain;border-radius:7px;background:white;border:1px solid #e9d5ff;">
     </button>
@@ -2695,9 +2818,11 @@ function renderIftySocialItemCard(folder, item) {
           ${renderIftySocialSubjectBadges(item.subjects.length ? item.subjects : folder.subjects)}
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
           ${item.imageData ? '<span style="font-size:.68em;color:#7e22ce;font-weight:900;">IMAGE</span>' : ''}
+          ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
         </div>
       </div>
       <div style="display:flex;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end;">
+        <button type="button" onclick="toggleIftySocialItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
         <button type="button" onclick="moveIftySocialItem('${folder.id}','${item.id}',-1)" ${itemIndex <= 0 ? 'disabled' : ''} title="上へ" style="border:none;background:${itemIndex <= 0 ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex <= 0 ? 'not-allowed' : 'pointer'};font-weight:900;">↑</button>
         <button type="button" onclick="moveIftySocialItem('${folder.id}','${item.id}',1)" ${itemIndex >= lastIndex ? 'disabled' : ''} title="下へ" style="border:none;background:${itemIndex >= lastIndex ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex >= lastIndex ? 'not-allowed' : 'pointer'};font-weight:900;">↓</button>
         <button type="button" onclick="openIftySocialItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
@@ -2938,6 +3063,7 @@ function renderIftySocialStudiesPage(options = {}) {
         <span id="iftySocialSearchCount" style="font-size:.78em;color:#64748b;font-weight:800;">${countIftySocialItems()}件</span>
       </div>
       <div id="iftySocialModuleSummary" style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 項目 ${countIftySocialItems()}。画像はクイズ用に圧縮して項目へ保存され、既存のpracticeDataと一緒にクラウド同期・バックアップ対象になります。</div>
+      <div id="iftySocialReviewPanelWrap">${renderIftySubjectReviewPanel('SOCIAL STUDIES')}</div>
       <div>${module.folders.length ? module.folders.map(renderIftySocialFolder).join('') : '<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">社会フォルダを作成してください。</div>'}</div>
     </section>
   `, 'subject');
@@ -4452,6 +4578,8 @@ function normalizeIftyScienceItem(value) {
     imageKind: normalizeIftyScienceImageKind(value.imageKind),
     imageFocus: text('imageFocus'),
     workTitle: text('workTitle'),
+    mastery: value.mastery === 'fixed' ? 'fixed' : 'unfixed',
+    review: value.review && typeof value.review === 'object' ? deepClone(value.review) : undefined,
     source: String(value.source || 'MANUAL').trim(),
     createdAt: Number(value.createdAt || 0) || Date.now(),
     updatedAt: Number(value.updatedAt || 0) || Date.now()
@@ -4598,7 +4726,7 @@ function renderIftyScienceMemoryText(item) {
 function renderIftyScienceVisualAsset(item) {
   const imageData = normalizeIftyScienceImageData(item.imageData);
   if (!imageData) return '';
-  return `<div style="margin-top:10px;border:1px solid #d8b4fe;background:#faf5ff;border-radius:10px;padding:9px;display:grid;grid-template-columns:minmax(120px,220px) 1fr;gap:10px;align-items:start;">
+  return `<div class="ifty-subject-visual-asset" style="margin-top:10px;border:1px solid #d8b4fe;background:#faf5ff;border-radius:10px;padding:9px;display:grid;grid-template-columns:minmax(120px,220px) 1fr;gap:10px;align-items:start;">
     <button type="button" onclick="openIftyScienceImageViewer('${item.id}')" style="border:none;background:transparent;padding:0;cursor:zoom-in;min-width:0;">
       <img src="${imageData}" alt="${escapeHtml(item.imageName || item.title || '理科画像')}" style="display:block;width:100%;max-height:190px;object-fit:contain;border-radius:7px;background:white;border:1px solid #e9d5ff;">
     </button>
@@ -4661,9 +4789,11 @@ function renderIftyScienceItemCard(folder, item) {
           ${renderIftyScienceSubjectBadges(item.subjects.length ? item.subjects : folder.subjects)}
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
           ${item.imageData ? '<span style="font-size:.68em;color:#7e22ce;font-weight:900;">IMAGE</span>' : ''}
+          ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
         </div>
       </div>
       <div style="display:flex;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end;">
+        <button type="button" onclick="toggleIftyScienceItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
         <button type="button" onclick="moveIftyScienceItem('${folder.id}','${item.id}',-1)" ${itemIndex <= 0 ? 'disabled' : ''} title="上へ" style="border:none;background:${itemIndex <= 0 ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex <= 0 ? 'not-allowed' : 'pointer'};font-weight:900;">↑</button>
         <button type="button" onclick="moveIftyScienceItem('${folder.id}','${item.id}',1)" ${itemIndex >= lastIndex ? 'disabled' : ''} title="下へ" style="border:none;background:${itemIndex >= lastIndex ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex >= lastIndex ? 'not-allowed' : 'pointer'};font-weight:900;">↓</button>
         <button type="button" onclick="openIftyScienceItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
@@ -4909,6 +5039,7 @@ function renderIftySciencePage(options = {}) {
         <span id="iftyScienceSearchCount" style="font-size:.78em;color:#64748b;font-weight:800;">${countIftyScienceItems()}件</span>
       </div>
       <div id="iftyScienceModuleSummary" style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 項目 ${countIftyScienceItems()}。画像はクイズ用に圧縮して項目へ保存され、既存のpracticeDataと一緒にクラウド同期・バックアップ対象になります。</div>
+      <div id="iftyScienceReviewPanelWrap">${renderIftySubjectReviewPanel('SCIENCE')}</div>
       <div>${module.folders.length ? module.folders.map(renderIftyScienceFolder).join('') : '<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">理科フォルダを作成してください。</div>'}</div>
     </section>
   `, 'subject');
@@ -7348,6 +7479,14 @@ async function applyIftyRecoveryPayload(payload) {
     iftySocialImageDrafts = {};
     iftySocialGenerationPending = {};
     iftySocialEditorImageDraft = null;
+    iftySocialSearchQuery = '';
+    iftySocialFolderSearchQueries = {};
+    iftyScienceTopicDrafts = {};
+    iftyScienceImageDrafts = {};
+    iftyScienceGenerationPending = {};
+    iftyScienceEditorImageDraft = null;
+    iftyScienceSearchQuery = '';
+    iftyScienceFolderSearchQueries = {};
     iftyGlobalVocabSearchQuery = '';
     iftyFolderSearchQueries = {};
     undoStack = [];
@@ -9594,6 +9733,265 @@ window.toggleIftyWordReview = function(folderId, wordId) {
 
   saveUserData();
   renderFolders();
+};
+
+
+function getIftySubjectReviewModuleKey(subject) {
+  const key = normalizeIftySubject(subject);
+  if (key === 'SOCIAL STUDIES') return 'socialStudies';
+  if (key === 'SCIENCE') return 'science';
+  return '';
+}
+
+function getIftySubjectReviewLabel(subject) {
+  const key = normalizeIftySubject(subject);
+  return key === 'SCIENCE' ? '理科' : '社会';
+}
+
+function getIftySubjectReviewItemRef(subject, itemId) {
+  const key = normalizeIftySubject(subject);
+  if (key === 'SOCIAL STUDIES') return getIftySocialItemById(itemId);
+  if (key === 'SCIENCE') return getIftyScienceItemById(itemId);
+  return null;
+}
+
+function getIftySubjectReviewEntries(subject, options = {}) {
+  const key = normalizeIftySubject(subject);
+  const dueOnly = options.dueOnly === true;
+  const now = Number(options.now || Date.now());
+  const moduleKey = getIftySubjectReviewModuleKey(key);
+  const module = moduleKey && practiceData?.modules?.[moduleKey];
+  const entries = [];
+
+  (module?.folders || []).forEach(folder => {
+    (folder.items || []).forEach((item, index) => {
+      const review = normalizeIftyReviewState(item);
+      if (!review || !review.active) return;
+      if (dueOnly && Number(review.nextReview || 0) > now) return;
+      entries.push({ folder, item, index, review });
+    });
+  });
+
+  entries.sort((a, b) => {
+    const diff = Number(a.review.nextReview || 0) - Number(b.review.nextReview || 0);
+    if (diff !== 0) return diff;
+    return String(a.item.title || a.item.topic || '').localeCompare(String(b.item.title || b.item.topic || ''), 'ja');
+  });
+  return entries;
+}
+
+function getIftySubjectReviewGraduatedCount(subject) {
+  const key = normalizeIftySubject(subject);
+  const moduleKey = getIftySubjectReviewModuleKey(key);
+  const module = moduleKey && practiceData?.modules?.[moduleKey];
+  let count = 0;
+  (module?.folders || []).forEach(folder => {
+    (folder.items || []).forEach(item => {
+      const review = normalizeIftyReviewState(item);
+      if (review && Number(review.graduatedAt || 0) > 0) count += 1;
+    });
+  });
+  return count;
+}
+
+function getIftySubjectNextReviewTimestamp(subject, now = Date.now()) {
+  const future = getIftySubjectReviewEntries(subject)
+    .map(entry => Number(entry.review.nextReview || 0))
+    .filter(value => value > now);
+  return future.length ? Math.min(...future) : 0;
+}
+
+function applyIftyEntityReviewResult(entity, correct) {
+  if (!entity || typeof entity !== 'object') return false;
+  const review = normalizeIftyReviewState(entity);
+  if (!review || !review.active) return false;
+
+  const now = Date.now();
+  review.lastReviewed = now;
+
+  if (correct) {
+    review.correctCount += 1;
+    if (review.level >= IFTY_REVIEW_INTERVAL_DAYS.length - 1) {
+      review.active = false;
+      review.nextReview = 0;
+      review.graduatedAt = now;
+      entity.mastery = 'fixed';
+      return true;
+    }
+    review.level = Math.min(review.level + 1, IFTY_REVIEW_INTERVAL_DAYS.length - 1);
+  } else {
+    review.level = 0;
+    review.wrongCount += 1;
+    review.graduatedAt = 0;
+  }
+
+  review.nextReview = now + IFTY_REVIEW_INTERVAL_DAYS[Math.max(0, review.level)] * IFTY_REVIEW_DAY_MS;
+  entity.mastery = correct ? 'fixed' : 'unfixed';
+  return true;
+}
+
+function enrollIftyEntityReviewFromStudy(entity, correct) {
+  if (!entity || typeof entity !== 'object') return false;
+  const now = Date.now();
+  let review = normalizeIftyReviewState(entity);
+
+  if (review && review.active) {
+    if (!correct) {
+      review.level = 0;
+      review.lastReviewed = now;
+      review.nextReview = now + IFTY_REVIEW_INTERVAL_DAYS[0] * IFTY_REVIEW_DAY_MS;
+      review.graduatedAt = 0;
+      review.wrongCount += 1;
+      entity.mastery = 'unfixed';
+      return true;
+    }
+    return false;
+  }
+
+  if (review && review.graduatedAt > 0 && correct) return false;
+
+  if (!review) {
+    entity.review = {
+      active: true,
+      level: 0,
+      lastReviewed: now,
+      nextReview: now + IFTY_REVIEW_INTERVAL_DAYS[0] * IFTY_REVIEW_DAY_MS,
+      correctCount: 0,
+      wrongCount: 0,
+      source: 'auto',
+      graduatedAt: 0,
+      manuallyRemovedAt: 0
+    };
+    return true;
+  }
+
+  review.active = true;
+  review.level = 0;
+  review.lastReviewed = now;
+  review.nextReview = now + IFTY_REVIEW_INTERVAL_DAYS[0] * IFTY_REVIEW_DAY_MS;
+  review.source = 'auto';
+  review.graduatedAt = 0;
+  review.manuallyRemovedAt = 0;
+  return true;
+}
+
+function toggleIftySubjectItemReview(subject, folderId, itemId) {
+  const key = normalizeIftySubject(subject);
+  const ref = getIftySubjectReviewItemRef(key, itemId);
+  if (!ref?.item) return;
+  const item = ref.item;
+
+  recordUndoState(isIftyReviewTagged(item) ? `${getIftySubjectReviewLabel(key)}復習登録解除` : `${getIftySubjectReviewLabel(key)}復習登録`);
+
+  if (isIftyReviewTagged(item)) {
+    item.review.active = false;
+    item.review.manuallyRemovedAt = Date.now();
+  } else {
+    let review = normalizeIftyReviewState(item);
+    if (!review) {
+      item.review = {
+        active: true,
+        level: -1,
+        lastReviewed: 0,
+        nextReview: Date.now(),
+        correctCount: 0,
+        wrongCount: 0,
+        source: 'manual',
+        graduatedAt: 0,
+        manuallyRemovedAt: 0
+      };
+    } else {
+      review.active = true;
+      review.level = -1;
+      review.lastReviewed = 0;
+      review.nextReview = Date.now();
+      review.source = 'manual';
+      review.graduatedAt = 0;
+      review.manuallyRemovedAt = 0;
+    }
+  }
+
+  savePracticeData();
+  if (key === 'SCIENCE') refreshIftyScienceFolderDynamic(ref.folder.id);
+  else refreshIftySocialFolderDynamic(ref.folder.id);
+
+  const panel = document.getElementById(key === 'SCIENCE' ? 'iftyScienceReviewPanelWrap' : 'iftySocialReviewPanelWrap');
+  if (panel) panel.innerHTML = renderIftySubjectReviewPanel(key);
+}
+
+window.toggleIftySocialItemReview = function(folderId, itemId) {
+  toggleIftySubjectItemReview('SOCIAL STUDIES', folderId, itemId);
+};
+
+window.toggleIftyScienceItemReview = function(folderId, itemId) {
+  toggleIftySubjectItemReview('SCIENCE', folderId, itemId);
+};
+
+function renderIftySubjectReviewPanel(subject) {
+  const key = normalizeIftySubject(subject);
+  const label = getIftySubjectReviewLabel(key);
+  const allEntries = getIftySubjectReviewEntries(key);
+  const dueEntries = getIftySubjectReviewEntries(key, { dueOnly: true });
+  const graduated = getIftySubjectReviewGraduatedCount(key);
+  const nextReview = getIftySubjectNextReviewTimestamp(key);
+
+  const dueList = dueEntries.length
+    ? dueEntries.slice(0, 12).map(({ folder, item, review }) => {
+        const title = String(item.title || item.topic || '無題');
+        const summary = String(item.memoryText || '').trim().replace(/\s+/g, ' ');
+        const stage = review.level < 0 ? '今すぐ' : `${IFTY_REVIEW_INTERVAL_DAYS[Math.max(0, review.level)]}日段階`;
+        const toggleFn = key === 'SCIENCE' ? 'toggleIftyScienceItemReview' : 'toggleIftySocialItemReview';
+        return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #fed7aa;">
+          <div style="min-width:0;flex:1;">
+            <div style="font-weight:900;color:#7c2d12;overflow-wrap:anywhere;">${escapeHtml(title)}</div>
+            ${summary ? `<div style="margin-top:2px;color:#9a3412;font-size:.78em;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtml(summary)}</div>` : ''}
+            <div style="margin-top:3px;color:#a16207;font-size:.7em;">📁 ${escapeHtml(folder.name || '')} ・ ${escapeHtml(stage)} ・ ${review.source === 'auto' ? '自動登録' : '手動登録'}</div>
+          </div>
+          <button type="button" onclick="${toggleFn}('${folder.id}','${item.id}')" style="border:none;background:#ffedd5;color:#9a3412;border-radius:6px;padding:6px 8px;font-size:.72em;font-weight:900;cursor:pointer;flex:none;">解除</button>
+        </div>`;
+      }).join('')
+    : `<div style="padding:11px 2px;color:#a16207;font-size:.8em;">今日の復習はありません。${nextReview ? `次回は ${escapeHtml(formatIftyReviewDate(nextReview))}。` : 'カードの「＋復習」またはフラッシュカード学習で登録できます。'}</div>`;
+
+  return `<div class="ifty-subject-review-panel" style="background:#fff7ed;border:2px solid #fb923c;border-radius:10px;padding:12px;margin-top:12px;">
+    <div style="display:flex;justify-content:space-between;gap:9px;align-items:center;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:900;color:#7c2d12;">🔁 ${label}の復習 <span style="font-size:.8em;color:#c2410c;">今日 ${dueEntries.length} / 管理 ${allEntries.length} / 卒業 ${graduated}</span></div>
+        <div style="margin-top:3px;color:#9a3412;font-size:.72em;">1日 → 3日 → 7日 → 14日 → 30日 → 卒業。未定着なら1日段階へ戻ります。</div>
+      </div>
+      <button type="button" onclick="startIftySubjectDueReviewFlashcards('${key}','front')" ${dueEntries.length ? '' : 'disabled'} style="border:none;background:#ea580c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${dueEntries.length ? 'pointer' : 'default'};opacity:${dueEntries.length ? '1' : '.45'};">📇 今日の復習</button>
+    </div>
+    <div style="margin-top:7px;">${dueList}${dueEntries.length > 12 ? `<div style="padding-top:6px;color:#9a3412;font-size:.72em;">ほか ${dueEntries.length - 12}件</div>` : ''}</div>
+  </div>`;
+}
+
+window.startIftySubjectDueReviewFlashcards = function(subject, direction = 'front') {
+  const key = normalizeIftySubject(subject);
+  const entries = getIftySubjectReviewEntries(key, { dueOnly: true });
+  if (!entries.length) {
+    alert('今日の復習はありません。');
+    return;
+  }
+
+  currentFlashcardMode = key === 'SCIENCE' ? 'science_review_due' : 'social_review_due';
+  cardMode = direction === 'back' ? 'back' : 'front';
+  isRandomMode = false;
+
+  flashcardList = entries.map(({ item }) => ({
+    id: String(item.id || ''),
+    word: String(item.title || item.topic || '無題'),
+    meanings: [String(item.memoryText || '').trim()],
+    mastery: item.mastery || 'unfixed',
+    language: '日本語',
+    languageCode: 'ja',
+    __iftySubjectReviewDue: true,
+    ...(key === 'SCIENCE'
+      ? { __iftyScienceFlashcard: true, __iftyScienceItemId: String(item.id || '') }
+      : { __iftySocialFlashcard: true, __iftySocialItemId: String(item.id || '') })
+  }));
+
+  currentFlashcardIndex = 0;
+  isCardFlipped = false;
+  renderFlashcardModal();
 };
 
 function renderIftyReviewFolder() {
@@ -13449,14 +13847,16 @@ window.renderFlashcardModal = function() {
     const isWeakSession = currentFlashcardMode === 'weak';
     const isSocialSession = currentFlashcardMode === 'social';
     const isScienceSession = currentFlashcardMode === 'science';
+    const isSocialReviewSession = currentFlashcardMode === 'social_review_due';
+    const isScienceReviewSession = currentFlashcardMode === 'science_review_due';
     if (isReviewSession || isWeakSession) renderFolders();
     modal.innerHTML = `
       <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
         <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 10px;">🎉 完了！</h3>
-        <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">${isReviewSession ? '今日の復習を終了しました。' : (isWeakSession ? '苦手候補の学習を終了しました。' : 'すべてのカードを終了しました。')}</p>
+        <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">${(isReviewSession || isSocialReviewSession || isScienceReviewSession) ? '今日の復習を終了しました。' : (isWeakSession ? '苦手候補の学習を終了しました。' : 'すべてのカードを終了しました。')}</p>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-          ${(isReviewSession || isWeakSession || isSocialSession || isScienceSession) ? '' : '<button onclick="closeFlashcardModal(); openPracticeHome(\'ENGLISH\');" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>'}
-          <button onclick="closeFlashcardModal();${isSocialSession ? "openPracticeHome('SOCIAL STUDIES');" : (isScienceSession ? "openPracticeHome('SCIENCE');" : '')}" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">${isReviewSession ? '復習フォルダへ戻る' : (isWeakSession ? '語彙帳へ戻る' : (isSocialSession ? '社会PRACTICEへ戻る' : (isScienceSession ? '理科PRACTICEへ戻る' : '閉じる')))}</button>
+          ${(isReviewSession || isWeakSession || isSocialSession || isScienceSession || isSocialReviewSession || isScienceReviewSession) ? '' : '<button onclick="closeFlashcardModal(); openPracticeHome(\'ENGLISH\');" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>'}
+          <button onclick="closeFlashcardModal();${isSocialReviewSession ? "renderIftySocialStudiesPage();" : (isScienceReviewSession ? "renderIftySciencePage();" : (isSocialSession ? "openPracticeHome('SOCIAL STUDIES');" : (isScienceSession ? "openPracticeHome('SCIENCE');" : '')))}" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">${isReviewSession ? '復習フォルダへ戻る' : (isWeakSession ? '語彙帳へ戻る' : (isSocialReviewSession ? '社会へ戻る' : (isScienceReviewSession ? '理科へ戻る' : (isSocialSession ? '社会PRACTICEへ戻る' : (isScienceSession ? '理科PRACTICEへ戻る' : '閉じる')))))}</button>
         </div>
       </div>
     `;
@@ -13500,11 +13900,19 @@ window.setMasteryAndNext = function(status) {
     current.mastery = status;
     if (current.__iftySocialFlashcard) {
       const ref = findIftySocialPracticeItemById(current.__iftySocialItemId || current.id);
-      if (ref && ref.item) ref.item.mastery = status;
+      if (ref && ref.item) {
+        ref.item.mastery = status;
+        if (current.__iftySubjectReviewDue) applyIftyEntityReviewResult(ref.item, correct);
+        else enrollIftyEntityReviewFromStudy(ref.item, correct);
+      }
       savePracticeData();
     } else if (current.__iftyScienceFlashcard) {
       const ref = findIftySciencePracticeItemById(current.__iftyScienceItemId || current.id);
-      if (ref && ref.item) ref.item.mastery = status;
+      if (ref && ref.item) {
+        ref.item.mastery = status;
+        if (current.__iftySubjectReviewDue) applyIftyEntityReviewResult(ref.item, correct);
+        else enrollIftyEntityReviewFromStudy(ref.item, correct);
+      }
       savePracticeData();
     } else {
       const sourceId = current.__iftyReviewWordId || current.id;
