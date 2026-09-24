@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP58 2026-09-24：ANCIENT PRACTICE + SOCIAL/SCIENCE 用語記述Challenge ★★★
+// ★★★ IFTY Q3 STEP59 2026-09-24：LANGUAGES名称変更 + 全教科フラッシュカード統一 + 古文読み問題 + 操作ボタン統一 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -744,7 +744,7 @@ function renderIftySideMenu() {
       <button class="ifty-side-menu-item" type="button" onclick="openIftySideMenuHome()">HOME</button>
 
       <div class="ifty-side-menu-label">SUBJECTS</div>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ENGLISH')">VOCABULARY</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ENGLISH')">LANGUAGES</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ANCIENT')">ANCIENT</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SCIENCE')">SCIENCE</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SOCIAL STUDIES')">SOCIAL STUDIES</button>
@@ -812,6 +812,7 @@ window.toggleIftySideMenu = function(event) {
 function normalizeIftySubject(subject) {
   const normalized = String(subject || '').trim().toUpperCase();
   if (
+    normalized === 'LANGUAGES' ||
     normalized === 'VOCABULARY' ||
     normalized === 'FOREIGN LANGUAGES' ||
     normalized === 'FOREIGN LANGUAGE'
@@ -821,7 +822,7 @@ function normalizeIftySubject(subject) {
 
 function getIftySubjectDisplayName(subject) {
   const key = normalizeIftySubject(subject);
-  return key === 'ENGLISH' ? 'VOCABULARY' : key;
+  return key === 'ENGLISH' ? 'LANGUAGES' : key;
 }
 
 function normalizeIftyLanguageCode(value) {
@@ -1494,6 +1495,17 @@ function ensureIftyEnglishVocabTools() {
   refreshIftyVocabSearchPanel();
 }
 
+function renderIftySubjectHeaderActions(subject) {
+  const key = normalizeIftySubject(subject);
+  const safe = String(key).replace(/'/g, "\\'");
+  return `<div class="ifty-subject-header-actions" style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;align-items:center;">
+    <button type="button" onclick="openIftyHome()" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">HOME</button>
+    <button type="button" onclick="openPracticeHome('${safe}')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">PRACTICE</button>
+    <button type="button" onclick="openIftySubjectOrder('${safe}')" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">ORDER</button>
+    <button type="button" onclick="openIftySubjectAllia('${safe}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">ALLIA</button>
+  </div>`;
+}
+
 function refreshIftyEnglishSubjectPanel() {
   const panel = document.getElementById('iftyEnglishSubjectPanel');
   if (!panel) return;
@@ -1501,23 +1513,16 @@ function refreshIftyEnglishSubjectPanel() {
   panel.innerHTML = `
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
       <div>
-        <h1 style="margin:0;color:#0f172a;font-size:1.55rem;font-weight:900;letter-spacing:.015em;">VOCABULARY</h1>
+        <h1 style="margin:0;color:#0f172a;font-size:1.55rem;font-weight:900;letter-spacing:.015em;">LANGUAGES</h1>
         <div style="margin-top:6px;color:#64748b;font-size:.9em;">英語を含む外国語と日本語の語彙をフォルダごとに追加・編集し、ALLIA・復習・PRACTICEへつなげます。</div>
       </div>
-      <button type="button" onclick="openIftyHome()" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">HOMEへ戻る</button>
+      ${renderIftySubjectHeaderActions('ENGLISH')}
     </div>
 
     <div style="margin-top:14px;padding:13px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-        <div>
-          <div style="font-weight:900;color:#0f172a;">ORDER / ALLIA</div>
-          <div style="font-size:.78em;color:#64748b;margin-top:3px;">${escapeHtml(getIftyOrderStatus('ENGLISH'))}。VOCABULARY専用の生成・編集を行います。</div>
-        </div>
-        <div style="display:flex;gap:7px;flex-wrap:wrap;">
-          <button type="button" onclick="openPracticeHome('ENGLISH')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">⚔️ PRACTICE</button>
-          <button type="button" onclick="openIftySubjectOrder('ENGLISH')" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">ORDERを編集</button>
-          <button type="button" onclick="openIftySubjectAllia('ENGLISH')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">🤖 ALLIA</button>
-        </div>
+      <div>
+        <div style="font-weight:900;color:#0f172a;">ORDER / ALLIA</div>
+        <div style="font-size:.78em;color:#64748b;margin-top:3px;">${escapeHtml(getIftyOrderStatus('ENGLISH'))}。LANGUAGES専用の生成・編集を行います。</div>
       </div>
     </div>
 
@@ -1553,12 +1558,9 @@ function refreshIftyEnglishOrderPanel() {
   if (!panel) return;
   const status = getIftyOrderStatus('ENGLISH');
   panel.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-      <div style="min-width:0;">
-        <div style="font-weight:900;color:#0f172a;">ORDER</div>
-        <div style="font-size:.82em;color:#64748b;margin-top:3px;">${escapeHtml(status)}。このORDERはVOCABULARYだけに適用されます。</div>
-      </div>
-      <button type="button" onclick="openIftySubjectOrder('ENGLISH')" style="border:none;background:#0284c7;color:white;padding:9px 12px;border-radius:8px;font-weight:900;cursor:pointer;">ORDERを編集</button>
+    <div style="min-width:0;">
+      <div style="font-weight:900;color:#0f172a;">ORDER</div>
+      <div style="font-size:.82em;color:#64748b;margin-top:3px;">${escapeHtml(status)}。このORDERはLANGUAGESだけに適用されます。</div>
     </div>`;
 }
 
@@ -1923,6 +1925,15 @@ function ensureIftyPortalStyles() {
       .ifty-subject-review-panel {
         padding: 9px !important;
       }
+      .ifty-subject-header-actions {
+        width: 100% !important;
+        justify-content: stretch !important;
+      }
+      .ifty-subject-header-actions > button {
+        flex: 1 1 calc(50% - 4px) !important;
+        min-width: 0 !important;
+        padding: 9px 7px !important;
+      }
       .ifty-subject-visual-asset {
         grid-template-columns: 1fr !important;
       }
@@ -2064,7 +2075,7 @@ window.openIftyHome = function() {
 
       <div class="ifty-home-grid">
         <button class="ifty-home-card" type="button" onclick="openIftySubject('ENGLISH')">
-          <div class="ifty-home-card-title">VOCABULARY</div>
+          <div class="ifty-home-card-title">LANGUAGES</div>
           <div class="ifty-home-card-meta">フォルダ ${stats.folders} / 単語 ${stats.words}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">単語帳を開く →</div>
@@ -3113,20 +3124,13 @@ function renderIftySocialStudiesPage(options = {}) {
           <h1 class="ifty-portal-title">SOCIAL STUDIES</h1>
           <div class="ifty-portal-subtitle">日本史・世界史・地理・公共を、フォルダごとに1つ以上組み合わせて管理。</div>
         </div>
-        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+        ${renderIftySubjectHeaderActions('SOCIAL STUDIES')}
       </div>
 
       <div class="ifty-settings-section" style="margin-top:14px;">
-        <div class="ifty-settings-row">
-          <div>
-            <h3>ORDER / ALLIA</h3>
-            <div class="ifty-settings-note">${escapeHtml(getIftyOrderStatus('SOCIAL STUDIES'))}。社会のALLIAは、Who / When / Where / What / Why / Howを項目ごとに分断せず、必要な要素を自然につないだ暗記用説明文にします。人物は抽象的な主体だけで済ませず、判明している場合は建国者・創始者・首謀者・初代就任者・中心人物などの具体的人名を優先します。画像の地図・作品名・覚える核も整理します。</div>
-          </div>
-          <div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;">
-            <button class="ifty-settings-action" type="button" onclick="openPracticeHome('SOCIAL STUDIES')" style="background:#0f766e;color:white;">⚔️ PRACTICE</button>
-            <button class="ifty-settings-action" type="button" onclick="openIftySubjectOrder('SOCIAL STUDIES')" style="background:#0284c7;color:white;">ORDERを編集</button>
-            <button class="ifty-settings-action" type="button" onclick="openIftySubjectAllia('SOCIAL STUDIES')" style="background:#7c3aed;color:white;">🤖 ALLIA</button>
-          </div>
+        <div>
+          <h3>ORDER / ALLIA</h3>
+          <div class="ifty-settings-note">${escapeHtml(getIftyOrderStatus('SOCIAL STUDIES'))}。社会のALLIAは、Who / When / Where / What / Why / Howを項目ごとに分断せず、必要な要素を自然につないだ暗記用説明文にします。人物は抽象的な主体だけで済ませず、判明している場合は建国者・創始者・首謀者・初代就任者・中心人物などの具体的人名を優先します。画像の地図・作品名・覚える核も整理します。</div>
         </div>
       </div>
 
@@ -5168,19 +5172,14 @@ function renderIftySciencePage(options = {}) {
           <h1 class="ifty-portal-title">SCIENCE</h1>
           <div class="ifty-portal-subtitle">物理・化学・生物・地学を、フォルダごとに1つ以上組み合わせて管理。</div>
         </div>
-        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+        ${renderIftySubjectHeaderActions('SCIENCE')}
       </div>
 
       <div class="ifty-settings-section" style="margin-top:14px;">
-        <div class="ifty-settings-row">
+        <div>
           <div>
             <h3>ORDER / ALLIA</h3>
             <div class="ifty-settings-note">${escapeHtml(getIftyOrderStatus('SCIENCE'))}。理科のALLIAは、定義だけでなく原理・因果関係・公式・単位・成立条件・典型実験を、必要なものだけ短く整理します。画像では模式図・グラフ・実験装置・観察写真などから、覚えるべき核を抽出します。</div>
-          </div>
-          <div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;">
-            <button class="ifty-settings-action" type="button" onclick="openPracticeHome('SCIENCE')" style="background:#0f766e;color:white;">⚔️ PRACTICE</button>
-            <button class="ifty-settings-action" type="button" onclick="openIftySubjectOrder('SCIENCE')" style="background:#0284c7;color:white;">ORDERを編集</button>
-            <button class="ifty-settings-action" type="button" onclick="openIftySubjectAllia('SCIENCE')" style="background:#7c3aed;color:white;">🤖 ALLIA</button>
           </div>
         </div>
       </div>
@@ -6833,11 +6832,7 @@ window.renderIftyAncientPage = function(options = {}) {
           <h1 class="ifty-portal-title">ANCIENT</h1>
           <div class="ifty-portal-subtitle">古文単語。漢文はまだここには入れません。</div>
         </div>
-        <div style="display:flex;gap:7px;flex-wrap:wrap;">
-          <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOME</button>
-          <button class="ifty-portal-back" type="button" onclick="openPracticeHome('ANCIENT')">PRACTICE</button>
-          <button class="ifty-portal-back" type="button" onclick="openIftySubjectOrder('ANCIENT')">ORDER</button>
-        </div>
+        ${renderIftySubjectHeaderActions('ANCIENT')}
       </div>
 
       <div style="margin-top:14px;padding:12px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;">
@@ -7352,7 +7347,7 @@ window.openIftySettings = function() {
       <div class="ifty-settings-section">
         <h3>ORDER</h3>
         <div class="ifty-settings-note">
-          教科ごとのALLIA・AI生成機能にだけ適用するカスタム指示です。VOCABULARYのORDERをSCIENCEなどが読むことはありません。
+          教科ごとのALLIA・AI生成機能にだけ適用するカスタム指示です。LANGUAGESのORDERをSCIENCEなどが読むことはありません。
         </div>
         <div style="display:grid;gap:8px;margin-top:11px;">
           ${renderIftyOrderSettingsCards()}
@@ -7535,7 +7530,7 @@ function idbTransactionDone(transaction) {
 
 // ==========================================
 // Q3 STEP18：生成済み語彙データの端末ローカル再利用
-// 同じIFTYユーザー + VOCABULARY + 同じ語彙 + 同じORDER のときだけ再利用する。
+// 同じIFTYユーザー + LANGUAGES + 同じ語彙 + 同じORDER のときだけ再利用する。
 // ==========================================
 function normalizeIftyGeneratedWordKey(word) {
   return String(word || '').normalize('NFKC').trim().toLowerCase();
@@ -11502,7 +11497,7 @@ function getIftyBasicCloze(item) {
 
 function renderIftyBasicPracticeTabs(active = 'BASIC SENTENCES') {
   const btn = (name, label) => `<button type="button" onclick="setIftyUnifiedPracticeSubject('${name}')" style="border:${active===name?'none':'1px solid #cbd5e1'};background:${active===name?'#7c3aed':'white'};color:${active===name?'white':'#334155'};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${label}</button>`;
-  return `<div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">${btn('ENGLISH','VOCABULARY')}${btn('ANCIENT','ANCIENT')}${btn('SOCIAL STUDIES','SOCIAL STUDIES')}${btn('SCIENCE','SCIENCE')}${btn('BASIC SENTENCES','BASIC SENTENCES')}</div>`;
+  return `<div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">${btn('ENGLISH','LANGUAGES')}${btn('ANCIENT','ANCIENT')}${btn('SOCIAL STUDIES','SOCIAL STUDIES')}${btn('SCIENCE','SCIENCE')}${btn('BASIC SENTENCES','BASIC SENTENCES')}</div>`;
 }
 
 function renderIftyBasicSentencePracticeHome(modal) {
@@ -11792,6 +11787,27 @@ function buildIftyAncientSearchText(folder, item) {
   ].map(v => String(v || '').trim()).filter(Boolean).join(' ').toLowerCase();
 }
 
+function normalizeIftySubjectFlashcardSet(value, index = 0) {
+  const source = value && typeof value === 'object' ? value : {};
+  const progressSource = source.progress && typeof source.progress === 'object' ? source.progress : null;
+  const progress = progressSource ? {
+    round: Math.max(1, Number(progressSource.round || 1)),
+    queue: Array.isArray(progressSource.queue) ? [...new Set(progressSource.queue.map(String).filter(Boolean))] : [],
+    index: Math.max(0, Number(progressSource.index || 0)),
+    missed: Array.isArray(progressSource.missed) ? [...new Set(progressSource.missed.map(String).filter(Boolean))] : [],
+    showingBack: !!progressSource.showingBack
+  } : null;
+
+  return {
+    id: String(source.id || makeId('subjectflashset')),
+    name: String(source.name || `フラッシュカード ${index + 1}`).trim() || `フラッシュカード ${index + 1}`,
+    itemIds: Array.isArray(source.itemIds) ? [...new Set(source.itemIds.map(String).filter(Boolean))] : [],
+    random: source.random !== false,
+    direction: source.direction === 'back' ? 'back' : 'front',
+    progress
+  };
+}
+
 function normalizePracticeData() {
   if (!practiceData || typeof practiceData !== 'object') practiceData = {};
   if (!practiceData.schemaVersion) practiceData.schemaVersion = 1;
@@ -11908,6 +11924,9 @@ function normalizePracticeData() {
       items: Array.isArray(source.items) ? source.items.map(normalizeIftySocialItem).filter(Boolean) : []
     };
   });
+  if (!Array.isArray(practiceData.modules.socialStudies.flashcardSets)) practiceData.modules.socialStudies.flashcardSets = [];
+  practiceData.modules.socialStudies.flashcardSets = practiceData.modules.socialStudies.flashcardSets.map(normalizeIftySubjectFlashcardSet);
+
 
   if (!practiceData.modules.science || typeof practiceData.modules.science !== 'object') {
     practiceData.modules.science = { folders: [] };
@@ -11926,6 +11945,9 @@ function normalizePracticeData() {
       items: Array.isArray(source.items) ? source.items.map(normalizeIftyScienceItem).filter(Boolean) : []
     };
   });
+  if (!Array.isArray(practiceData.modules.science.flashcardSets)) practiceData.modules.science.flashcardSets = [];
+  practiceData.modules.science.flashcardSets = practiceData.modules.science.flashcardSets.map(normalizeIftySubjectFlashcardSet);
+
 
   if (!practiceData.modules.ancient || typeof practiceData.modules.ancient !== 'object') {
     practiceData.modules.ancient = { folders: [] };
@@ -11942,6 +11964,9 @@ function normalizePracticeData() {
       items: Array.isArray(source.items) ? source.items.map(normalizeIftyAncientItem).filter(Boolean) : []
     };
   });
+  if (!Array.isArray(practiceData.modules.ancient.flashcardSets)) practiceData.modules.ancient.flashcardSets = [];
+  practiceData.modules.ancient.flashcardSets = practiceData.modules.ancient.flashcardSets.map(normalizeIftySubjectFlashcardSet);
+
 }
 function loadPracticeData(username) {
   try {
@@ -13135,6 +13160,7 @@ window.openPracticeHome = function(subject) {
   else if (requested === 'BASIC SENTENCES') iftyUnifiedPracticeSubject = 'BASIC SENTENCES';
   else if (
     requested === 'ENGLISH' ||
+    requested === 'LANGUAGES' ||
     requested === 'VOCABULARY' ||
     requested === 'FOREIGN LANGUAGES' ||
     requested === 'FOREIGN LANGUAGE'
@@ -13199,7 +13225,7 @@ function renderPracticeHome() {
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
       </div>
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">VOCABULARY</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">LANGUAGES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
@@ -13251,6 +13277,465 @@ function renderPracticeHome() {
       </div>
     </div>`;
 }
+
+
+
+function getIftySubjectFlashcardModule(subject) {
+  const key = normalizeIftySubject(subject);
+  normalizePracticeData();
+  if (key === 'ANCIENT') return practiceData.modules.ancient;
+  if (key === 'SCIENCE') return practiceData.modules.science;
+  if (key === 'SOCIAL STUDIES') return practiceData.modules.socialStudies;
+  return null;
+}
+
+function getIftySubjectFlashcardSets(subject) {
+  const module = getIftySubjectFlashcardModule(subject);
+  if (!module) return [];
+  if (!Array.isArray(module.flashcardSets)) module.flashcardSets = [];
+  return module.flashcardSets;
+}
+
+function getIftySubjectFlashcardSet(subject, setId) {
+  return getIftySubjectFlashcardSets(subject).find(set => String(set.id) === String(setId)) || null;
+}
+
+function getIftySubjectFlashcardRefById(subject, itemId) {
+  const key = normalizeIftySubject(subject);
+  if (key === 'ANCIENT') return getIftyAncientItemById(itemId);
+  if (key === 'SCIENCE') return getIftyScienceItemById(itemId);
+  if (key === 'SOCIAL STUDIES') return getIftySocialItemById(itemId);
+  return null;
+}
+
+function getIftyAllSubjectFlashcardRefs(subject) {
+  const key = normalizeIftySubject(subject);
+  const module = getIftySubjectFlashcardModule(key);
+  if (!module) return [];
+  return (module.folders || []).flatMap(folder =>
+    (folder.items || []).map(item => ({ folder, item }))
+  ).filter(ref => {
+    const front = getIftySubjectFlashcardFront(key, ref.item);
+    const back = getIftySubjectFlashcardBack(key, ref.item);
+    return !!front && !!back;
+  });
+}
+
+function getIftySelectedSubjectFlashcardRefs(subject) {
+  const key = normalizeIftySubject(subject);
+  if (key === 'ANCIENT') return getIftyAncientPracticeItems();
+  if (key === 'SCIENCE') return getIftySciencePracticeItems();
+  if (key === 'SOCIAL STUDIES') return getIftySocialPracticeItems();
+  return [];
+}
+
+function getIftySubjectFlashcardFront(subject, item) {
+  const key = normalizeIftySubject(subject);
+  if (key === 'ANCIENT') return String(item?.word || item?.title || '').trim();
+  return String(item?.title || item?.topic || '').trim();
+}
+
+function getIftySubjectFlashcardBack(subject, item) {
+  const key = normalizeIftySubject(subject);
+  if (key === 'ANCIENT') {
+    const meanings = Array.isArray(item?.meanings) ? item.meanings.map(v => String(v || '').trim()).filter(Boolean) : [];
+    return meanings.join(' / ') || String(item?.memoryText || '').trim();
+  }
+  return String(item?.memoryText || '').trim();
+}
+
+function getIftySubjectFlashcardNoun(subject) {
+  return normalizeIftySubject(subject) === 'ANCIENT' ? '単語' : '項目';
+}
+
+function getIftySubjectFlashcardDirectionLabels(subject) {
+  const key = normalizeIftySubject(subject);
+  if (key === 'ANCIENT') return { front: '単語 → 意味', back: '意味 → 単語' };
+  return { front: '用語 → 説明', back: '説明 → 用語' };
+}
+
+function uniqueIftySubjectFlashcardIds(subject, ids) {
+  const out = [];
+  const seen = new Set();
+  (ids || []).forEach(id => {
+    const sid = String(id || '');
+    if (!sid || seen.has(sid) || !getIftySubjectFlashcardRefById(subject, sid)) return;
+    seen.add(sid);
+    out.push(sid);
+  });
+  return out;
+}
+
+function renderIftySubjectFlashcardSetsSection(subject) {
+  const key = normalizeIftySubject(subject);
+  const sets = getIftySubjectFlashcardSets(key);
+  const label = getIftySubjectDisplayName(key);
+
+  return `<div style="border:1px solid #cbd5e1;border-radius:10px;padding:14px;background:#f8fafc;margin-top:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div>
+        <b style="color:#0f172a;">📇 フラッシュカード</b>
+        <div style="font-size:.82em;color:#64748b;margin-top:2px;">LANGUAGESと同じ形式。セット保存・ランダム・方向切替・中断再開・ミスだけ周回に対応。</div>
+      </div>
+      <button type="button" onclick="createIftySubjectFlashcardSet('${key}')" style="background:#0284c7;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">＋ 新規セット</button>
+    </div>
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+      ${sets.length ? sets.map(set => `
+        <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button type="button" onclick="openIftySubjectFlashcardSet('${key}','${set.id}')" style="background:none;border:none;padding:0;cursor:pointer;text-align:left;flex:1;min-width:170px;">
+            <div style="font-weight:bold;color:#0f172a;">${escapeHtml(set.name)}</div>
+            <div style="font-size:.8em;color:#64748b;margin-top:2px;">${set.itemIds.length}${getIftySubjectFlashcardNoun(key)}${set.progress ? ` ・ ${set.progress.round || 1}周目を中断中` : ''}</div>
+          </button>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button type="button" onclick="moveIftySubjectFlashcardSet('${key}','${set.id}',-1)" style="border:none;background:#e2e8f0;border-radius:4px;padding:5px;cursor:pointer;">⬆️</button>
+            <button type="button" onclick="moveIftySubjectFlashcardSet('${key}','${set.id}',1)" style="border:none;background:#e2e8f0;border-radius:4px;padding:5px;cursor:pointer;">⬇️</button>
+            <button type="button" onclick="duplicateIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#e2e8f0;border-radius:4px;padding:5px;cursor:pointer;">複製</button>
+            <button type="button" onclick="deleteIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#ef4444;color:white;border-radius:4px;padding:5px 7px;cursor:pointer;">削除</button>
+          </div>
+        </div>`).join('') : `<div style="color:#94a3b8;text-align:center;padding:16px;">${escapeHtml(label)}のフラッシュカードセットはまだありません。</div>`}
+    </div>
+  </div>`;
+}
+
+window.createIftySubjectFlashcardSet = function(subject) {
+  const key = normalizeIftySubject(subject);
+  openPracticeNamePrompt('フラッシュカードセット名を入力してください。', '新しいフラッシュカード', name => {
+    recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカードセット作成`);
+    const set = normalizeIftySubjectFlashcardSet({
+      id: makeId('subjectflashset'),
+      name,
+      itemIds: [],
+      random: true,
+      direction: 'front',
+      progress: null
+    });
+    getIftySubjectFlashcardSets(key).push(set);
+    savePracticeData();
+    openIftySubjectFlashcardSet(key, set.id);
+  });
+};
+
+window.renameIftySubjectFlashcardSet = function(subject, setId) {
+  const key = normalizeIftySubject(subject);
+  const set = getIftySubjectFlashcardSet(key, setId);
+  if (!set) return;
+  openPracticeNamePrompt('フラッシュカードセット名を変更', set.name, name => {
+    recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカードセット名変更`);
+    set.name = name;
+    savePracticeData();
+    openIftySubjectFlashcardSet(key, setId);
+  });
+};
+
+window.moveIftySubjectFlashcardSet = function(subject, setId, direction) {
+  const key = normalizeIftySubject(subject);
+  const sets = getIftySubjectFlashcardSets(key);
+  const index = sets.findIndex(set => String(set.id) === String(setId));
+  const nextIndex = index + Number(direction || 0);
+  if (index < 0 || nextIndex < 0 || nextIndex >= sets.length) return;
+  recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカードセット移動`);
+  [sets[index], sets[nextIndex]] = [sets[nextIndex], sets[index]];
+  savePracticeData();
+  renderPracticeHome();
+};
+
+window.duplicateIftySubjectFlashcardSet = function(subject, setId) {
+  const key = normalizeIftySubject(subject);
+  const set = getIftySubjectFlashcardSet(key, setId);
+  if (!set) return;
+  recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカードセット複製`);
+  const copy = normalizeIftySubjectFlashcardSet(JSON.parse(JSON.stringify(set)));
+  copy.id = makeId('subjectflashset');
+  copy.name = `${set.name} コピー`;
+  copy.progress = null;
+  getIftySubjectFlashcardSets(key).push(copy);
+  savePracticeData();
+  renderPracticeHome();
+};
+
+window.deleteIftySubjectFlashcardSet = function(subject, setId) {
+  const key = normalizeIftySubject(subject);
+  const set = getIftySubjectFlashcardSet(key, setId);
+  if (!set || !confirm(`「${set.name}」を削除しますか？`)) return;
+  recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカードセット削除`);
+  const module = getIftySubjectFlashcardModule(key);
+  module.flashcardSets = getIftySubjectFlashcardSets(key).filter(row => String(row.id) !== String(setId));
+  savePracticeData();
+  renderPracticeHome();
+};
+
+window.openIftySubjectFlashcardSet = function(subject, setId) {
+  const key = normalizeIftySubject(subject);
+  const set = getIftySubjectFlashcardSet(key, setId);
+  const modal = document.getElementById('practiceModal');
+  if (!set || !modal) return;
+
+  const refs = uniqueIftySubjectFlashcardIds(key, set.itemIds)
+    .map(id => getIftySubjectFlashcardRefById(key, id))
+    .filter(Boolean);
+  set.itemIds = refs.map(ref => String(ref.item.id));
+
+  const directionLabels = getIftySubjectFlashcardDirectionLabels(key);
+  const selectedCount = getIftySelectedSubjectFlashcardRefs(key).length;
+  const allCount = getIftyAllSubjectFlashcardRefs(key).length;
+
+  modal.innerHTML = `
+    <div style="background:white;border-radius:14px;width:min(760px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:.78em;color:#64748b;">${escapeHtml(getIftySubjectDisplayName(key))} / フラッシュカード</div>
+          <h2 style="margin:2px 0 0;color:#0f172a;">${escapeHtml(set.name)}</h2>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button type="button" onclick="setIftyUnifiedPracticeSubject('${key}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;font-weight:800;cursor:pointer;">← PRACTICE</button>
+          <button type="button" onclick="renameIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#334155;color:white;border-radius:6px;padding:7px 10px;font-weight:800;cursor:pointer;">名前変更</button>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
+        <b style="color:#334155;">${getIftySubjectFlashcardNoun(key)}を追加</b>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+          <button type="button" onclick="addSelectedToIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#0284c7;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">選択中フォルダから追加（${selectedCount}）</button>
+          <button type="button" onclick="addAllToIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#334155;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">全${getIftySubjectFlashcardNoun(key)}を追加（${allCount}）</button>
+          <button type="button" onclick="clearIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">セットを空にする</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <label style="display:flex;align-items:center;gap:5px;color:#334155;"><input type="checkbox" ${set.random ? 'checked' : ''} onchange="setIftySubjectFlashcardRandom('${key}','${set.id}',this.checked)"> ランダム順</label>
+        <select onchange="setIftySubjectFlashcardDirection('${key}','${set.id}',this.value)" style="padding:7px;border:1px solid #cbd5e1;border-radius:5px;">
+          <option value="front" ${set.direction === 'front' ? 'selected' : ''}>${escapeHtml(directionLabels.front)}</option>
+          <option value="back" ${set.direction === 'back' ? 'selected' : ''}>${escapeHtml(directionLabels.back)}</option>
+        </select>
+        <button type="button" onclick="startIftySubjectFlashcardSet('${key}','${set.id}',false)" ${refs.length ? '' : 'disabled'} style="background:#10b981;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${refs.length ? 'pointer' : 'default'};opacity:${refs.length ? '1' : '.45'};">▶ ${set.progress ? '続きから' : '開始'}</button>
+        <button type="button" onclick="startIftySubjectFlashcardSet('${key}','${set.id}',true)" ${refs.length ? '' : 'disabled'} style="background:#ef4444;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${refs.length ? 'pointer' : 'default'};opacity:${refs.length ? '1' : '.45'};">↻ 最初から</button>
+      </div>
+
+      <div style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px;max-height:38vh;overflow:auto;">
+        ${refs.length ? refs.map(ref => {
+          const front = getIftySubjectFlashcardFront(key, ref.item);
+          const back = getIftySubjectFlashcardBack(key, ref.item);
+          return `<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px solid #f1f5f9;">
+            <span style="min-width:0;"><b>${escapeHtml(front)}</b>　<span style="color:#64748b;font-size:.88em;">${escapeHtml(back)}</span></span>
+            <button type="button" onclick="removeFromIftySubjectFlashcardSet('${key}','${set.id}','${ref.item.id}')" style="border:none;background:none;color:#ef4444;cursor:pointer;">削除</button>
+          </div>`;
+        }).join('') : `<div style="color:#94a3b8;text-align:center;padding:16px;">${getIftySubjectFlashcardNoun(key)}を追加してください。</div>`}
+      </div>
+    </div>`;
+
+  savePracticeData();
+};
+
+window.addSelectedToIftySubjectFlashcardSet = function(subject, setId) {
+  const key = normalizeIftySubject(subject);
+  const set = getIftySubjectFlashcardSet(key, setId);
+  if (!set) return;
+  recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカードへ追加`);
+  set.itemIds = uniqueIftySubjectFlashcardIds(key, [
+    ...(set.itemIds || []),
+    ...getIftySelectedSubjectFlashcardRefs(key).map(ref => String(ref.item.id))
+  ]);
+  set.progress = null;
+  savePracticeData();
+  openIftySubjectFlashcardSet(key, set.id);
+};
+
+window.addAllToIftySubjectFlashcardSet = function(subject, setId) {
+  const key = normalizeIftySubject(subject);
+  const set = getIftySubjectFlashcardSet(key, setId);
+  if (!set) return;
+  recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカードへ全追加`);
+  set.itemIds = uniqueIftySubjectFlashcardIds(key, [
+    ...(set.itemIds || []),
+    ...getIftyAllSubjectFlashcardRefs(key).map(ref => String(ref.item.id))
+  ]);
+  set.progress = null;
+  savePracticeData();
+  openIftySubjectFlashcardSet(key, set.id);
+};
+
+window.removeFromIftySubjectFlashcardSet = function(subject, setId, itemId) {
+  const key = normalizeIftySubject(subject);
+  const set = getIftySubjectFlashcardSet(key, setId);
+  if (!set) return;
+  recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカードから削除`);
+  set.itemIds = (set.itemIds || []).filter(id => String(id) !== String(itemId));
+  set.progress = null;
+  savePracticeData();
+  openIftySubjectFlashcardSet(key, set.id);
+};
+
+window.clearIftySubjectFlashcardSet = function(subject, setId) {
+  const key = normalizeIftySubject(subject);
+  const set = getIftySubjectFlashcardSet(key, setId);
+  if (!set || !confirm('このセットの項目をすべて外しますか？')) return;
+  recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカードを空にする`);
+  set.itemIds = [];
+  set.progress = null;
+  savePracticeData();
+  openIftySubjectFlashcardSet(key, set.id);
+};
+
+window.setIftySubjectFlashcardRandom = function(subject, setId, value) {
+  const key = normalizeIftySubject(subject);
+  const set = getIftySubjectFlashcardSet(key, setId);
+  if (!set) return;
+  recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカード設定変更`);
+  set.random = !!value;
+  set.progress = null;
+  savePracticeData();
+};
+
+window.setIftySubjectFlashcardDirection = function(subject, setId, value) {
+  const key = normalizeIftySubject(subject);
+  const set = getIftySubjectFlashcardSet(key, setId);
+  if (!set) return;
+  recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカード設定変更`);
+  set.direction = value === 'back' ? 'back' : 'front';
+  set.progress = null;
+  savePracticeData();
+};
+
+window.startIftySubjectFlashcardSet = function(subject, setId, restart = false) {
+  const key = normalizeIftySubject(subject);
+  const set = getIftySubjectFlashcardSet(key, setId);
+  if (!set) return;
+
+  const validIds = uniqueIftySubjectFlashcardIds(key, set.itemIds || []);
+  if (!validIds.length) {
+    alert('このセットに利用できる項目がありません。');
+    return;
+  }
+
+  if (restart || !set.progress) {
+    set.progress = {
+      round: 1,
+      queue: set.random ? shuffleArray(validIds) : [...validIds],
+      index: 0,
+      missed: [],
+      showingBack: false
+    };
+  } else {
+    set.progress.queue = uniqueIftySubjectFlashcardIds(key, set.progress.queue || []);
+    set.progress.missed = uniqueIftySubjectFlashcardIds(key, set.progress.missed || []);
+    if (!set.progress.queue.length) {
+      set.progress.queue = set.random ? shuffleArray(validIds) : [...validIds];
+      set.progress.index = 0;
+    }
+    if (set.progress.index >= set.progress.queue.length) set.progress.index = 0;
+  }
+
+  savePracticeData();
+  renderIftySubjectFlashcardPlayer(key, set.id);
+};
+
+function renderIftySubjectFlashcardPlayer(subject, setId) {
+  const key = normalizeIftySubject(subject);
+  const set = getIftySubjectFlashcardSet(key, setId);
+  const modal = document.getElementById('practiceModal');
+  if (!set || !set.progress || !modal) return;
+
+  const p = set.progress;
+  if (p.index >= p.queue.length) {
+    if (p.missed.length) {
+      p.round += 1;
+      const missed = uniqueIftySubjectFlashcardIds(key, p.missed);
+      p.queue = set.random ? shuffleArray(missed) : missed;
+      p.missed = [];
+      p.index = 0;
+      p.showingBack = false;
+      savePracticeData();
+    } else {
+      set.progress = null;
+      savePracticeData();
+      modal.innerHTML = `<div style="background:white;border-radius:14px;width:min(520px,100%);padding:26px;text-align:center;">
+        <h2 style="color:#0f172a;margin-top:0;">🎉 完了</h2>
+        <p style="color:#475569;">「${escapeHtml(set.name)}」をすべて覚えました。</p>
+        <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">
+          <button type="button" onclick="startIftySubjectFlashcardSet('${key}','${set.id}',true)" style="background:#0284c7;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">最初から</button>
+          <button type="button" onclick="openIftySubjectFlashcardSet('${key}','${set.id}')" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">セットへ戻る</button>
+        </div>
+      </div>`;
+      return;
+    }
+  }
+
+  const ref = getIftySubjectFlashcardRefById(key, p.queue[p.index]);
+  if (!ref) {
+    p.index += 1;
+    savePracticeData();
+    renderIftySubjectFlashcardPlayer(key, setId);
+    return;
+  }
+
+  const frontRaw = getIftySubjectFlashcardFront(key, ref.item);
+  const backRaw = getIftySubjectFlashcardBack(key, ref.item);
+  const front = set.direction === 'front' ? frontRaw : backRaw;
+  const back = set.direction === 'front' ? backRaw : frontRaw;
+
+  modal.innerHTML = `
+    <div style="background:white;border-radius:14px;width:min(620px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div style="color:#64748b;font-size:.88em;">${escapeHtml(set.name)} ・ ${p.round}周目 ・ ${p.index + 1}/${p.queue.length}</div>
+        <button type="button" onclick="pauseIftySubjectFlashcardSet('${key}','${set.id}')" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;">⏸ 一時中断</button>
+      </div>
+
+      <button type="button" onclick="toggleIftySubjectFlashcardCard('${key}','${set.id}')" style="width:100%;min-height:210px;margin-top:16px;background:#f8fafc;border:2px solid #cbd5e1;border-radius:12px;padding:24px;cursor:pointer;color:#0f172a;font-size:1.5em;font-weight:bold;white-space:pre-wrap;overflow-wrap:anywhere;">
+        ${escapeHtml(p.showingBack ? back : front)}
+        <div style="margin-top:14px;font-size:.5em;color:#94a3b8;font-weight:normal;">タップして裏返す</div>
+      </button>
+
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button type="button" onclick="answerIftySubjectFlashcardCard('${key}','${set.id}',false)" style="flex:1;background:#ef4444;color:white;border:none;border-radius:7px;padding:12px;font-weight:bold;cursor:pointer;">覚えてない</button>
+        <button type="button" onclick="answerIftySubjectFlashcardCard('${key}','${set.id}',true)" style="flex:1;background:#10b981;color:white;border:none;border-radius:7px;padding:12px;font-weight:bold;cursor:pointer;">覚えた</button>
+      </div>
+
+      <div style="display:flex;justify-content:center;margin-top:10px;">
+        <button type="button" onclick="restartIftySubjectFlashcardSetConfirm('${key}','${set.id}')" style="background:none;border:none;color:#64748b;cursor:pointer;">↻ 最初からやり直す</button>
+      </div>
+    </div>`;
+}
+
+window.toggleIftySubjectFlashcardCard = function(subject, setId) {
+  const set = getIftySubjectFlashcardSet(subject, setId);
+  if (!set?.progress) return;
+  set.progress.showingBack = !set.progress.showingBack;
+  savePracticeData();
+  renderIftySubjectFlashcardPlayer(subject, setId);
+};
+
+window.answerIftySubjectFlashcardCard = function(subject, setId, remembered) {
+  const key = normalizeIftySubject(subject);
+  const set = getIftySubjectFlashcardSet(key, setId);
+  if (!set?.progress) return;
+
+  const p = set.progress;
+  const id = String(p.queue[p.index] || '');
+  if (!remembered && id && !p.missed.includes(id)) p.missed.push(id);
+
+  const ref = getIftySubjectFlashcardRefById(key, id);
+  if (ref?.item) {
+    ref.item.mastery = remembered ? 'fixed' : 'unfixed';
+    enrollIftyEntityReviewFromStudy(ref.item, !!remembered);
+  }
+
+  p.index += 1;
+  p.showingBack = false;
+  savePracticeData();
+  renderIftySubjectFlashcardPlayer(key, setId);
+};
+
+window.pauseIftySubjectFlashcardSet = function(subject, setId) {
+  savePracticeData();
+  openIftySubjectFlashcardSet(subject, setId);
+};
+
+window.restartIftySubjectFlashcardSetConfirm = function(subject, setId) {
+  if (confirm('このセットを最初からやり直しますか？')) {
+    startIftySubjectFlashcardSet(subject, setId, true);
+  }
+};
+
 
 
 function getIftyAncientPracticeFolders() {
@@ -13314,6 +13799,11 @@ function getIftyAncientPracticeModeMeta(mode) {
       description: '意味から古文単語を自分で入力。通常は端末内採点、不正解時だけChallengeでALLIAを使えます。',
       color: '#1d4ed8'
     },
+    reading_write: {
+      title: '読み',
+      description: '宿直→とのい のように、見出し語と読みが異なる重要語の読みを記述。通常は端末内採点です。',
+      color: '#0369a1'
+    },
     meaning_write: {
       title: '意味記述',
       description: '古文単語の意味を自分で記述。複数語義・自然な言い換えをALLIAが採点します。',
@@ -13334,6 +13824,7 @@ function renderIftyUnifiedAncientPracticeHome(modal) {
   const selectedFolders = getIftyAncientPracticeSelectedFolders();
   const selectedItems = getIftyAncientPracticeItems();
   const exampleItems = selectedItems.filter(ref => Array.isArray(ref.item.examples) && ref.item.examples.some(ex => ex?.classical));
+  const readingItems = selectedItems.filter(ref => isIftyAncientReadingPracticeItem(ref.item));
 
   const folderChoices = folders.length
     ? folders.map(folder => {
@@ -13351,6 +13842,7 @@ function renderIftyUnifiedAncientPracticeHome(modal) {
     let disabledReason = '';
     if (mode === 'choice' && selectedItems.length < 2) disabledReason = '単語が2語以上必要です。';
     else if (mode === 'example' && !exampleItems.length) disabledReason = '例文つき単語が必要です。';
+    else if (mode === 'reading_write' && !readingItems.length) disabledReason = '読みを別に覚える単語が必要です。';
     else if (!selectedItems.length) disabledReason = '学習する単語を選択してください。';
     const disabled = !!disabledReason;
     return `<button type="button" onclick="startIftyAncientPractice('${mode}')" ${disabled ? 'disabled' : ''} style="text-align:left;border:1px solid ${disabled ? '#e2e8f0' : meta.color};background:${disabled ? '#f8fafc' : '#fff'};border-radius:12px;padding:12px;cursor:${disabled ? 'not-allowed' : 'pointer'};min-height:112px;opacity:${disabled ? '.62' : '1'};">
@@ -13368,7 +13860,7 @@ function renderIftyUnifiedAncientPracticeHome(modal) {
       </div>
 
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">VOCABULARY</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">LANGUAGES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
@@ -13398,18 +13890,12 @@ function renderIftyUnifiedAncientPracticeHome(modal) {
         <span style="font-size:.74em;color:#64748b;">リスニングは古文単語では使用しません。</span>
       </div>
 
-      <div style="margin-top:14px;padding:13px;border:1px solid #99f6e4;border-radius:11px;background:#f0fdfa;">
-        <div style="font-size:1.04em;font-weight:900;color:#0f766e;">📇 フラッシュカード</div>
-        <div style="margin-top:5px;color:#475569;font-size:.82em;">VOCABULARYと同じカードUIで、古文単語⇄意味を確認します。</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-          <button type="button" onclick="startIftyAncientPracticeFlashcards('front')" ${selectedItems.length ? '' : 'disabled'} style="border:none;background:#0f766e;color:white;border-radius:7px;padding:9px 12px;font-weight:900;opacity:${selectedItems.length ? '1' : '.55'};">単語 → 意味</button>
-          <button type="button" onclick="startIftyAncientPracticeFlashcards('back')" ${selectedItems.length ? '' : 'disabled'} style="border:none;background:#115e59;color:white;border-radius:7px;padding:9px 12px;font-weight:900;opacity:${selectedItems.length ? '1' : '.55'};">意味 → 単語</button>
-        </div>
-      </div>
+      ${renderIftySubjectFlashcardSetsSection('ANCIENT')}
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:14px;">
         ${modeCard('choice')}
         ${modeCard('term_write')}
+        ${modeCard('reading_write')}
         ${modeCard('meaning_write')}
         ${modeCard('example')}
       </div>
@@ -13468,15 +13954,69 @@ function buildIftyAncientChoiceQuestion(target, refs) {
   };
 }
 
+function normalizeIftyAncientReadingAnswer(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[ 　・／/,，、。．.「」『』【】［］\[\]（）()]/g, '')
+    .replace(/^読み[:：]?/, '');
+}
+
+function getIftyAncientReadingAnswers(item) {
+  const raw = String(item?.reading || '').trim();
+  if (!raw) return [];
+
+  const values = new Set();
+  const add = value => {
+    const text = String(value || '')
+      .replace(/^(?:歴史的仮名遣い|現代仮名遣い|読み)[:：]\s*/g, '')
+      .trim();
+    if (text) values.add(text);
+  };
+
+  add(raw);
+
+  const parenPattern = /（([^）]+)）|\(([^)]+)\)/g;
+  let match;
+  while ((match = parenPattern.exec(raw))) add(match[1] || match[2]);
+
+  add(raw.replace(/（[^）]*）|\([^)]*\)/g, '').trim());
+
+  raw.split(/[／/,，、]|(?:または)|(?:又は)/).forEach(add);
+
+  return [...values]
+    .map(value => value.trim())
+    .filter(Boolean)
+    .filter((value, index, arr) => {
+      const normalized = normalizeIftyAncientReadingAnswer(value);
+      return normalized && arr.findIndex(other => normalizeIftyAncientReadingAnswer(other) === normalized) === index;
+    });
+}
+
+function isIftyAncientReadingPracticeItem(item) {
+  const word = String(item?.word || item?.title || '').trim();
+  const answers = getIftyAncientReadingAnswers(item);
+  if (!word || !answers.length) return false;
+  const wordNormalized = normalizeIftyAncientReadingAnswer(word);
+  return answers.some(answer => normalizeIftyAncientReadingAnswer(answer) !== wordNormalized);
+}
+
 window.startIftyAncientPractice = function(mode) {
-  const normalizedMode = ['choice', 'term_write', 'meaning_write', 'example'].includes(mode) ? mode : 'choice';
+  const normalizedMode = ['choice', 'term_write', 'reading_write', 'meaning_write', 'example'].includes(mode) ? mode : 'choice';
   let refs = getIftyAncientPracticeItems();
 
   if (normalizedMode === 'example') {
     refs = refs.filter(ref => Array.isArray(ref.item.examples) && ref.item.examples.some(ex => ex?.classical));
+  } else if (normalizedMode === 'reading_write') {
+    refs = refs.filter(ref => isIftyAncientReadingPracticeItem(ref.item));
   }
   if (!refs.length) {
-    alert(normalizedMode === 'example' ? '例文つき古文単語がありません。' : '出題する古文単語がありません。');
+    alert(
+      normalizedMode === 'example'
+        ? '例文つき古文単語がありません。'
+        : (normalizedMode === 'reading_write' ? '読みを別に覚える古文単語がありません。' : '出題する古文単語がありません。')
+    );
     return;
   }
   if (normalizedMode === 'choice' && refs.length < 2) {
@@ -13498,6 +14038,17 @@ window.startIftyAncientPractice = function(mode) {
         prompt: meanings[0] || String(item.memoryText || '').trim(),
         answer: word,
         modelAnswer: word
+      };
+    }
+    if (normalizedMode === 'reading_write') {
+      const readingAnswers = getIftyAncientReadingAnswers(item);
+      return {
+        mode: 'reading_write',
+        targetItemId: String(item.id),
+        prompt: `「${word}」の読みをひらがなで答えよ。`,
+        answer: readingAnswers[0] || String(item.reading || '').trim(),
+        acceptedAnswers: readingAnswers,
+        modelAnswer: readingAnswers.join(' / ')
       };
     }
     if (normalizedMode === 'meaning_write') {
@@ -13566,7 +14117,9 @@ function renderIftyAncientPracticeQuestion() {
 
   const label = st.mode === 'term_write'
     ? '古文単語を入力'
-    : (st.mode === 'example' ? '文脈での意味を記述' : '意味を記述');
+    : (st.mode === 'reading_write'
+        ? '読みをひらがなで入力'
+        : (st.mode === 'example' ? '文脈での意味を記述' : '意味を記述'));
 
   modal.innerHTML = `<div style="background:white;border-radius:14px;width:min(700px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
     <div style="display:flex;justify-content:space-between;gap:10px;"><div style="font-weight:900;color:${meta.color};">${escapeHtml(meta.title)}　${st.index + 1}/${st.questions.length}</div><button onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:none;font-size:1.3em;color:#64748b;">✕</button></div>
@@ -13575,7 +14128,7 @@ function renderIftyAncientPracticeQuestion() {
       <textarea id="iftyAncientPracticeAnswer" rows="3" style="width:100%;box-sizing:border-box;margin-top:7px;padding:11px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;"></textarea>
     </label>
     <button onclick="submitIftyAncientPracticeAnswer()" style="width:100%;margin-top:11px;border:none;background:${meta.color};color:white;border-radius:8px;padding:11px;font-weight:900;">回答</button>
-    <div style="margin-top:8px;color:#64748b;font-size:.78em;">Enterで回答 / Shift+Enterで改行${st.mode === 'term_write' ? '。通常採点ではALLIAを使用しません。' : '。記述内容はALLIAが採点します。'}</div>
+    <div style="margin-top:8px;color:#64748b;font-size:.78em;">Enterで回答 / Shift+Enterで改行${(st.mode === 'term_write' || st.mode === 'reading_write') ? '。通常採点ではALLIAを使用しません。' : '。記述内容はALLIAが採点します。'}</div>
   </div>`;
 
   const input = document.getElementById('iftyAncientPracticeAnswer');
@@ -13613,13 +14166,27 @@ window.submitIftyAncientPracticeAnswer = async function() {
     return;
   }
 
-  if (st.mode === 'term_write') {
-    const correct = normalizeIftyLocalTermAnswer(userAnswer) === normalizeIftyLocalTermAnswer(q.answer);
+  if (st.mode === 'term_write' || st.mode === 'reading_write') {
+    const accepted = st.mode === 'reading_write'
+      ? (Array.isArray(q.acceptedAnswers) && q.acceptedAnswers.length ? q.acceptedAnswers : [q.answer])
+      : [q.answer];
+    const normalize = st.mode === 'reading_write'
+      ? normalizeIftyAncientReadingAnswer
+      : normalizeIftyLocalTermAnswer;
+    const correct = accepted.some(answer => normalize(userAnswer) === normalize(answer));
+
     st.answered = true;
     if (correct) st.correct += 1;
     else st.wrong += 1;
     st.last = { userAnswer, correct, challenged: false };
-    renderIftyAncientPracticeFeedback(correct, correct ? '登録単語と一致しました。' : '登録単語とは一致しませんでした。', q.modelAnswer, !correct);
+    renderIftyAncientPracticeFeedback(
+      correct,
+      correct
+        ? (st.mode === 'reading_write' ? '読みが一致しました。' : '登録単語と一致しました。')
+        : (st.mode === 'reading_write' ? '登録されている読みとは一致しませんでした。' : '登録単語とは一致しませんでした。'),
+      q.modelAnswer,
+      !correct
+    );
     return;
   }
 
@@ -13672,7 +14239,7 @@ function renderIftyAncientPracticeFeedback(correct, feedback, modelAnswer, canCh
     <div style="margin-top:10px;color:#475569;white-space:pre-wrap;line-height:1.55;">${escapeHtml(feedback || '')}</div>
 
     ${canChallenge && st.last && !st.last.challenged ? `<div style="margin-top:13px;padding:11px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
-      <div style="font-weight:900;color:#92400e;">表記ゆれ・別形として正しいと思う場合</div>
+      <div style="font-weight:900;color:#92400e;">表記ゆれ・別形・別読みとして正しいと思う場合</div>
       <textarea id="iftyAncientChallengeReason" rows="2" placeholder="理由（任意）" style="width:100%;box-sizing:border-box;margin-top:7px;padding:9px;border:1px solid #f59e0b;border-radius:7px;"></textarea>
       <button onclick="submitIftyAncientPracticeChallenge()" style="width:100%;margin-top:7px;border:none;background:#d97706;color:white;border-radius:7px;padding:9px;font-weight:900;">⚖️ Challenge（ALLIA）</button>
     </div>` : ''}
@@ -13772,7 +14339,7 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
       </div>
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">VOCABULARY</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">LANGUAGES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
@@ -13802,14 +14369,7 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
         <span style="font-size:.74em;color:#64748b;">時代・並べ替え・説明は開始時にALLIAが問題を作ります。</span>
       </div>
 
-      <div style="margin-top:14px;padding:13px;border:1px solid #99f6e4;border-radius:11px;background:#f0fdfa;">
-        <div style="font-size:1.04em;font-weight:900;color:#0f766e;">📇 フラッシュカード</div>
-        <div style="margin-top:5px;color:#475569;font-size:.82em;line-height:1.5;">VOCABULARYと同じカードUIで、用語⇄説明を確認します。選択中の社会フォルダだけが対象です。</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-          <button type="button" onclick="startIftySocialFlashcards('front',true)" ${selectedItems.length ? '' : 'disabled'} style="border:none;background:#0f766e;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:${selectedItems.length ? 'pointer' : 'not-allowed'};opacity:${selectedItems.length ? '1' : '.55'};">用語 → 説明</button>
-          <button type="button" onclick="startIftySocialFlashcards('back',true)" ${selectedItems.length ? '' : 'disabled'} style="border:none;background:#115e59;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:${selectedItems.length ? 'pointer' : 'not-allowed'};opacity:${selectedItems.length ? '1' : '.55'};">説明 → 用語</button>
-        </div>
-      </div>
+      ${renderIftySubjectFlashcardSetsSection('SOCIAL STUDIES')}
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:14px;">
         ${modeCard('simple')}
@@ -13862,7 +14422,7 @@ function renderIftyUnifiedSciencePracticeHome(modal) {
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
       </div>
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">VOCABULARY</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">LANGUAGES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
@@ -13892,14 +14452,7 @@ function renderIftyUnifiedSciencePracticeHome(modal) {
         <span style="font-size:.74em;color:#64748b;">公式・単位・並べ替え・説明は開始時にALLIAが問題を作ります。</span>
       </div>
 
-      <div style="margin-top:14px;padding:13px;border:1px solid #99f6e4;border-radius:11px;background:#f0fdfa;">
-        <div style="font-size:1.04em;font-weight:900;color:#0f766e;">📇 フラッシュカード</div>
-        <div style="margin-top:5px;color:#475569;font-size:.82em;line-height:1.5;">VOCABULARYと同じカードUIで、用語⇄説明を確認します。選択中の理科フォルダだけが対象です。</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-          <button type="button" onclick="startIftyScienceFlashcards('front',true)" ${selectedItems.length ? '' : 'disabled'} style="border:none;background:#0f766e;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:${selectedItems.length ? 'pointer' : 'not-allowed'};opacity:${selectedItems.length ? '1' : '.55'};">用語 → 説明</button>
-          <button type="button" onclick="startIftyScienceFlashcards('back',true)" ${selectedItems.length ? '' : 'disabled'} style="border:none;background:#115e59;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:${selectedItems.length ? 'pointer' : 'not-allowed'};opacity:${selectedItems.length ? '1' : '.55'};">説明 → 用語</button>
-        </div>
-      </div>
+      ${renderIftySubjectFlashcardSetsSection('SCIENCE')}
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:14px;">
         ${modeCard('simple')}
