@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP52 2026-09-24：科目チェック固定・内外検索・生成中入力維持 ★★★
+// ★★★ IFTY Q3 STEP53 2026-09-24：SCIENCE ORDER英語時の用語名 英語（日本語）対応 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -4613,6 +4613,25 @@ function renderIftyScienceVisualAsset(item) {
   </div>`;
 }
 
+function chooseIftyScienceGeneratedTitle(topic, generatedTitle) {
+  const original = String(topic || '').trim();
+  const generated = String(generatedTitle || '').trim();
+
+  if (!original) return generated;
+  if (!generated) return original;
+  if (generated === original) return original;
+
+  // ALLIA may translate the heading according to SCIENCE ORDER.
+  // Only accept that heading when it still explicitly contains the user's
+  // original term, so unrelated renaming (e.g. "物理基礎") cannot occur.
+  const normalizedGenerated = generated.normalize('NFKC').toLowerCase();
+  const normalizedOriginal = original.normalize('NFKC').toLowerCase();
+
+  return normalizedGenerated.includes(normalizedOriginal)
+    ? generated
+    : original;
+}
+
 function buildIftyScienceSearchText(folder, item) {
   return [
     folder?.name,
@@ -5140,7 +5159,7 @@ window.generateIftyScienceItem = async function(folderId) {
       ...data,
       id: makeId('scienceitem'),
       topic,
-      title: topic || String(data.title || '').trim(),
+      title: chooseIftyScienceGeneratedTitle(topic, data.title),
       subjects: requestSubjects,
       imageData: imageDraft?.storedDataUrl || '',
       imageName: imageDraft?.name || '',
