@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP59 2026-09-24：LANGUAGES名称変更 + 全教科フラッシュカード統一 + 古文読み問題 + 操作ボタン統一 ★★★
+// ★★★ IFTY Q3 STEP60 2026-09-24：全教科チェック選択・一括操作 + フラッシュカード項目追加修正 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -98,6 +98,7 @@ let iftySocialGenerationPending = {};
 let iftySocialEditorImageDraft = null;
 let iftySocialSearchQuery = '';
 let iftySocialFolderSearchQueries = {};
+let iftySocialSelectedItemIds = new Set();
 let iftySocialVisualQuizState = {
   mode: '',
   folderId: '',
@@ -149,6 +150,7 @@ let iftyScienceGenerationPending = {};
 let iftyScienceEditorImageDraft = null;
 let iftyScienceSearchQuery = '';
 let iftyScienceFolderSearchQueries = {};
+let iftyScienceSelectedItemIds = new Set();
 let iftyScienceVisualQuizState = {
   mode: '',
   folderId: '',
@@ -186,6 +188,7 @@ let iftyAncientWordDrafts = {};
 let iftyAncientGenerationPending = {};
 let iftyAncientSearchQuery = '';
 let iftyAncientFolderSearchQueries = {};
+let iftyAncientSelectedItemIds = new Set();
 let iftyAncientPracticeSelectedFolderIds = new Set();
 let iftyAncientPracticeSelectionInitialized = false;
 let iftyAncientPracticeQuestionCount = 5;
@@ -462,6 +465,9 @@ function restoreLearningState(snapshot) {
     normalizePracticeData();
     selectedFolderIds.clear();
     selectedWordIds.clear();
+    iftySocialSelectedItemIds.clear();
+    iftyScienceSelectedItemIds.clear();
+    iftyAncientSelectedItemIds.clear();
     saveUserData();
     savePracticeData();
     renderFolders();
@@ -1934,6 +1940,14 @@ function ensureIftyPortalStyles() {
         min-width: 0 !important;
         padding: 9px 7px !important;
       }
+      [id^="iftySubjectSelectionToolbar_"] {
+        align-items: stretch !important;
+      }
+      [id^="iftySubjectSelectionToolbar_"] > button,
+      [id^="iftySubjectSelectionToolbar_"] > select {
+        flex: 1 1 calc(50% - 5px) !important;
+        min-width: 0 !important;
+      }
       .ifty-subject-visual-asset {
         grid-template-columns: 1fr !important;
       }
@@ -2847,6 +2861,7 @@ function renderIftySocialItemCard(folder, item) {
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
       <div style="min-width:0;flex:1;">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <input type="checkbox" ${iftySocialSelectedItemIds.has(String(item.id)) ? 'checked' : ''} onchange="toggleIftySubjectItemSelection('SOCIAL STUDIES','${item.id}',this.checked)" title="この項目を選択" style="width:18px;height:18px;flex:none;">
           <strong style="font-size:1.08em;color:#0f172a;">${escapeHtml(item.title || item.topic || '無題')}</strong>
           ${renderIftySocialSubjectBadges(item.subjects.length ? item.subjects : folder.subjects)}
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
@@ -3089,7 +3104,10 @@ function renderIftySocialFolder(folder) {
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;">${subjectChecks}</div>
         <div style="font-size:.72em;color:#64748b;margin-top:5px;">このフォルダでは複数科目を同時選択できます。ALLIA生成時には選択中の科目だけをコンテキストとして送ります。</div>
       </div>
-      <button type="button" onclick="deleteIftySocialFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">フォルダ削除</button>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">
+        <button type="button" onclick="toggleIftySubjectFolderItemsSelection('SOCIAL STUDIES','${folder.id}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">中を選択/解除</button>
+        <button type="button" onclick="deleteIftySocialFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">フォルダ削除</button>
+      </div>
     </div>
 
     ${folder.collapsed ? '' : `<div style="margin-top:12px;">
@@ -3150,6 +3168,7 @@ function renderIftySocialStudiesPage(options = {}) {
         <button type="button" onclick="document.getElementById('iftySocialSearchInput').value='';applyIftySocialSearch('');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">クリア</button>
         <span id="iftySocialSearchCount" style="font-size:.78em;color:#64748b;font-weight:800;">${countIftySocialItems()}件</span>
       </div>
+      ${renderIftySubjectSelectionToolbar('SOCIAL STUDIES')}
       <div id="iftySocialModuleSummary" style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 項目 ${countIftySocialItems()}。画像はクイズ用に圧縮して項目へ保存され、既存のpracticeDataと一緒にクラウド同期・バックアップ対象になります。</div>
       <div id="iftySocialReviewPanelWrap">${renderIftySubjectReviewPanel('SOCIAL STUDIES')}</div>
       <div>${module.folders.length ? module.folders.map(renderIftySocialFolder).join('') : '<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">社会フォルダを作成してください。</div>'}</div>
@@ -3224,6 +3243,7 @@ window.deleteIftySocialFolder = function(folderId) {
   if (!folder) return;
   if (!confirm(`「${folder.name}」を削除しますか？中の項目も削除されます。`)) return;
   recordUndoState('社会フォルダ削除');
+  (folder.items || []).forEach(item => iftySocialSelectedItemIds.delete(String(item.id)));
   module.folders = module.folders.filter(item => item.id !== folderId);
   delete iftySocialTopicDrafts[folderId];
   delete iftySocialImageDrafts[folderId];
@@ -4884,6 +4904,7 @@ function renderIftyScienceItemCard(folder, item) {
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
       <div style="min-width:0;flex:1;">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <input type="checkbox" ${iftyScienceSelectedItemIds.has(String(item.id)) ? 'checked' : ''} onchange="toggleIftySubjectItemSelection('SCIENCE','${item.id}',this.checked)" title="この項目を選択" style="width:18px;height:18px;flex:none;">
           <strong style="font-size:1.08em;color:#0f172a;">${escapeHtml(item.title || item.topic || '無題')}</strong>
           ${renderIftyScienceSubjectBadges(item.subjects.length ? item.subjects : folder.subjects)}
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
@@ -5137,7 +5158,10 @@ function renderIftyScienceFolder(folder) {
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;">${subjectChecks}</div>
         <div style="font-size:.72em;color:#64748b;margin-top:5px;">このフォルダでは複数科目を同時選択できます。ALLIA生成時には選択中の科目だけをコンテキストとして送ります。</div>
       </div>
-      <button type="button" onclick="deleteIftyScienceFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">フォルダ削除</button>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">
+        <button type="button" onclick="toggleIftySubjectFolderItemsSelection('SCIENCE','${folder.id}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">中を選択/解除</button>
+        <button type="button" onclick="deleteIftyScienceFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">フォルダ削除</button>
+      </div>
     </div>
 
     ${folder.collapsed ? '' : `<div style="margin-top:12px;">
@@ -5200,6 +5224,7 @@ function renderIftySciencePage(options = {}) {
         <button type="button" onclick="document.getElementById('iftyScienceSearchInput').value='';applyIftyScienceSearch('');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">クリア</button>
         <span id="iftyScienceSearchCount" style="font-size:.78em;color:#64748b;font-weight:800;">${countIftyScienceItems()}件</span>
       </div>
+      ${renderIftySubjectSelectionToolbar('SCIENCE')}
       <div id="iftyScienceModuleSummary" style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 項目 ${countIftyScienceItems()}。画像はクイズ用に圧縮して項目へ保存され、既存のpracticeDataと一緒にクラウド同期・バックアップ対象になります。</div>
       <div id="iftyScienceReviewPanelWrap">${renderIftySubjectReviewPanel('SCIENCE')}</div>
       <div>${module.folders.length ? module.folders.map(renderIftyScienceFolder).join('') : '<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">理科フォルダを作成してください。</div>'}</div>
@@ -5274,6 +5299,7 @@ window.deleteIftyScienceFolder = function(folderId) {
   if (!folder) return;
   if (!confirm(`「${folder.name}」を削除しますか？中の項目も削除されます。`)) return;
   recordUndoState('理科フォルダ削除');
+  (folder.items || []).forEach(item => iftyScienceSelectedItemIds.delete(String(item.id)));
   module.folders = module.folders.filter(item => item.id !== folderId);
   delete iftyScienceTopicDrafts[folderId];
   delete iftyScienceImageDrafts[folderId];
@@ -6674,6 +6700,7 @@ function renderIftyAncientItemCard(folder, item) {
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
       <div style="min-width:0;flex:1;">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <input type="checkbox" ${iftyAncientSelectedItemIds.has(String(item.id)) ? 'checked' : ''} onchange="toggleIftySubjectItemSelection('ANCIENT','${item.id}',this.checked)" title="この単語を選択" style="width:18px;height:18px;flex:none;">
           <strong style="font-size:1.16em;color:#0f172a;">${escapeHtml(item.word || item.title || '無題')}</strong>
           ${item.reading ? `<span style="font-size:.78em;color:#475569;background:#f1f5f9;border-radius:999px;padding:2px 7px;">${escapeHtml(item.reading)}</span>` : ''}
           ${item.partOfSpeech ? `<span style="font-size:.72em;color:#075985;background:#e0f2fe;border-radius:999px;padding:2px 7px;font-weight:900;">${escapeHtml(item.partOfSpeech)}</span>` : ''}
@@ -6795,6 +6822,7 @@ function renderIftyAncientFolder(folder, folderIndex) {
         <button id="iftyAncientFolderTitle_${folder.id}" type="button" onclick="toggleIftyAncientFolderCollapse('${folder.id}')" style="border:none;background:transparent;padding:0;cursor:pointer;font-size:1.02em;font-weight:900;color:#0f172a;text-align:left;">${folder.collapsed ? '▶' : '▼'} 📁 ${escapeHtml(folder.name)} (${items.length}語)</button>
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
+        <button type="button" onclick="toggleIftySubjectFolderItemsSelection('ANCIENT','${folder.id}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">中を選択/解除</button>
         <button type="button" onclick="moveIftyAncientFolder(${folderIndex},-1)" ${folderIndex <= 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">↑</button>
         <button type="button" onclick="moveIftyAncientFolder(${folderIndex},1)" ${folderIndex >= getIftyAncientModule().folders.length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">↓</button>
         <button type="button" onclick="renameIftyAncientFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">名前変更</button>
@@ -6850,6 +6878,7 @@ window.renderIftyAncientPage = function(options = {}) {
         <span id="iftyAncientSearchCount" style="font-size:.78em;color:#64748b;font-weight:800;">${countIftyAncientItems()}件</span>
       </div>
 
+      ${renderIftySubjectSelectionToolbar('ANCIENT')}
       <div id="iftyAncientModuleSummary" style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 古文単語 ${countIftyAncientItems()}語</div>
       <div id="iftyAncientReviewPanelWrap">${renderIftySubjectReviewPanel('ANCIENT')}</div>
       <div>${module.folders.length ? module.folders.map((folder, index) => renderIftyAncientFolder(folder, index)).join('') : '<div style="margin-top:16px;padding:24px;text-align:center;color:#94a3b8;border:1px dashed #cbd5e1;border-radius:10px;">まだフォルダがありません。</div>'}</div>
@@ -6899,6 +6928,7 @@ window.deleteIftyAncientFolder = function(folderId) {
   if (!confirm(`フォルダ「${folder.name}」を削除しますか？\n中の古文単語 ${folder.items.length}語も削除されます。`)) return;
 
   recordUndoState('古文単語フォルダ削除');
+  (folder.items || []).forEach(item => iftyAncientSelectedItemIds.delete(String(item.id)));
   module.folders.splice(index, 1);
   delete iftyAncientWordDrafts[folderId];
   delete iftyAncientGenerationPending[folderId];
@@ -7019,6 +7049,7 @@ window.deleteIftyAncientItem = function(folderId, itemId) {
   if (!confirm(`「${folder.items[index].word}」を削除しますか？`)) return;
 
   recordUndoState('古文単語削除');
+  iftyAncientSelectedItemIds.delete(String(itemId));
   folder.items.splice(index, 1);
   savePracticeData();
   refreshIftyAncientFolderDynamic(folderId);
@@ -8182,6 +8213,9 @@ async function applyIftyRecoveryPayload(payload) {
 
     selectedFolderIds.clear();
     selectedWordIds.clear();
+    iftySocialSelectedItemIds.clear();
+    iftyScienceSelectedItemIds.clear();
+    iftyAncientSelectedItemIds.clear();
     clearAllIftySpellingSuggestionTimers();
     pendingSpellingSuggestions = {};
     wordInputDrafts = {};
@@ -13280,6 +13314,185 @@ function renderPracticeHome() {
 
 
 
+
+function getIftySubjectSelectionSet(subject) {
+  const key = normalizeIftySubject(subject);
+  if (key === 'SOCIAL STUDIES') return iftySocialSelectedItemIds;
+  if (key === 'SCIENCE') return iftyScienceSelectedItemIds;
+  if (key === 'ANCIENT') return iftyAncientSelectedItemIds;
+  return new Set();
+}
+
+function getIftySubjectFoldersForBulk(subject) {
+  const key = normalizeIftySubject(subject);
+  if (key === 'SOCIAL STUDIES') return getIftySocialModule().folders || [];
+  if (key === 'SCIENCE') return getIftyScienceModule().folders || [];
+  if (key === 'ANCIENT') return getIftyAncientModule().folders || [];
+  return [];
+}
+
+function getIftySubjectItemRefForBulk(subject, itemId) {
+  const key = normalizeIftySubject(subject);
+  if (key === 'SOCIAL STUDIES') return getIftySocialItemById(itemId);
+  if (key === 'SCIENCE') return getIftyScienceItemById(itemId);
+  if (key === 'ANCIENT') return getIftyAncientItemById(itemId);
+  return null;
+}
+
+function getIftySubjectBulkLabel(subject) {
+  return normalizeIftySubject(subject) === 'ANCIENT' ? '語' : '項目';
+}
+
+function cleanIftySubjectSelection(subject) {
+  const selection = getIftySubjectSelectionSet(subject);
+  [...selection].forEach(id => {
+    if (!getIftySubjectItemRefForBulk(subject, id)) selection.delete(id);
+  });
+  return selection;
+}
+
+function renderIftySubjectSelectionToolbar(subject) {
+  const key = normalizeIftySubject(subject);
+  const selection = cleanIftySubjectSelection(key);
+  const folders = getIftySubjectFoldersForBulk(key);
+  const noun = getIftySubjectBulkLabel(key);
+  const options = folders.map(folder => `<option value="${escapeHtml(String(folder.id))}">${escapeHtml(folder.name)}</option>`).join('');
+  const safeKey = String(key).replace(/'/g, "\\'");
+
+  return `<div id="iftySubjectSelectionToolbar_${key.replace(/\s+/g,'_')}" style="margin-top:12px;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+    <b style="color:#334155;">選択：${selection.size}${noun}</b>
+    <button type="button" onclick="selectAllIftySubjectItems('${safeKey}')" style="border:none;background:#334155;color:white;border-radius:6px;padding:7px 9px;font-weight:900;cursor:pointer;">全選択</button>
+    <button type="button" onclick="clearIftySubjectItemSelections('${safeKey}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 9px;font-weight:900;cursor:pointer;">選択解除</button>
+    <button type="button" onclick="bulkDeleteIftySubjectSelectedItems('${safeKey}')" ${selection.size ? '' : 'disabled'} style="border:none;background:#ef4444;color:white;border-radius:6px;padding:7px 9px;font-weight:900;cursor:${selection.size ? 'pointer' : 'default'};opacity:${selection.size ? '1' : '.45'};">選択${noun}を削除</button>
+    <select id="iftySubjectBulkMove_${key.replace(/\s+/g,'_')}" ${selection.size ? '' : 'disabled'} style="padding:7px;border:1px solid #cbd5e1;border-radius:6px;min-width:150px;">${options}</select>
+    <button type="button" onclick="bulkMoveIftySubjectSelectedItems('${safeKey}')" ${selection.size && folders.length > 1 ? '' : 'disabled'} style="border:none;background:#0284c7;color:white;border-radius:6px;padding:7px 9px;font-weight:900;cursor:${selection.size && folders.length > 1 ? 'pointer' : 'default'};opacity:${selection.size && folders.length > 1 ? '1' : '.45'};">選択${noun}を移動</button>
+  </div>`;
+}
+
+function refreshIftySubjectSelectionToolbar(subject) {
+  const key = normalizeIftySubject(subject);
+  const id = `iftySubjectSelectionToolbar_${key.replace(/\s+/g,'_')}`;
+  const old = document.getElementById(id);
+  if (!old) return;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = renderIftySubjectSelectionToolbar(key);
+  const next = wrap.firstElementChild;
+  if (next) old.replaceWith(next);
+}
+
+window.toggleIftySubjectItemSelection = function(subject, itemId, checked) {
+  const key = normalizeIftySubject(subject);
+  const selection = getIftySubjectSelectionSet(key);
+  const id = String(itemId || '');
+  if (!id) return;
+
+  if (checked) selection.add(id);
+  else selection.delete(id);
+
+  refreshIftySubjectSelectionToolbar(key);
+};
+
+window.toggleIftySubjectFolderItemsSelection = function(subject, folderId) {
+  const key = normalizeIftySubject(subject);
+  const folder = getIftySubjectFoldersForBulk(key).find(row => String(row.id) === String(folderId));
+  if (!folder) return;
+
+  const selection = getIftySubjectSelectionSet(key);
+  const ids = (folder.items || []).map(item => String(item.id));
+  const allSelected = ids.length > 0 && ids.every(id => selection.has(id));
+
+  ids.forEach(id => allSelected ? selection.delete(id) : selection.add(id));
+
+  if (key === 'SOCIAL STUDIES') refreshIftySocialFolderDynamic(folderId);
+  else if (key === 'SCIENCE') refreshIftyScienceFolderDynamic(folderId);
+  else if (key === 'ANCIENT') refreshIftyAncientFolderDynamic(folderId);
+
+  refreshIftySubjectSelectionToolbar(key);
+};
+
+window.selectAllIftySubjectItems = function(subject) {
+  const key = normalizeIftySubject(subject);
+  const selection = getIftySubjectSelectionSet(key);
+  getIftySubjectFoldersForBulk(key).forEach(folder => {
+    (folder.items || []).forEach(item => selection.add(String(item.id)));
+  });
+
+  if (key === 'SOCIAL STUDIES') renderIftySocialStudiesPage({ preserveScroll: true });
+  else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
+  else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
+};
+
+window.clearIftySubjectItemSelections = function(subject) {
+  const key = normalizeIftySubject(subject);
+  getIftySubjectSelectionSet(key).clear();
+
+  if (key === 'SOCIAL STUDIES') renderIftySocialStudiesPage({ preserveScroll: true });
+  else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
+  else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
+};
+
+window.bulkDeleteIftySubjectSelectedItems = function(subject) {
+  const key = normalizeIftySubject(subject);
+  const selection = cleanIftySubjectSelection(key);
+  if (!selection.size) return;
+
+  const noun = getIftySubjectBulkLabel(key);
+  if (!confirm(`チェックした ${selection.size}${noun} を削除しますか？`)) return;
+
+  recordUndoState(`${getIftySubjectDisplayName(key)} 選択${noun}一括削除`);
+  getIftySubjectFoldersForBulk(key).forEach(folder => {
+    folder.items = (folder.items || []).filter(item => !selection.has(String(item.id)));
+  });
+  selection.clear();
+  savePracticeData();
+
+  if (key === 'SOCIAL STUDIES') renderIftySocialStudiesPage({ preserveScroll: true });
+  else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
+  else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
+};
+
+window.bulkMoveIftySubjectSelectedItems = function(subject) {
+  const key = normalizeIftySubject(subject);
+  const selection = cleanIftySubjectSelection(key);
+  if (!selection.size) return;
+
+  const selectId = `iftySubjectBulkMove_${key.replace(/\s+/g,'_')}`;
+  const destinationId = String(document.getElementById(selectId)?.value || '');
+  const folders = getIftySubjectFoldersForBulk(key);
+  const destination = folders.find(folder => String(folder.id) === destinationId);
+  if (!destination) return;
+
+  const moving = [];
+  folders.forEach(folder => {
+    if (String(folder.id) === destinationId) return;
+    const keep = [];
+    (folder.items || []).forEach(item => {
+      if (selection.has(String(item.id))) moving.push(item);
+      else keep.push(item);
+    });
+    folder.items = keep;
+  });
+
+  if (!moving.length) {
+    alert('選択した項目はすでに移動先フォルダにあります。');
+    return;
+  }
+
+  recordUndoState(`${getIftySubjectDisplayName(key)} 選択項目一括移動`);
+  const existing = new Set((destination.items || []).map(item => String(item.id)));
+  moving.forEach(item => {
+    if (!existing.has(String(item.id))) destination.items.push(item);
+  });
+
+  selection.clear();
+  savePracticeData();
+
+  if (key === 'SOCIAL STUDIES') renderIftySocialStudiesPage({ preserveScroll: true });
+  else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
+  else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
+};
+
+
 function getIftySubjectFlashcardModule(subject) {
   const key = normalizeIftySubject(subject);
   normalizePracticeData();
@@ -13323,10 +13536,10 @@ function getIftyAllSubjectFlashcardRefs(subject) {
 
 function getIftySelectedSubjectFlashcardRefs(subject) {
   const key = normalizeIftySubject(subject);
-  if (key === 'ANCIENT') return getIftyAncientPracticeItems();
-  if (key === 'SCIENCE') return getIftySciencePracticeItems();
-  if (key === 'SOCIAL STUDIES') return getIftySocialPracticeItems();
-  return [];
+  const selection = cleanIftySubjectSelection(key);
+  return [...selection]
+    .map(id => getIftySubjectFlashcardRefById(key, id))
+    .filter(Boolean);
 }
 
 function getIftySubjectFlashcardFront(subject, item) {
@@ -13475,6 +13688,9 @@ window.openIftySubjectFlashcardSet = function(subject, setId) {
     .filter(Boolean);
   set.itemIds = refs.map(ref => String(ref.item.id));
 
+  const allRefs = getIftyAllSubjectFlashcardRefs(key);
+  const setItemIdSet = new Set(set.itemIds.map(String));
+
   const directionLabels = getIftySubjectFlashcardDirectionLabels(key);
   const selectedCount = getIftySelectedSubjectFlashcardRefs(key).length;
   const allCount = getIftyAllSubjectFlashcardRefs(key).length;
@@ -13495,9 +13711,31 @@ window.openIftySubjectFlashcardSet = function(subject, setId) {
       <div style="margin-top:14px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
         <b style="color:#334155;">${getIftySubjectFlashcardNoun(key)}を追加</b>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
-          <button type="button" onclick="addSelectedToIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#0284c7;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">選択中フォルダから追加（${selectedCount}）</button>
+          <button type="button" onclick="addSelectedToIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#0284c7;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">チェックした${getIftySubjectFlashcardNoun(key)}を追加（${selectedCount}）</button>
           <button type="button" onclick="addAllToIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#334155;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">全${getIftySubjectFlashcardNoun(key)}を追加（${allCount}）</button>
           <button type="button" onclick="clearIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">セットを空にする</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <b style="color:#334155;">${getIftySubjectFlashcardNoun(key)}を個別選択</b>
+          <span id="iftySubjectFlashcardSetCount_${set.id}" style="font-size:.78em;color:#64748b;">${set.itemIds.length}件選択中</span>
+        </div>
+        <div style="max-height:240px;overflow:auto;margin-top:8px;border-top:1px solid #e2e8f0;">
+          ${allRefs.length ? allRefs.map(ref => {
+            const itemId = String(ref.item.id);
+            const checked = setItemIdSet.has(itemId);
+            const front = getIftySubjectFlashcardFront(key, ref.item);
+            const back = getIftySubjectFlashcardBack(key, ref.item);
+            return `<label style="display:flex;gap:8px;align-items:flex-start;padding:8px 2px;border-bottom:1px solid #f1f5f9;cursor:pointer;">
+              <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleIftySubjectFlashcardSetItem('${key}','${set.id}','${itemId}',this.checked)" style="width:18px;height:18px;margin-top:2px;flex:none;">
+              <span style="min-width:0;flex:1;">
+                <b>${escapeHtml(front)}</b>
+                <span style="display:block;font-size:.78em;color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(ref.folder?.name || '')} / ${escapeHtml(back)}</span>
+              </span>
+            </label>`;
+          }).join('') : `<div style="padding:14px;text-align:center;color:#94a3b8;">追加できる${getIftySubjectFlashcardNoun(key)}がありません。</div>`}
         </div>
       </div>
 
@@ -13526,14 +13764,43 @@ window.openIftySubjectFlashcardSet = function(subject, setId) {
   savePracticeData();
 };
 
+window.toggleIftySubjectFlashcardSetItem = function(subject, setId, itemId, checked) {
+  const key = normalizeIftySubject(subject);
+  const set = getIftySubjectFlashcardSet(key, setId);
+  if (!set) return;
+
+  const id = String(itemId || '');
+  if (!id || !getIftySubjectFlashcardRefById(key, id)) return;
+
+  recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカード項目変更`);
+
+  const ids = new Set((set.itemIds || []).map(String));
+  if (checked) ids.add(id);
+  else ids.delete(id);
+
+  set.itemIds = uniqueIftySubjectFlashcardIds(key, [...ids]);
+  set.progress = null;
+  savePracticeData();
+
+  const count = document.getElementById(`iftySubjectFlashcardSetCount_${set.id}`);
+  if (count) count.textContent = `${set.itemIds.length}件選択中`;
+};
+
 window.addSelectedToIftySubjectFlashcardSet = function(subject, setId) {
   const key = normalizeIftySubject(subject);
   const set = getIftySubjectFlashcardSet(key, setId);
   if (!set) return;
+
+  const selectedRefs = getIftySelectedSubjectFlashcardRefs(key);
+  if (!selectedRefs.length) {
+    alert(`${getIftySubjectDisplayName(key)}の画面で追加したい${getIftySubjectFlashcardNoun(key)}にチェックを入れるか、下の一覧から直接選んでください。`);
+    return;
+  }
+
   recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカードへ追加`);
   set.itemIds = uniqueIftySubjectFlashcardIds(key, [
     ...(set.itemIds || []),
-    ...getIftySelectedSubjectFlashcardRefs(key).map(ref => String(ref.item.id))
+    ...selectedRefs.map(ref => String(ref.item.id))
   ]);
   set.progress = null;
   savePracticeData();
