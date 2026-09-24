@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP49 2026-09-24：用語名固定・項目並べ替え・SOCIAL/SCIENCE検索 ★★★
+// ★★★ IFTY Q3 STEP50 2026-09-24：SCIENCE数式表示・生成ボタン削除・HOME有効化 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -1934,9 +1934,9 @@ window.openIftyHome = function() {
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('SCIENCE')">
           <div class="ifty-home-card-title">SCIENCE</div>
-          <div class="ifty-home-card-meta">理科系科目の学習領域</div>
+          <div class="ifty-home-card-meta">フォルダ ${stats.scienceFolders} / 項目 ${stats.scienceItems}</div>
           <div class="ifty-home-card-spacer"></div>
-          <div class="ifty-home-card-soon">科目ページ準備済み / 学習機能は今後追加</div>
+          <div class="ifty-home-card-action">物理・化学・生物・地学 →</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('SOCIAL STUDIES')">
@@ -2645,7 +2645,7 @@ function renderIftySocialMemoryText(item) {
   if (!memoryText) return '';
   return `<div style="margin-top:10px;border:1px solid #dbeafe;background:#f8fbff;border-radius:9px;padding:10px;">
     <div style="font-size:.76em;color:#0369a1;font-weight:900;">暗記用説明</div>
-    <div style="margin-top:5px;color:#0f172a;font-size:.92em;line-height:1.65;white-space:pre-wrap;">${escapeHtml(memoryText)}</div>
+    <div style="margin-top:5px;color:#0f172a;font-size:.92em;line-height:1.65;white-space:pre-wrap;">${escapeHtml(formatIftyScienceMathText(memoryText))}</div>
   </div>`;
 }
 
@@ -2803,7 +2803,6 @@ function renderIftySocialFolder(folder) {
         <input id="iftySocialTopic_${folder.id}" value="${escapeHtml(iftySocialTopicDrafts[folder.id] || '')}" placeholder="人物・出来事・制度・地名など（画像だけでも可）" oninput="iftySocialTopicDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'){event.preventDefault();generateIftySocialItem('${folder.id}');}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;">
         <button type="button" onclick="document.getElementById('iftySocialImageInput_${folder.id}').click()" style="border:1px solid #c084fc;background:#faf5ff;color:#7e22ce;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">🖼 画像</button>
         <input id="iftySocialImageInput_${folder.id}" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleIftySocialImageSelect(event,'${folder.id}')" style="display:none;">
-        <button type="button" onclick="generateIftySocialItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">ALLIAで生成</button>
         <button type="button" onclick="addBlankIftySocialItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">白紙</button>
       </div>
       <div id="iftySocialImagePreview_${folder.id}" style="display:${iftySocialImageDrafts[folder.id]?.storedDataUrl ? 'flex' : 'none'};align-items:center;gap:8px;margin-top:7px;padding:7px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:8px;"></div>
@@ -4412,6 +4411,100 @@ function renderIftyScienceSubjectBadges(subjects) {
   return normalized.map(key => `<span style="display:inline-block;padding:3px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.72em;font-weight:900;">${escapeHtml(getIftyScienceSubjectLabel(key))}</span>`).join(' ');
 }
 
+function formatIftyScienceMathText(value) {
+  let text = String(value || '');
+  if (!text) return '';
+
+  // Remove common inline-LaTeX wrappers while keeping the content.
+  text = text
+    .replace(/\\\(/g, '')
+    .replace(/\\\)/g, '')
+    .replace(/\\\[/g, '')
+    .replace(/\\\]/g, '')
+    .replace(/\$/g, '');
+
+  // Common symbols used in high-school science.
+  const commands = {
+    '\\\\times': '×',
+    '\\\\cdot': '·',
+    '\\\\pm': '±',
+    '\\\\mp': '∓',
+    '\\\\leq': '≤',
+    '\\\\le': '≤',
+    '\\\\geq': '≥',
+    '\\\\ge': '≥',
+    '\\\\neq': '≠',
+    '\\\\approx': '≈',
+    '\\\\propto': '∝',
+    '\\\\rightarrow': '→',
+    '\\\\to': '→',
+    '\\\\leftrightarrow': '↔',
+    '\\\\Delta': 'Δ',
+    '\\\\delta': 'δ',
+    '\\\\theta': 'θ',
+    '\\\\lambda': 'λ',
+    '\\\\mu': 'μ',
+    '\\\\rho': 'ρ',
+    '\\\\sigma': 'σ',
+    '\\\\omega': 'ω',
+    '\\\\Omega': 'Ω',
+    '\\\\alpha': 'α',
+    '\\\\beta': 'β',
+    '\\\\gamma': 'γ'
+  };
+  Object.entries(commands).forEach(([from, to]) => {
+    text = text.split(from).join(to);
+  });
+
+  // Fractions. Prefer familiar single-character fractions when possible.
+  const simpleFractions = {
+    '1/2': '½',
+    '1/3': '⅓',
+    '2/3': '⅔',
+    '1/4': '¼',
+    '3/4': '¾'
+  };
+  text = text.replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, (_, numerator, denominator) => {
+    const key = `${String(numerator).trim()}/${String(denominator).trim()}`;
+    return simpleFractions[key] || `(${String(numerator).trim()})/(${String(denominator).trim()})`;
+  });
+
+  // Roots and simple formatting commands.
+  text = text
+    .replace(/\\sqrt\s*\{([^{}]+)\}/g, '√($1)')
+    .replace(/\\(?:mathrm|text|mathbf|operatorname)\s*\{([^{}]+)\}/g, '$1')
+    .replace(/\\left/g, '')
+    .replace(/\\right/g, '');
+
+  const superscriptMap = {
+    '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹',
+    '+':'⁺','-':'⁻','=':'⁼','(':'⁽',')':'⁾','n':'ⁿ'
+  };
+  const subscriptMap = {
+    '0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉',
+    '+':'₊','-':'₋','=':'₌','(':'₍',')':'₎','a':'ₐ','e':'ₑ','h':'ₕ','i':'ᵢ','j':'ⱼ',
+    'k':'ₖ','l':'ₗ','m':'ₘ','n':'ₙ','o':'ₒ','p':'ₚ','r':'ᵣ','s':'ₛ','t':'ₜ','u':'ᵤ','v':'ᵥ','x':'ₓ'
+  };
+  const convertScript = (raw, map, fallbackPrefix) => {
+    const chars = [...String(raw || '')];
+    if (chars.every(ch => Object.prototype.hasOwnProperty.call(map, ch))) {
+      return chars.map(ch => map[ch]).join('');
+    }
+    return `${fallbackPrefix}${raw}`;
+  };
+
+  text = text
+    .replace(/\^\{([^{}]+)\}/g, (_, raw) => convertScript(raw, superscriptMap, '^'))
+    .replace(/\^([0-9n+\-=()]+)/g, (_, raw) => convertScript(raw, superscriptMap, '^'))
+    .replace(/_\{([^{}]+)\}/g, (_, raw) => convertScript(raw, subscriptMap, '_'))
+    .replace(/_([0-9a-z+\-=()]+)/g, (_, raw) => convertScript(raw, subscriptMap, '_'));
+
+  // Any unknown LaTeX command is made readable instead of displaying a raw backslash.
+  text = text.replace(/\\([A-Za-z]+)/g, '$1');
+
+  return text.replace(/\s{2,}/g, ' ').trim();
+}
+
 function renderIftyScienceMemoryText(item) {
   const memoryText = String(item?.memoryText || '').trim();
   if (!memoryText) return '';
@@ -4431,10 +4524,10 @@ function renderIftyScienceVisualAsset(item) {
     <div style="min-width:0;">
       <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
         <span style="font-size:.72em;font-weight:900;color:#7e22ce;background:#f3e8ff;border-radius:999px;padding:3px 7px;">${escapeHtml(getIftyScienceImageKindLabel(item.imageKind))}</span>
-        ${item.workTitle ? `<span style="font-size:.78em;font-weight:900;color:#581c87;">${escapeHtml(item.workTitle)}</span>` : ''}
+        ${item.workTitle ? `<span style="font-size:.78em;font-weight:900;color:#581c87;">${escapeHtml(formatIftyScienceMathText(item.workTitle))}</span>` : ''}
       </div>
       <div style="margin-top:6px;font-size:.76em;font-weight:900;color:#6b21a8;">画像から押さえる核</div>
-      <div style="margin-top:2px;color:#3b0764;font-size:.87em;line-height:1.5;white-space:pre-wrap;">${escapeHtml(item.imageFocus || '—')}</div>
+      <div style="margin-top:2px;color:#3b0764;font-size:.87em;line-height:1.5;white-space:pre-wrap;">${escapeHtml(formatIftyScienceMathText(item.imageFocus || '—'))}</div>
     </div>
   </div>`;
 }
@@ -4479,14 +4572,14 @@ function renderIftyScienceItemCard(folder, item) {
     </div>
     ${renderIftyScienceVisualAsset(item)}
     ${(item.formula || item.unit || item.conditions) ? `<div style="margin-top:10px;padding:10px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:9px;">
-      ${item.formula ? `<div style="font-size:.9em;color:#14532d;"><strong>公式・関係式：</strong><span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${escapeHtml(item.formula)}</span></div>` : ''}
-      ${item.unit ? `<div style="margin-top:4px;font-size:.85em;color:#166534;"><strong>単位：</strong>${escapeHtml(item.unit)}</div>` : ''}
-      ${item.conditions ? `<div style="margin-top:4px;font-size:.85em;color:#166534;"><strong>条件・適用範囲：</strong>${escapeHtml(item.conditions)}</div>` : ''}
+      ${item.formula ? `<div style="font-size:.9em;color:#14532d;"><strong>公式・関係式：</strong><span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${escapeHtml(formatIftyScienceMathText(item.formula))}</span></div>` : ''}
+      ${item.unit ? `<div style="margin-top:4px;font-size:.85em;color:#166534;"><strong>単位：</strong>${escapeHtml(formatIftyScienceMathText(item.unit))}</div>` : ''}
+      ${item.conditions ? `<div style="margin-top:4px;font-size:.85em;color:#166534;"><strong>条件・適用範囲：</strong>${escapeHtml(formatIftyScienceMathText(item.conditions))}</div>` : ''}
     </div>` : ''}
     ${renderIftyScienceMemoryText(item)}
     ${item.keyPoints.length ? `<div style="margin-top:9px;padding:9px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;">
       <div style="font-size:.76em;font-weight:900;color:#475569;margin-bottom:4px;">重要ポイント</div>
-      ${item.keyPoints.map(point => `<div style="font-size:.86em;color:#334155;line-height:1.45;">・${escapeHtml(point)}</div>`).join('')}
+      ${item.keyPoints.map(point => `<div style="font-size:.86em;color:#334155;line-height:1.45;">・${escapeHtml(formatIftyScienceMathText(point))}</div>`).join('')}
     </div>` : ''}
   </article>`;
 }
@@ -4583,7 +4676,6 @@ function renderIftyScienceFolder(folder) {
         <input id="iftyScienceTopic_${folder.id}" value="${escapeHtml(iftyScienceTopicDrafts[folder.id] || '')}" placeholder="用語・法則・現象・反応・生体機能など（画像だけでも可）" oninput="iftyScienceTopicDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'){event.preventDefault();generateIftyScienceItem('${folder.id}');}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;">
         <button type="button" onclick="document.getElementById('iftyScienceImageInput_${folder.id}').click()" style="border:1px solid #c084fc;background:#faf5ff;color:#7e22ce;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">🖼 画像</button>
         <input id="iftyScienceImageInput_${folder.id}" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleIftyScienceImageSelect(event,'${folder.id}')" style="display:none;">
-        <button type="button" onclick="generateIftyScienceItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">ALLIAで生成</button>
         <button type="button" onclick="addBlankIftyScienceItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">白紙</button>
       </div>
       <div id="iftyScienceImagePreview_${folder.id}" style="display:${iftyScienceImageDrafts[folder.id]?.storedDataUrl ? 'flex' : 'none'};align-items:center;gap:8px;margin-top:7px;padding:7px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:8px;"></div>
