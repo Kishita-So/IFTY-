@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP46 2026-09-24：複数ORDER・ORDERなし切替対応 ★★★
+// ★★★ IFTY Q3 STEP47 2026-09-24：SCIENCE 専用学習・PRACTICE対応 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -128,6 +128,53 @@ let iftySocialPracticeState = {
   score: null,
   modelAnswer: ''
 };
+
+
+// Q3 STEP47：SCIENCE
+// 社会と同じフォルダ型を基礎に、物理・化学・生物・地学を複数指定できる。
+// 理科では、定義だけでなく「原理・因果・公式・単位・条件・実験」を重視する。
+const IFTY_SCIENCE_SUBJECTS = [
+  { key: 'PHYSICS', label: '物理' },
+  { key: 'CHEMISTRY', label: '化学' },
+  { key: 'BIOLOGY', label: '生物' },
+  { key: 'EARTH_SCIENCE', label: '地学' }
+];
+const IFTY_SCIENCE_SUBJECT_KEYS = IFTY_SCIENCE_SUBJECTS.map(item => item.key);
+
+let iftyScienceTopicDrafts = {};
+let iftyScienceImageDrafts = {};
+let iftyScienceGenerationPending = {};
+let iftyScienceEditorImageDraft = null;
+let iftyScienceVisualQuizState = {
+  mode: '',
+  folderId: '',
+  queue: [],
+  index: 0,
+  correct: 0,
+  wrong: 0,
+  answered: false,
+  selectedId: '',
+  optionIds: []
+};
+
+let iftySciencePracticeSelectedFolderIds = new Set();
+let iftySciencePracticeSelectionInitialized = false;
+let iftySciencePracticeQuestionCount = 5;
+let iftySciencePracticeState = {
+  mode: '',
+  questions: [],
+  index: 0,
+  correct: 0,
+  wrong: 0,
+  answered: false,
+  selectedIds: [],
+  orderIds: [],
+  grading: false,
+  feedback: '',
+  score: null,
+  modelAnswer: ''
+};
+
 
 let chatSessions = [];
 let currentChatSessionId = null;
@@ -1814,6 +1861,11 @@ function getIftyHomeStats() {
     : [];
   const socialItems = socialFolders.reduce((sum, folder) => sum + (Array.isArray(folder.items) ? folder.items.length : 0), 0);
 
+  const scienceFolders = practiceData && practiceData.modules && practiceData.modules.science && Array.isArray(practiceData.modules.science.folders)
+    ? practiceData.modules.science.folders
+    : [];
+  const scienceItems = scienceFolders.reduce((sum, folder) => sum + (Array.isArray(folder.items) ? folder.items.length : 0), 0);
+
   const learning = getIftyLearningStats();
   return {
     folders: Array.isArray(folders) ? folders.length : 0,
@@ -1826,6 +1878,8 @@ function getIftyHomeStats() {
     years: countIftyYearEntries(),
     socialFolders: socialFolders.length,
     socialItems,
+    scienceFolders: scienceFolders.length,
+    scienceItems,
     ...learning
   };
 }
@@ -2650,7 +2704,7 @@ function renderIftySocialPendingImage(folderId) {
     <img src="${draft.storedDataUrl}" alt="添付画像" style="width:74px;height:74px;object-fit:contain;border:1px solid #d8b4fe;border-radius:7px;background:white;">
     <div style="min-width:0;flex:1;">
       <div style="font-size:.78em;font-weight:900;color:#6b21a8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(draft.name || '画像')}</div>
-      <div style="font-size:.7em;color:#7c3aed;margin-top:3px;">ALLIAが画像も読み取り、地図・作品名・覚える核を整理します。</div>
+      <div style="font-size:.7em;color:#7c3aed;margin-top:3px;">ALLIAが画像も読み取り、模式図・グラフ・実験装置・観察対象と覚える核を整理します。</div>
     </div>
     <button type="button" onclick="clearIftySocialImageDraft('${folderId}')" style="border:none;background:#e2e8f0;color:#475569;border-radius:999px;width:28px;height:28px;font-weight:900;cursor:pointer;">×</button>`;
 }
@@ -3330,7 +3384,7 @@ function renderIftySocialVisualQuiz() {
 
   const resultBlock = state.answered ? `<div style="margin-top:13px;padding:10px;border-radius:9px;background:${state.selectedId === String(target.id) ? '#ecfdf5' : '#fff1f2'};border:1px solid ${state.selectedId === String(target.id) ? '#86efac' : '#fda4af'};">
       <div style="font-weight:900;color:${state.selectedId === String(target.id) ? '#166534' : '#9f1239'};">${state.selectedId === String(target.id) ? '正解' : `正解：${escapeHtml(target.title || '無題')}`}</div>
-      ${target.workTitle ? `<div style="margin-top:5px;font-size:.83em;color:#581c87;"><strong>作品名・資料名：</strong>${escapeHtml(target.workTitle)}</div>` : ''}
+      ${target.workTitle ? `<div style="margin-top:5px;font-size:.83em;color:#581c87;"><strong>図・装置・資料名：</strong>${escapeHtml(target.workTitle)}</div>` : ''}
       ${target.imageFocus ? `<div style="margin-top:5px;font-size:.83em;color:#3b0764;line-height:1.5;"><strong>画像の核：</strong>${escapeHtml(target.imageFocus)}</div>` : ''}
       ${target.memoryText ? `<div style="margin-top:5px;font-size:.82em;color:#475569;line-height:1.55;">${escapeHtml(target.memoryText)}</div>` : ''}
       <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySocialVisualQuiz()" data-ifty-enter-primary="true" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
@@ -3755,7 +3809,7 @@ function normalizeIftySocialPracticeAiQuestions(mode, rawQuestions) {
       const options = originalOptions.map((option, optionIndex) => {
         const originalId = String(option?.id || `opt${optionIndex + 1}`);
         return {
-          id: `era_${questionIndex}_${optionIndex}`,
+          id: `formula_${questionIndex}_${optionIndex}`,
           originalId,
           label: String(option?.label || '').trim()
         };
@@ -3943,7 +3997,7 @@ function renderIftySocialPracticeChoiceQuestion(question) {
     <div style="margin-top:13px;padding:11px;border-radius:9px;background:${allCorrect ? '#ecfdf5' : '#fff1f2'};border:1px solid ${allCorrect ? '#86efac' : '#fda4af'};">
       <div style="font-weight:900;color:${allCorrect ? '#166534' : '#9f1239'};">${allCorrect ? '正解' : '不正解'}</div>
       ${question.explanation ? `<div style="margin-top:6px;color:#475569;line-height:1.6;">${escapeHtml(question.explanation)}</div>` : ''}
-      ${isImage && targetRef?.item?.workTitle ? `<div style="margin-top:5px;color:#581c87;font-size:.85em;"><strong>作品名・資料名：</strong>${escapeHtml(targetRef.item.workTitle)}</div>` : ''}
+      ${isImage && targetRef?.item?.workTitle ? `<div style="margin-top:5px;color:#581c87;font-size:.85em;"><strong>図・装置・資料名：</strong>${escapeHtml(targetRef.item.workTitle)}</div>` : ''}
       ${isImage && targetRef?.item?.imageFocus ? `<div style="margin-top:5px;color:#3b0764;font-size:.85em;"><strong>画像の核：</strong>${escapeHtml(targetRef.item.imageFocus)}</div>` : ''}
       <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySocialPracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
     </div>` : '';
@@ -3985,7 +4039,7 @@ function renderIftySocialPracticeOrderQuestion(question) {
   const correct = state.answered && arraysAsSetsEqual(state.orderIds, question.correctOrder || []) && state.orderIds.every((id, index) => String(id) === String(question.correctOrder[index]));
   return `
     <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
-    <div style="margin-top:7px;color:#64748b;font-size:.76em;">古いものから新しいものの順に並べてください。</div>
+    <div style="margin-top:7px;color:#64748b;font-size:.76em;">科学的に正しい過程・因果・手順の順に並べてください。</div>
     <div style="display:grid;gap:7px;margin-top:12px;">${rows}</div>
     ${state.answered ? `<div style="margin-top:12px;padding:11px;border-radius:9px;background:${correct ? '#ecfdf5' : '#fff1f2'};border:1px solid ${correct ? '#86efac' : '#fda4af'};">
       <div style="font-weight:900;color:${correct ? '#166534' : '#9f1239'};">${correct ? '正解' : '不正解'}</div>
@@ -4142,6 +4196,9 @@ window.submitIftySocialPracticeExplanation = async function() {
           prompt: question.prompt,
           title: String(target?.title || ''),
           memoryText: String(target?.memoryText || ''),
+          formula: String(target?.formula || ''),
+          unit: String(target?.unit || ''),
+          conditions: String(target?.conditions || ''),
           requiredTerms: question.requiredTerms || [],
           referenceAnswer: question.referenceAnswer || '',
           gradingPoints: question.gradingPoints || []
@@ -4180,6 +4237,1723 @@ window.nextIftySocialPracticeQuestion = function() {
   if (state.mode === 'order' && nextQuestion?.events) state.orderIds = nextQuestion.events.map(event => event.id);
   renderIftySocialPracticePlayer();
 };
+
+
+// Q3 STEP47：SCIENCE / 分野別フォルダ + 原理・公式・単位・条件 + 画像資産 + 画像クイズ
+// ==========================================
+function normalizeIftyScienceSubjects(value) {
+  const source = Array.isArray(value) ? value : [];
+  return [...new Set(source.map(item => String(item || '').trim().toUpperCase()))]
+    .filter(key => IFTY_SCIENCE_SUBJECT_KEYS.includes(key));
+}
+
+function getIftyScienceSubjectLabel(key) {
+  const found = IFTY_SCIENCE_SUBJECTS.find(item => item.key === key);
+  return found ? found.label : String(key || '');
+}
+
+function normalizeIftyScienceImageData(value) {
+  const image = String(value || '').trim();
+  return /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(image) ? image : '';
+}
+
+function normalizeIftyScienceImageKind(value) {
+  const kind = String(value || '').trim().toUpperCase();
+  return ['DIAGRAM', 'GRAPH', 'APPARATUS', 'PHOTO', 'TABLE', 'OTHER'].includes(kind) ? kind : '';
+}
+
+function getIftyScienceImageKindLabel(kind) {
+  const labels = {
+    DIAGRAM: '図・模式図',
+    GRAPH: 'グラフ',
+    APPARATUS: '実験装置',
+    PHOTO: '写真',
+    TABLE: '表',
+    OTHER: 'その他'
+  };
+  return labels[normalizeIftyScienceImageKind(kind)] || '画像';
+}
+
+function buildIftyScienceLegacyMemoryText(value) {
+  if (!value || typeof value !== 'object') return '';
+  const text = field => String(value[field] || '').trim();
+  const direct = text('memoryText');
+  if (direct) return direct;
+  return text('summary') || text('what') || text('note') || '';
+}
+
+function normalizeIftyScienceItem(value) {
+  if (!value || typeof value !== 'object') return null;
+  const text = field => String(value[field] || '').trim();
+  return {
+    id: value.id || makeId('scienceitem'),
+    topic: text('topic'),
+    title: text('title') || text('topic'),
+    summary: text('summary'),
+    memoryText: buildIftyScienceLegacyMemoryText(value),
+    who: text('who'),
+    when: text('when'),
+    where: text('where'),
+    what: text('what'),
+    why: text('why'),
+    how: text('how'),
+    keyPoints: Array.isArray(value.keyPoints) ? value.keyPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12) : [],
+    formula: text('formula'),
+    unit: text('unit'),
+    conditions: text('conditions'),
+    subjects: normalizeIftyScienceSubjects(value.subjects),
+    imageData: normalizeIftyScienceImageData(value.imageData),
+    imageName: text('imageName'),
+    imageKind: normalizeIftyScienceImageKind(value.imageKind),
+    imageFocus: text('imageFocus'),
+    workTitle: text('workTitle'),
+    source: String(value.source || 'MANUAL').trim(),
+    createdAt: Number(value.createdAt || 0) || Date.now(),
+    updatedAt: Number(value.updatedAt || 0) || Date.now()
+  };
+}
+
+function getIftyScienceModule() {
+  normalizePracticeData();
+  return practiceData.modules.scienceStudies;
+}
+
+function getIftyScienceFolder(folderId) {
+  return getIftyScienceModule().folders.find(folder => folder.id === folderId) || null;
+}
+
+function getIftyScienceItemById(itemId) {
+  for (const folder of getIftyScienceModule().folders) {
+    const item = (folder.items || []).find(entry => String(entry.id) === String(itemId));
+    if (item) return { folder, item };
+  }
+  return null;
+}
+
+function countIftyScienceItems() {
+  return getIftyScienceModule().folders.reduce((sum, folder) => sum + (Array.isArray(folder.items) ? folder.items.length : 0), 0);
+}
+
+function getIftyScienceImageEntries(folderId = '') {
+  const module = getIftyScienceModule();
+  const foldersToUse = folderId ? module.folders.filter(folder => folder.id === folderId) : module.folders;
+  return foldersToUse.flatMap(folder => (folder.items || [])
+    .filter(item => !!normalizeIftyScienceImageData(item.imageData))
+    .map(item => ({ folder, item })));
+}
+
+function renderIftyScienceSubjectBadges(subjects) {
+  const normalized = normalizeIftyScienceSubjects(subjects);
+  return normalized.map(key => `<span style="display:inline-block;padding:3px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.72em;font-weight:900;">${escapeHtml(getIftyScienceSubjectLabel(key))}</span>`).join(' ');
+}
+
+function renderIftyScienceMemoryText(item) {
+  const memoryText = String(item?.memoryText || '').trim();
+  if (!memoryText) return '';
+  return `<div style="margin-top:10px;border:1px solid #dbeafe;background:#f8fbff;border-radius:9px;padding:10px;">
+    <div style="font-size:.76em;color:#0369a1;font-weight:900;">暗記用説明</div>
+    <div style="margin-top:5px;color:#0f172a;font-size:.92em;line-height:1.65;white-space:pre-wrap;">${escapeHtml(memoryText)}</div>
+  </div>`;
+}
+
+function renderIftyScienceVisualAsset(item) {
+  const imageData = normalizeIftyScienceImageData(item.imageData);
+  if (!imageData) return '';
+  return `<div style="margin-top:10px;border:1px solid #d8b4fe;background:#faf5ff;border-radius:10px;padding:9px;display:grid;grid-template-columns:minmax(120px,220px) 1fr;gap:10px;align-items:start;">
+    <button type="button" onclick="openIftyScienceImageViewer('${item.id}')" style="border:none;background:transparent;padding:0;cursor:zoom-in;min-width:0;">
+      <img src="${imageData}" alt="${escapeHtml(item.imageName || item.title || '理科画像')}" style="display:block;width:100%;max-height:190px;object-fit:contain;border-radius:7px;background:white;border:1px solid #e9d5ff;">
+    </button>
+    <div style="min-width:0;">
+      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:.72em;font-weight:900;color:#7e22ce;background:#f3e8ff;border-radius:999px;padding:3px 7px;">${escapeHtml(getIftyScienceImageKindLabel(item.imageKind))}</span>
+        ${item.workTitle ? `<span style="font-size:.78em;font-weight:900;color:#581c87;">${escapeHtml(item.workTitle)}</span>` : ''}
+      </div>
+      <div style="margin-top:6px;font-size:.76em;font-weight:900;color:#6b21a8;">画像から押さえる核</div>
+      <div style="margin-top:2px;color:#3b0764;font-size:.87em;line-height:1.5;white-space:pre-wrap;">${escapeHtml(item.imageFocus || '—')}</div>
+    </div>
+  </div>`;
+}
+
+function renderIftyScienceItemCard(folder, item) {
+  return `<article style="border:1px solid #cbd5e1;border-radius:10px;background:white;padding:12px;margin-top:9px;box-shadow:0 1px 3px rgba(15,23,42,.05);">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+      <div style="min-width:0;flex:1;">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <strong style="font-size:1.08em;color:#0f172a;">${escapeHtml(item.title || item.topic || '無題')}</strong>
+          ${renderIftyScienceSubjectBadges(item.subjects.length ? item.subjects : folder.subjects)}
+          ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
+          ${item.imageData ? '<span style="font-size:.68em;color:#7e22ce;font-weight:900;">IMAGE</span>' : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;flex:none;">
+        <button type="button" onclick="openIftyScienceItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
+        <button type="button" onclick="deleteIftyScienceItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">削除</button>
+      </div>
+    </div>
+    ${renderIftyScienceVisualAsset(item)}
+    ${(item.formula || item.unit || item.conditions) ? `<div style="margin-top:10px;padding:10px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:9px;">
+      ${item.formula ? `<div style="font-size:.9em;color:#14532d;"><strong>公式・関係式：</strong><span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${escapeHtml(item.formula)}</span></div>` : ''}
+      ${item.unit ? `<div style="margin-top:4px;font-size:.85em;color:#166534;"><strong>単位：</strong>${escapeHtml(item.unit)}</div>` : ''}
+      ${item.conditions ? `<div style="margin-top:4px;font-size:.85em;color:#166534;"><strong>条件・適用範囲：</strong>${escapeHtml(item.conditions)}</div>` : ''}
+    </div>` : ''}
+    ${renderIftyScienceMemoryText(item)}
+    ${item.keyPoints.length ? `<div style="margin-top:9px;padding:9px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;">
+      <div style="font-size:.76em;font-weight:900;color:#475569;margin-bottom:4px;">重要ポイント</div>
+      ${item.keyPoints.map(point => `<div style="font-size:.86em;color:#334155;line-height:1.45;">・${escapeHtml(point)}</div>`).join('')}
+    </div>` : ''}
+  </article>`;
+}
+
+function renderIftySciencePendingImage(folderId) {
+  const container = document.getElementById(`iftyScienceImagePreview_${folderId}`);
+  if (!container) return;
+  const draft = iftyScienceImageDrafts[folderId];
+  if (!draft || !draft.storedDataUrl) {
+    container.innerHTML = '';
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'flex';
+  container.innerHTML = `
+    <img src="${draft.storedDataUrl}" alt="添付画像" style="width:74px;height:74px;object-fit:contain;border:1px solid #d8b4fe;border-radius:7px;background:white;">
+    <div style="min-width:0;flex:1;">
+      <div style="font-size:.78em;font-weight:900;color:#6b21a8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(draft.name || '画像')}</div>
+      <div style="font-size:.7em;color:#7c3aed;margin-top:3px;">ALLIAが画像も読み取り、模式図・グラフ・実験装置・観察対象と覚える核を整理します。</div>
+    </div>
+    <button type="button" onclick="clearIftyScienceImageDraft('${folderId}')" style="border:none;background:#e2e8f0;color:#475569;border-radius:999px;width:28px;height:28px;font-weight:900;cursor:pointer;">×</button>`;
+}
+
+function keepIftyScienceTopicFocused(folderId) {
+  setTimeout(() => {
+    const input = document.getElementById(`iftyScienceTopic_${folderId}`);
+    if (input) {
+      input.focus({ preventScroll: true });
+      const end = input.value.length;
+      try { input.setSelectionRange(end, end); } catch (_) {}
+    }
+  }, 0);
+}
+
+function renderIftyScienceFolder(folder) {
+  const items = Array.isArray(folder.items) ? folder.items : [];
+  const imageCount = items.filter(item => !!item.imageData).length;
+  const subjectChecks = IFTY_SCIENCE_SUBJECTS.map(subject => {
+    const checked = folder.subjects.includes(subject.key);
+    return `<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 7px;border:1px solid ${checked ? '#38bdf8' : '#cbd5e1'};border-radius:999px;background:${checked ? '#f0f9ff' : 'white'};font-size:.76em;font-weight:800;cursor:pointer;">
+      <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleIftyScienceFolderSubject('${folder.id}','${subject.key}',this.checked)"> ${escapeHtml(subject.label)}
+    </label>`;
+  }).join('');
+
+  return `<section style="margin-top:14px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;padding:13px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+      <div style="min-width:0;flex:1;">
+        <button type="button" onclick="toggleIftyScienceFolderCollapse('${folder.id}')" style="border:none;background:transparent;padding:0;cursor:pointer;font-size:1.02em;font-weight:900;color:#0f172a;text-align:left;">${folder.collapsed ? '▶' : '▼'} 📁 ${escapeHtml(folder.name)} (${items.length}件)</button>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;">${subjectChecks}</div>
+        <div style="font-size:.72em;color:#64748b;margin-top:5px;">このフォルダでは複数科目を同時選択できます。ALLIA生成時には選択中の科目だけをコンテキストとして送ります。</div>
+      </div>
+      <button type="button" onclick="deleteIftyScienceFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">フォルダ削除</button>
+    </div>
+
+    ${folder.collapsed ? '' : `<div style="margin-top:12px;">
+      <div style="display:flex;gap:7px;flex-wrap:wrap;">
+        <input id="iftyScienceTopic_${folder.id}" value="${escapeHtml(iftyScienceTopicDrafts[folder.id] || '')}" placeholder="用語・法則・現象・反応・生体機能など（画像だけでも可）" oninput="iftyScienceTopicDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'){event.preventDefault();generateIftyScienceItem('${folder.id}');}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;">
+        <button type="button" onclick="document.getElementById('iftyScienceImageInput_${folder.id}').click()" style="border:1px solid #c084fc;background:#faf5ff;color:#7e22ce;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">🖼 画像</button>
+        <input id="iftyScienceImageInput_${folder.id}" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleIftyScienceImageSelect(event,'${folder.id}')" style="display:none;">
+        <button type="button" onclick="generateIftyScienceItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">ALLIAで生成</button>
+        <button type="button" onclick="addBlankIftyScienceItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">白紙</button>
+      </div>
+      <div id="iftyScienceImagePreview_${folder.id}" style="display:${iftyScienceImageDrafts[folder.id]?.storedDataUrl ? 'flex' : 'none'};align-items:center;gap:8px;margin-top:7px;padding:7px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:8px;"></div>
+      <div id="iftyScienceStatus_${folder.id}" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;">${Number(iftyScienceGenerationPending[folder.id] || 0) > 0 ? `ALLIA生成中… ${Number(iftyScienceGenerationPending[folder.id] || 0)}件` : ''}</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:7px;padding:8px;border:1px solid #ede9fe;border-radius:8px;background:#fafaff;">
+        <span style="font-size:.76em;font-weight:900;color:#6d28d9;">画像クイズ ${imageCount}枚</span>
+        <button type="button" onclick="startIftyScienceVisualQuiz('${folder.id}','image_to_text')" ${imageCount < 2 ? 'disabled' : ''} style="border:none;background:${imageCount < 2 ? '#cbd5e1' : '#7c3aed'};color:white;border-radius:7px;padding:6px 9px;font-weight:900;cursor:${imageCount < 2 ? 'not-allowed' : 'pointer'};">画像を見て選ぶ</button>
+        <button type="button" onclick="startIftyScienceVisualQuiz('${folder.id}','text_to_image')" ${imageCount < 2 ? 'disabled' : ''} style="border:none;background:${imageCount < 2 ? '#cbd5e1' : '#6d28d9'};color:white;border-radius:7px;padding:6px 9px;font-weight:900;cursor:${imageCount < 2 ? 'not-allowed' : 'pointer'};">画像を選ぶ</button>
+        ${imageCount < 2 ? '<span style="font-size:.7em;color:#94a3b8;">2枚以上の画像を登録すると使用できます。</span>' : ''}
+      </div>
+      <div>${items.length ? items.map(item => renderIftyScienceItemCard(folder, item)).join('') : '<div style="margin-top:12px;padding:18px;text-align:center;border:1px dashed #cbd5e1;border-radius:8px;color:#94a3b8;">まだ項目がありません。</div>'}</div>
+    </div>`}
+  </section>`;
+}
+
+function renderIftySciencePage(options = {}) {
+  const preserveScroll = !!options.preserveScroll;
+  const preservedScrollY = preserveScroll ? window.scrollY : 0;
+  currentIftySubject = 'SCIENCE';
+  const module = getIftyScienceModule();
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">SCIENCE</h1>
+          <div class="ifty-portal-subtitle">物理・化学・生物・地学を、フォルダごとに1つ以上組み合わせて管理。</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+      </div>
+
+      <div class="ifty-settings-section" style="margin-top:14px;">
+        <div class="ifty-settings-row">
+          <div>
+            <h3>ORDER / ALLIA</h3>
+            <div class="ifty-settings-note">${escapeHtml(getIftyOrderStatus('SCIENCE'))}。理科のALLIAは、定義だけでなく原理・因果関係・公式・単位・成立条件・典型実験を、必要なものだけ短く整理します。画像では模式図・グラフ・実験装置・観察写真などから、覚えるべき核を抽出します。</div>
+          </div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;">
+            <button class="ifty-settings-action" type="button" onclick="openPracticeHome('SCIENCE')" style="background:#0f766e;color:white;">⚔️ PRACTICE</button>
+            <button class="ifty-settings-action" type="button" onclick="openIftySubjectOrder('SCIENCE')" style="background:#0284c7;color:white;">ORDERを編集</button>
+            <button class="ifty-settings-action" type="button" onclick="openIftySubjectAllia('SCIENCE')" style="background:#7c3aed;color:white;">🤖 ALLIA</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;padding:13px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;">
+        <div style="font-weight:900;color:#0c4a6e;">新しい理科フォルダ</div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;align-items:center;">
+          <input id="iftyScienceFolderName" placeholder="例：力学 / 酸塩基 / 遺伝 / 地質" onkeydown="if(event.key==='Enter'){event.preventDefault();createIftyScienceFolder();}" style="flex:1;min-width:210px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;font-size:.95em;">
+          <button type="button" onclick="createIftyScienceFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">作成</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">
+          ${IFTY_SCIENCE_SUBJECTS.map((subject, index) => `<label style="display:inline-flex;align-items:center;gap:4px;font-size:.8em;font-weight:800;"><input id="iftyScienceCreate_${subject.key}" type="checkbox" ${index === 0 ? 'checked' : ''}> ${escapeHtml(subject.label)}</label>`).join('')}
+        </div>
+      </div>
+
+      <div style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 項目 ${countIftyScienceItems()}。画像はクイズ用に圧縮して項目へ保存され、既存のpracticeDataと一緒にクラウド同期・バックアップ対象になります。</div>
+      <div>${module.folders.length ? module.folders.map(renderIftyScienceFolder).join('') : '<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">理科フォルダを作成してください。</div>'}</div>
+    </section>
+  `, 'subject');
+  module.folders.forEach(folder => renderIftySciencePendingImage(folder.id));
+
+  // ALLIA生成完了時の全体再描画でページ先頭へ飛ばないよう、
+  // 再描画直前の閲覧位置を同じ位置へ戻す。通常の画面遷移では従来どおり先頭へ移動する。
+  if (preserveScroll) {
+    const restoreScroll = () => window.scrollTo({ top: preservedScrollY, left: 0, behavior: 'auto' });
+    restoreScroll();
+    requestAnimationFrame(restoreScroll);
+  }
+}
+
+window.createIftyScienceFolder = function() {
+  const input = document.getElementById('iftyScienceFolderName');
+  const name = String(input?.value || '').trim();
+  if (!name) {
+    alert('フォルダ名を入力してください。');
+    return;
+  }
+  const subjects = IFTY_SCIENCE_SUBJECTS
+    .filter(subject => document.getElementById(`iftyScienceCreate_${subject.key}`)?.checked)
+    .map(subject => subject.key);
+  if (!subjects.length) {
+    alert('物理・化学・生物・地学から1つ以上選択してください。');
+    return;
+  }
+  recordUndoState('理科フォルダ作成');
+  getIftyScienceModule().folders.push({ id: makeId('sciencefolder'), name, subjects, collapsed: false, items: [] });
+  savePracticeData();
+  renderIftySciencePage();
+};
+
+window.toggleIftyScienceFolderCollapse = function(folderId) {
+  const folder = getIftyScienceFolder(folderId);
+  if (!folder) return;
+  folder.collapsed = !folder.collapsed;
+  savePracticeData();
+  renderIftySciencePage();
+};
+
+window.toggleIftyScienceFolderSubject = function(folderId, subjectKey, checked) {
+  const folder = getIftyScienceFolder(folderId);
+  if (!folder || !IFTY_SCIENCE_SUBJECT_KEYS.includes(subjectKey)) return;
+  const next = new Set(folder.subjects);
+  if (checked) next.add(subjectKey); else next.delete(subjectKey);
+  if (!next.size) {
+    alert('少なくとも1科目は選択してください。');
+    renderIftySciencePage();
+    return;
+  }
+  recordUndoState('理科フォルダ科目変更');
+  folder.subjects = [...next];
+  savePracticeData();
+  renderIftySciencePage();
+};
+
+window.deleteIftyScienceFolder = function(folderId) {
+  const module = getIftyScienceModule();
+  const folder = module.folders.find(item => item.id === folderId);
+  if (!folder) return;
+  if (!confirm(`「${folder.name}」を削除しますか？中の項目も削除されます。`)) return;
+  recordUndoState('理科フォルダ削除');
+  module.folders = module.folders.filter(item => item.id !== folderId);
+  delete iftyScienceTopicDrafts[folderId];
+  delete iftyScienceImageDrafts[folderId];
+  savePracticeData();
+  renderIftySciencePage();
+};
+
+function loadIftyImageElement(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('画像を読み込めませんでした。'));
+    img.src = dataUrl;
+  });
+}
+
+async function makeIftyScienceStoredImage(dataUrl, maxSide = 900, maxChars = 240000) {
+  const img = await loadIftyImageElement(dataUrl);
+  let width = img.naturalWidth || img.width;
+  let height = img.naturalHeight || img.height;
+  const largest = Math.max(width, height);
+  if (largest > maxSide) {
+    const scale = maxSide / largest;
+    width = Math.max(1, Math.round(width * scale));
+    height = Math.max(1, Math.round(height * scale));
+  }
+
+  for (let pass = 0; pass < 5; pass += 1) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return dataUrl;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+
+    for (const quality of [0.84, 0.76, 0.68, 0.6, 0.52]) {
+      const out = canvas.toDataURL('image/jpeg', quality);
+      if (out.length <= maxChars) return out;
+    }
+    width = Math.max(320, Math.round(width * 0.82));
+    height = Math.max(240, Math.round(height * 0.82));
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return dataUrl;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(img, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', 0.5);
+}
+
+window.handleIftyScienceImageSelect = async function(event, folderId) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (file.type && !file.type.startsWith('image/')) {
+    alert('画像ファイルを選択してください。');
+    event.target.value = '';
+    return;
+  }
+  if (file.size > 14 * 1024 * 1024) {
+    alert('画像が大きすぎます。14MB以下の画像を選択してください。');
+    event.target.value = '';
+    return;
+  }
+
+  try {
+    const rawDataUrl = await readFileAsDataUrl(file);
+    const [aiDataUrl, storedDataUrl] = await Promise.all([
+      resizeImageDataUrl(rawDataUrl, 1600),
+      makeIftyScienceStoredImage(rawDataUrl)
+    ]);
+    iftyScienceImageDrafts[folderId] = {
+      name: String(file.name || 'image').trim(),
+      aiDataUrl,
+      storedDataUrl
+    };
+    renderIftySciencePendingImage(folderId);
+    keepIftyScienceTopicFocused(folderId);
+  } catch (error) {
+    delete iftyScienceImageDrafts[folderId];
+    alert(String(error.message || error));
+  } finally {
+    event.target.value = '';
+  }
+};
+
+window.clearIftyScienceImageDraft = function(folderId) {
+  delete iftyScienceImageDrafts[folderId];
+  renderIftySciencePendingImage(folderId);
+  keepIftyScienceTopicFocused(folderId);
+};
+
+window.generateIftyScienceItem = async function(folderId) {
+  const folder = getIftyScienceFolder(folderId);
+  const input = document.getElementById(`iftyScienceTopic_${folderId}`);
+  // DOMの値を最優先し、再描画直後などinput参照が取れない場合はdraftを使う。
+  const topic = String(input?.value ?? iftyScienceTopicDrafts[folderId] ?? '').trim();
+  const imageDraft = iftyScienceImageDrafts[folderId] ? { ...iftyScienceImageDrafts[folderId] } : null;
+
+  if (!folder) {
+    alert('対象の理科フォルダを取得できませんでした。画面を開き直してください。');
+    return;
+  }
+  // STEP33までは空欄時に無言returnしていたため、ボタンが壊れたように見えた。
+  // 用語または画像のどちらかを必須にし、足りない場合は明示する。
+  if (!topic && !imageDraft?.aiDataUrl) {
+    const status = document.getElementById(`iftyScienceStatus_${folderId}`);
+    if (status) status.textContent = '用語を入力するか、画像を添付してください。';
+    if (input) {
+      input.focus({ preventScroll: true });
+      input.style.outline = '2px solid #7c3aed';
+      setTimeout(() => { if (input) input.style.outline = ''; }, 1200);
+    }
+    return;
+  }
+  if (!ensureIftyOnline('理科データ生成')) return;
+
+  // 送信時点の科目設定を固定する。生成待ちの間にフォルダ設定が変わっても、
+  // このリクエスト自体の条件は途中で変えない。
+  const requestSubjects = [...folder.subjects];
+
+  // クリック送信でもEnter送信でも、確定した値をここで固定してから空にする。
+  // 前の生成完了を待たず、次の用語を続けて入力・送信できる。
+  iftyScienceTopicDrafts[folderId] = '';
+  if (input) input.value = '';
+  delete iftyScienceImageDrafts[folderId];
+  renderIftySciencePendingImage(folderId);
+  keepIftyScienceTopicFocused(folderId);
+
+  iftyScienceGenerationPending[folderId] = Number(iftyScienceGenerationPending[folderId] || 0) + 1;
+  const setPendingStatus = (message = '') => {
+    const status = document.getElementById(`iftyScienceStatus_${folderId}`);
+    if (!status) return;
+    const pending = Number(iftyScienceGenerationPending[folderId] || 0);
+    if (message) {
+      status.textContent = pending > 0 ? `${message}（残り ${pending}件生成中）` : message;
+    } else {
+      status.textContent = pending > 0 ? `ALLIA生成中… ${pending}件` : '';
+    }
+  };
+  setPendingStatus(imageDraft?.aiDataUrl ? 'ALLIAが画像と暗記用説明文を作成中…' : 'ALLIAが暗記用説明文を作成中…');
+
+  try {
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'science_generate',
+        topic,
+        image: imageDraft?.aiDataUrl || '',
+        subjects: requestSubjects,
+        subject: 'SCIENCE',
+        order: getIftySubjectOrder('SCIENCE')
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw alliaHttpError(response, data, '理科データ生成に失敗しました。');
+
+    // 重要：savePracticeData()/normalizePracticeData() はフォルダオブジェクトを
+    // 新しく作り直す。連続生成中に先のリクエストが保存すると、送信開始時に取得した
+    // folder参照は古くなるため、必ず完了時点でfolderIdから最新フォルダを取り直す。
+    const currentFolder = getIftyScienceFolder(folderId);
+    if (!currentFolder) {
+      iftyScienceGenerationPending[folderId] = Math.max(0, Number(iftyScienceGenerationPending[folderId] || 0) - 1);
+      return;
+    }
+
+    recordUndoState('理科項目追加');
+    currentFolder.items.push(normalizeIftyScienceItem({
+      ...data,
+      id: makeId('scienceitem'),
+      topic,
+      subjects: requestSubjects,
+      imageData: imageDraft?.storedDataUrl || '',
+      imageName: imageDraft?.name || '',
+      source: 'ALLIA',
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }));
+    savePracticeData();
+
+    iftyScienceGenerationPending[folderId] = Math.max(0, Number(iftyScienceGenerationPending[folderId] || 0) - 1);
+    renderIftySciencePage({ preserveScroll: true });
+    keepIftyScienceTopicFocused(folderId);
+  } catch (error) {
+    console.error('理科暗記用説明文生成エラー:', error);
+    iftyScienceGenerationPending[folderId] = Math.max(0, Number(iftyScienceGenerationPending[folderId] || 0) - 1);
+
+    // 失敗時だけ、送信した内容を復元する。
+    // ただし、その後に入力した新しい内容がある場合は絶対に上書きしない。
+    if (!String(iftyScienceTopicDrafts[folderId] || '').trim()) iftyScienceTopicDrafts[folderId] = topic;
+    if (!iftyScienceImageDrafts[folderId] && imageDraft) iftyScienceImageDrafts[folderId] = imageDraft;
+    const currentInput = document.getElementById(`iftyScienceTopic_${folderId}`);
+    if (currentInput && !currentInput.value.trim()) currentInput.value = iftyScienceTopicDrafts[folderId] || '';
+    renderIftySciencePendingImage(folderId);
+    setPendingStatus(String(error.message || error));
+    keepIftyScienceTopicFocused(folderId);
+  }
+};
+
+window.addBlankIftyScienceItem = function(folderId) {
+  const folder = getIftyScienceFolder(folderId);
+  if (!folder) return;
+  const imageDraft = iftyScienceImageDrafts[folderId] ? { ...iftyScienceImageDrafts[folderId] } : null;
+  recordUndoState('理科白紙項目追加');
+  const item = normalizeIftyScienceItem({
+    id: makeId('scienceitem'),
+    subjects: folder.subjects,
+    imageData: imageDraft?.storedDataUrl || '',
+    imageName: imageDraft?.name || '',
+    source: 'MANUAL',
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  });
+  folder.items.push(item);
+  delete iftyScienceImageDrafts[folderId];
+  savePracticeData();
+  renderIftySciencePage();
+  setTimeout(() => window.openIftyScienceItemEditor(folderId, item.id), 0);
+};
+
+function ensureIftyScienceImageViewerModal() {
+  let modal = document.getElementById('iftyScienceImageViewerModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'iftyScienceImageViewerModal';
+  modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(2,6,23,.82);z-index:12150;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+  modal.innerHTML = '<div id="iftyScienceImageViewerCard" style="width:min(980px,96vw);max-height:94vh;overflow:auto;background:#0f172a;border-radius:12px;padding:12px;box-shadow:0 20px 60px rgba(0,0,0,.4);"></div>';
+  modal.addEventListener('click', event => { if (event.target === modal) window.closeIftyScienceImageViewer(); });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+window.openIftyScienceImageViewer = function(itemId) {
+  const ref = getIftyScienceItemById(itemId);
+  if (!ref?.item?.imageData) return;
+  const modal = ensureIftyScienceImageViewerModal();
+  const card = document.getElementById('iftyScienceImageViewerCard');
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px;color:white;">
+      <div style="font-weight:900;">${escapeHtml(ref.item.workTitle || ref.item.title || '画像')}</div>
+      <button type="button" onclick="closeIftyScienceImageViewer()" style="border:none;background:#334155;color:white;border-radius:999px;width:34px;height:34px;font-size:1.2em;cursor:pointer;">×</button>
+    </div>
+    <img src="${ref.item.imageData}" alt="${escapeHtml(ref.item.imageName || ref.item.title || '理科画像')}" style="display:block;max-width:100%;max-height:78vh;margin:auto;object-fit:contain;background:white;border-radius:8px;">
+    ${ref.item.imageFocus ? `<div style="margin-top:9px;color:#e9d5ff;line-height:1.5;white-space:pre-wrap;">${escapeHtml(ref.item.imageFocus)}</div>` : ''}`;
+  modal.style.display = 'flex';
+};
+
+window.closeIftyScienceImageViewer = function() {
+  const modal = document.getElementById('iftyScienceImageViewerModal');
+  if (modal) modal.style.display = 'none';
+};
+
+function ensureIftyScienceItemModal() {
+  let modal = document.getElementById('iftyScienceItemModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'iftyScienceItemModal';
+  modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(15,23,42,.58);z-index:12050;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;';
+  modal.innerHTML = '<div id="iftyScienceItemModalCard" style="width:min(760px,96vw);max-height:92vh;overflow:auto;background:white;border-radius:12px;padding:16px;box-shadow:0 20px 50px rgba(0,0,0,.28);"></div>';
+  modal.addEventListener('click', event => { if (event.target === modal) window.closeIftyScienceItemEditor(); });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function renderIftyScienceEditorImagePreview() {
+  const container = document.getElementById('iftyScienceEditImagePreview');
+  if (!container) return;
+  const imageData = normalizeIftyScienceImageData(iftyScienceEditorImageDraft?.imageData);
+  if (!imageData) {
+    container.innerHTML = '<div style="padding:12px;border:1px dashed #cbd5e1;border-radius:8px;color:#94a3b8;text-align:center;font-size:.8em;">画像なし</div>';
+    return;
+  }
+  container.innerHTML = `
+    <div style="display:flex;gap:9px;align-items:center;padding:8px;border:1px solid #e9d5ff;border-radius:8px;background:#faf5ff;">
+      <img src="${imageData}" alt="画像プレビュー" style="width:96px;height:80px;object-fit:contain;background:white;border:1px solid #e9d5ff;border-radius:7px;">
+      <div style="min-width:0;flex:1;font-size:.76em;color:#6b21a8;">${escapeHtml(iftyScienceEditorImageDraft?.imageName || '添付画像')}</div>
+      <button type="button" onclick="removeIftyScienceEditorImage()" style="border:none;background:#ef4444;color:white;border-radius:7px;padding:6px 8px;font-weight:900;cursor:pointer;">画像削除</button>
+    </div>`;
+}
+
+window.openIftyScienceItemEditor = function(folderId, itemId) {
+  const folder = getIftyScienceFolder(folderId);
+  const item = folder?.items?.find(entry => entry.id === itemId);
+  if (!folder || !item) return;
+  iftyScienceEditorImageDraft = {
+    imageData: normalizeIftyScienceImageData(item.imageData),
+    imageName: String(item.imageName || '').trim()
+  };
+  const modal = ensureIftyScienceItemModal();
+  const card = document.getElementById('iftyScienceItemModalCard');
+  const field = (id, label, value, rows = 1) => `<label style="display:block;margin-top:9px;font-size:.78em;font-weight:900;color:#475569;">${label}</label>${rows > 1 ? `<textarea id="${id}" rows="${rows}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.95em;resize:vertical;">${escapeHtml(value || '')}</textarea>` : `<input id="${id}" value="${escapeHtml(value || '')}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.95em;">`}`;
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+      <div><div style="font-size:1.15em;font-weight:900;color:#0f172a;">理科項目を編集</div><div style="font-size:.75em;color:#64748b;">原理・因果・公式・単位・条件を含む暗記用説明と、画像の覚える核を修正できます。</div></div>
+      <button type="button" onclick="closeIftyScienceItemEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:999px;width:34px;height:34px;font-size:1.2em;font-weight:900;cursor:pointer;">×</button>
+    </div>
+    ${field('iftyScienceEditTitle','タイトル',item.title)}
+    ${field('iftyScienceEditMemoryText','暗記用説明文（定義・原理・因果・仕組みを必要な範囲で簡潔に）',item.memoryText,7)}
+    ${field('iftyScienceEditFormula','公式・関係式',item.formula)}
+    ${field('iftyScienceEditUnit','単位',item.unit)}
+    ${field('iftyScienceEditConditions','条件・適用範囲',item.conditions,3)}
+    ${field('iftyScienceEditKeyPoints','重要ポイント（1行1項目）',item.keyPoints.join('\n'),4)}
+    <div style="margin-top:12px;padding:10px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:9px;">
+      <div style="font-size:.8em;font-weight:900;color:#6b21a8;">画像資産</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:7px;align-items:center;">
+        <button type="button" onclick="document.getElementById('iftyScienceEditImageInput').click()" style="border:1px solid #c084fc;background:white;color:#7e22ce;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">画像を選択</button>
+        <input id="iftyScienceEditImageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleIftyScienceEditorImageSelect(event)" style="display:none;">
+      </div>
+      <div id="iftyScienceEditImagePreview" style="margin-top:7px;"></div>
+      <label style="display:block;margin-top:9px;font-size:.78em;font-weight:900;color:#6b21a8;">画像種別</label>
+      <select id="iftyScienceEditImageKind" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #d8b4fe;border-radius:7px;background:white;">
+        <option value="" ${!item.imageKind ? 'selected' : ''}>未設定</option>
+        <option value="DIAGRAM" ${item.imageKind === 'DIAGRAM' ? 'selected' : ''}>図・模式図</option>
+        <option value="GRAPH" ${item.imageKind === 'GRAPH' ? 'selected' : ''}>グラフ</option>
+        <option value="APPARATUS" ${item.imageKind === 'APPARATUS' ? 'selected' : ''}>実験装置</option>
+        <option value="PHOTO" ${item.imageKind === 'PHOTO' ? 'selected' : ''}>写真</option>
+        <option value="TABLE" ${item.imageKind === 'TABLE' ? 'selected' : ''}>表</option>
+        <option value="OTHER" ${item.imageKind === 'OTHER' ? 'selected' : ''}>その他</option>
+      </select>
+      ${field('iftyScienceEditImageFocus','画像から押さえる核（模式図の関係、グラフの傾向、装置の役割など）',item.imageFocus,3)}
+      ${field('iftyScienceEditWorkTitle','図・装置・資料名',item.workTitle)}
+    </div>
+    <div style="position:sticky;bottom:-16px;margin:14px -16px -16px;padding:10px 16px;background:rgba(255,255,255,.97);border-top:1px solid #e2e8f0;display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" onclick="closeIftyScienceItemEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">キャンセル</button>
+      <button type="button" onclick="saveIftyScienceItemEditor('${folderId}','${itemId}')" data-ifty-enter-primary="true" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 14px;font-weight:900;cursor:pointer;">保存</button>
+    </div>`;
+  modal.style.display = 'flex';
+  renderIftyScienceEditorImagePreview();
+  setTimeout(() => document.getElementById('iftyScienceEditTitle')?.focus(), 0);
+};
+
+window.handleIftyScienceEditorImageSelect = async function(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (file.type && !file.type.startsWith('image/')) {
+    alert('画像ファイルを選択してください。');
+    event.target.value = '';
+    return;
+  }
+  if (file.size > 14 * 1024 * 1024) {
+    alert('画像が大きすぎます。14MB以下の画像を選択してください。');
+    event.target.value = '';
+    return;
+  }
+  try {
+    const rawDataUrl = await readFileAsDataUrl(file);
+    iftyScienceEditorImageDraft = {
+      imageData: await makeIftyScienceStoredImage(rawDataUrl),
+      imageName: String(file.name || 'image').trim()
+    };
+    renderIftyScienceEditorImagePreview();
+  } catch (error) {
+    alert(String(error.message || error));
+  } finally {
+    event.target.value = '';
+  }
+};
+
+window.removeIftyScienceEditorImage = function() {
+  iftyScienceEditorImageDraft = { imageData: '', imageName: '' };
+  renderIftyScienceEditorImagePreview();
+};
+
+window.closeIftyScienceItemEditor = function() {
+  const modal = document.getElementById('iftyScienceItemModal');
+  if (modal) modal.style.display = 'none';
+  iftyScienceEditorImageDraft = null;
+};
+
+window.saveIftyScienceItemEditor = function(folderId, itemId) {
+  const folder = getIftyScienceFolder(folderId);
+  const item = folder?.items?.find(entry => entry.id === itemId);
+  if (!item) return;
+  recordUndoState('理科項目編集');
+  const val = id => String(document.getElementById(id)?.value || '').trim();
+  item.title = val('iftyScienceEditTitle');
+  item.memoryText = val('iftyScienceEditMemoryText');
+  item.formula = val('iftyScienceEditFormula');
+  item.unit = val('iftyScienceEditUnit');
+  item.conditions = val('iftyScienceEditConditions');
+  item.keyPoints = val('iftyScienceEditKeyPoints').split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 12);
+  item.imageData = normalizeIftyScienceImageData(iftyScienceEditorImageDraft?.imageData);
+  item.imageName = String(iftyScienceEditorImageDraft?.imageName || '').trim();
+  item.imageKind = normalizeIftyScienceImageKind(val('iftyScienceEditImageKind'));
+  item.imageFocus = val('iftyScienceEditImageFocus');
+  item.workTitle = val('iftyScienceEditWorkTitle');
+  if (!item.imageData) {
+    item.imageName = '';
+    item.imageKind = '';
+    item.imageFocus = '';
+    item.workTitle = '';
+  }
+  item.updatedAt = Date.now();
+  savePracticeData();
+  window.closeIftyScienceItemEditor();
+  renderIftySciencePage();
+};
+
+window.deleteIftyScienceItem = function(folderId, itemId) {
+  const folder = getIftyScienceFolder(folderId);
+  const item = folder?.items?.find(entry => entry.id === itemId);
+  if (!folder || !item) return;
+  if (!confirm(`「${item.title || item.topic || 'この項目'}」を削除しますか？`)) return;
+  recordUndoState('理科項目削除');
+  folder.items = folder.items.filter(entry => entry.id !== itemId);
+  savePracticeData();
+  renderIftySciencePage();
+};
+
+function ensureIftyScienceVisualQuizModal() {
+  let modal = document.getElementById('iftyScienceVisualQuizModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'iftyScienceVisualQuizModal';
+  modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(15,23,42,.65);z-index:12080;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;';
+  modal.innerHTML = '<div id="iftyScienceVisualQuizCard" style="width:min(820px,96vw);max-height:92vh;overflow:auto;background:white;border-radius:12px;padding:16px;box-shadow:0 20px 50px rgba(0,0,0,.3);"></div>';
+  modal.addEventListener('click', event => { if (event.target === modal) window.closeIftyScienceVisualQuiz(); });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function getIftyScienceVisualQuizCandidates(folderId, mode) {
+  const folder = getIftyScienceFolder(folderId);
+  if (!folder) return [];
+  if (mode === 'text_to_image') {
+    return (folder.items || []).filter(item => !!item.imageData && !!String(item.title || '').trim());
+  }
+  return (folder.items || []).filter(item => !!item.imageData && !!String(item.title || '').trim());
+}
+
+function buildIftyScienceVisualOptionIds(folderId, targetId, mode) {
+  const localFolder = getIftyScienceFolder(folderId);
+  let pool = [];
+  if (mode === 'text_to_image') {
+    pool = getIftyScienceImageEntries().map(ref => ref.item);
+  } else {
+    pool = getIftyScienceModule().folders.flatMap(folder => folder.items || []);
+  }
+
+  const target = getIftyScienceItemById(targetId)?.item;
+  if (!target) return [];
+  const seenLabels = new Set([String(target.title || '').trim().toLowerCase()]);
+  const distractors = [];
+
+  // 同じフォルダを優先し、足りない分だけ理科全体から補う。
+  const prioritized = [
+    ...(localFolder?.items || []).filter(item => String(item.id) !== String(targetId)),
+    ...pool.filter(item => !localFolder?.items?.some(local => String(local.id) === String(item.id)))
+  ];
+
+  for (const item of shuffleArray(prioritized)) {
+    if (String(item.id) === String(targetId)) continue;
+    if (mode === 'text_to_image' && !item.imageData) continue;
+    const label = String(item.title || '').trim();
+    if (!label) continue;
+    const normalized = label.toLowerCase();
+    if (seenLabels.has(normalized)) continue;
+    seenLabels.add(normalized);
+    distractors.push(String(item.id));
+    if (distractors.length >= 3) break;
+  }
+  return shuffleArray([String(targetId), ...distractors]);
+}
+
+window.startIftyScienceVisualQuiz = function(folderId, mode) {
+  const normalizedMode = mode === 'text_to_image' ? 'text_to_image' : 'image_to_text';
+  const candidates = getIftyScienceVisualQuizCandidates(folderId, normalizedMode);
+  if (candidates.length < 2) {
+    alert('この画像クイズには、画像付きの項目が2件以上必要です。');
+    return;
+  }
+  iftyScienceVisualQuizState = {
+    mode: normalizedMode,
+    folderId,
+    queue: shuffleArray(candidates.map(item => String(item.id))),
+    index: 0,
+    correct: 0,
+    wrong: 0,
+    answered: false,
+    selectedId: '',
+    optionIds: []
+  };
+  ensureIftyScienceVisualQuizModal().style.display = 'flex';
+  renderIftyScienceVisualQuiz();
+};
+
+function renderIftyScienceVisualQuiz() {
+  const state = iftyScienceVisualQuizState;
+  const card = document.getElementById('iftyScienceVisualQuizCard');
+  if (!card) return;
+
+  if (state.index >= state.queue.length) {
+    const total = state.correct + state.wrong;
+    const rate = total ? Math.round((state.correct / total) * 100) : 0;
+    card.innerHTML = `
+      <div style="text-align:center;padding:16px 4px;">
+        <div style="font-size:1.25em;font-weight:900;color:#0f172a;">画像クイズ完了</div>
+        <div style="margin-top:12px;font-size:1.05em;color:#334155;">正解 ${state.correct} / ${total}　正答率 ${rate}%</div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px;">
+          <button type="button" onclick="startIftyScienceVisualQuiz('${state.folderId}','${state.mode}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">もう一度</button>
+          <button type="button" onclick="closeIftyScienceVisualQuiz()" data-ifty-enter-primary="true" style="border:none;background:#334155;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">閉じる</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const targetRef = getIftyScienceItemById(state.queue[state.index]);
+  if (!targetRef?.item?.imageData) {
+    state.index += 1;
+    renderIftyScienceVisualQuiz();
+    return;
+  }
+  const target = targetRef.item;
+  if (!state.optionIds.length) state.optionIds = buildIftyScienceVisualOptionIds(state.folderId, target.id, state.mode);
+  const optionRefs = state.optionIds.map(id => getIftyScienceItemById(id)).filter(Boolean);
+
+  const resultBlock = state.answered ? `<div style="margin-top:13px;padding:10px;border-radius:9px;background:${state.selectedId === String(target.id) ? '#ecfdf5' : '#fff1f2'};border:1px solid ${state.selectedId === String(target.id) ? '#86efac' : '#fda4af'};">
+      <div style="font-weight:900;color:${state.selectedId === String(target.id) ? '#166534' : '#9f1239'};">${state.selectedId === String(target.id) ? '正解' : `正解：${escapeHtml(target.title || '無題')}`}</div>
+      ${target.workTitle ? `<div style="margin-top:5px;font-size:.83em;color:#581c87;"><strong>図・装置・資料名：</strong>${escapeHtml(target.workTitle)}</div>` : ''}
+      ${target.imageFocus ? `<div style="margin-top:5px;font-size:.83em;color:#3b0764;line-height:1.5;"><strong>画像の核：</strong>${escapeHtml(target.imageFocus)}</div>` : ''}
+      ${target.memoryText ? `<div style="margin-top:5px;font-size:.82em;color:#475569;line-height:1.55;">${escapeHtml(target.memoryText)}</div>` : ''}
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftyScienceVisualQuiz()" data-ifty-enter-primary="true" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
+    </div>` : '';
+
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+      <div>
+        <div style="font-size:1.12em;font-weight:900;color:#0f172a;">${state.mode === 'image_to_text' ? '画像を見て選ぶ' : '画像を選ぶ'}</div>
+        <div style="font-size:.75em;color:#64748b;margin-top:2px;">${state.index + 1} / ${state.queue.length}</div>
+      </div>
+      <button type="button" onclick="closeIftyScienceVisualQuiz()" style="border:none;background:#e2e8f0;color:#475569;border-radius:999px;width:34px;height:34px;font-size:1.2em;font-weight:900;cursor:pointer;">×</button>
+    </div>
+
+    ${state.mode === 'image_to_text' ? `
+      <div style="margin-top:13px;text-align:center;">
+        <img src="${target.imageData}" alt="問題画像" style="max-width:100%;max-height:340px;object-fit:contain;border:1px solid #e2e8f0;border-radius:10px;background:#fff;">
+        <div style="margin-top:9px;font-weight:900;color:#334155;">この画像に最も対応する項目は？</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-top:12px;">
+        ${optionRefs.map(ref => {
+          const id = String(ref.item.id);
+          const disabled = state.answered ? 'disabled' : '';
+          const isCorrect = id === String(target.id);
+          const isSelected = id === state.selectedId;
+          let bg = '#f8fafc', border = '#cbd5e1', color = '#0f172a';
+          if (state.answered && isCorrect) { bg = '#dcfce7'; border = '#22c55e'; color = '#166534'; }
+          else if (state.answered && isSelected) { bg = '#ffe4e6'; border = '#f43f5e'; color = '#9f1239'; }
+          return `<button type="button" ${disabled} data-ifty-enter-ignore="true" onclick="answerIftyScienceVisualQuiz('${id}')" style="border:2px solid ${border};background:${bg};color:${color};border-radius:9px;padding:11px;text-align:left;font-weight:900;cursor:${state.answered ? 'default' : 'pointer'};">${escapeHtml(ref.item.title || '無題')}</button>`;
+        }).join('')}
+      </div>` : `
+      <div style="margin-top:13px;padding:12px;border:1px solid #ddd6fe;border-radius:10px;background:#f5f3ff;text-align:center;">
+        <div style="font-size:.78em;color:#6d28d9;font-weight:900;">次の項目に対応する画像を選べ</div>
+        <div style="margin-top:5px;font-size:1.2em;font-weight:900;color:#3b0764;">${escapeHtml(target.title || '無題')}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px;">
+        ${optionRefs.map(ref => {
+          const id = String(ref.item.id);
+          const disabled = state.answered ? 'disabled' : '';
+          const isCorrect = id === String(target.id);
+          const isSelected = id === state.selectedId;
+          let border = '#cbd5e1', bg = '#fff';
+          if (state.answered && isCorrect) { border = '#22c55e'; bg = '#f0fdf4'; }
+          else if (state.answered && isSelected) { border = '#f43f5e'; bg = '#fff1f2'; }
+          return `<button type="button" ${disabled} data-ifty-enter-ignore="true" onclick="answerIftyScienceVisualQuiz('${id}')" style="border:3px solid ${border};background:${bg};border-radius:10px;padding:7px;cursor:${state.answered ? 'default' : 'pointer'};min-width:0;"><img src="${ref.item.imageData}" alt="選択肢画像" style="display:block;width:100%;height:180px;object-fit:contain;background:white;border-radius:6px;"></button>`;
+        }).join('')}
+      </div>`}
+    ${resultBlock}`;
+}
+
+window.answerIftyScienceVisualQuiz = function(itemId) {
+  const state = iftyScienceVisualQuizState;
+  if (state.answered || state.index >= state.queue.length) return;
+  const correctId = String(state.queue[state.index]);
+  state.selectedId = String(itemId);
+  state.answered = true;
+  if (state.selectedId === correctId) state.correct += 1;
+  else state.wrong += 1;
+  renderIftyScienceVisualQuiz();
+};
+
+window.nextIftyScienceVisualQuiz = function() {
+  const state = iftyScienceVisualQuizState;
+  if (!state.answered) return;
+  state.index += 1;
+  state.answered = false;
+  state.selectedId = '';
+  state.optionIds = [];
+  renderIftyScienceVisualQuiz();
+};
+
+window.closeIftyScienceVisualQuiz = function() {
+  const modal = document.getElementById('iftyScienceVisualQuizModal');
+  if (modal) modal.style.display = 'none';
+};
+
+
+// ==========================================
+// Q3 STEP47：SCIENCE 専用PRACTICE
+// ==========================================
+function getIftySciencePracticeFolders() {
+  return getIftyScienceModule().folders.filter(folder => Array.isArray(folder.items) && folder.items.length);
+}
+
+function ensureIftySciencePracticeFolderSelection() {
+  const foldersWithItems = getIftySciencePracticeFolders();
+  const validIds = new Set(foldersWithItems.map(folder => String(folder.id)));
+  iftySciencePracticeSelectedFolderIds = new Set(
+    [...iftySciencePracticeSelectedFolderIds].filter(id => validIds.has(String(id)))
+  );
+  if (!iftySciencePracticeSelectionInitialized) {
+    foldersWithItems.forEach(folder => iftySciencePracticeSelectedFolderIds.add(String(folder.id)));
+    iftySciencePracticeSelectionInitialized = true;
+  }
+}
+
+function getIftySciencePracticeSelectedFolders() {
+  ensureIftySciencePracticeFolderSelection();
+  return getIftySciencePracticeFolders().filter(folder => iftySciencePracticeSelectedFolderIds.has(String(folder.id)));
+}
+
+function getIftySciencePracticeItems() {
+  return getIftySciencePracticeSelectedFolders().flatMap(folder => (folder.items || [])
+    .filter(item => String(item?.title || item?.topic || '').trim())
+    .map(item => ({ folder, item })));
+}
+
+function getIftySciencePracticeImageItems() {
+  return getIftySciencePracticeItems().filter(ref => !!normalizeIftyScienceImageData(ref.item.imageData));
+}
+
+function findIftySciencePracticeItemById(itemId) {
+  const target = String(itemId || '');
+  for (const folder of getIftyScienceModule().folders || []) {
+    const item = (folder.items || []).find(row => String(row?.id || '') === target);
+    if (item) return { folder, item };
+  }
+  return null;
+}
+
+window.startIftyScienceFlashcards = function(direction = 'front', random = true) {
+  const refs = getIftySciencePracticeItems().filter(ref =>
+    String(ref.item?.title || ref.item?.topic || '').trim() &&
+    String(ref.item?.memoryText || '').trim()
+  );
+  if (!refs.length) {
+    alert('フラッシュカードに使える理科用語がありません。');
+    return;
+  }
+  closePracticeModal();
+  currentFlashcardMode = 'science';
+  cardMode = direction === 'back' ? 'back' : 'front';
+  isRandomMode = random !== false;
+  flashcardList = refs.map(ref => ({
+    id: String(ref.item.id || ''),
+    word: String(ref.item.title || ref.item.topic || '').trim(),
+    meanings: [String(ref.item.memoryText || '').trim()],
+    mastery: ref.item.mastery || 'unfixed',
+    language: '日本語',
+    languageCode: 'ja',
+    __iftyScienceFlashcard: true,
+    __iftyScienceItemId: String(ref.item.id || '')
+  }));
+  if (isRandomMode) flashcardList = shuffleArray(flashcardList);
+  currentFlashcardIndex = 0;
+  isCardFlipped = false;
+  renderFlashcardModal();
+};
+
+function getIftySciencePracticeModeMeta(mode) {
+  const meta = {
+    simple: {
+      title: 'シンプル',
+      description: '用語→説明、または説明→用語。保存済みデータだけで出題します。',
+      color: '#2563eb'
+    },
+    formula: {
+      title: '公式・単位',
+      description: '用語→公式・単位、または公式・単位→用語。複数正解にも対応します。',
+      color: '#7c3aed'
+    },
+    order: {
+      title: '並べ替え',
+      description: '反応・実験・生体過程・現象などの手順や因果の順序を並べます。',
+      color: '#d97706'
+    },
+    explanation: {
+      title: '説明',
+      description: '提示された用語を、指定された語句を使って説明します。ALLIAが採点します。',
+      color: '#059669'
+    },
+    image: {
+      title: '画像関連',
+      description: '画像から用語を答える、または用語から正しい画像を選びます。',
+      color: '#db2777'
+    }
+  };
+  return meta[mode] || { title: 'PRACTICE', description: '', color: '#334155' };
+}
+
+function resetIftySciencePracticeAnswerState() {
+  iftySciencePracticeState.answered = false;
+  iftySciencePracticeState.selectedIds = [];
+  iftySciencePracticeState.orderIds = [];
+  iftySciencePracticeState.grading = false;
+  iftySciencePracticeState.feedback = '';
+  iftySciencePracticeState.score = null;
+  iftySciencePracticeState.modelAnswer = '';
+  iftySciencePracticeState.answerText = '';
+}
+
+window.openIftySciencePractice = function() {
+  currentIftySubject = 'SCIENCE';
+  window.closeIftySideMenu();
+  ensureIftySciencePracticeFolderSelection();
+  window.openPracticeHome('SCIENCE');
+};
+
+window.toggleIftySciencePracticeFolder = function(folderId, checked) {
+  iftySciencePracticeSelectionInitialized = true;
+  const id = String(folderId || '');
+  if (checked) iftySciencePracticeSelectedFolderIds.add(id);
+  else iftySciencePracticeSelectedFolderIds.delete(id);
+  const practiceModal = document.getElementById('practiceModal');
+  if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
+  else renderIftySciencePracticeHome();
+};
+
+window.selectAllIftySciencePracticeFolders = function(selected) {
+  iftySciencePracticeSelectionInitialized = true;
+  iftySciencePracticeSelectedFolderIds.clear();
+  if (selected) getIftySciencePracticeFolders().forEach(folder => iftySciencePracticeSelectedFolderIds.add(String(folder.id)));
+  const practiceModal = document.getElementById('practiceModal');
+  if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
+  else renderIftySciencePracticeHome();
+};
+
+window.setIftySciencePracticeQuestionCount = function(value) {
+  const count = Number(value);
+  iftySciencePracticeQuestionCount = [5, 10].includes(count) ? count : 5;
+  const practiceModal = document.getElementById('practiceModal');
+  if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
+  else renderIftySciencePracticeHome();
+};
+
+function renderIftySciencePracticeHome() {
+  currentIftySubject = 'SCIENCE';
+  const foldersWithItems = getIftySciencePracticeFolders();
+  ensureIftySciencePracticeFolderSelection();
+  const selectedFolders = getIftySciencePracticeSelectedFolders();
+  const selectedItems = getIftySciencePracticeItems();
+  const imageItems = getIftySciencePracticeImageItems();
+  const selectedSubjects = [...new Set(selectedFolders.flatMap(folder => normalizeIftyScienceSubjects(folder.subjects)))]
+    .map(getIftyScienceSubjectLabel);
+
+  const folderChoices = foldersWithItems.length
+    ? foldersWithItems.map(folder => {
+        const checked = iftySciencePracticeSelectedFolderIds.has(String(folder.id));
+        return `<label style="display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid ${checked ? '#38bdf8' : '#cbd5e1'};border-radius:9px;background:${checked ? '#f0f9ff' : '#fff'};cursor:pointer;min-width:0;">
+          <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleIftySciencePracticeFolder('${folder.id}',this.checked)">
+          <span style="font-weight:900;color:#0f172a;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(folder.name)}</span>
+          <span style="font-size:.72em;color:#64748b;white-space:nowrap;">${folder.items.length}件</span>
+        </label>`;
+      }).join('')
+    : '<div style="color:#94a3b8;padding:10px 0;">項目のある理科フォルダがありません。</div>';
+
+  const modeCard = mode => {
+    const meta = getIftySciencePracticeModeMeta(mode);
+    let disabledReason = '';
+    if (mode === 'image' && imageItems.length < 2) disabledReason = '画像付き項目が2件以上必要です。';
+    else if (mode === 'simple' && selectedItems.length < 2) disabledReason = '項目が2件以上必要です。';
+    else if (!selectedItems.length) disabledReason = '学習する項目を選択してください。';
+    const disabled = !!disabledReason;
+    return `<button type="button" onclick="startIftySciencePractice('${mode}')" ${disabled ? 'disabled' : ''} style="text-align:left;border:1px solid ${disabled ? '#e2e8f0' : meta.color};background:${disabled ? '#f8fafc' : '#fff'};border-radius:12px;padding:14px;cursor:${disabled ? 'not-allowed' : 'pointer'};min-height:126px;opacity:${disabled ? '.62' : '1'};">
+      <div style="font-size:1.08em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(meta.title)}</div>
+      <div style="margin-top:7px;color:#475569;font-size:.84em;line-height:1.55;">${escapeHtml(meta.description)}</div>
+      ${disabledReason ? `<div style="margin-top:8px;font-size:.72em;color:#94a3b8;font-weight:800;">${escapeHtml(disabledReason)}</div>` : ''}
+    </button>`;
+  };
+
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">SCIENCE / PRACTICE</h1>
+          <div class="ifty-portal-subtitle">理科専用の5種類の問題で、登録した用語を確認します。</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="renderIftySciencePage()">SCIENCEへ戻る</button>
+      </div>
+
+      <div style="margin-top:14px;padding:13px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:900;color:#0f172a;">出題するフォルダ</div>
+            <div style="font-size:.76em;color:#64748b;margin-top:3px;">選択 ${selectedFolders.length}フォルダ / ${selectedItems.length}項目${selectedSubjects.length ? ` ・ ${escapeHtml(selectedSubjects.join('・'))}` : ''}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button type="button" onclick="selectAllIftySciencePracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">すべて</button>
+            <button type="button" onclick="selectAllIftySciencePracticeFolders(false)" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">解除</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin-top:10px;">${folderChoices}</div>
+      </div>
+
+      <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+        <strong style="color:#334155;">問題数</strong>
+        <select onchange="setIftySciencePracticeQuestionCount(this.value)" style="padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
+          <option value="5" ${iftySciencePracticeQuestionCount === 5 ? 'selected' : ''}>5問</option>
+          <option value="10" ${iftySciencePracticeQuestionCount === 10 ? 'selected' : ''}>10問</option>
+        </select>
+        <span style="font-size:.74em;color:#64748b;">公式・単位・並べ替え・説明は開始時にALLIAが問題を作ります。</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:14px;">
+        ${modeCard('simple')}
+        ${modeCard('formula')}
+        ${modeCard('order')}
+        ${modeCard('explanation')}
+        ${modeCard('image')}
+      </div>
+    </section>
+  `, 'science-practice');
+}
+
+function makeIftySciencePracticeSimpleQuestions(items, requestedCount) {
+  const refs = items.filter(ref => String(ref.item.title || '').trim() && String(ref.item.memoryText || '').trim());
+  if (refs.length < 2) return [];
+  const targets = shuffleArray(refs).slice(0, Math.min(requestedCount, refs.length));
+  return targets.map((targetRef, index) => {
+    const direction = index % 2 === 0 ? 'term_to_description' : 'description_to_term';
+    const target = targetRef.item;
+    const targetLabel = direction === 'term_to_description' ? target.memoryText : target.title;
+    const seen = new Set([String(targetLabel).trim().toLowerCase()]);
+    const distractors = [];
+    for (const ref of shuffleArray(refs.filter(ref => String(ref.item.id) !== String(target.id)))) {
+      const label = direction === 'term_to_description' ? String(ref.item.memoryText || '').trim() : String(ref.item.title || '').trim();
+      const key = label.toLowerCase();
+      if (!label || seen.has(key)) continue;
+      seen.add(key);
+      distractors.push({ id: String(ref.item.id), itemId: String(ref.item.id), label });
+      if (distractors.length >= 3) break;
+    }
+    const options = shuffleArray([
+      { id: String(target.id), itemId: String(target.id), label: String(targetLabel) },
+      ...distractors
+    ]);
+    return {
+      id: `simple_${index}_${String(target.id)}`,
+      type: 'simple',
+      direction,
+      prompt: direction === 'term_to_description'
+        ? `「${target.title}」の説明として最も適切なものを選べ。`
+        : '次の説明に当てはまる用語を選べ。',
+      sourceText: direction === 'description_to_term' ? target.memoryText : '',
+      targetItemId: String(target.id),
+      options,
+      correctIds: [String(target.id)],
+      explanation: target.memoryText
+    };
+  }).filter(question => question.options.length >= 2);
+}
+
+function makeIftySciencePracticeImageQuestions(items, requestedCount) {
+  const refs = items.filter(ref => !!normalizeIftyScienceImageData(ref.item.imageData) && String(ref.item.title || '').trim());
+  if (refs.length < 2) return [];
+  const targets = shuffleArray(refs).slice(0, Math.min(requestedCount, refs.length));
+  return targets.map((targetRef, index) => {
+    const target = targetRef.item;
+    const direction = index % 2 === 0 ? 'image_to_text' : 'text_to_image';
+    let optionPool = refs;
+    let labelField = 'title';
+    let prompt = '';
+
+    if (direction === 'image_to_text') {
+      const workTitleRefs = refs.filter(ref => String(ref.item.workTitle || '').trim());
+      const focusRefs = refs.filter(ref => String(ref.item.imageFocus || '').trim());
+      if (String(target.workTitle || '').trim() && workTitleRefs.length >= 2) {
+        optionPool = workTitleRefs;
+        labelField = 'workTitle';
+        prompt = 'この画像の図・装置・資料名として最も適切なものを選べ。';
+      } else if (String(target.imageFocus || '').trim() && focusRefs.length >= 2) {
+        optionPool = focusRefs;
+        labelField = 'imageFocus';
+        prompt = 'この画像から押さえるべき内容として最も適切なものを選べ。';
+      } else {
+        prompt = 'この画像に最も対応する用語を選べ。';
+      }
+    } else {
+      prompt = `「${target.title}」に対応する画像を選べ。`;
+    }
+
+    const candidatePool = optionPool.some(ref => String(ref.item.id) === String(target.id)) ? optionPool : refs;
+    const others = shuffleArray(candidatePool.filter(ref => String(ref.item.id) !== String(target.id))).slice(0, 3);
+    const optionRefs = shuffleArray([targetRef, ...others]);
+    return {
+      id: `image_${index}_${String(target.id)}`,
+      type: 'image',
+      direction,
+      prompt,
+      targetItemId: String(target.id),
+      imageItemId: direction === 'image_to_text' ? String(target.id) : '',
+      options: optionRefs.map(ref => ({
+        id: String(ref.item.id),
+        itemId: String(ref.item.id),
+        label: direction === 'image_to_text'
+          ? String(ref.item[labelField] || ref.item.title || '').trim()
+          : String(ref.item.title || '').trim()
+      })).filter(option => direction === 'text_to_image' || option.label),
+      correctIds: [String(target.id)],
+      explanation: String(target.memoryText || ''),
+      imageFocus: String(target.imageFocus || ''),
+      workTitle: String(target.workTitle || '')
+    };
+  }).filter(question => question.options.length >= 2);
+}
+
+function serializeIftySciencePracticeItems(items) {
+  return items.slice(0, 60).map(ref => ({
+    id: String(ref.item.id || ''),
+    title: String(ref.item.title || ref.item.topic || '').trim(),
+    memoryText: String(ref.item.memoryText || '').trim(),
+    keyPoints: Array.isArray(ref.item.keyPoints) ? ref.item.keyPoints.slice(0, 4) : [],
+    formula: String(ref.item.formula || '').trim(),
+    unit: String(ref.item.unit || '').trim(),
+    conditions: String(ref.item.conditions || '').trim(),
+    subjects: normalizeIftyScienceSubjects(ref.item.subjects?.length ? ref.item.subjects : ref.folder.subjects)
+  })).filter(item => item.id && item.title);
+}
+
+function normalizeIftySciencePracticeAiQuestions(mode, rawQuestions) {
+  const questions = Array.isArray(rawQuestions) ? rawQuestions : [];
+  return questions.map((raw, questionIndex) => {
+    const source = raw && typeof raw === 'object' ? raw : {};
+    const base = {
+      id: `ai_${mode}_${questionIndex}_${Date.now()}`,
+      type: mode,
+      prompt: String(source.prompt || '').trim(),
+      targetItemId: String(source.targetItemId || '').trim(),
+      explanation: String(source.explanation || '').trim()
+    };
+
+    if (mode === 'formula') {
+      const originalOptions = Array.isArray(source.options) ? source.options : [];
+      const originalCorrect = new Set((Array.isArray(source.correctIds) ? source.correctIds : []).map(value => String(value)));
+      const options = originalOptions.map((option, optionIndex) => {
+        const originalId = String(option?.id || `opt${optionIndex + 1}`);
+        return {
+          id: `formula_${questionIndex}_${optionIndex}`,
+          originalId,
+          label: String(option?.label || '').trim()
+        };
+      }).filter(option => option.label);
+      const correctIds = options.filter(option => originalCorrect.has(option.originalId)).map(option => option.id);
+      if (!base.prompt || options.length < 2 || !correctIds.length) return null;
+      return { ...base, direction: String(source.direction || ''), options, correctIds };
+    }
+
+    if (mode === 'order') {
+      const originalEvents = Array.isArray(source.events) ? source.events : [];
+      const originalCorrectOrder = (Array.isArray(source.correctOrder) ? source.correctOrder : []).map(value => String(value));
+      const events = originalEvents.map((event, eventIndex) => ({
+        id: `order_${questionIndex}_${eventIndex}`,
+        originalId: String(event?.id || `event${eventIndex + 1}`),
+        text: String(event?.text || '').trim()
+      })).filter(event => event.text);
+      const byOriginal = new Map(events.map(event => [event.originalId, event.id]));
+      const correctOrder = originalCorrectOrder.map(id => byOriginal.get(id)).filter(Boolean);
+      if (!base.prompt || events.length < 3 || correctOrder.length !== events.length) return null;
+      return { ...base, events: shuffleArray(events), correctOrder };
+    }
+
+    if (mode === 'explanation') {
+      const requiredTerms = [...new Set((Array.isArray(source.requiredTerms) ? source.requiredTerms : [])
+        .map(value => String(value || '').trim()).filter(Boolean))].slice(0, 5);
+      const referenceAnswer = String(source.referenceAnswer || '').trim();
+      const gradingPoints = (Array.isArray(source.gradingPoints) ? source.gradingPoints : [])
+        .map(value => String(value || '').trim()).filter(Boolean).slice(0, 5);
+      if (!base.prompt || !requiredTerms.length || !referenceAnswer) return null;
+      return { ...base, requiredTerms, referenceAnswer, gradingPoints };
+    }
+
+    return null;
+  }).filter(Boolean);
+}
+
+function renderIftySciencePracticeLoading(mode) {
+  const meta = getIftySciencePracticeModeMeta(mode);
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">${escapeHtml(meta.title)}</h1>
+          <div class="ifty-portal-subtitle">ALLIAが理科PRACTICE用の問題を作成しています。</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="openIftySciencePractice()">PRACTICEへ戻る</button>
+      </div>
+      <div style="margin-top:20px;padding:28px;border:1px solid #ddd6fe;border-radius:12px;background:#faf5ff;text-align:center;">
+        <div style="font-size:1.15em;font-weight:900;color:#6d28d9;">問題を生成中…</div>
+        <div style="margin-top:7px;color:#64748b;font-size:.82em;">登録済みの用語と理科のORDERを使っています。</div>
+      </div>
+    </section>
+  `, 'science-practice');
+}
+
+window.startIftySciencePractice = async function(mode) {
+  const normalizedMode = ['simple', 'formula', 'order', 'explanation', 'image'].includes(mode) ? mode : 'simple';
+  const items = getIftySciencePracticeItems();
+  if (!items.length) {
+    alert('出題するフォルダを選択してください。');
+    return;
+  }
+
+  let questions = [];
+  if (normalizedMode === 'simple') {
+    questions = makeIftySciencePracticeSimpleQuestions(items, iftySciencePracticeQuestionCount);
+  } else if (normalizedMode === 'image') {
+    questions = makeIftySciencePracticeImageQuestions(items, iftySciencePracticeQuestionCount);
+  } else {
+    if (!ensureIftyOnline('理科PRACTICE問題生成')) return;
+    renderIftySciencePracticeLoading(normalizedMode);
+    try {
+      const selectedFolders = getIftySciencePracticeSelectedFolders();
+      const subjects = [...new Set(selectedFolders.flatMap(folder => normalizeIftyScienceSubjects(folder.subjects)))];
+      const response = await fetch(WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'science_practice_generate',
+          mode: normalizedMode,
+          count: iftySciencePracticeQuestionCount,
+          items: serializeIftySciencePracticeItems(items),
+          subjects,
+          subject: 'SCIENCE',
+          order: getIftySubjectOrder('SCIENCE')
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw alliaHttpError(response, data, '理科PRACTICEの問題生成に失敗しました。');
+      questions = normalizeIftySciencePracticeAiQuestions(normalizedMode, data.questions);
+    } catch (error) {
+      console.error('理科PRACTICE問題生成エラー:', error);
+      alert(String(error.message || error));
+      window.openPracticeHome('SCIENCE');
+      return;
+    }
+  }
+
+  if (!questions.length) {
+    alert(normalizedMode === 'image'
+      ? '画像付き項目が2件以上必要です。'
+      : 'この条件では問題を作れませんでした。別のフォルダを選ぶか、項目を増やしてください。');
+    window.openPracticeHome('SCIENCE');
+    return;
+  }
+
+  iftySciencePracticeState = {
+    mode: normalizedMode,
+    questions,
+    index: 0,
+    correct: 0,
+    wrong: 0,
+    answered: false,
+    selectedIds: [],
+    orderIds: normalizedMode === 'order' ? questions[0].events.map(event => event.id) : [],
+    grading: false,
+    feedback: '',
+    score: null,
+    modelAnswer: '',
+    answerText: ''
+  };
+  renderIftySciencePracticePlayer();
+};
+
+function getCurrentIftySciencePracticeQuestion() {
+  return iftySciencePracticeState.questions[iftySciencePracticeState.index] || null;
+}
+
+function renderIftySciencePracticeResult() {
+  const state = iftySciencePracticeState;
+  const total = state.correct + state.wrong;
+  const rate = total ? Math.round((state.correct / total) * 100) : 0;
+  const meta = getIftySciencePracticeModeMeta(state.mode);
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="text-align:center;padding:28px 8px;">
+        <div style="font-size:1.4em;font-weight:900;color:${meta.color};">${escapeHtml(meta.title)} 完了</div>
+        <div style="margin-top:12px;color:#334155;font-size:1.05em;">正解 ${state.correct} / ${total}　正答率 ${rate}%</div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:18px;">
+          <button type="button" onclick="startIftySciencePractice('${state.mode}')" style="border:none;background:${meta.color};color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">もう一度</button>
+          <button type="button" onclick="openIftySciencePractice()" data-ifty-enter-primary="true" style="border:none;background:#334155;color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">PRACTICEへ戻る</button>
+        </div>
+      </div>
+    </section>
+  `, 'science-practice');
+}
+
+function renderIftySciencePracticeChoiceQuestion(question) {
+  const state = iftySciencePracticeState;
+  const isFormula = state.mode === 'formula';
+  const isImage = state.mode === 'image';
+  const targetRef = question.targetItemId ? getIftyScienceItemById(question.targetItemId) : null;
+  const imageRef = question.imageItemId ? getIftyScienceItemById(question.imageItemId) : null;
+
+  const promptVisual = isImage && question.direction === 'image_to_text' && imageRef?.item?.imageData
+    ? `<div style="margin-top:12px;text-align:center;"><img src="${imageRef.item.imageData}" alt="問題画像" style="max-width:100%;max-height:330px;object-fit:contain;border:1px solid #e2e8f0;border-radius:10px;background:white;"></div>`
+    : '';
+  const sourceText = question.sourceText
+    ? `<div style="margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:10px;background:#f8fbff;color:#0f172a;line-height:1.65;">${escapeHtml(question.sourceText)}</div>`
+    : '';
+
+  const optionHtml = (question.options || []).map(option => {
+    const selected = state.selectedIds.includes(String(option.id));
+    const correct = (question.correctIds || []).includes(String(option.id));
+    let border = selected ? '#0ea5e9' : '#cbd5e1';
+    let bg = selected ? '#f0f9ff' : '#fff';
+    let color = '#0f172a';
+    if (state.answered && correct) { border = '#22c55e'; bg = '#f0fdf4'; color = '#166534'; }
+    else if (state.answered && selected && !correct) { border = '#f43f5e'; bg = '#fff1f2'; color = '#9f1239'; }
+
+    if (isImage && question.direction === 'text_to_image') {
+      const ref = getIftyScienceItemById(option.itemId || option.id);
+      const imageData = ref?.item?.imageData || '';
+      return `<button type="button" ${state.answered ? 'disabled' : ''} data-ifty-enter-ignore="true" onclick="answerIftySciencePracticeChoice('${option.id}')" style="border:3px solid ${border};background:${bg};border-radius:10px;padding:7px;cursor:${state.answered ? 'default' : 'pointer'};min-width:0;">
+        <img src="${imageData}" alt="選択肢画像" style="display:block;width:100%;height:170px;object-fit:contain;background:white;border-radius:6px;">
+      </button>`;
+    }
+
+    return `<button type="button" ${state.answered ? 'disabled' : ''} data-ifty-enter-ignore="true" onclick="${isFormula ? `toggleIftySciencePracticeFormulaChoice('${option.id}')` : `answerIftySciencePracticeChoice('${option.id}')`}" style="border:2px solid ${border};background:${bg};color:${color};border-radius:9px;padding:11px;text-align:left;font-weight:800;line-height:1.5;cursor:${state.answered ? 'default' : 'pointer'};">${escapeHtml(option.label)}</button>`;
+  }).join('');
+
+  const allCorrect = state.answered && arraysAsSetsEqual(state.selectedIds, question.correctIds || []);
+  const feedback = state.answered ? `
+    <div style="margin-top:13px;padding:11px;border-radius:9px;background:${allCorrect ? '#ecfdf5' : '#fff1f2'};border:1px solid ${allCorrect ? '#86efac' : '#fda4af'};">
+      <div style="font-weight:900;color:${allCorrect ? '#166534' : '#9f1239'};">${allCorrect ? '正解' : '不正解'}</div>
+      ${question.explanation ? `<div style="margin-top:6px;color:#475569;line-height:1.6;">${escapeHtml(question.explanation)}</div>` : ''}
+      ${isImage && targetRef?.item?.workTitle ? `<div style="margin-top:5px;color:#581c87;font-size:.85em;"><strong>図・装置・資料名：</strong>${escapeHtml(targetRef.item.workTitle)}</div>` : ''}
+      ${isImage && targetRef?.item?.imageFocus ? `<div style="margin-top:5px;color:#3b0764;font-size:.85em;"><strong>画像の核：</strong>${escapeHtml(targetRef.item.imageFocus)}</div>` : ''}
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySciencePracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
+    </div>` : '';
+
+  return `
+    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
+    ${promptVisual}
+    ${sourceText}
+    ${isFormula && !state.answered ? '<div style="margin-top:7px;color:#7c3aed;font-size:.76em;font-weight:800;">正しいものをすべて選択してください。複数正解の場合があります。</div>' : ''}
+    <div style="display:grid;grid-template-columns:${isImage && question.direction === 'text_to_image' ? 'repeat(2,minmax(0,1fr))' : 'repeat(auto-fit,minmax(220px,1fr))'};gap:8px;margin-top:12px;">${optionHtml}</div>
+    ${isFormula && !state.answered ? `<div style="text-align:right;margin-top:11px;"><button type="button" onclick="submitIftySciencePracticeFormula()" ${state.selectedIds.length ? '' : 'disabled'} style="border:none;background:${state.selectedIds.length ? '#7c3aed' : '#cbd5e1'};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:${state.selectedIds.length ? 'pointer' : 'not-allowed'};">回答する</button></div>` : ''}
+    ${feedback}`;
+}
+
+
+function renderIftySciencePracticeOrderQuestion(question) {
+  const state = iftySciencePracticeState;
+  if (!state.orderIds.length) state.orderIds = (question.events || []).map(event => event.id);
+  const eventMap = new Map((question.events || []).map(event => [String(event.id), event]));
+  const rows = state.orderIds.map((id, index) => {
+    const event = eventMap.get(String(id));
+    if (!event) return '';
+    const correctPosition = state.answered ? (question.correctOrder || []).indexOf(String(id)) : -1;
+    const isCorrectPosition = state.answered && correctPosition === index;
+    return `<div style="display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;padding:9px;border:1px solid ${state.answered ? (isCorrectPosition ? '#86efac' : '#fda4af') : '#cbd5e1'};background:${state.answered ? (isCorrectPosition ? '#f0fdf4' : '#fff1f2') : '#fff'};border-radius:9px;">
+      <div style="font-weight:900;color:#64748b;text-align:center;">${index + 1}</div>
+      <div style="color:#0f172a;line-height:1.5;">${escapeHtml(event.text)}</div>
+      ${state.answered ? '' : `<div style="display:flex;gap:4px;">
+        <button type="button" data-ifty-enter-ignore="true" onclick="moveIftySciencePracticeOrder(${index},-1)" ${index === 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;border-radius:6px;width:34px;height:34px;cursor:${index === 0 ? 'not-allowed' : 'pointer'};">↑</button>
+        <button type="button" data-ifty-enter-ignore="true" onclick="moveIftySciencePracticeOrder(${index},1)" ${index === state.orderIds.length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;border-radius:6px;width:34px;height:34px;cursor:${index === state.orderIds.length - 1 ? 'not-allowed' : 'pointer'};">↓</button>
+      </div>`}
+    </div>`;
+  }).join('');
+  const correct = state.answered && arraysAsSetsEqual(state.orderIds, question.correctOrder || []) && state.orderIds.every((id, index) => String(id) === String(question.correctOrder[index]));
+  return `
+    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
+    <div style="margin-top:7px;color:#64748b;font-size:.76em;">科学的に正しい過程・因果・手順の順に並べてください。</div>
+    <div style="display:grid;gap:7px;margin-top:12px;">${rows}</div>
+    ${state.answered ? `<div style="margin-top:12px;padding:11px;border-radius:9px;background:${correct ? '#ecfdf5' : '#fff1f2'};border:1px solid ${correct ? '#86efac' : '#fda4af'};">
+      <div style="font-weight:900;color:${correct ? '#166534' : '#9f1239'};">${correct ? '正解' : '不正解'}</div>
+      ${question.explanation ? `<div style="margin-top:6px;color:#475569;line-height:1.6;">${escapeHtml(question.explanation)}</div>` : ''}
+      ${!correct ? `<div style="margin-top:8px;color:#334155;font-size:.84em;"><strong>正しい順：</strong>${(question.correctOrder || []).map((id, i) => `${i + 1}. ${escapeHtml(eventMap.get(String(id))?.text || '')}`).join(' → ')}</div>` : ''}
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySciencePracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
+    </div>` : `<div style="text-align:right;margin-top:11px;"><button type="button" onclick="submitIftySciencePracticeOrder()" style="border:none;background:#d97706;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">回答する</button></div>`}`;
+}
+
+function renderIftySciencePracticeExplanationQuestion(question) {
+  const state = iftySciencePracticeState;
+  const required = (question.requiredTerms || []).map(term => `<span style="display:inline-block;padding:5px 8px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:900;font-size:.82em;">${escapeHtml(term)}</span>`).join(' ');
+  return `
+    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
+    <div style="margin-top:10px;padding:10px;border:1px solid #bbf7d0;border-radius:9px;background:#f0fdf4;">
+      <div style="font-size:.76em;color:#166534;font-weight:900;margin-bottom:6px;">必ず使う語句</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">${required}</div>
+    </div>
+    ${state.answered ? `<div style="margin-top:12px;padding:11px;border:1px solid ${state.correctLast ? '#86efac' : '#fda4af'};background:${state.correctLast ? '#ecfdf5' : '#fff1f2'};border-radius:9px;">
+      <div style="font-weight:900;color:${state.correctLast ? '#166534' : '#9f1239'};">${state.correctLast ? '正解' : '要復習'}${Number.isFinite(Number(state.score)) ? `　${Math.round(Number(state.score))}点` : ''}</div>
+      <div style="margin-top:7px;color:#334155;line-height:1.6;white-space:pre-wrap;">${escapeHtml(state.feedback)}</div>
+      ${state.modelAnswer ? `<div style="margin-top:9px;padding:9px;background:white;border:1px solid #d1fae5;border-radius:8px;color:#0f172a;line-height:1.6;"><strong>模範：</strong>${escapeHtml(state.modelAnswer)}</div>` : ''}
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySciencePracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
+    </div>` : `<div style="margin-top:12px;">
+      <textarea id="iftySciencePracticeExplanationInput" placeholder="ここに説明を書く" oninput="iftySciencePracticeState.answerText=this.value" style="width:100%;min-height:150px;box-sizing:border-box;padding:11px;border:1px solid #94a3b8;border-radius:9px;font:inherit;line-height:1.6;resize:vertical;">${escapeHtml(state.answerText || '')}</textarea>
+      <div id="iftySciencePracticeGradeStatus" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;">${state.grading ? 'ALLIAが採点中…' : 'Ctrl/Cmd + Enterでも回答できます。'}</div>
+      <div style="text-align:right;margin-top:7px;"><button type="button" onclick="submitIftySciencePracticeExplanation()" ${state.grading ? 'disabled' : ''} style="border:none;background:${state.grading ? '#94a3b8' : '#059669'};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:${state.grading ? 'wait' : 'pointer'};">${state.grading ? '採点中…' : '回答する'}</button></div>
+    </div>`}`;
+}
+
+function renderIftySciencePracticePlayer() {
+  const state = iftySciencePracticeState;
+  if (state.index >= state.questions.length) {
+    renderIftySciencePracticeResult();
+    return;
+  }
+  const question = getCurrentIftySciencePracticeQuestion();
+  if (!question) {
+    state.index += 1;
+    renderIftySciencePracticePlayer();
+    return;
+  }
+  const meta = getIftySciencePracticeModeMeta(state.mode);
+  let body = '';
+  if (state.mode === 'simple' || state.mode === 'formula' || state.mode === 'image') body = renderIftySciencePracticeChoiceQuestion(question);
+  else if (state.mode === 'order') body = renderIftySciencePracticeOrderQuestion(question);
+  else if (state.mode === 'explanation') body = renderIftySciencePracticeExplanationQuestion(question);
+
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title" style="color:${meta.color};">${escapeHtml(meta.title)}</h1>
+          <div class="ifty-portal-subtitle">${state.index + 1} / ${state.questions.length}　正解 ${state.correct}　要復習 ${state.wrong}</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="openIftySciencePractice()">終了</button>
+      </div>
+      <div style="margin-top:15px;padding:15px;border:1px solid #cbd5e1;border-radius:12px;background:white;">${body}</div>
+    </section>
+  `, 'science-practice');
+
+  if (state.mode === 'explanation' && !state.answered && !state.grading) {
+    const textarea = document.getElementById('iftySciencePracticeExplanationInput');
+    if (textarea) {
+      textarea.addEventListener('keydown', event => {
+        if (event.isComposing) return;
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          window.submitIftySciencePracticeExplanation();
+        }
+      });
+      setTimeout(() => textarea.focus({ preventScroll: true }), 0);
+    }
+  }
+}
+
+window.answerIftySciencePracticeChoice = function(optionId) {
+  const state = iftySciencePracticeState;
+  const question = getCurrentIftySciencePracticeQuestion();
+  if (!question || state.answered) return;
+  state.selectedIds = [String(optionId)];
+  state.answered = true;
+  const correct = arraysAsSetsEqual(state.selectedIds, question.correctIds || []);
+  if (correct) state.correct += 1; else state.wrong += 1;
+  renderIftySciencePracticePlayer();
+};
+
+window.toggleIftySciencePracticeFormulaChoice = function(optionId) {
+  const state = iftySciencePracticeState;
+  if (state.answered) return;
+  const id = String(optionId);
+  if (state.selectedIds.includes(id)) state.selectedIds = state.selectedIds.filter(value => value !== id);
+  else state.selectedIds = [...state.selectedIds, id];
+  renderIftySciencePracticePlayer();
+};
+
+window.submitIftySciencePracticeFormula = function() {
+  const state = iftySciencePracticeState;
+  const question = getCurrentIftySciencePracticeQuestion();
+  if (!question || state.answered || !state.selectedIds.length) return;
+  state.answered = true;
+  const correct = arraysAsSetsEqual(state.selectedIds, question.correctIds || []);
+  if (correct) state.correct += 1; else state.wrong += 1;
+  renderIftySciencePracticePlayer();
+};
+
+window.moveIftySciencePracticeOrder = function(index, direction) {
+  const state = iftySciencePracticeState;
+  if (state.answered) return;
+  const from = Number(index);
+  const to = from + Number(direction);
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= state.orderIds.length || to >= state.orderIds.length) return;
+  [state.orderIds[from], state.orderIds[to]] = [state.orderIds[to], state.orderIds[from]];
+  renderIftySciencePracticePlayer();
+};
+
+window.submitIftySciencePracticeOrder = function() {
+  const state = iftySciencePracticeState;
+  const question = getCurrentIftySciencePracticeQuestion();
+  if (!question || state.answered) return;
+  state.answered = true;
+  const correct = state.orderIds.length === (question.correctOrder || []).length
+    && state.orderIds.every((id, index) => String(id) === String(question.correctOrder[index]));
+  if (correct) state.correct += 1; else state.wrong += 1;
+  renderIftySciencePracticePlayer();
+};
+
+window.submitIftySciencePracticeExplanation = async function() {
+  const state = iftySciencePracticeState;
+  const question = getCurrentIftySciencePracticeQuestion();
+  if (!question || state.answered || state.grading) return;
+  const textarea = document.getElementById('iftySciencePracticeExplanationInput');
+  const answer = String(textarea?.value ?? state.answerText ?? '').trim();
+  if (!answer) {
+    if (textarea) textarea.focus();
+    return;
+  }
+  if (!ensureIftyOnline('理科PRACTICE採点')) return;
+  state.answerText = answer;
+  state.grading = true;
+  const status = document.getElementById('iftySciencePracticeGradeStatus');
+  if (status) status.textContent = 'ALLIAが採点中…';
+  const button = status?.parentElement?.querySelector('button');
+  if (button) button.disabled = true;
+
+  try {
+    const target = question.targetItemId ? getIftyScienceItemById(question.targetItemId)?.item : null;
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'science_practice_grade',
+        question: {
+          prompt: question.prompt,
+          title: String(target?.title || ''),
+          memoryText: String(target?.memoryText || ''),
+          requiredTerms: question.requiredTerms || [],
+          referenceAnswer: question.referenceAnswer || '',
+          gradingPoints: question.gradingPoints || []
+        },
+        answer,
+        subject: 'SCIENCE',
+        order: getIftySubjectOrder('SCIENCE')
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw alliaHttpError(response, data, '理科PRACTICEの採点に失敗しました。');
+    state.grading = false;
+    state.answered = true;
+    state.correctLast = !!data.correct;
+    state.score = Number.isFinite(Number(data.score)) ? Number(data.score) : null;
+    state.feedback = String(data.feedback || '').trim();
+    state.modelAnswer = String(data.modelAnswer || question.referenceAnswer || '').trim();
+    if (state.correctLast) state.correct += 1; else state.wrong += 1;
+    renderIftySciencePracticePlayer();
+  } catch (error) {
+    console.error('理科PRACTICE採点エラー:', error);
+    state.grading = false;
+    const currentStatus = document.getElementById('iftySciencePracticeGradeStatus');
+    if (currentStatus) currentStatus.textContent = String(error.message || error);
+    const currentButton = currentStatus?.parentElement?.querySelector('button');
+    if (currentButton) currentButton.disabled = false;
+  }
+};
+
+window.nextIftySciencePracticeQuestion = function() {
+  const state = iftySciencePracticeState;
+  if (!state.answered) return;
+  state.index += 1;
+  resetIftySciencePracticeAnswerState();
+  const nextQuestion = getCurrentIftySciencePracticeQuestion();
+  if (state.mode === 'order' && nextQuestion?.events) state.orderIds = nextQuestion.events.map(event => event.id);
+  renderIftySciencePracticePlayer();
+};
+
+
 window.openIftySubject = function(subject) {
   const normalized = normalizeIftySubject(subject);
   currentIftySubject = normalized;
@@ -4193,6 +5967,11 @@ window.openIftySubject = function(subject) {
 
   if (normalized === 'SOCIAL STUDIES') {
     renderIftySocialStudiesPage();
+    return;
+  }
+
+  if (normalized === 'SCIENCE') {
+    renderIftySciencePage();
     return;
   }
 
@@ -8190,7 +9969,7 @@ function getIftyBasicCloze(item) {
 
 function renderIftyBasicPracticeTabs(active = 'BASIC SENTENCES') {
   const btn = (name, label) => `<button type="button" onclick="setIftyUnifiedPracticeSubject('${name}')" style="border:${active===name?'none':'1px solid #cbd5e1'};background:${active===name?'#7c3aed':'white'};color:${active===name?'white':'#334155'};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${label}</button>`;
-  return `<div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">${btn('ENGLISH','VOCABULARY')}${btn('SOCIAL STUDIES','SOCIAL STUDIES')}${btn('BASIC SENTENCES','BASIC SENTENCES')}</div>`;
+  return `<div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">${btn('ENGLISH','VOCABULARY')}${btn('SOCIAL STUDIES','SOCIAL STUDIES')}${btn('SCIENCE','SCIENCE')}${btn('BASIC SENTENCES','BASIC SENTENCES')}</div>`;
 }
 
 function renderIftyBasicSentencePracticeHome(modal) {
@@ -8500,6 +10279,24 @@ function normalizePracticeData() {
       subjects: normalizedSubjects.length ? normalizedSubjects : ['WORLD_HISTORY'],
       collapsed: !!source.collapsed,
       items: Array.isArray(source.items) ? source.items.map(normalizeIftySocialItem).filter(Boolean) : []
+    };
+  });
+
+  if (!practiceData.modules.science || typeof practiceData.modules.science !== 'object') {
+    practiceData.modules.science = { folders: [] };
+  }
+  if (!Array.isArray(practiceData.modules.science.folders)) {
+    practiceData.modules.science.folders = [];
+  }
+  practiceData.modules.science.folders = practiceData.modules.science.folders.map(folder => {
+    const source = folder && typeof folder === 'object' ? folder : {};
+    const normalizedSubjects = normalizeIftyScienceSubjects(source.subjects);
+    return {
+      id: source.id || makeId('sciencefolder'),
+      name: String(source.name || '理科').trim() || '理科',
+      subjects: normalizedSubjects.length ? normalizedSubjects : ['PHYSICS'],
+      collapsed: !!source.collapsed,
+      items: Array.isArray(source.items) ? source.items.map(normalizeIftyScienceItem).filter(Boolean) : []
     };
   });
 }
@@ -9609,6 +11406,7 @@ window.openPracticeHome = function(subject) {
   closeMainLauncher();
   const requested = String(subject || '').trim().toUpperCase();
   if (requested === 'SOCIAL STUDIES') iftyUnifiedPracticeSubject = 'SOCIAL STUDIES';
+  else if (requested === 'SCIENCE') iftyUnifiedPracticeSubject = 'SCIENCE';
   else if (requested === 'BASIC SENTENCES') iftyUnifiedPracticeSubject = 'BASIC SENTENCES';
   else if (
     requested === 'ENGLISH' ||
@@ -9617,6 +11415,7 @@ window.openPracticeHome = function(subject) {
     requested === 'FOREIGN LANGUAGE'
   ) iftyUnifiedPracticeSubject = 'ENGLISH';
   else if (currentIftySubject === 'SOCIAL STUDIES') iftyUnifiedPracticeSubject = 'SOCIAL STUDIES';
+  else if (currentIftySubject === 'SCIENCE') iftyUnifiedPracticeSubject = 'SCIENCE';
   else iftyUnifiedPracticeSubject = 'ENGLISH';
   let modal = document.getElementById('practiceModal');
   if (!modal) {
@@ -9636,7 +11435,7 @@ window.closePracticeModal = function() {
 
 window.setIftyUnifiedPracticeSubject = function(subject) {
   const value = String(subject || '').toUpperCase();
-  iftyUnifiedPracticeSubject = value === 'SOCIAL STUDIES' ? 'SOCIAL STUDIES' : (value === 'BASIC SENTENCES' ? 'BASIC SENTENCES' : 'ENGLISH');
+  iftyUnifiedPracticeSubject = value === 'SOCIAL STUDIES' ? 'SOCIAL STUDIES' : (value === 'SCIENCE' ? 'SCIENCE' : (value === 'BASIC SENTENCES' ? 'BASIC SENTENCES' : 'ENGLISH'));
   renderPracticeHome();
 };
 
@@ -9645,6 +11444,10 @@ function renderPracticeHome() {
   if (!modal) return;
   if (iftyUnifiedPracticeSubject === 'SOCIAL STUDIES') {
     renderIftyUnifiedSocialPracticeHome(modal);
+    return;
+  }
+  if (iftyUnifiedPracticeSubject === 'SCIENCE') {
+    renderIftyUnifiedSciencePracticeHome(modal);
     return;
   }
   if (iftyUnifiedPracticeSubject === 'BASIC SENTENCES') {
@@ -9662,6 +11465,7 @@ function renderPracticeHome() {
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">VOCABULARY</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
       </div>
 
@@ -9753,6 +11557,8 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">VOCABULARY</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
       </div>
 
       <div style="padding:13px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;">
@@ -9796,6 +11602,96 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
       </div>
     </div>`;
 }
+
+
+function renderIftyUnifiedSciencePracticeHome(modal) {
+  ensureIftySciencePracticeFolderSelection();
+  const foldersWithItems = getIftySciencePracticeFolders();
+  const selectedFolders = getIftySciencePracticeSelectedFolders();
+  const selectedItems = getIftySciencePracticeItems();
+  const imageItems = getIftySciencePracticeImageItems();
+  const selectedSubjects = [...new Set(selectedFolders.flatMap(folder => normalizeIftyScienceSubjects(folder.subjects)))].map(getIftyScienceSubjectLabel);
+
+  const folderChoices = foldersWithItems.length
+    ? foldersWithItems.map(folder => {
+        const checked = iftySciencePracticeSelectedFolderIds.has(String(folder.id));
+        return `<label style="display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid ${checked ? '#38bdf8' : '#cbd5e1'};border-radius:9px;background:${checked ? '#f0f9ff' : '#fff'};cursor:pointer;min-width:0;">
+          <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleIftySciencePracticeFolder('${folder.id}',this.checked)">
+          <span style="font-weight:900;color:#0f172a;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(folder.name)}</span>
+          <span style="font-size:.72em;color:#64748b;white-space:nowrap;">${folder.items.length}件</span>
+        </label>`;
+      }).join('')
+    : '<div style="color:#94a3b8;padding:10px 0;">項目のある理科フォルダがありません。</div>';
+
+  const modeCard = mode => {
+    const meta = getIftySciencePracticeModeMeta(mode);
+    let disabledReason = '';
+    if (mode === 'image' && imageItems.length < 2) disabledReason = '画像付き項目が2件以上必要です。';
+    else if (mode === 'simple' && selectedItems.length < 2) disabledReason = '項目が2件以上必要です。';
+    else if (!selectedItems.length) disabledReason = '学習する項目を選択してください。';
+    const disabled = !!disabledReason;
+    return `<button type="button" onclick="closePracticeModal();startIftySciencePractice('${mode}')" ${disabled ? 'disabled' : ''} style="text-align:left;border:1px solid ${disabled ? '#e2e8f0' : meta.color};background:${disabled ? '#f8fafc' : '#fff'};border-radius:12px;padding:12px;cursor:${disabled ? 'not-allowed' : 'pointer'};min-height:112px;opacity:${disabled ? '.62' : '1'};">
+      <div style="font-size:1.04em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(meta.title)}</div>
+      <div style="margin-top:6px;color:#475569;font-size:.82em;line-height:1.5;">${escapeHtml(meta.description)}</div>
+      ${disabledReason ? `<div style="margin-top:7px;font-size:.7em;color:#94a3b8;font-weight:800;">${escapeHtml(disabledReason)}</div>` : ''}
+    </button>`;
+  };
+
+  modal.innerHTML = `
+    <div style="background:white;border-radius:14px;width:min(820px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;">
+        <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">⚔️ PRACTICE</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">教科を切り替えて実践できます。</div></div>
+        <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
+      </div>
+      <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">VOCABULARY</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
+      </div>
+
+      <div style="padding:13px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:900;color:#0f172a;">出題するフォルダ</div>
+            <div style="font-size:.76em;color:#64748b;margin-top:3px;">選択 ${selectedFolders.length}フォルダ / ${selectedItems.length}項目${selectedSubjects.length ? ` ・ ${escapeHtml(selectedSubjects.join('・'))}` : ''}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button type="button" onclick="selectAllIftySciencePracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">すべて</button>
+            <button type="button" onclick="selectAllIftySciencePracticeFolders(false)" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">解除</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin-top:10px;">${folderChoices}</div>
+      </div>
+
+      <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+        <strong style="color:#334155;">問題数</strong>
+        <select onchange="setIftySciencePracticeQuestionCount(this.value)" style="padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
+          <option value="5" ${iftySciencePracticeQuestionCount === 5 ? 'selected' : ''}>5問</option>
+          <option value="10" ${iftySciencePracticeQuestionCount === 10 ? 'selected' : ''}>10問</option>
+        </select>
+        <span style="font-size:.74em;color:#64748b;">公式・単位・並べ替え・説明は開始時にALLIAが問題を作ります。</span>
+      </div>
+
+      <div style="margin-top:14px;padding:13px;border:1px solid #99f6e4;border-radius:11px;background:#f0fdfa;">
+        <div style="font-size:1.04em;font-weight:900;color:#0f766e;">📇 フラッシュカード</div>
+        <div style="margin-top:5px;color:#475569;font-size:.82em;line-height:1.5;">VOCABULARYと同じカードUIで、用語⇄説明を確認します。選択中の理科フォルダだけが対象です。</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+          <button type="button" onclick="startIftyScienceFlashcards('front',true)" ${selectedItems.length ? '' : 'disabled'} style="border:none;background:#0f766e;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:${selectedItems.length ? 'pointer' : 'not-allowed'};opacity:${selectedItems.length ? '1' : '.55'};">用語 → 説明</button>
+          <button type="button" onclick="startIftyScienceFlashcards('back',true)" ${selectedItems.length ? '' : 'disabled'} style="border:none;background:#115e59;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:${selectedItems.length ? 'pointer' : 'not-allowed'};opacity:${selectedItems.length ? '1' : '.55'};">説明 → 用語</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:14px;">
+        ${modeCard('simple')}
+        ${modeCard('formula')}
+        ${modeCard('order')}
+        ${modeCard('explanation')}
+        ${modeCard('image')}
+      </div>
+    </div>`;
+}
+
 
 function openPracticeNamePrompt(title, defaultValue, onConfirm) {
   let modal = document.getElementById('practiceNameModal');
@@ -10908,8 +12804,15 @@ function getIftyAlliaSubjectCapabilities(subject) {
       itemLabelField: 'title', generator: 'generic_study_item', supportsPractice: false
     },
     SCIENCE: {
-      storage: 'practiceModule', moduleKey: 'science', folderCollection: 'folders', itemCollection: 'items',
-      itemLabelField: 'title', generator: 'generic_study_item', supportsPractice: false
+      storage: 'practiceModule',
+      moduleKey: 'science',
+      folderCollection: 'folders',
+      itemCollection: 'items',
+      itemLabelField: 'title',
+      generator: 'science_study',
+      folderDefaults: { subjects: ['PHYSICS'], collapsed: false },
+      itemSchema: ['title','memoryText','keyPoints','formula','unit','conditions','subjects','imageData','imageName','imageKind','imageFocus','workTitle','source','createdAt','updatedAt'],
+      supportsPractice: true
     }
   };
   // Future subjects only need a registry entry. Worker actions use these declared storage
@@ -11143,14 +13046,15 @@ window.renderFlashcardModal = function() {
     const isReviewSession = currentFlashcardMode === 'review_due';
     const isWeakSession = currentFlashcardMode === 'weak';
     const isSocialSession = currentFlashcardMode === 'social';
+    const isScienceSession = currentFlashcardMode === 'science';
     if (isReviewSession || isWeakSession) renderFolders();
     modal.innerHTML = `
       <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
         <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 10px;">🎉 完了！</h3>
         <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">${isReviewSession ? '今日の復習を終了しました。' : (isWeakSession ? '苦手候補の学習を終了しました。' : 'すべてのカードを終了しました。')}</p>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-          ${(isReviewSession || isWeakSession || isSocialSession) ? '' : '<button onclick="closeFlashcardModal(); openPracticeHome(\'ENGLISH\');" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>'}
-          <button onclick="closeFlashcardModal();${isSocialSession ? "openPracticeHome('SOCIAL STUDIES');" : ''}" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">${isReviewSession ? '復習フォルダへ戻る' : (isWeakSession ? '語彙帳へ戻る' : (isSocialSession ? '社会PRACTICEへ戻る' : '閉じる'))}</button>
+          ${(isReviewSession || isWeakSession || isSocialSession || isScienceSession) ? '' : '<button onclick="closeFlashcardModal(); openPracticeHome(\'ENGLISH\');" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>'}
+          <button onclick="closeFlashcardModal();${isSocialSession ? "openPracticeHome('SOCIAL STUDIES');" : (isScienceSession ? "openPracticeHome('SCIENCE');" : '')}" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">${isReviewSession ? '復習フォルダへ戻る' : (isWeakSession ? '語彙帳へ戻る' : (isSocialSession ? '社会PRACTICEへ戻る' : (isScienceSession ? '理科PRACTICEへ戻る' : '閉じる')))}</button>
         </div>
       </div>
     `;
@@ -11194,6 +13098,10 @@ window.setMasteryAndNext = function(status) {
     current.mastery = status;
     if (current.__iftySocialFlashcard) {
       const ref = findIftySocialPracticeItemById(current.__iftySocialItemId || current.id);
+      if (ref && ref.item) ref.item.mastery = status;
+      savePracticeData();
+    } else if (current.__iftyScienceFlashcard) {
+      const ref = findIftySciencePracticeItemById(current.__iftyScienceItemId || current.id);
       if (ref && ref.item) ref.item.mastery = status;
       savePracticeData();
     } else {
