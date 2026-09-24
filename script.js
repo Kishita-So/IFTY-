@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP57 2026-09-24：全教科 慎重な再生成 + ANCIENT修正 ★★★
+// ★★★ IFTY Q3 STEP58 2026-09-24：ANCIENT PRACTICE + SOCIAL/SCIENCE 用語記述Challenge ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -186,6 +186,12 @@ let iftyAncientWordDrafts = {};
 let iftyAncientGenerationPending = {};
 let iftyAncientSearchQuery = '';
 let iftyAncientFolderSearchQueries = {};
+let iftyAncientPracticeSelectedFolderIds = new Set();
+let iftyAncientPracticeSelectionInitialized = false;
+let iftyAncientPracticeQuestionCount = 5;
+let iftyAncientPracticeState = null;
+
+let iftySubjectTermWriteState = null;
 
 let chatSessions = [];
 let currentChatSessionId = null;
@@ -3890,6 +3896,11 @@ function getIftySocialPracticeModeMeta(mode) {
       description: '用語→説明、または説明→用語。保存済みデータだけで出題します。',
       color: '#2563eb'
     },
+    term_write: {
+      title: '用語記述',
+      description: '説明を見て用語を自分で入力。通常は端末内で採点し、不正解時だけChallengeでALLIAを使えます。',
+      color: '#1d4ed8'
+    },
     era: {
       title: '時代',
       description: '用語→時代、または時代→用語。正解が複数になる問題にも対応します。',
@@ -4029,6 +4040,7 @@ function renderIftySocialPracticeHome() {
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:14px;">
         ${modeCard('simple')}
+        ${modeCard('term_write')}
         ${modeCard('era')}
         ${modeCard('order')}
         ${modeCard('explanation')}
@@ -4216,10 +4228,15 @@ function renderIftySocialPracticeLoading(mode) {
 }
 
 window.startIftySocialPractice = async function(mode) {
-  const normalizedMode = ['simple', 'era', 'order', 'explanation', 'image'].includes(mode) ? mode : 'simple';
+  const normalizedMode = ['simple', 'term_write', 'era', 'order', 'explanation', 'image'].includes(mode) ? mode : 'simple';
   const items = getIftySocialPracticeItems();
   if (!items.length) {
     alert('出題するフォルダを選択してください。');
+    return;
+  }
+
+  if (normalizedMode === 'term_write') {
+    window.startIftySubjectTermWritePractice('SOCIAL STUDIES');
     return;
   }
 
@@ -5940,6 +5957,11 @@ function getIftySciencePracticeModeMeta(mode) {
       description: '用語→説明、または説明→用語。保存済みデータだけで出題します。',
       color: '#2563eb'
     },
+    term_write: {
+      title: '用語記述',
+      description: '説明・公式などを見て用語を自分で入力。通常は端末内で採点し、不正解時だけChallengeでALLIAを使えます。',
+      color: '#1d4ed8'
+    },
     formula: {
       title: '公式・単位',
       description: '用語→公式・単位、または公式・単位→用語。複数正解にも対応します。',
@@ -6079,6 +6101,7 @@ function renderIftySciencePracticeHome() {
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:14px;">
         ${modeCard('simple')}
+        ${modeCard('term_write')}
         ${modeCard('formula')}
         ${modeCard('order')}
         ${modeCard('explanation')}
@@ -6269,10 +6292,15 @@ function renderIftySciencePracticeLoading(mode) {
 }
 
 window.startIftySciencePractice = async function(mode) {
-  const normalizedMode = ['simple', 'formula', 'order', 'explanation', 'image'].includes(mode) ? mode : 'simple';
+  const normalizedMode = ['simple', 'term_write', 'formula', 'order', 'explanation', 'image'].includes(mode) ? mode : 'simple';
   const items = getIftySciencePracticeItems();
   if (!items.length) {
     alert('出題するフォルダを選択してください。');
+    return;
+  }
+
+  if (normalizedMode === 'term_write') {
+    window.startIftySubjectTermWritePractice('SCIENCE');
     return;
   }
 
@@ -6807,6 +6835,7 @@ window.renderIftyAncientPage = function(options = {}) {
         </div>
         <div style="display:flex;gap:7px;flex-wrap:wrap;">
           <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOME</button>
+          <button class="ifty-portal-back" type="button" onclick="openPracticeHome('ANCIENT')">PRACTICE</button>
           <button class="ifty-portal-back" type="button" onclick="openIftySubjectOrder('ANCIENT')">ORDER</button>
         </div>
       </div>
@@ -11473,7 +11502,7 @@ function getIftyBasicCloze(item) {
 
 function renderIftyBasicPracticeTabs(active = 'BASIC SENTENCES') {
   const btn = (name, label) => `<button type="button" onclick="setIftyUnifiedPracticeSubject('${name}')" style="border:${active===name?'none':'1px solid #cbd5e1'};background:${active===name?'#7c3aed':'white'};color:${active===name?'white':'#334155'};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${label}</button>`;
-  return `<div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">${btn('ENGLISH','VOCABULARY')}${btn('SOCIAL STUDIES','SOCIAL STUDIES')}${btn('SCIENCE','SCIENCE')}${btn('BASIC SENTENCES','BASIC SENTENCES')}</div>`;
+  return `<div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">${btn('ENGLISH','VOCABULARY')}${btn('ANCIENT','ANCIENT')}${btn('SOCIAL STUDIES','SOCIAL STUDIES')}${btn('SCIENCE','SCIENCE')}${btn('BASIC SENTENCES','BASIC SENTENCES')}</div>`;
 }
 
 function renderIftyBasicSentencePracticeHome(modal) {
@@ -13102,6 +13131,7 @@ window.openPracticeHome = function(subject) {
   const requested = String(subject || '').trim().toUpperCase();
   if (requested === 'SOCIAL STUDIES') iftyUnifiedPracticeSubject = 'SOCIAL STUDIES';
   else if (requested === 'SCIENCE') iftyUnifiedPracticeSubject = 'SCIENCE';
+  else if (requested === 'ANCIENT') iftyUnifiedPracticeSubject = 'ANCIENT';
   else if (requested === 'BASIC SENTENCES') iftyUnifiedPracticeSubject = 'BASIC SENTENCES';
   else if (
     requested === 'ENGLISH' ||
@@ -13111,6 +13141,7 @@ window.openPracticeHome = function(subject) {
   ) iftyUnifiedPracticeSubject = 'ENGLISH';
   else if (currentIftySubject === 'SOCIAL STUDIES') iftyUnifiedPracticeSubject = 'SOCIAL STUDIES';
   else if (currentIftySubject === 'SCIENCE') iftyUnifiedPracticeSubject = 'SCIENCE';
+  else if (currentIftySubject === 'ANCIENT') iftyUnifiedPracticeSubject = 'ANCIENT';
   else iftyUnifiedPracticeSubject = 'ENGLISH';
   let modal = document.getElementById('practiceModal');
   if (!modal) {
@@ -13130,7 +13161,13 @@ window.closePracticeModal = function() {
 
 window.setIftyUnifiedPracticeSubject = function(subject) {
   const value = String(subject || '').toUpperCase();
-  iftyUnifiedPracticeSubject = value === 'SOCIAL STUDIES' ? 'SOCIAL STUDIES' : (value === 'SCIENCE' ? 'SCIENCE' : (value === 'BASIC SENTENCES' ? 'BASIC SENTENCES' : 'ENGLISH'));
+  iftyUnifiedPracticeSubject = value === 'SOCIAL STUDIES'
+    ? 'SOCIAL STUDIES'
+    : (value === 'SCIENCE'
+        ? 'SCIENCE'
+        : (value === 'ANCIENT'
+            ? 'ANCIENT'
+            : (value === 'BASIC SENTENCES' ? 'BASIC SENTENCES' : 'ENGLISH')));
   renderPracticeHome();
 };
 
@@ -13143,6 +13180,10 @@ function renderPracticeHome() {
   }
   if (iftyUnifiedPracticeSubject === 'SCIENCE') {
     renderIftyUnifiedSciencePracticeHome(modal);
+    return;
+  }
+  if (iftyUnifiedPracticeSubject === 'ANCIENT') {
+    renderIftyUnifiedAncientPracticeHome(modal);
     return;
   }
   if (iftyUnifiedPracticeSubject === 'BASIC SENTENCES') {
@@ -13159,6 +13200,7 @@ function renderPracticeHome() {
       </div>
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">VOCABULARY</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
@@ -13210,6 +13252,486 @@ function renderPracticeHome() {
     </div>`;
 }
 
+
+function getIftyAncientPracticeFolders() {
+  return getIftyAncientModule().folders.filter(folder => Array.isArray(folder.items) && folder.items.length);
+}
+
+function ensureIftyAncientPracticeFolderSelection() {
+  const folders = getIftyAncientPracticeFolders();
+  const validIds = new Set(folders.map(folder => String(folder.id)));
+  iftyAncientPracticeSelectedFolderIds = new Set(
+    [...iftyAncientPracticeSelectedFolderIds].filter(id => validIds.has(String(id)))
+  );
+  if (!iftyAncientPracticeSelectionInitialized) {
+    folders.forEach(folder => iftyAncientPracticeSelectedFolderIds.add(String(folder.id)));
+    iftyAncientPracticeSelectionInitialized = true;
+  }
+}
+
+function getIftyAncientPracticeSelectedFolders() {
+  ensureIftyAncientPracticeFolderSelection();
+  return getIftyAncientPracticeFolders().filter(folder =>
+    iftyAncientPracticeSelectedFolderIds.has(String(folder.id))
+  );
+}
+
+function getIftyAncientPracticeItems() {
+  return getIftyAncientPracticeSelectedFolders().flatMap(folder =>
+    (folder.items || [])
+      .filter(item => String(item?.word || item?.title || '').trim())
+      .map(item => ({ folder, item }))
+  );
+}
+
+window.toggleIftyAncientPracticeFolder = function(folderId, checked) {
+  if (checked) iftyAncientPracticeSelectedFolderIds.add(String(folderId));
+  else iftyAncientPracticeSelectedFolderIds.delete(String(folderId));
+  renderPracticeHome();
+};
+
+window.selectAllIftyAncientPracticeFolders = function(select) {
+  ensureIftyAncientPracticeFolderSelection();
+  iftyAncientPracticeSelectedFolderIds.clear();
+  if (select) getIftyAncientPracticeFolders().forEach(folder => iftyAncientPracticeSelectedFolderIds.add(String(folder.id)));
+  renderPracticeHome();
+};
+
+window.setIftyAncientPracticeQuestionCount = function(value) {
+  iftyAncientPracticeQuestionCount = Number(value) === 10 ? 10 : 5;
+  renderPracticeHome();
+};
+
+function getIftyAncientPracticeModeMeta(mode) {
+  const meta = {
+    choice: {
+      title: '選択',
+      description: '古文単語→意味 / 意味→古文単語。保存済みデータだけで4択を作り、ALLIAは使いません。',
+      color: '#2563eb'
+    },
+    term_write: {
+      title: '単語記述',
+      description: '意味から古文単語を自分で入力。通常は端末内採点、不正解時だけChallengeでALLIAを使えます。',
+      color: '#1d4ed8'
+    },
+    meaning_write: {
+      title: '意味記述',
+      description: '古文単語の意味を自分で記述。複数語義・自然な言い換えをALLIAが採点します。',
+      color: '#7c3aed'
+    },
+    example: {
+      title: '例文',
+      description: '登録済み古文例文の文脈で、その単語の意味を記述。ALLIAが文脈込みで採点します。',
+      color: '#9333ea'
+    }
+  };
+  return meta[mode] || { title: 'PRACTICE', description: '', color: '#334155' };
+}
+
+function renderIftyUnifiedAncientPracticeHome(modal) {
+  ensureIftyAncientPracticeFolderSelection();
+  const folders = getIftyAncientPracticeFolders();
+  const selectedFolders = getIftyAncientPracticeSelectedFolders();
+  const selectedItems = getIftyAncientPracticeItems();
+  const exampleItems = selectedItems.filter(ref => Array.isArray(ref.item.examples) && ref.item.examples.some(ex => ex?.classical));
+
+  const folderChoices = folders.length
+    ? folders.map(folder => {
+        const checked = iftyAncientPracticeSelectedFolderIds.has(String(folder.id));
+        return `<label style="display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid ${checked ? '#38bdf8' : '#cbd5e1'};border-radius:9px;background:${checked ? '#f0f9ff' : '#fff'};cursor:pointer;min-width:0;">
+          <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleIftyAncientPracticeFolder('${folder.id}',this.checked)">
+          <span style="font-weight:900;color:#0f172a;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(folder.name)}</span>
+          <span style="font-size:.72em;color:#64748b;white-space:nowrap;">${folder.items.length}語</span>
+        </label>`;
+      }).join('')
+    : '<div style="color:#94a3b8;padding:10px 0;">古文単語のあるフォルダがありません。</div>';
+
+  const modeCard = mode => {
+    const meta = getIftyAncientPracticeModeMeta(mode);
+    let disabledReason = '';
+    if (mode === 'choice' && selectedItems.length < 2) disabledReason = '単語が2語以上必要です。';
+    else if (mode === 'example' && !exampleItems.length) disabledReason = '例文つき単語が必要です。';
+    else if (!selectedItems.length) disabledReason = '学習する単語を選択してください。';
+    const disabled = !!disabledReason;
+    return `<button type="button" onclick="startIftyAncientPractice('${mode}')" ${disabled ? 'disabled' : ''} style="text-align:left;border:1px solid ${disabled ? '#e2e8f0' : meta.color};background:${disabled ? '#f8fafc' : '#fff'};border-radius:12px;padding:12px;cursor:${disabled ? 'not-allowed' : 'pointer'};min-height:112px;opacity:${disabled ? '.62' : '1'};">
+      <div style="font-size:1.04em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(meta.title)}</div>
+      <div style="margin-top:6px;color:#475569;font-size:.82em;line-height:1.5;">${escapeHtml(meta.description)}</div>
+      ${disabledReason ? `<div style="margin-top:7px;font-size:.7em;color:#94a3b8;font-weight:800;">${escapeHtml(disabledReason)}</div>` : ''}
+    </button>`;
+  };
+
+  modal.innerHTML = `
+    <div style="background:white;border-radius:14px;width:min(820px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;">
+        <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">⚔️ PRACTICE</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">ANCIENT / 古文単語の実践</div></div>
+        <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
+      </div>
+
+      <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">VOCABULARY</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
+      </div>
+
+      <div style="padding:13px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:900;color:#0f172a;">出題するフォルダ</div>
+            <div style="font-size:.76em;color:#64748b;margin-top:3px;">選択 ${selectedFolders.length}フォルダ / ${selectedItems.length}語</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button type="button" onclick="selectAllIftyAncientPracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">すべて</button>
+            <button type="button" onclick="selectAllIftyAncientPracticeFolders(false)" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">解除</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin-top:10px;">${folderChoices}</div>
+      </div>
+
+      <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+        <strong style="color:#334155;">問題数</strong>
+        <select onchange="setIftyAncientPracticeQuestionCount(this.value)" style="padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
+          <option value="5" ${iftyAncientPracticeQuestionCount === 5 ? 'selected' : ''}>5問</option>
+          <option value="10" ${iftyAncientPracticeQuestionCount === 10 ? 'selected' : ''}>10問</option>
+        </select>
+        <span style="font-size:.74em;color:#64748b;">リスニングは古文単語では使用しません。</span>
+      </div>
+
+      <div style="margin-top:14px;padding:13px;border:1px solid #99f6e4;border-radius:11px;background:#f0fdfa;">
+        <div style="font-size:1.04em;font-weight:900;color:#0f766e;">📇 フラッシュカード</div>
+        <div style="margin-top:5px;color:#475569;font-size:.82em;">VOCABULARYと同じカードUIで、古文単語⇄意味を確認します。</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+          <button type="button" onclick="startIftyAncientPracticeFlashcards('front')" ${selectedItems.length ? '' : 'disabled'} style="border:none;background:#0f766e;color:white;border-radius:7px;padding:9px 12px;font-weight:900;opacity:${selectedItems.length ? '1' : '.55'};">単語 → 意味</button>
+          <button type="button" onclick="startIftyAncientPracticeFlashcards('back')" ${selectedItems.length ? '' : 'disabled'} style="border:none;background:#115e59;color:white;border-radius:7px;padding:9px 12px;font-weight:900;opacity:${selectedItems.length ? '1' : '.55'};">意味 → 単語</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:14px;">
+        ${modeCard('choice')}
+        ${modeCard('term_write')}
+        ${modeCard('meaning_write')}
+        ${modeCard('example')}
+      </div>
+    </div>`;
+}
+
+window.startIftyAncientPracticeFlashcards = function(direction = 'front') {
+  const refs = getIftyAncientPracticeItems();
+  if (!refs.length) {
+    alert('古文単語がありません。');
+    return;
+  }
+  closePracticeModal();
+  currentFlashcardMode = 'ancient';
+  cardMode = direction === 'back' ? 'back' : 'front';
+  isRandomMode = true;
+  flashcardList = shuffleArray(refs.map(ref => ({
+    id: String(ref.item.id || ''),
+    word: String(ref.item.word || ref.item.title || ''),
+    meanings: Array.isArray(ref.item.meanings) && ref.item.meanings.length ? ref.item.meanings : [String(ref.item.memoryText || '')],
+    mastery: ref.item.mastery || 'unfixed',
+    language: '日本語（古文）',
+    languageCode: 'ja',
+    __iftyAncientFlashcard: true,
+    __iftyAncientItemId: String(ref.item.id || '')
+  })));
+  currentFlashcardIndex = 0;
+  isCardFlipped = false;
+  renderFlashcardModal();
+};
+
+function buildIftyAncientChoiceQuestion(target, refs) {
+  const direction = Math.random() < 0.5 ? 'word_to_meaning' : 'meaning_to_word';
+  const targetWord = String(target.item.word || target.item.title || '').trim();
+  const targetMeaning = String(target.item.meanings?.[0] || target.item.memoryText || '').trim();
+
+  const pool = refs.filter(ref => String(ref.item.id) !== String(target.item.id));
+  const distractors = shuffleArray(pool).slice(0, Math.min(3, pool.length));
+  const options = shuffleArray([target, ...distractors]).map(ref => ({
+    id: String(ref.item.id),
+    label: direction === 'word_to_meaning'
+      ? String(ref.item.meanings?.[0] || ref.item.memoryText || '—').trim()
+      : String(ref.item.word || ref.item.title || '').trim()
+  }));
+
+  return {
+    mode: 'choice',
+    targetItemId: String(target.item.id),
+    direction,
+    prompt: direction === 'word_to_meaning'
+      ? `「${targetWord}」の古文での意味として最も適切なものを選べ。`
+      : `「${targetMeaning}」に当たる古文単語を選べ。`,
+    options,
+    correctId: String(target.item.id),
+    modelAnswer: direction === 'word_to_meaning' ? targetMeaning : targetWord
+  };
+}
+
+window.startIftyAncientPractice = function(mode) {
+  const normalizedMode = ['choice', 'term_write', 'meaning_write', 'example'].includes(mode) ? mode : 'choice';
+  let refs = getIftyAncientPracticeItems();
+
+  if (normalizedMode === 'example') {
+    refs = refs.filter(ref => Array.isArray(ref.item.examples) && ref.item.examples.some(ex => ex?.classical));
+  }
+  if (!refs.length) {
+    alert(normalizedMode === 'example' ? '例文つき古文単語がありません。' : '出題する古文単語がありません。');
+    return;
+  }
+  if (normalizedMode === 'choice' && refs.length < 2) {
+    alert('選択問題には2語以上必要です。');
+    return;
+  }
+
+  const count = Math.min(iftyAncientPracticeQuestionCount, refs.length);
+  const targets = shuffleArray([...refs]).slice(0, count);
+  const questions = targets.map(ref => {
+    const item = ref.item;
+    const word = String(item.word || item.title || '').trim();
+    const meanings = Array.isArray(item.meanings) ? item.meanings.filter(Boolean) : [];
+    if (normalizedMode === 'choice') return buildIftyAncientChoiceQuestion(ref, refs);
+    if (normalizedMode === 'term_write') {
+      return {
+        mode: 'term_write',
+        targetItemId: String(item.id),
+        prompt: meanings[0] || String(item.memoryText || '').trim(),
+        answer: word,
+        modelAnswer: word
+      };
+    }
+    if (normalizedMode === 'meaning_write') {
+      return {
+        mode: 'meaning_write',
+        targetItemId: String(item.id),
+        prompt: `「${word}」の古文での重要な意味を1つ以上書け。`,
+        answer: meanings,
+        modelAnswer: meanings.join('／')
+      };
+    }
+    const example = (item.examples || []).find(ex => ex?.classical) || {};
+    return {
+      mode: 'example',
+      targetItemId: String(item.id),
+      prompt: `次の例文中の「${word}」はどのような意味か。\n\n${String(example.classical || '')}`,
+      example: String(example.classical || ''),
+      exampleModern: String(example.modern || ''),
+      answer: meanings,
+      modelAnswer: example.modern || meanings.join('／')
+    };
+  });
+
+  iftyAncientPracticeState = {
+    mode: normalizedMode,
+    questions,
+    index: 0,
+    correct: 0,
+    wrong: 0,
+    answered: false,
+    last: null,
+    grading: false
+  };
+  renderIftyAncientPracticeQuestion();
+};
+
+function renderIftyAncientPracticeQuestion() {
+  const st = iftyAncientPracticeState;
+  const modal = document.getElementById('practiceModal');
+  if (!st || !modal) return;
+
+  modal.style.display = 'flex';
+
+  if (st.index >= st.questions.length) {
+    const total = st.correct + st.wrong;
+    const rate = total ? Math.round(st.correct / total * 100) : 0;
+    modal.innerHTML = `<div style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;">
+      <h2 style="color:#0f766e;margin-top:0;">ANCIENT PRACTICE 完了</h2>
+      <div style="font-size:1.15em;margin:14px 0;">正解 ${st.correct} / ${total}　正答率 ${rate}%</div>
+      <button onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:11px 16px;font-weight:900;">PRACTICEへ戻る</button>
+    </div>`;
+    return;
+  }
+
+  const q = st.questions[st.index];
+  const meta = getIftyAncientPracticeModeMeta(st.mode);
+
+  if (st.mode === 'choice') {
+    modal.innerHTML = `<div style="background:white;border-radius:14px;width:min(700px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+      <div style="display:flex;justify-content:space-between;gap:10px;"><div style="font-weight:900;color:${meta.color};">${escapeHtml(meta.title)}　${st.index + 1}/${st.questions.length}</div><button onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:none;font-size:1.3em;color:#64748b;">✕</button></div>
+      <div style="margin-top:18px;padding:15px;border-radius:10px;background:#f8fafc;font-size:1.05em;line-height:1.65;">${escapeHtml(q.prompt)}</div>
+      <div style="display:grid;gap:8px;margin-top:12px;">${q.options.map(option => `<button type="button" onclick="answerIftyAncientPracticeChoice('${option.id}')" style="text-align:left;border:2px solid #cbd5e1;background:white;border-radius:9px;padding:11px;font-weight:800;cursor:pointer;">${escapeHtml(option.label)}</button>`).join('')}</div>
+    </div>`;
+    return;
+  }
+
+  const label = st.mode === 'term_write'
+    ? '古文単語を入力'
+    : (st.mode === 'example' ? '文脈での意味を記述' : '意味を記述');
+
+  modal.innerHTML = `<div style="background:white;border-radius:14px;width:min(700px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
+    <div style="display:flex;justify-content:space-between;gap:10px;"><div style="font-weight:900;color:${meta.color};">${escapeHtml(meta.title)}　${st.index + 1}/${st.questions.length}</div><button onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:none;font-size:1.3em;color:#64748b;">✕</button></div>
+    <div style="margin-top:18px;padding:15px;border-radius:10px;background:#f8fafc;font-size:1.05em;line-height:1.7;white-space:pre-wrap;">${escapeHtml(q.prompt)}</div>
+    <label style="display:block;margin-top:14px;font-weight:800;color:#334155;">${label}
+      <textarea id="iftyAncientPracticeAnswer" rows="3" style="width:100%;box-sizing:border-box;margin-top:7px;padding:11px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;"></textarea>
+    </label>
+    <button onclick="submitIftyAncientPracticeAnswer()" style="width:100%;margin-top:11px;border:none;background:${meta.color};color:white;border-radius:8px;padding:11px;font-weight:900;">回答</button>
+    <div style="margin-top:8px;color:#64748b;font-size:.78em;">Enterで回答 / Shift+Enterで改行${st.mode === 'term_write' ? '。通常採点ではALLIAを使用しません。' : '。記述内容はALLIAが採点します。'}</div>
+  </div>`;
+
+  const input = document.getElementById('iftyAncientPracticeAnswer');
+  if (input) {
+    input.onkeydown = event => {
+      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
+        window.submitIftyAncientPracticeAnswer();
+      }
+    };
+    setTimeout(() => input.focus(), 0);
+  }
+}
+
+window.answerIftyAncientPracticeChoice = function(optionId) {
+  const st = iftyAncientPracticeState;
+  if (!st || st.answered) return;
+  const q = st.questions[st.index];
+  const correct = String(optionId) === String(q.correctId);
+  st.answered = true;
+  if (correct) st.correct += 1;
+  else st.wrong += 1;
+  st.last = { userAnswer: q.options.find(option => String(option.id) === String(optionId))?.label || '', correct };
+  renderIftyAncientPracticeFeedback(correct, correct ? '正解です。' : '選択肢を見直してください。', q.modelAnswer, false);
+};
+
+window.submitIftyAncientPracticeAnswer = async function() {
+  const st = iftyAncientPracticeState;
+  if (!st || st.answered || st.grading) return;
+  const q = st.questions[st.index];
+  const input = document.getElementById('iftyAncientPracticeAnswer');
+  const userAnswer = String(input?.value || '').trim();
+  if (!userAnswer) {
+    input?.focus();
+    return;
+  }
+
+  if (st.mode === 'term_write') {
+    const correct = normalizeIftyLocalTermAnswer(userAnswer) === normalizeIftyLocalTermAnswer(q.answer);
+    st.answered = true;
+    if (correct) st.correct += 1;
+    else st.wrong += 1;
+    st.last = { userAnswer, correct, challenged: false };
+    renderIftyAncientPracticeFeedback(correct, correct ? '登録単語と一致しました。' : '登録単語とは一致しませんでした。', q.modelAnswer, !correct);
+    return;
+  }
+
+  if (!ensureIftyOnline('古文単語記述採点')) return;
+  st.grading = true;
+
+  try {
+    const ref = getIftyAncientItemById(q.targetItemId);
+    const item = ref?.item || {};
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'ancient_practice_grade',
+        mode: st.mode,
+        word: String(item.word || item.title || ''),
+        meanings: Array.isArray(item.meanings) ? item.meanings : [],
+        example: q.example || '',
+        exampleModern: q.exampleModern || '',
+        userAnswer,
+        order: getIftySubjectOrder('ANCIENT')
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+
+    const correct = data.correct === true;
+    st.answered = true;
+    if (correct) st.correct += 1;
+    else st.wrong += 1;
+    st.last = { userAnswer, correct };
+    renderIftyAncientPracticeFeedback(correct, data.feedback || '', data.modelAnswer || q.modelAnswer, false);
+  } catch (error) {
+    alert(String(error.message || error));
+  } finally {
+    st.grading = false;
+  }
+};
+
+function renderIftyAncientPracticeFeedback(correct, feedback, modelAnswer, canChallenge) {
+  const st = iftyAncientPracticeState;
+  if (!st) return;
+  const modal = document.getElementById('practiceModal');
+  if (!modal) return;
+
+  modal.innerHTML = `<div style="background:white;border-radius:14px;width:min(650px,100%);padding:22px;">
+    <h2 style="margin-top:0;color:${correct ? '#059669' : '#dc2626'};">${correct ? '⭕ 正解' : '❌ 不正解'}</h2>
+    <div style="padding:10px;background:#f8fafc;border-radius:8px;"><b>あなたの回答：</b>${escapeHtml(st.last?.userAnswer || '')}</div>
+    <div style="padding:10px;background:#f5f3ff;border-radius:8px;margin-top:8px;color:#4c1d95;"><b>登録・模範：</b>${escapeHtml(modelAnswer || '')}</div>
+    <div style="margin-top:10px;color:#475569;white-space:pre-wrap;line-height:1.55;">${escapeHtml(feedback || '')}</div>
+
+    ${canChallenge && st.last && !st.last.challenged ? `<div style="margin-top:13px;padding:11px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
+      <div style="font-weight:900;color:#92400e;">表記ゆれ・別形として正しいと思う場合</div>
+      <textarea id="iftyAncientChallengeReason" rows="2" placeholder="理由（任意）" style="width:100%;box-sizing:border-box;margin-top:7px;padding:9px;border:1px solid #f59e0b;border-radius:7px;"></textarea>
+      <button onclick="submitIftyAncientPracticeChallenge()" style="width:100%;margin-top:7px;border:none;background:#d97706;color:white;border-radius:7px;padding:9px;font-weight:900;">⚖️ Challenge（ALLIA）</button>
+    </div>` : ''}
+
+    <button onclick="nextIftyAncientPracticeQuestion()" data-ifty-enter-primary="true" style="width:100%;margin-top:13px;border:none;background:#0f766e;color:white;border-radius:8px;padding:11px;font-weight:900;">次へ</button>
+  </div>`;
+}
+
+window.submitIftyAncientPracticeChallenge = async function() {
+  const st = iftyAncientPracticeState;
+  if (!st?.last || st.last.correct || st.last.challenged) return;
+  const q = st.questions[st.index];
+  if (!ensureIftyOnline('古文単語Challenge')) return;
+
+  const reason = String(document.getElementById('iftyAncientChallengeReason')?.value || '').trim();
+  st.last.challenged = true;
+
+  try {
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'subject_term_challenge',
+        subject: 'ANCIENT',
+        correctTerm: q.answer,
+        userAnswer: st.last.userAnswer,
+        prompt: q.prompt,
+        reason,
+        order: getIftySubjectOrder('ANCIENT')
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+
+    const accepted = data.challengeAccepted === true;
+    if (accepted) {
+      st.wrong = Math.max(0, st.wrong - 1);
+      st.correct += 1;
+      st.last.correct = true;
+    }
+    renderIftyAncientPracticeFeedback(accepted, data.feedback || 'Challengeを再審査しました。', q.modelAnswer, false);
+  } catch (error) {
+    st.last.challenged = false;
+    renderIftyAncientPracticeFeedback(false, String(error.message || error), q.modelAnswer, true);
+  }
+};
+
+window.nextIftyAncientPracticeQuestion = function() {
+  const st = iftyAncientPracticeState;
+  if (!st) return;
+  st.index += 1;
+  st.answered = false;
+  st.last = null;
+  st.grading = false;
+  renderIftyAncientPracticeQuestion();
+};
+
+
+
 function renderIftyUnifiedSocialPracticeHome(modal) {
   ensureIftySocialPracticeFolderSelection();
   const foldersWithItems = getIftySocialPracticeFolders();
@@ -13251,6 +13773,7 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
       </div>
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">VOCABULARY</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
@@ -13340,6 +13863,7 @@ function renderIftyUnifiedSciencePracticeHome(modal) {
       </div>
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">VOCABULARY</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
@@ -13386,6 +13910,255 @@ function renderIftyUnifiedSciencePracticeHome(modal) {
       </div>
     </div>`;
 }
+
+
+
+function normalizeIftyLocalTermAnswer(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s　]+/g, '')
+    .replace(/[、。・，,．.「」『』【】［］\[\]（）()〈〉《》]/g, '');
+}
+
+function maskIftyTermInPracticeText(text, term) {
+  let result = String(text || '').trim();
+  const target = String(term || '').trim();
+  if (!result || !target) return result;
+  try {
+    const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    result = result.replace(new RegExp(escaped, 'gi'), '＿＿＿');
+  } catch (_) {}
+  return result;
+}
+
+function getIftySubjectTermWriteRefs(subject) {
+  const key = normalizeIftySubject(subject);
+  if (key === 'SOCIAL STUDIES') return getIftySocialPracticeItems();
+  if (key === 'SCIENCE') return getIftySciencePracticeItems();
+  return [];
+}
+
+function getIftySubjectTermWriteCount(subject) {
+  const key = normalizeIftySubject(subject);
+  return key === 'SCIENCE' ? iftySciencePracticeQuestionCount : iftySocialPracticeQuestionCount;
+}
+
+function buildIftySubjectTermWritePrompt(subject, ref) {
+  const key = normalizeIftySubject(subject);
+  const item = ref?.item || {};
+  const term = String(item.title || item.topic || '').trim();
+  const lines = [];
+
+  const memory = maskIftyTermInPracticeText(item.memoryText, term);
+  if (memory) lines.push(memory);
+
+  if (key === 'SCIENCE') {
+    const formula = maskIftyTermInPracticeText(item.formula, term);
+    const unit = maskIftyTermInPracticeText(item.unit, term);
+    const conditions = maskIftyTermInPracticeText(item.conditions, term);
+    if (formula) lines.push(`公式・関係式：${formatIftyScienceMathText(formula)}`);
+    if (unit) lines.push(`単位：${formatIftyScienceMathText(unit)}`);
+    if (conditions) lines.push(`条件：${formatIftyScienceMathText(conditions)}`);
+  }
+
+  const points = (Array.isArray(item.keyPoints) ? item.keyPoints : [])
+    .map(point => maskIftyTermInPracticeText(point, term))
+    .filter(Boolean)
+    .slice(0, 2);
+  if (points.length) lines.push(points.map(point => `・${point}`).join('\n'));
+
+  return lines.join('\n').trim() || '登録済みの説明に対応する用語を答えてください。';
+}
+
+window.startIftySubjectTermWritePractice = function(subject) {
+  const key = normalizeIftySubject(subject);
+  const refs = getIftySubjectTermWriteRefs(key)
+    .filter(ref => String(ref?.item?.title || ref?.item?.topic || '').trim());
+  if (!refs.length) {
+    alert('用語記述に使える項目がありません。');
+    return;
+  }
+
+  const count = Math.min(getIftySubjectTermWriteCount(key), refs.length);
+  const picked = shuffleArray([...refs]).slice(0, count);
+
+  iftySubjectTermWriteState = {
+    subject: key,
+    queue: picked.map(ref => ({
+      itemId: String(ref.item.id),
+      folderId: String(ref.folder.id),
+      answer: String(ref.item.title || ref.item.topic || '').trim(),
+      prompt: buildIftySubjectTermWritePrompt(key, ref),
+      context: String(ref.item.memoryText || '').trim()
+    })),
+    index: 0,
+    correct: 0,
+    wrong: 0,
+    answered: false,
+    last: null
+  };
+
+  closePracticeModal();
+  renderIftySubjectTermWriteQuestion();
+};
+
+function renderIftySubjectTermWriteQuestion() {
+  const st = iftySubjectTermWriteState;
+  if (!st) return;
+
+  if (st.index >= st.queue.length) {
+    const total = st.correct + st.wrong;
+    const rate = total ? Math.round(st.correct / total * 100) : 0;
+    showIftyHubContent(`
+      <section class="ifty-portal-shell">
+        <div style="text-align:center;padding:28px 8px;">
+          <div style="font-size:1.4em;font-weight:900;color:#1d4ed8;">用語記述 完了</div>
+          <div style="margin-top:12px;color:#334155;font-size:1.05em;">正解 ${st.correct} / ${total}　正答率 ${rate}%</div>
+          <div style="margin-top:7px;color:#64748b;font-size:.82em;">通常採点ではALLIAを使用していません。</div>
+          <button type="button" onclick="openPracticeHome('${st.subject}')" style="margin-top:18px;border:none;background:#334155;color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">PRACTICEへ戻る</button>
+        </div>
+      </section>
+    `, 'term-write-practice');
+    return;
+  }
+
+  const q = st.queue[st.index];
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">✍️ 用語記述</h1>
+          <div class="ifty-portal-subtitle">${escapeHtml(getIftySubjectDisplayName(st.subject))} ・ ${st.index + 1}/${st.queue.length} ・ 通常採点はALLIAなし</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="openPracticeHome('${st.subject}')">PRACTICEへ戻る</button>
+      </div>
+
+      <div style="margin-top:16px;padding:15px;border:1px solid #bfdbfe;border-radius:11px;background:#eff6ff;white-space:pre-wrap;line-height:1.7;color:#0f172a;">${escapeHtml(q.prompt)}</div>
+
+      <div style="margin-top:13px;">
+        <label style="font-weight:900;color:#334155;">対応する用語を入力
+          <input id="iftySubjectTermWriteInput" autocomplete="off" autocapitalize="off" style="width:100%;box-sizing:border-box;margin-top:7px;padding:11px;border:2px solid #93c5fd;border-radius:9px;font-size:1em;">
+        </label>
+        <button type="button" onclick="submitIftySubjectTermWriteAnswer()" style="width:100%;margin-top:10px;border:none;background:#2563eb;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">回答</button>
+        <div style="margin-top:7px;color:#64748b;font-size:.76em;">Enterで回答。表記ゆれ・別名だと思う場合は、不正解後にChallengeできます。</div>
+      </div>
+    </section>
+  `, 'term-write-practice');
+
+  const input = document.getElementById('iftySubjectTermWriteInput');
+  if (input) {
+    input.onkeydown = event => {
+      if (event.key === 'Enter' && !event.isComposing) {
+        event.preventDefault();
+        window.submitIftySubjectTermWriteAnswer();
+      }
+    };
+    setTimeout(() => input.focus(), 0);
+  }
+}
+
+window.submitIftySubjectTermWriteAnswer = function() {
+  const st = iftySubjectTermWriteState;
+  if (!st || st.answered) return;
+  const q = st.queue[st.index];
+  const input = document.getElementById('iftySubjectTermWriteInput');
+  const userAnswer = String(input?.value || '').trim();
+  if (!userAnswer) {
+    input?.focus();
+    return;
+  }
+
+  const correct = normalizeIftyLocalTermAnswer(userAnswer) === normalizeIftyLocalTermAnswer(q.answer);
+  st.answered = true;
+  if (correct) st.correct += 1;
+  else st.wrong += 1;
+  st.last = { userAnswer, correct, challenged: false };
+
+  renderIftySubjectTermWriteFeedback(correct, correct ? '登録された用語と一致しました。' : '登録された用語とは一致しませんでした。');
+};
+
+function renderIftySubjectTermWriteFeedback(correct, feedback) {
+  const st = iftySubjectTermWriteState;
+  if (!st) return;
+  const q = st.queue[st.index];
+  const last = st.last || {};
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="max-width:720px;margin:0 auto;">
+        <h2 style="margin-top:0;color:${correct ? '#059669' : '#dc2626'};">${correct ? '⭕ 正解' : '❌ 不正解'}</h2>
+        <div style="padding:11px;background:#f8fafc;border-radius:8px;"><strong>あなたの回答：</strong>${escapeHtml(last.userAnswer || '')}</div>
+        <div style="padding:11px;background:#eff6ff;border-radius:8px;margin-top:8px;"><strong>登録用語：</strong>${escapeHtml(q.answer)}</div>
+        <div style="margin-top:10px;color:#475569;line-height:1.55;">${escapeHtml(feedback || '')}</div>
+
+        ${!correct && !last.challenged ? `<div style="margin-top:13px;padding:11px;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;">
+          <div style="font-weight:900;color:#92400e;">表記ゆれ・別名として正しいと思う場合</div>
+          <textarea id="iftySubjectTermChallengeReason" rows="2" placeholder="Challenge理由（任意）" style="width:100%;box-sizing:border-box;margin-top:7px;padding:9px;border:1px solid #f59e0b;border-radius:7px;"></textarea>
+          <button type="button" onclick="submitIftySubjectTermWriteChallenge()" style="width:100%;margin-top:7px;border:none;background:#d97706;color:white;border-radius:7px;padding:9px;font-weight:900;cursor:pointer;">⚖️ Challenge（ALLIA）</button>
+        </div>` : ''}
+
+        <button type="button" onclick="nextIftySubjectTermWriteQuestion()" data-ifty-enter-primary="true" style="width:100%;margin-top:13px;border:none;background:#2563eb;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">次へ</button>
+      </div>
+    </section>
+  `, 'term-write-practice');
+}
+
+window.submitIftySubjectTermWriteChallenge = async function() {
+  const st = iftySubjectTermWriteState;
+  if (!st?.last || st.last.correct || st.last.challenged) return;
+  const q = st.queue[st.index];
+  if (!ensureIftyOnline('用語記述Challenge')) return;
+
+  const reason = String(document.getElementById('iftySubjectTermChallengeReason')?.value || '').trim();
+  st.last.challenged = true;
+
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="text-align:center;padding:30px;"><h2 style="color:#92400e;">⚖️ ALLIAがChallengeを再審査中…</h2></div>
+    </section>
+  `, 'term-write-practice');
+
+  try {
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'subject_term_challenge',
+        subject: st.subject,
+        correctTerm: q.answer,
+        userAnswer: st.last.userAnswer,
+        prompt: q.prompt,
+        context: q.context,
+        reason,
+        order: getIftySubjectOrder(st.subject)
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+
+    const accepted = data.challengeAccepted === true;
+    if (accepted) {
+      st.wrong = Math.max(0, st.wrong - 1);
+      st.correct += 1;
+      st.last.correct = true;
+    }
+    renderIftySubjectTermWriteFeedback(accepted, data.feedback || 'Challengeを再審査しました。');
+  } catch (error) {
+    st.last.challenged = false;
+    renderIftySubjectTermWriteFeedback(false, String(error.message || error));
+  }
+};
+
+window.nextIftySubjectTermWriteQuestion = function() {
+  const st = iftySubjectTermWriteState;
+  if (!st) return;
+  st.index += 1;
+  st.answered = false;
+  st.last = null;
+  renderIftySubjectTermWriteQuestion();
+};
+
 
 
 function openPracticeNamePrompt(title, defaultValue, onConfirm) {
