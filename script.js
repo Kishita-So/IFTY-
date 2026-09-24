@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP48 2026-09-24：SCIENCE 起動修正 ★★★
+// ★★★ IFTY Q3 STEP49 2026-09-24：用語名固定・項目並べ替え・SOCIAL/SCIENCE検索 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -96,6 +96,7 @@ let iftySocialImageDrafts = {};
 // 非同期処理では古いfolder参照を保持せず、完了時にfolderIdから取り直す。
 let iftySocialGenerationPending = {};
 let iftySocialEditorImageDraft = null;
+let iftySocialSearchQuery = '';
 let iftySocialVisualQuizState = {
   mode: '',
   folderId: '',
@@ -145,6 +146,7 @@ let iftyScienceTopicDrafts = {};
 let iftyScienceImageDrafts = {};
 let iftyScienceGenerationPending = {};
 let iftyScienceEditorImageDraft = null;
+let iftyScienceSearchQuery = '';
 let iftyScienceVisualQuizState = {
   mode: '',
   folderId: '',
@@ -2665,8 +2667,25 @@ function renderIftySocialVisualAsset(item) {
   </div>`;
 }
 
+function buildIftySocialSearchText(folder, item) {
+  return [
+    folder?.name,
+    item?.title,
+    item?.topic,
+    item?.memoryText,
+    item?.workTitle,
+    item?.imageFocus,
+    ...(Array.isArray(item?.keyPoints) ? item.keyPoints : []),
+    ...(Array.isArray(item?.subjects) ? item.subjects.map(getIftySocialSubjectLabel) : [])
+  ].map(value => String(value || '').trim()).filter(Boolean).join(' ').toLowerCase();
+}
+
 function renderIftySocialItemCard(folder, item) {
-  return `<article style="border:1px solid #cbd5e1;border-radius:10px;background:white;padding:12px;margin-top:9px;box-shadow:0 1px 3px rgba(15,23,42,.05);">
+  const itemIndex = Math.max(0, (folder.items || []).findIndex(entry => String(entry.id) === String(item.id)));
+  const lastIndex = Math.max(0, (folder.items || []).length - 1);
+  const searchText = buildIftySocialSearchText(folder, item);
+
+  return `<article class="ifty-social-item-card" data-ifty-search="${escapeHtml(searchText)}" style="border:1px solid #cbd5e1;border-radius:10px;background:white;padding:12px;margin-top:9px;box-shadow:0 1px 3px rgba(15,23,42,.05);">
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
       <div style="min-width:0;flex:1;">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -2676,7 +2695,9 @@ function renderIftySocialItemCard(folder, item) {
           ${item.imageData ? '<span style="font-size:.68em;color:#7e22ce;font-weight:900;">IMAGE</span>' : ''}
         </div>
       </div>
-      <div style="display:flex;gap:5px;flex:none;">
+      <div style="display:flex;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end;">
+        <button type="button" onclick="moveIftySocialItem('${folder.id}','${item.id}',-1)" ${itemIndex <= 0 ? 'disabled' : ''} title="上へ" style="border:none;background:${itemIndex <= 0 ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex <= 0 ? 'not-allowed' : 'pointer'};font-weight:900;">↑</button>
+        <button type="button" onclick="moveIftySocialItem('${folder.id}','${item.id}',1)" ${itemIndex >= lastIndex ? 'disabled' : ''} title="下へ" style="border:none;background:${itemIndex >= lastIndex ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex >= lastIndex ? 'not-allowed' : 'pointer'};font-weight:900;">↓</button>
         <button type="button" onclick="openIftySocialItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
         <button type="button" onclick="deleteIftySocialItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">削除</button>
       </div>
@@ -2689,6 +2710,43 @@ function renderIftySocialItemCard(folder, item) {
     </div>` : ''}
   </article>`;
 }
+
+window.moveIftySocialItem = function(folderId, itemId, direction) {
+  const folder = getIftySocialFolder(folderId);
+  if (!folder || !Array.isArray(folder.items)) return;
+  const index = folder.items.findIndex(item => String(item.id) === String(itemId));
+  if (index < 0) return;
+  const nextIndex = index + (direction < 0 ? -1 : 1);
+  if (nextIndex < 0 || nextIndex >= folder.items.length) return;
+
+  recordUndoState('社会項目並べ替え');
+  [folder.items[index], folder.items[nextIndex]] = [folder.items[nextIndex], folder.items[index]];
+  folder.items[index].updatedAt = Date.now();
+  folder.items[nextIndex].updatedAt = Date.now();
+  savePracticeData();
+  renderIftySocialStudiesPage({ preserveScroll: true });
+};
+
+window.applyIftySocialSearch = function(value = null) {
+  const input = document.getElementById('iftySocialSearchInput');
+  iftySocialSearchQuery = String(value ?? input?.value ?? iftySocialSearchQuery ?? '').trim();
+  const query = iftySocialSearchQuery.toLowerCase();
+
+  const cards = [...document.querySelectorAll('.ifty-social-item-card')];
+  let visibleCount = 0;
+  cards.forEach(card => {
+    const matched = !query || String(card.dataset.iftySearch || '').includes(query);
+    card.style.display = matched ? '' : 'none';
+    if (matched) visibleCount += 1;
+  });
+
+  const counter = document.getElementById('iftySocialSearchCount');
+  if (counter) {
+    counter.textContent = query
+      ? `${visibleCount} / ${cards.length}件表示`
+      : `${cards.length}件`;
+  }
+};
 
 function renderIftySocialPendingImage(folderId) {
   const container = document.getElementById(`iftySocialImagePreview_${folderId}`);
@@ -2801,11 +2859,17 @@ function renderIftySocialStudiesPage(options = {}) {
         </div>
       </div>
 
+      <div style="margin-top:12px;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:white;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input id="iftySocialSearchInput" value="${escapeHtml(iftySocialSearchQuery)}" placeholder="🔎 社会の用語・説明・重要ポイントを検索" oninput="applyIftySocialSearch(this.value)" style="flex:1;min-width:220px;padding:9px 10px;border:1px solid #94a3b8;border-radius:8px;font-size:.92em;">
+        <button type="button" onclick="document.getElementById('iftySocialSearchInput').value='';applyIftySocialSearch('');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">クリア</button>
+        <span id="iftySocialSearchCount" style="font-size:.78em;color:#64748b;font-weight:800;">${countIftySocialItems()}件</span>
+      </div>
       <div style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 項目 ${countIftySocialItems()}。画像はクイズ用に圧縮して項目へ保存され、既存のpracticeDataと一緒にクラウド同期・バックアップ対象になります。</div>
       <div>${module.folders.length ? module.folders.map(renderIftySocialFolder).join('') : '<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">社会フォルダを作成してください。</div>'}</div>
     </section>
   `, 'subject');
   module.folders.forEach(folder => renderIftySocialPendingImage(folder.id));
+  window.applyIftySocialSearch(iftySocialSearchQuery);
 
   // ALLIA生成完了時の全体再描画でページ先頭へ飛ばないよう、
   // 再描画直前の閲覧位置を同じ位置へ戻す。通常の画面遷移では従来どおり先頭へ移動する。
@@ -3043,6 +3107,7 @@ window.generateIftySocialItem = async function(folderId) {
       ...data,
       id: makeId('socialitem'),
       topic,
+      title: topic || String(data.title || '').trim(),
       subjects: requestSubjects,
       imageData: imageDraft?.storedDataUrl || '',
       imageName: imageDraft?.name || '',
@@ -4374,8 +4439,28 @@ function renderIftyScienceVisualAsset(item) {
   </div>`;
 }
 
+function buildIftyScienceSearchText(folder, item) {
+  return [
+    folder?.name,
+    item?.title,
+    item?.topic,
+    item?.memoryText,
+    item?.formula,
+    item?.unit,
+    item?.conditions,
+    item?.workTitle,
+    item?.imageFocus,
+    ...(Array.isArray(item?.keyPoints) ? item.keyPoints : []),
+    ...(Array.isArray(item?.subjects) ? item.subjects.map(getIftyScienceSubjectLabel) : [])
+  ].map(value => String(value || '').trim()).filter(Boolean).join(' ').toLowerCase();
+}
+
 function renderIftyScienceItemCard(folder, item) {
-  return `<article style="border:1px solid #cbd5e1;border-radius:10px;background:white;padding:12px;margin-top:9px;box-shadow:0 1px 3px rgba(15,23,42,.05);">
+  const itemIndex = Math.max(0, (folder.items || []).findIndex(entry => String(entry.id) === String(item.id)));
+  const lastIndex = Math.max(0, (folder.items || []).length - 1);
+  const searchText = buildIftyScienceSearchText(folder, item);
+
+  return `<article class="ifty-science-item-card" data-ifty-search="${escapeHtml(searchText)}" style="border:1px solid #cbd5e1;border-radius:10px;background:white;padding:12px;margin-top:9px;box-shadow:0 1px 3px rgba(15,23,42,.05);">
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
       <div style="min-width:0;flex:1;">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -4385,7 +4470,9 @@ function renderIftyScienceItemCard(folder, item) {
           ${item.imageData ? '<span style="font-size:.68em;color:#7e22ce;font-weight:900;">IMAGE</span>' : ''}
         </div>
       </div>
-      <div style="display:flex;gap:5px;flex:none;">
+      <div style="display:flex;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end;">
+        <button type="button" onclick="moveIftyScienceItem('${folder.id}','${item.id}',-1)" ${itemIndex <= 0 ? 'disabled' : ''} title="上へ" style="border:none;background:${itemIndex <= 0 ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex <= 0 ? 'not-allowed' : 'pointer'};font-weight:900;">↑</button>
+        <button type="button" onclick="moveIftyScienceItem('${folder.id}','${item.id}',1)" ${itemIndex >= lastIndex ? 'disabled' : ''} title="下へ" style="border:none;background:${itemIndex >= lastIndex ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex >= lastIndex ? 'not-allowed' : 'pointer'};font-weight:900;">↓</button>
         <button type="button" onclick="openIftyScienceItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
         <button type="button" onclick="deleteIftyScienceItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">削除</button>
       </div>
@@ -4403,6 +4490,43 @@ function renderIftyScienceItemCard(folder, item) {
     </div>` : ''}
   </article>`;
 }
+
+window.moveIftyScienceItem = function(folderId, itemId, direction) {
+  const folder = getIftyScienceFolder(folderId);
+  if (!folder || !Array.isArray(folder.items)) return;
+  const index = folder.items.findIndex(item => String(item.id) === String(itemId));
+  if (index < 0) return;
+  const nextIndex = index + (direction < 0 ? -1 : 1);
+  if (nextIndex < 0 || nextIndex >= folder.items.length) return;
+
+  recordUndoState('理科項目並べ替え');
+  [folder.items[index], folder.items[nextIndex]] = [folder.items[nextIndex], folder.items[index]];
+  folder.items[index].updatedAt = Date.now();
+  folder.items[nextIndex].updatedAt = Date.now();
+  savePracticeData();
+  renderIftySciencePage({ preserveScroll: true });
+};
+
+window.applyIftyScienceSearch = function(value = null) {
+  const input = document.getElementById('iftyScienceSearchInput');
+  iftyScienceSearchQuery = String(value ?? input?.value ?? iftyScienceSearchQuery ?? '').trim();
+  const query = iftyScienceSearchQuery.toLowerCase();
+
+  const cards = [...document.querySelectorAll('.ifty-science-item-card')];
+  let visibleCount = 0;
+  cards.forEach(card => {
+    const matched = !query || String(card.dataset.iftySearch || '').includes(query);
+    card.style.display = matched ? '' : 'none';
+    if (matched) visibleCount += 1;
+  });
+
+  const counter = document.getElementById('iftyScienceSearchCount');
+  if (counter) {
+    counter.textContent = query
+      ? `${visibleCount} / ${cards.length}件表示`
+      : `${cards.length}件`;
+  }
+};
 
 function renderIftySciencePendingImage(folderId) {
   const container = document.getElementById(`iftyScienceImagePreview_${folderId}`);
@@ -4515,11 +4639,17 @@ function renderIftySciencePage(options = {}) {
         </div>
       </div>
 
+      <div style="margin-top:12px;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:white;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input id="iftyScienceSearchInput" value="${escapeHtml(iftyScienceSearchQuery)}" placeholder="🔎 理科の用語・説明・公式・単位を検索" oninput="applyIftyScienceSearch(this.value)" style="flex:1;min-width:220px;padding:9px 10px;border:1px solid #94a3b8;border-radius:8px;font-size:.92em;">
+        <button type="button" onclick="document.getElementById('iftyScienceSearchInput').value='';applyIftyScienceSearch('');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">クリア</button>
+        <span id="iftyScienceSearchCount" style="font-size:.78em;color:#64748b;font-weight:800;">${countIftyScienceItems()}件</span>
+      </div>
       <div style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 項目 ${countIftyScienceItems()}。画像はクイズ用に圧縮して項目へ保存され、既存のpracticeDataと一緒にクラウド同期・バックアップ対象になります。</div>
       <div>${module.folders.length ? module.folders.map(renderIftyScienceFolder).join('') : '<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">理科フォルダを作成してください。</div>'}</div>
     </section>
   `, 'subject');
   module.folders.forEach(folder => renderIftySciencePendingImage(folder.id));
+  window.applyIftyScienceSearch(iftyScienceSearchQuery);
 
   // ALLIA生成完了時の全体再描画でページ先頭へ飛ばないよう、
   // 再描画直前の閲覧位置を同じ位置へ戻す。通常の画面遷移では従来どおり先頭へ移動する。
@@ -4757,6 +4887,7 @@ window.generateIftyScienceItem = async function(folderId) {
       ...data,
       id: makeId('scienceitem'),
       topic,
+      title: topic || String(data.title || '').trim(),
       subjects: requestSubjects,
       imageData: imageDraft?.storedDataUrl || '',
       imageName: imageDraft?.name || '',
