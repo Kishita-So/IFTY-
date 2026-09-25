@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP60 2026-09-24：全教科チェック選択・一括操作 + フラッシュカード項目追加修正 ★★★
+// ★★★ IFTY Q3 STEP62 2026-09-25：ANCIENT 古典文法PRACTICE（活用・識別・活用表・文法説明） ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -6695,6 +6695,8 @@ function renderIftyAncientItemCard(folder, item) {
   const examples = Array.isArray(item.examples) ? item.examples : [];
   const related = Array.isArray(item.relatedWords) ? item.relatedWords : [];
   const keyPoints = Array.isArray(item.keyPoints) ? item.keyPoints : [];
+  const grammar = normalizeIftyAncientGrammar(item.grammar);
+  const grammarSummary = formatIftyAncientGrammarSummary(item);
 
   return `<article class="ifty-ancient-item-card" data-folder-id="${escapeHtml(String(folder.id))}" data-ifty-search="${escapeHtml(searchText)}" style="border:1px solid #cbd5e1;border-radius:10px;background:white;padding:12px;margin-top:9px;box-shadow:0 1px 3px rgba(15,23,42,.05);">
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
@@ -6727,6 +6729,11 @@ function renderIftyAncientItemCard(folder, item) {
     ${item.modernCaution ? `<div style="margin-top:8px;padding:9px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;font-size:.84em;line-height:1.5;color:#78350f;"><strong>現代語との注意：</strong>${escapeHtml(item.modernCaution)}</div>` : ''}
 
     ${item.usage ? `<div style="margin-top:8px;padding:9px;border:1px solid #e2e8f0;background:#f8fafc;border-radius:8px;font-size:.84em;line-height:1.5;color:#334155;"><strong>識別・用法：</strong>${escapeHtml(item.usage)}</div>` : ''}
+
+    ${grammar.applicable && grammarSummary ? `<div style="margin-top:8px;padding:9px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:8px;">
+      <div style="font-size:.74em;font-weight:900;color:#1d4ed8;margin-bottom:5px;">古典文法</div>
+      <div style="font-size:.82em;line-height:1.55;color:#1e3a8a;white-space:pre-wrap;">${escapeHtml(grammarSummary)}</div>
+    </div>` : ''}
 
     ${examples.length ? `<div style="margin-top:8px;padding:9px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:8px;">
       <div style="font-size:.74em;font-weight:900;color:#7e22ce;margin-bottom:5px;">例文</div>
@@ -7004,6 +7011,7 @@ window.regenerateIftyAncientItem = async function(folderId, itemId) {
     item.memoryText = item.meanings.join('／');
     item.modernCaution = String(data.modernCaution || '').trim();
     item.usage = String(data.usage || '').trim();
+    item.grammar = normalizeIftyAncientGrammar(data.grammar);
     item.examples = Array.isArray(data.examples)
       ? data.examples.map(ex => ({
           classical: String(ex?.classical || '').trim(),
@@ -7148,6 +7156,19 @@ window.openIftyAncientItemEditor = function(folderId, itemId) {
       ${field('iftyAncientEditMeanings','重要語義（1行1つ）',(item.meanings || []).join('\n'),4)}
       ${field('iftyAncientEditModern','現代語との注意',item.modernCaution,3)}
       ${field('iftyAncientEditUsage','識別・用法',item.usage,3)}
+      <div style="margin-top:4px;padding:11px;border:1px solid #bfdbfe;border-radius:9px;background:#eff6ff;">
+        <div style="font-weight:900;color:#1d4ed8;margin-bottom:9px;">古典文法（不要な欄は空欄）</div>
+        <div style="display:grid;gap:9px;">
+          ${field('iftyAncientEditGrammarCategory','品詞・分類',normalizeIftyAncientGrammar(item.grammar).category)}
+          ${field('iftyAncientEditGrammarClass','活用の種類',normalizeIftyAncientGrammar(item.grammar).conjugationClass)}
+          ${field('iftyAncientEditGrammarConnection','接続',normalizeIftyAncientGrammar(item.grammar).connection)}
+          ${field('iftyAncientEditGrammarMeanings','文法的意味（1行1つ）',normalizeIftyAncientGrammar(item.grammar).grammaticalMeanings.join('\n'),3)}
+          ${field('iftyAncientEditGrammarIdentification','識別ポイント（1行1つ）',normalizeIftyAncientGrammar(item.grammar).identificationPoints.join('\n'),3)}
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">
+            ${IFTY_ANCIENT_GRAMMAR_FORM_META.map(meta => field(`iftyAncientEditGrammarForm_${meta.key}`,meta.label,(normalizeIftyAncientGrammar(item.grammar).forms[meta.key] || []).join('・'))).join('')}
+          </div>
+        </div>
+      </div>
       ${field('iftyAncientEditExamples','例文（古文 | 現代語訳、1行1組）',(item.examples || []).map(ex => `${ex.classical || ''} | ${ex.modern || ''}`).join('\n'),5)}
       ${field('iftyAncientEditRelated','関連語（1行1つ）',(item.relatedWords || []).join('\n'),3)}
       ${field('iftyAncientEditPoints','重要ポイント（1行1つ）',(item.keyPoints || []).join('\n'),3)}
@@ -7182,6 +7203,20 @@ window.saveIftyAncientItemEditor = function(folderId, itemId) {
   item.memoryText = item.meanings.join('／');
   item.modernCaution = value('iftyAncientEditModern');
   item.usage = value('iftyAncientEditUsage');
+  item.grammar = normalizeIftyAncientGrammar({
+    applicable: true,
+    category: value('iftyAncientEditGrammarCategory'),
+    conjugationClass: value('iftyAncientEditGrammarClass'),
+    connection: value('iftyAncientEditGrammarConnection'),
+    grammaticalMeanings: value('iftyAncientEditGrammarMeanings').split(/\n+/).map(v => v.trim()).filter(Boolean),
+    identificationPoints: value('iftyAncientEditGrammarIdentification').split(/\n+/).map(v => v.trim()).filter(Boolean),
+    forms: Object.fromEntries(
+      IFTY_ANCIENT_GRAMMAR_FORM_META.map(meta => [
+        meta.key,
+        normalizeIftyAncientGrammarFormCell(value(`iftyAncientEditGrammarForm_${meta.key}`))
+      ])
+    )
+  });
   item.examples = value('iftyAncientEditExamples').split(/\n+/).map(line => {
     const parts = line.split('|');
     const classical = String(parts.shift() || '').trim();
@@ -11741,6 +11776,142 @@ function normalizeIftyAncientExample(value) {
   return { classical, modern };
 }
 
+
+const IFTY_ANCIENT_GRAMMAR_FORM_META = [
+  { key: 'mizen', label: '未然形' },
+  { key: 'renyo', label: '連用形' },
+  { key: 'shushi', label: '終止形' },
+  { key: 'rentai', label: '連体形' },
+  { key: 'izen', label: '已然形' },
+  { key: 'meirei', label: '命令形' }
+];
+
+function normalizeIftyAncientGrammarStringArray(value, limit = 12) {
+  if (Array.isArray(value)) {
+    return [...new Set(value.map(v => String(v || '').trim()).filter(Boolean))].slice(0, limit);
+  }
+  const text = String(value || '').trim();
+  if (!text) return [];
+  return [...new Set(
+    text.split(/\n+|[／/、,，]+/).map(v => v.trim()).filter(Boolean)
+  )].slice(0, limit);
+}
+
+function normalizeIftyAncientGrammarFormCell(value) {
+  if (Array.isArray(value)) {
+    return [...new Set(value.map(v => String(v || '').trim()).filter(v => v && !/^(?:-|—|なし|無し|該当なし)$/i.test(v)))].slice(0, 8);
+  }
+  const text = String(value || '').trim();
+  if (!text || /^(?:-|—|なし|無し|該当なし)$/i.test(text)) return [];
+  return [...new Set(
+    text.split(/[・／/、,，]+/).map(v => v.trim()).filter(v => v && !/^(?:-|—|なし|無し|該当なし)$/i.test(v))
+  )].slice(0, 8);
+}
+
+function normalizeIftyAncientGrammar(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  const rawForms = source.forms && typeof source.forms === 'object' ? source.forms : {};
+  const forms = {};
+  IFTY_ANCIENT_GRAMMAR_FORM_META.forEach(meta => {
+    forms[meta.key] = normalizeIftyAncientGrammarFormCell(rawForms[meta.key]);
+  });
+
+  const category = String(source.category || source.grammarType || '').trim();
+  const conjugationClass = String(source.conjugationClass || source.conjugationType || '').trim();
+  const connection = String(source.connection || '').trim();
+  const grammaticalMeanings = normalizeIftyAncientGrammarStringArray(source.grammaticalMeanings || source.meanings, 10);
+  const identificationPoints = normalizeIftyAncientGrammarStringArray(source.identificationPoints || source.identification, 10);
+  const notes = normalizeIftyAncientGrammarStringArray(source.notes, 10);
+  const hasForms = Object.values(forms).some(values => values.length);
+  const hasEvidence = !!(category || conjugationClass || connection || grammaticalMeanings.length || identificationPoints.length || notes.length || hasForms);
+
+  return {
+    applicable: source.applicable === true || source.isGrammarTarget === true || hasEvidence,
+    category,
+    conjugationClass,
+    forms,
+    connection,
+    grammaticalMeanings,
+    identificationPoints,
+    notes
+  };
+}
+
+function hasIftyAncientGrammarData(item) {
+  const grammar = normalizeIftyAncientGrammar(item?.grammar);
+  return grammar.applicable && (
+    grammar.category ||
+    grammar.conjugationClass ||
+    grammar.connection ||
+    grammar.grammaticalMeanings.length ||
+    grammar.identificationPoints.length ||
+    Object.values(grammar.forms).some(values => values.length)
+  );
+}
+
+function isIftyAncientPotentialGrammarItem(item) {
+  if (!item) return false;
+  if (hasIftyAncientGrammarData(item)) return true;
+
+  const joined = [
+    item.partOfSpeech,
+    item.usage,
+    ...(Array.isArray(item.keyPoints) ? item.keyPoints : [])
+  ].map(v => String(v || '')).join(' ');
+
+  return /(動詞|形容詞|形容動詞|助動詞|助詞|活用|未然形|連用形|終止形|連体形|已然形|命令形|接続|係助詞|格助詞|接続助詞|終助詞)/.test(joined);
+}
+
+function hasIftyAncientConjugationData(item) {
+  const grammar = normalizeIftyAncientGrammar(item?.grammar);
+  return Object.values(grammar.forms).some(values => values.length);
+}
+
+function isIftyAncientPotentialConjugationItem(item) {
+  if (hasIftyAncientConjugationData(item)) return true;
+  const joined = [item?.partOfSpeech, item?.usage, ...(Array.isArray(item?.keyPoints) ? item.keyPoints : [])]
+    .map(v => String(v || '')).join(' ');
+  return /(動詞|形容詞|形容動詞|助動詞|活用)/.test(joined);
+}
+
+function getIftyAncientGrammarFormEntries(item) {
+  const grammar = normalizeIftyAncientGrammar(item?.grammar);
+  return IFTY_ANCIENT_GRAMMAR_FORM_META
+    .map(meta => ({ ...meta, answers: grammar.forms[meta.key] || [] }))
+    .filter(entry => entry.answers.length);
+}
+
+function formatIftyAncientGrammarSummary(item) {
+  const grammar = normalizeIftyAncientGrammar(item?.grammar);
+  const parts = [];
+  if (grammar.category) parts.push(`品詞・分類：${grammar.category}`);
+  if (grammar.conjugationClass) parts.push(`活用：${grammar.conjugationClass}`);
+  if (grammar.connection) parts.push(`接続：${grammar.connection}`);
+  if (grammar.grammaticalMeanings.length) parts.push(`文法的意味：${grammar.grammaticalMeanings.join('・')}`);
+
+  const forms = IFTY_ANCIENT_GRAMMAR_FORM_META
+    .map(meta => {
+      const values = grammar.forms[meta.key] || [];
+      return values.length ? `${meta.label} ${values.join('・')}` : '';
+    })
+    .filter(Boolean);
+  if (forms.length) parts.push(`活用表：${forms.join(' / ')}`);
+
+  if (grammar.identificationPoints.length) parts.push(`識別：${grammar.identificationPoints.join(' / ')}`);
+  if (grammar.notes.length) parts.push(`注意：${grammar.notes.join(' / ')}`);
+  return parts.join('\n');
+}
+
+function normalizeIftyAncientGrammarAnswer(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[ 　\t\r\n]+/g, '')
+    .replace(/[「」『』【】［］\[\]（）()]/g, '')
+    .replace(/[、。，,.・／/]/g, '');
+}
+
 function normalizeIftyAncientItem(value) {
   if (!value || typeof value !== 'object') return null;
   const text = field => String(value[field] || '').trim();
@@ -11772,6 +11943,7 @@ function normalizeIftyAncientItem(value) {
     meanings,
     modernCaution: text('modernCaution'),
     usage: text('usage'),
+    grammar: normalizeIftyAncientGrammar(value.grammar),
     examples,
     relatedWords,
     keyPoints,
@@ -11815,6 +11987,7 @@ function buildIftyAncientSearchText(folder, item) {
     ...(Array.isArray(item?.meanings) ? item.meanings : []),
     item?.modernCaution,
     item?.usage,
+    formatIftyAncientGrammarSummary(item),
     ...(Array.isArray(item?.examples) ? item.examples.flatMap(ex => [ex?.classical, ex?.modern]) : []),
     ...(Array.isArray(item?.relatedWords) ? item.relatedWords : []),
     ...(Array.isArray(item?.keyPoints) ? item.keyPoints : [])
@@ -13495,10 +13668,10 @@ window.bulkMoveIftySubjectSelectedItems = function(subject) {
 
 function getIftySubjectFlashcardModule(subject) {
   const key = normalizeIftySubject(subject);
-  normalizePracticeData();
-  if (key === 'ANCIENT') return practiceData.modules.ancient;
-  if (key === 'SCIENCE') return practiceData.modules.science;
-  if (key === 'SOCIAL STUDIES') return practiceData.modules.socialStudies;
+  const modules = practiceData && practiceData.modules ? practiceData.modules : {};
+  if (key === 'ANCIENT') return modules.ancient || null;
+  if (key === 'SCIENCE') return modules.science || null;
+  if (key === 'SOCIAL STUDIES') return modules.socialStudies || null;
   return null;
 }
 
@@ -13515,9 +13688,14 @@ function getIftySubjectFlashcardSet(subject, setId) {
 
 function getIftySubjectFlashcardRefById(subject, itemId) {
   const key = normalizeIftySubject(subject);
-  if (key === 'ANCIENT') return getIftyAncientItemById(itemId);
-  if (key === 'SCIENCE') return getIftyScienceItemById(itemId);
-  if (key === 'SOCIAL STUDIES') return getIftySocialItemById(itemId);
+  const module = getIftySubjectFlashcardModule(key);
+  const target = String(itemId || '');
+  if (!module || !target) return null;
+
+  for (const folder of (module.folders || [])) {
+    const item = (folder.items || []).find(row => String(row?.id || '') === target);
+    if (item) return { folder, item };
+  }
   return null;
 }
 
@@ -13711,7 +13889,7 @@ window.openIftySubjectFlashcardSet = function(subject, setId) {
       <div style="margin-top:14px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
         <b style="color:#334155;">${getIftySubjectFlashcardNoun(key)}を追加</b>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
-          <button type="button" onclick="addSelectedToIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#0284c7;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">チェックした${getIftySubjectFlashcardNoun(key)}を追加（${selectedCount}）</button>
+          <button type="button" onclick="addSelectedToIftySubjectFlashcardSet('${key}','${set.id}')" ${selectedCount ? '' : 'disabled'} style="border:none;background:#0284c7;color:white;border-radius:5px;padding:7px 9px;cursor:${selectedCount ? 'pointer' : 'default'};opacity:${selectedCount ? '1' : '.45'};">チェックした${getIftySubjectFlashcardNoun(key)}を追加（${selectedCount}）</button>
           <button type="button" onclick="addAllToIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#334155;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">全${getIftySubjectFlashcardNoun(key)}を追加（${allCount}）</button>
           <button type="button" onclick="clearIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">セットを空にする</button>
         </div>
@@ -13772,6 +13950,10 @@ window.toggleIftySubjectFlashcardSetItem = function(subject, setId, itemId, chec
   const id = String(itemId || '');
   if (!id || !getIftySubjectFlashcardRefById(key, id)) return;
 
+  const modal = document.getElementById('practiceModal');
+  const editor = modal?.firstElementChild;
+  const previousScrollTop = Number(editor?.scrollTop || 0);
+
   recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカード項目変更`);
 
   const ids = new Set((set.itemIds || []).map(String));
@@ -13780,10 +13962,15 @@ window.toggleIftySubjectFlashcardSetItem = function(subject, setId, itemId, chec
 
   set.itemIds = uniqueIftySubjectFlashcardIds(key, [...ids]);
   set.progress = null;
-  savePracticeData();
+  const targetSetId = String(set.id);
 
-  const count = document.getElementById(`iftySubjectFlashcardSetCount_${set.id}`);
-  if (count) count.textContent = `${set.itemIds.length}件選択中`;
+  savePracticeData();
+  openIftySubjectFlashcardSet(key, targetSetId);
+
+  requestAnimationFrame(() => {
+    const refreshedEditor = document.getElementById('practiceModal')?.firstElementChild;
+    if (refreshedEditor) refreshedEditor.scrollTop = previousScrollTop;
+  });
 };
 
 window.addSelectedToIftySubjectFlashcardSet = function(subject, setId) {
@@ -13803,8 +13990,9 @@ window.addSelectedToIftySubjectFlashcardSet = function(subject, setId) {
     ...selectedRefs.map(ref => String(ref.item.id))
   ]);
   set.progress = null;
+  const targetSetId = String(set.id);
   savePracticeData();
-  openIftySubjectFlashcardSet(key, set.id);
+  openIftySubjectFlashcardSet(key, targetSetId);
 };
 
 window.addAllToIftySubjectFlashcardSet = function(subject, setId) {
@@ -13817,8 +14005,9 @@ window.addAllToIftySubjectFlashcardSet = function(subject, setId) {
     ...getIftyAllSubjectFlashcardRefs(key).map(ref => String(ref.item.id))
   ]);
   set.progress = null;
+  const targetSetId = String(set.id);
   savePracticeData();
-  openIftySubjectFlashcardSet(key, set.id);
+  openIftySubjectFlashcardSet(key, targetSetId);
 };
 
 window.removeFromIftySubjectFlashcardSet = function(subject, setId, itemId) {
@@ -13828,8 +14017,9 @@ window.removeFromIftySubjectFlashcardSet = function(subject, setId, itemId) {
   recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカードから削除`);
   set.itemIds = (set.itemIds || []).filter(id => String(id) !== String(itemId));
   set.progress = null;
+  const targetSetId = String(set.id);
   savePracticeData();
-  openIftySubjectFlashcardSet(key, set.id);
+  openIftySubjectFlashcardSet(key, targetSetId);
 };
 
 window.clearIftySubjectFlashcardSet = function(subject, setId) {
@@ -13839,8 +14029,9 @@ window.clearIftySubjectFlashcardSet = function(subject, setId) {
   recordUndoState(`${getIftySubjectDisplayName(key)} フラッシュカードを空にする`);
   set.itemIds = [];
   set.progress = null;
+  const targetSetId = String(set.id);
   savePracticeData();
-  openIftySubjectFlashcardSet(key, set.id);
+  openIftySubjectFlashcardSet(key, targetSetId);
 };
 
 window.setIftySubjectFlashcardRandom = function(subject, setId, value) {
@@ -14054,6 +14245,174 @@ window.setIftyAncientPracticeQuestionCount = function(value) {
   renderPracticeHome();
 };
 
+
+async function ensureIftyAncientGrammarData(refs) {
+  const candidates = (Array.isArray(refs) ? refs : [])
+    .filter(ref => ref?.item && isIftyAncientPotentialGrammarItem(ref.item) && !hasIftyAncientGrammarData(ref.item));
+
+  if (!candidates.length) return true;
+  if (!ensureIftyOnline('古典文法データ生成')) return false;
+
+  const chunks = [];
+  for (let i = 0; i < candidates.length; i += 12) chunks.push(candidates.slice(i, i + 12));
+
+  for (const chunk of chunks) {
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'ancient_grammar_enrich',
+        items: chunk.map(ref => ({
+          id: String(ref.item.id),
+          word: String(ref.item.word || ref.item.title || ''),
+          reading: String(ref.item.reading || ''),
+          partOfSpeech: String(ref.item.partOfSpeech || ''),
+          meanings: Array.isArray(ref.item.meanings) ? ref.item.meanings : [],
+          usage: String(ref.item.usage || ''),
+          keyPoints: Array.isArray(ref.item.keyPoints) ? ref.item.keyPoints : []
+        })),
+        order: getIftySubjectOrder('ANCIENT')
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+
+    const rows = Array.isArray(data.items) ? data.items : [];
+    rows.forEach(row => {
+      const ref = getIftyAncientItemById(row.id);
+      if (!ref?.item) return;
+      ref.item.grammar = normalizeIftyAncientGrammar(row.grammar);
+      ref.item.updatedAt = Date.now();
+    });
+  }
+
+  savePracticeData();
+  return true;
+}
+
+function buildIftyAncientGrammarConjugationQuestion(item) {
+  const word = String(item?.word || item?.title || '').trim();
+  const entries = getIftyAncientGrammarFormEntries(item);
+  if (!word || !entries.length) return null;
+
+  const target = entries[Math.floor(Math.random() * entries.length)];
+  return {
+    mode: 'grammar_conjugate',
+    targetItemId: String(item.id),
+    prompt: `「${word}」を${target.label}に活用せよ。`,
+    answer: target.answers[0] || '',
+    acceptedAnswers: target.answers,
+    modelAnswer: `${target.label}：${target.answers.join('・')}`
+  };
+}
+
+function buildIftyAncientGrammarIdentifyQuestion(item) {
+  const grammar = normalizeIftyAncientGrammar(item?.grammar);
+  const word = String(item?.word || item?.title || '').trim();
+  const candidates = [];
+
+  if (grammar.category || item?.partOfSpeech) {
+    const answers = normalizeIftyAncientGrammarStringArray([grammar.category, item?.partOfSpeech], 5);
+    candidates.push({
+      prompt: `「${word}」の品詞・文法分類を答えよ。`,
+      answers,
+      modelAnswer: answers.join(' / ')
+    });
+  }
+
+  if (grammar.conjugationClass) {
+    candidates.push({
+      prompt: `「${word}」の活用の種類を答えよ。`,
+      answers: [grammar.conjugationClass],
+      modelAnswer: grammar.conjugationClass
+    });
+  }
+
+  if (grammar.connection) {
+    candidates.push({
+      prompt: `「${word}」の接続を答えよ。`,
+      answers: [grammar.connection],
+      modelAnswer: grammar.connection
+    });
+  }
+
+  if (grammar.grammaticalMeanings.length) {
+    candidates.push({
+      prompt: `「${word}」の主な文法的意味を1つ答えよ。`,
+      answers: grammar.grammaticalMeanings,
+      modelAnswer: grammar.grammaticalMeanings.join(' / ')
+    });
+  }
+
+  // 活用形判定は、同じ形が複数の活用形に重なるものを避ける。
+  const formOwners = new Map();
+  getIftyAncientGrammarFormEntries(item).forEach(entry => {
+    entry.answers.forEach(answer => {
+      const key = normalizeIftyAncientGrammarAnswer(answer);
+      if (!key) return;
+      if (!formOwners.has(key)) formOwners.set(key, []);
+      formOwners.get(key).push({ label: entry.label, surface: answer });
+    });
+  });
+  [...formOwners.values()]
+    .filter(rows => rows.length === 1)
+    .forEach(rows => {
+      const row = rows[0];
+      candidates.push({
+        prompt: `「${row.surface}」は「${word}」の何形か。`,
+        answers: [row.label],
+        modelAnswer: row.label
+      });
+    });
+
+  if (!candidates.length) return null;
+  const q = candidates[Math.floor(Math.random() * candidates.length)];
+  return {
+    mode: 'grammar_identify',
+    targetItemId: String(item.id),
+    prompt: q.prompt,
+    answer: q.answers[0] || '',
+    acceptedAnswers: q.answers,
+    modelAnswer: q.modelAnswer
+  };
+}
+
+function buildIftyAncientGrammarTableQuestion(item) {
+  const word = String(item?.word || item?.title || '').trim();
+  const entries = getIftyAncientGrammarFormEntries(item);
+  if (!word || !entries.length) return null;
+
+  return {
+    mode: 'grammar_table',
+    targetItemId: String(item.id),
+    prompt: `「${word}」の活用表を書け。未然形・連用形・終止形・連体形・已然形・命令形の順に、存在する形を答えよ。`,
+    grammar: normalizeIftyAncientGrammar(item.grammar),
+    modelAnswer: entries.map(entry => `${entry.label}：${entry.answers.join('・')}`).join(' / ')
+  };
+}
+
+function buildIftyAncientGrammarExplainQuestion(item) {
+  const word = String(item?.word || item?.title || '').trim();
+  const grammar = normalizeIftyAncientGrammar(item?.grammar);
+  if (!word || !grammar.applicable) return null;
+
+  const hintParts = [];
+  if (grammar.category || item?.partOfSpeech) hintParts.push('品詞');
+  if (grammar.conjugationClass) hintParts.push('活用の種類');
+  if (grammar.connection) hintParts.push('接続');
+  if (grammar.grammaticalMeanings.length) hintParts.push('意味');
+  if (getIftyAncientGrammarFormEntries(item).length) hintParts.push('活用');
+  if (grammar.identificationPoints.length) hintParts.push('識別');
+
+  return {
+    mode: 'grammar_explain',
+    targetItemId: String(item.id),
+    prompt: `「${word}」を古典文法上説明せよ。${hintParts.length ? `（${hintParts.join('・')}など）` : ''}`,
+    grammar,
+    modelAnswer: formatIftyAncientGrammarSummary(item)
+  };
+}
+
 function getIftyAncientPracticeModeMeta(mode) {
   const meta = {
     choice: {
@@ -14080,6 +14439,26 @@ function getIftyAncientPracticeModeMeta(mode) {
       title: '例文',
       description: '登録済み古文例文の文脈で、その単語の意味を記述。ALLIAが文脈込みで採点します。',
       color: '#9333ea'
+    },
+    grammar_conjugate: {
+      title: '指定活用',
+      description: '「あり」を已然形にする、のように指定された活用形へ変化させます。通常は端末内採点です。',
+      color: '#0f766e'
+    },
+    grammar_identify: {
+      title: '文法識別',
+      description: '品詞・活用の種類・接続・文法的意味・活用形判定からランダム出題します。',
+      color: '#0891b2'
+    },
+    grammar_table: {
+      title: '活用表',
+      description: '未然・連用・終止・連体・已然・命令をまとめて記述し、ALLIAが表記ゆれ込みで採点します。',
+      color: '#c2410c'
+    },
+    grammar_explain: {
+      title: '文法説明',
+      description: '「けり」などを品詞・接続・活用・意味・識別まで含めて文法的に説明します。',
+      color: '#be123c'
     }
   };
   return meta[mode] || { title: 'PRACTICE', description: '', color: '#334155' };
@@ -14092,6 +14471,8 @@ function renderIftyUnifiedAncientPracticeHome(modal) {
   const selectedItems = getIftyAncientPracticeItems();
   const exampleItems = selectedItems.filter(ref => Array.isArray(ref.item.examples) && ref.item.examples.some(ex => ex?.classical));
   const readingItems = selectedItems.filter(ref => isIftyAncientReadingPracticeItem(ref.item));
+  const grammarItems = selectedItems.filter(ref => isIftyAncientPotentialGrammarItem(ref.item));
+  const conjugationItems = selectedItems.filter(ref => isIftyAncientPotentialConjugationItem(ref.item));
 
   const folderChoices = folders.length
     ? folders.map(folder => {
@@ -14110,6 +14491,8 @@ function renderIftyUnifiedAncientPracticeHome(modal) {
     if (mode === 'choice' && selectedItems.length < 2) disabledReason = '単語が2語以上必要です。';
     else if (mode === 'example' && !exampleItems.length) disabledReason = '例文つき単語が必要です。';
     else if (mode === 'reading_write' && !readingItems.length) disabledReason = '読みを別に覚える単語が必要です。';
+    else if ((mode === 'grammar_conjugate' || mode === 'grammar_table') && !conjugationItems.length) disabledReason = '活用する語が必要です。';
+    else if ((mode === 'grammar_identify' || mode === 'grammar_explain') && !grammarItems.length) disabledReason = '文法問題を作れる語が必要です。';
     else if (!selectedItems.length) disabledReason = '学習する単語を選択してください。';
     const disabled = !!disabledReason;
     return `<button type="button" onclick="startIftyAncientPractice('${mode}')" ${disabled ? 'disabled' : ''} style="text-align:left;border:1px solid ${disabled ? '#e2e8f0' : meta.color};background:${disabled ? '#f8fafc' : '#fff'};border-radius:12px;padding:12px;cursor:${disabled ? 'not-allowed' : 'pointer'};min-height:112px;opacity:${disabled ? '.62' : '1'};">
@@ -14165,6 +14548,10 @@ function renderIftyUnifiedAncientPracticeHome(modal) {
         ${modeCard('reading_write')}
         ${modeCard('meaning_write')}
         ${modeCard('example')}
+        ${modeCard('grammar_conjugate')}
+        ${modeCard('grammar_identify')}
+        ${modeCard('grammar_table')}
+        ${modeCard('grammar_explain')}
       </div>
     </div>`;
 }
@@ -14269,20 +14656,60 @@ function isIftyAncientReadingPracticeItem(item) {
   return answers.some(answer => normalizeIftyAncientReadingAnswer(answer) !== wordNormalized);
 }
 
-window.startIftyAncientPractice = function(mode) {
-  const normalizedMode = ['choice', 'term_write', 'reading_write', 'meaning_write', 'example'].includes(mode) ? mode : 'choice';
+window.startIftyAncientPractice = async function(mode) {
+  const allowedModes = [
+    'choice', 'term_write', 'reading_write', 'meaning_write', 'example',
+    'grammar_conjugate', 'grammar_identify', 'grammar_table', 'grammar_explain'
+  ];
+  const normalizedMode = allowedModes.includes(mode) ? mode : 'choice';
   let refs = getIftyAncientPracticeItems();
+
+  const grammarMode = normalizedMode.startsWith('grammar_');
+  if (grammarMode) {
+    try {
+      const potential = refs.filter(ref =>
+        normalizedMode === 'grammar_conjugate' || normalizedMode === 'grammar_table'
+          ? isIftyAncientPotentialConjugationItem(ref.item)
+          : isIftyAncientPotentialGrammarItem(ref.item)
+      );
+      if (potential.some(ref => !hasIftyAncientGrammarData(ref.item))) {
+        const modal = document.getElementById('practiceModal');
+        if (modal) {
+          modal.style.display = 'flex';
+          modal.innerHTML = `<div style="background:white;border-radius:14px;width:min(560px,100%);padding:26px;text-align:center;">
+            <h2 style="margin:0;color:#1d4ed8;">古典文法データを準備中…</h2>
+            <div style="margin-top:9px;color:#64748b;">古いカードも文法PRACTICEで使えるよう、必要な語だけALLIAが補完しています。</div>
+          </div>`;
+        }
+        const ok = await ensureIftyAncientGrammarData(potential);
+        if (!ok) return;
+        refs = getIftyAncientPracticeItems();
+      }
+    } catch (error) {
+      alert(`古典文法データを準備できませんでした：${String(error.message || error)}`);
+      setIftyUnifiedPracticeSubject('ANCIENT');
+      return;
+    }
+  }
 
   if (normalizedMode === 'example') {
     refs = refs.filter(ref => Array.isArray(ref.item.examples) && ref.item.examples.some(ex => ex?.classical));
   } else if (normalizedMode === 'reading_write') {
     refs = refs.filter(ref => isIftyAncientReadingPracticeItem(ref.item));
+  } else if (normalizedMode === 'grammar_conjugate' || normalizedMode === 'grammar_table') {
+    refs = refs.filter(ref => hasIftyAncientConjugationData(ref.item));
+  } else if (normalizedMode === 'grammar_identify' || normalizedMode === 'grammar_explain') {
+    refs = refs.filter(ref => hasIftyAncientGrammarData(ref.item));
   }
   if (!refs.length) {
     alert(
       normalizedMode === 'example'
         ? '例文つき古文単語がありません。'
-        : (normalizedMode === 'reading_write' ? '読みを別に覚える古文単語がありません。' : '出題する古文単語がありません。')
+        : (normalizedMode === 'reading_write'
+            ? '読みを別に覚える古文単語がありません。'
+            : (normalizedMode.startsWith('grammar_')
+                ? 'このモードで使える古典文法データがありません。再生成または編集で文法情報を追加してください。'
+                : '出題する古文単語がありません。'))
     );
     return;
   }
@@ -14327,6 +14754,11 @@ window.startIftyAncientPractice = function(mode) {
         modelAnswer: meanings.join('／')
       };
     }
+    if (normalizedMode === 'grammar_conjugate') return buildIftyAncientGrammarConjugationQuestion(item);
+    if (normalizedMode === 'grammar_identify') return buildIftyAncientGrammarIdentifyQuestion(item);
+    if (normalizedMode === 'grammar_table') return buildIftyAncientGrammarTableQuestion(item);
+    if (normalizedMode === 'grammar_explain') return buildIftyAncientGrammarExplainQuestion(item);
+
     const example = (item.examples || []).find(ex => ex?.classical) || {};
     return {
       mode: 'example',
@@ -14339,9 +14771,16 @@ window.startIftyAncientPractice = function(mode) {
     };
   });
 
+  const usableQuestions = questions.filter(Boolean);
+  if (!usableQuestions.length) {
+    alert('このモードで作れる問題がありません。');
+    setIftyUnifiedPracticeSubject('ANCIENT');
+    return;
+  }
+
   iftyAncientPracticeState = {
     mode: normalizedMode,
-    questions,
+    questions: usableQuestions,
     index: 0,
     correct: 0,
     wrong: 0,
@@ -14386,7 +14825,15 @@ function renderIftyAncientPracticeQuestion() {
     ? '古文単語を入力'
     : (st.mode === 'reading_write'
         ? '読みをひらがなで入力'
-        : (st.mode === 'example' ? '文脈での意味を記述' : '意味を記述'));
+        : (st.mode === 'grammar_conjugate'
+            ? '活用した形を入力'
+            : (st.mode === 'grammar_identify'
+                ? '文法事項を入力'
+                : (st.mode === 'grammar_table'
+                    ? '活用表を記述'
+                    : (st.mode === 'grammar_explain'
+                        ? '文法的説明を記述'
+                        : (st.mode === 'example' ? '文脈での意味を記述' : '意味を記述'))))));
 
   modal.innerHTML = `<div style="background:white;border-radius:14px;width:min(700px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
     <div style="display:flex;justify-content:space-between;gap:10px;"><div style="font-weight:900;color:${meta.color};">${escapeHtml(meta.title)}　${st.index + 1}/${st.questions.length}</div><button onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:none;font-size:1.3em;color:#64748b;">✕</button></div>
@@ -14395,7 +14842,7 @@ function renderIftyAncientPracticeQuestion() {
       <textarea id="iftyAncientPracticeAnswer" rows="3" style="width:100%;box-sizing:border-box;margin-top:7px;padding:11px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;"></textarea>
     </label>
     <button onclick="submitIftyAncientPracticeAnswer()" style="width:100%;margin-top:11px;border:none;background:${meta.color};color:white;border-radius:8px;padding:11px;font-weight:900;">回答</button>
-    <div style="margin-top:8px;color:#64748b;font-size:.78em;">Enterで回答 / Shift+Enterで改行${(st.mode === 'term_write' || st.mode === 'reading_write') ? '。通常採点ではALLIAを使用しません。' : '。記述内容はALLIAが採点します。'}</div>
+    <div style="margin-top:8px;color:#64748b;font-size:.78em;">Enterで回答 / Shift+Enterで改行${(['term_write','reading_write','grammar_conjugate','grammar_identify'].includes(st.mode)) ? '。通常採点ではALLIAを使用しません。不正解時はChallengeできます。' : '。記述内容はALLIAが採点します。'}</div>
   </div>`;
 
   const input = document.getElementById('iftyAncientPracticeAnswer');
@@ -14433,13 +14880,15 @@ window.submitIftyAncientPracticeAnswer = async function() {
     return;
   }
 
-  if (st.mode === 'term_write' || st.mode === 'reading_write') {
-    const accepted = st.mode === 'reading_write'
-      ? (Array.isArray(q.acceptedAnswers) && q.acceptedAnswers.length ? q.acceptedAnswers : [q.answer])
+  if (['term_write','reading_write','grammar_conjugate','grammar_identify'].includes(st.mode)) {
+    const accepted = Array.isArray(q.acceptedAnswers) && q.acceptedAnswers.length
+      ? q.acceptedAnswers
       : [q.answer];
     const normalize = st.mode === 'reading_write'
       ? normalizeIftyAncientReadingAnswer
-      : normalizeIftyLocalTermAnswer;
+      : (st.mode === 'grammar_conjugate' || st.mode === 'grammar_identify'
+          ? normalizeIftyAncientGrammarAnswer
+          : normalizeIftyLocalTermAnswer);
     const correct = accepted.some(answer => normalize(userAnswer) === normalize(answer));
 
     st.answered = true;
@@ -14449,8 +14898,12 @@ window.submitIftyAncientPracticeAnswer = async function() {
     renderIftyAncientPracticeFeedback(
       correct,
       correct
-        ? (st.mode === 'reading_write' ? '読みが一致しました。' : '登録単語と一致しました。')
-        : (st.mode === 'reading_write' ? '登録されている読みとは一致しませんでした。' : '登録単語とは一致しませんでした。'),
+        ? (st.mode === 'reading_write'
+            ? '読みが一致しました。'
+            : (st.mode.startsWith('grammar_') ? '文法事項が一致しました。' : '登録単語と一致しました。'))
+        : (st.mode === 'reading_write'
+            ? '登録されている読みとは一致しませんでした。'
+            : (st.mode.startsWith('grammar_') ? '登録されている文法事項とは一致しませんでした。' : '登録単語とは一致しませんでした。')),
       q.modelAnswer,
       !correct
     );
@@ -14473,6 +14926,8 @@ window.submitIftyAncientPracticeAnswer = async function() {
         meanings: Array.isArray(item.meanings) ? item.meanings : [],
         example: q.example || '',
         exampleModern: q.exampleModern || '',
+        grammar: normalizeIftyAncientGrammar(item.grammar),
+        question: q.prompt || '',
         userAnswer,
         order: getIftySubjectOrder('ANCIENT')
       })
@@ -14531,7 +14986,7 @@ window.submitIftyAncientPracticeChallenge = async function() {
       body: JSON.stringify({
         type: 'subject_term_challenge',
         subject: 'ANCIENT',
-        correctTerm: q.answer,
+        correctTerm: q.modelAnswer || q.answer,
         userAnswer: st.last.userAnswer,
         prompt: q.prompt,
         reason,
