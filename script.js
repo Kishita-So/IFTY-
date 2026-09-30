@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP71 2026-09-30：KANBUN 手書き認識強化・訓点表示修正・送り仮名カタカナ化 ★★★
+// ★★★ IFTY Q3 STEP73 2026-09-30：KANBUN 手書き英字・記号・短文対応 + 句法記号クイック入力 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -538,11 +538,16 @@ function restoreLearningState(snapshot) {
     iftySocialSelectedItemIds.clear();
     iftyScienceSelectedItemIds.clear();
     iftyAncientSelectedItemIds.clear();
+    iftyKanbunSelectedItemIds.clear();
     saveUserData();
     savePracticeData();
     renderFolders();
-    if (currentIftySubject === 'SOCIAL STUDIES' && iftyPortalPage === 'subject') {
-      renderIftySocialStudiesPage();
+    if (iftyPortalPage === 'subject') {
+      const subject = normalizeIftySubject(currentIftySubject);
+      if (subject === 'SOCIAL STUDIES') renderIftySocialStudiesPage({ preserveScroll: true });
+      else if (subject === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
+      else if (subject === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
+      else if (subject === 'KANBUN') renderIftyKanbunPage({ preserveScroll: true });
     }
     if (iftyPortalPage === 'years' && typeof window.openIftyYears === 'function') {
       window.openIftyYears();
@@ -7728,10 +7733,11 @@ function renderIftyKanbunMarkedText(item, options = {}) {
         const kana = convertIftyKanbunOkuriganaToKatakana(okurigana[index] || '');
         const selected = interactive && index === selectedIndex;
         const click = interactive ? `onclick="${selectFunction}(${index})"` : '';
+        const rotateVerticalGlyph = /[ー―‐‑–—〜～]/u.test(ch);
         return `<button type="button" ${click} ${interactive ? '' : 'tabindex="-1"'} style="appearance:none;position:relative;overflow:visible;border:${selected ? '2px solid #7c3aed' : '1px solid transparent'};background:${selected ? '#f5f3ff' : 'transparent'};border-radius:8px;padding:0;width:72px;height:66px;cursor:${interactive ? 'pointer' : 'default'};box-sizing:border-box;flex:none;">
           ${mark ? `<span style="position:absolute;left:1px;bottom:1px;width:20px;min-height:16px;display:flex;align-items:flex-end;justify-content:center;color:#b91c1c;z-index:2;">${renderIftyKanbunReturnMarkGlyph(mark)}</span>` : ''}
-          <span style="position:absolute;left:40%;top:50%;transform:translate(-50%,-50%);font-size:30px;line-height:1;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#0f172a;white-space:nowrap;">${escapeHtml(ch)}</span>
-          ${kana ? `<span style="position:absolute;right:2px;top:3px;bottom:3px;max-height:60px;writing-mode:vertical-rl;text-orientation:upright;font-size:12px;line-height:1.05;font-weight:800;letter-spacing:-.02em;color:#075985;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;white-space:nowrap;z-index:2;">${escapeHtml(kana)}</span>` : ''}
+          <span style="position:absolute;left:40%;top:50%;transform:translate(-50%,-50%)${rotateVerticalGlyph ? ' rotate(90deg)' : ''};font-size:30px;line-height:1;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#0f172a;white-space:nowrap;">${escapeHtml(ch)}</span>
+          ${kana ? `<span style="position:absolute;right:2px;top:12px;max-height:48px;writing-mode:vertical-rl;text-orientation:mixed;font-size:12px;line-height:1.05;font-weight:800;letter-spacing:-.02em;color:#075985;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;white-space:nowrap;z-index:2;">${escapeHtml(kana)}</span>` : ''}
         </button>`;
       }).join('')}</div>`).join('')}
     </div>
@@ -7942,13 +7948,14 @@ window.openIftyKanbunInputHandwriting = function(targetId, folderId = '') {
   const target = document.getElementById(String(targetId || ''));
   if (!target) return;
   document.getElementById('iftyKanbunInputHandwritingModal')?.remove();
-  iftyKanbunInputHandwritingState = { targetId: String(targetId), folderId: String(folderId || ''), strokes: [], currentStroke: null, recognizing: false, candidates: [] };
+  iftyKanbunInputHandwritingState = { targetId: String(targetId), folderId: String(folderId || ''), strokes: [], currentStroke: null, recognizing: false, candidates: [], recognitionMode: 'auto' };
   const modal = document.createElement('div');
   modal.id = 'iftyKanbunInputHandwritingModal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12160;display:flex;align-items:center;justify-content:center;padding:10px;box-sizing:border-box;';
   modal.innerHTML = `<div style="width:min(720px,100%);max-height:94vh;overflow:auto;background:white;border-radius:14px;padding:14px;box-sizing:border-box;">
-    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>✍️ 手書き入力</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">難しい漢字は1字ずつ大きく書くのを推奨。AIが候補を複数出すので、正しい字をタップして挿入します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunInputHandwritingModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>✍️ 手書き入力</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">漢字だけでなく、かな・英字・数字・記号・短い句法も認識します。A / B / 〜 / ー は下のボタンなら認識なしで直接入力できます。</div></div><button type="button" onclick="document.getElementById('iftyKanbunInputHandwritingModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
     <canvas id="iftyKanbunInputHandwritingCanvas" style="display:block;width:100%;height:320px;margin-top:11px;border:1px solid #94a3b8;border-radius:10px;background:white;touch-action:none;"></canvas>
+    <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;padding:8px 9px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:9px;"><span style="font-size:.72em;font-weight:900;color:#075985;">句法クイック入力</span>${['A','B','〜','ー'].map(ch => `<button type="button" onclick="insertIftyKanbunHandwritingQuick('${ch}')" style="min-width:42px;border:1px solid #7dd3fc;background:white;color:#0f172a;border-radius:7px;padding:7px 10px;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.05em;font-weight:900;">${ch}</button>`).join('')}<span style="margin-left:auto;font-size:.7em;color:#64748b;">認識：</span><select id="iftyKanbunHandwritingRecognitionMode" onchange="setIftyKanbunHandwritingRecognitionMode(this.value)" style="border:1px solid #cbd5e1;background:white;border-radius:7px;padding:6px 8px;font-weight:800;color:#334155;"><option value="auto">自動</option><option value="single">1文字</option><option value="sequence">短い文字列</option></select></div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;"><button type="button" onclick="undoIftyKanbunInputHandwritingStroke()" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;padding:9px 11px;font-weight:900;">1画戻す</button><button type="button" onclick="clearIftyKanbunInputHandwriting()" style="border:none;background:#fee2e2;color:#991b1b;border-radius:8px;padding:9px 11px;font-weight:900;">全消去</button><button id="iftyKanbunInputHandwritingRecognize" type="button" onclick="recognizeIftyKanbunInputHandwriting()" style="margin-left:auto;border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 12px;font-weight:900;">候補を出す</button></div>
     <div id="iftyKanbunInputHandwritingCandidates" style="display:none;margin-top:10px;padding:10px;border:1px solid #ddd6fe;background:#faf5ff;border-radius:10px;"></div>
     <div id="iftyKanbunInputHandwritingStatus" style="min-height:1.2em;margin-top:7px;font-size:.76em;color:#64748b;"></div>
@@ -7956,6 +7963,21 @@ window.openIftyKanbunInputHandwriting = function(targetId, folderId = '') {
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   document.body.appendChild(modal);
   requestAnimationFrame(() => { drawIftyKanbunInputHandwritingCanvas(); bindIftyKanbunInputHandwritingCanvas(); });
+};
+
+window.setIftyKanbunHandwritingRecognitionMode = function(mode) {
+  const st = iftyKanbunInputHandwritingState;
+  if (!st) return;
+  st.recognitionMode = ['single','sequence'].includes(String(mode || '')) ? String(mode) : 'auto';
+};
+
+window.insertIftyKanbunHandwritingQuick = function(value) {
+  const st = iftyKanbunInputHandwritingState;
+  const text = String(value || '');
+  if (!st || !text) return;
+  insertIftyKanbunTextAtCursor(st.targetId, text);
+  const status = document.getElementById('iftyKanbunInputHandwritingStatus');
+  if (status) status.textContent = `「${text}」を挿入しました。`;
 };
 
 window.undoIftyKanbunInputHandwritingStroke = function() {
@@ -7993,8 +8015,8 @@ function buildIftyKanbunInputHandwritingRecognitionImage() {
   // 大きな余白をAIへ送らず、筆跡だけを白い正方形へ拡大して認識しやすくする。
   const inkWidth = Math.max(8, maxX - minX);
   const inkHeight = Math.max(8, maxY - minY);
-  const size = 768;
-  const padding = 72;
+  const size = 1024;
+  const padding = 96;
   const scale = Math.min((size - padding * 2) / inkWidth, (size - padding * 2) / inkHeight);
   const offsetX = (size - inkWidth * scale) / 2 - minX * scale;
   const offsetY = (size - inkHeight * scale) / 2 - minY * scale;
@@ -8009,7 +8031,7 @@ function buildIftyKanbunInputHandwritingRecognitionImage() {
   ctx.strokeStyle = '#0f172a';
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.lineWidth = Math.max(7, Math.min(18, 3.2 * scale));
+  ctx.lineWidth = Math.max(6, Math.min(10, 2.0 * scale));
 
   strokes.forEach(stroke => {
     if (!stroke.length) return;
@@ -8029,6 +8051,27 @@ function buildIftyKanbunInputHandwritingRecognitionImage() {
   });
 
   return output.toDataURL('image/png');
+}
+
+function buildIftyKanbunInputHandwritingStrokeData() {
+  const strokes = Array.isArray(iftyKanbunInputHandwritingState?.strokes)
+    ? iftyKanbunInputHandwritingState.strokes.filter(stroke => Array.isArray(stroke) && stroke.length)
+    : [];
+  const points = strokes.flat();
+  if (!points.length) return [];
+  const xs = points.map(p => Number(p?.x)).filter(Number.isFinite);
+  const ys = points.map(p => Number(p?.y)).filter(Number.isFinite);
+  if (!xs.length || !ys.length) return [];
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const width = Math.max(1, maxX - minX), height = Math.max(1, maxY - minY);
+  return strokes.slice(0, 40).map(stroke => {
+    const limit = 24;
+    const step = Math.max(1, Math.ceil(stroke.length / limit));
+    return stroke.filter((_, i) => i % step === 0 || i === stroke.length - 1).slice(0, limit).map(point => [
+      Math.round(((Number(point.x) - minX) / width) * 1000),
+      Math.round(((Number(point.y) - minY) / height) * 1000)
+    ]);
+  });
 }
 
 window.insertIftyKanbunHandwritingCandidate = function(value) {
@@ -8066,13 +8109,16 @@ window.recognizeIftyKanbunInputHandwriting = async function() {
     const full = String(target?.value || '');
     const caret = Number.isInteger(target?.selectionStart) ? target.selectionStart : full.length;
     const context = `${full.slice(Math.max(0, caret - 8), caret)}□${full.slice(caret, caret + 8)}`;
-    const response = await fetch(WORKER_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ type:'kanbun_handwriting_recognize', image, context, strokeCount:(st.strokes || []).length, singleCharacterPreferred:true, imageSize:768, order:getIftySubjectOrder('KANBUN') }) });
+    const response = await fetch(WORKER_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ type:'kanbun_handwriting_recognize', image, context, strokeCount:(st.strokes || []).length, strokeData:buildIftyKanbunInputHandwritingStrokeData(), recognitionMode:st.recognitionMode || 'auto', imageSize:1024, order:getIftySubjectOrder('KANBUN') }) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.error) throw new Error(String(data.details || data.error || `HTTP ${response.status}`));
     const rawCandidates = (Array.isArray(data.candidates) ? data.candidates : [data.text]).map(v => String(v || '').trim()).filter(Boolean);
-    const oneChar = rawCandidates.filter(v => Array.from(v).length === 1);
-    const candidates = [...new Set(oneChar.length ? oneChar : rawCandidates)].slice(0, 8);
-    if (!candidates.length) throw new Error('文字候補を出せませんでした。1字を大きく、線をはっきり書いてください。');
+    const uniqueCandidates = [...new Set(rawCandidates)];
+    const oneChar = uniqueCandidates.filter(v => Array.from(v).length === 1);
+    const candidates = st.recognitionMode === 'single'
+      ? [...oneChar, ...uniqueCandidates.filter(v => Array.from(v).length !== 1)].slice(0, 12)
+      : uniqueCandidates.slice(0, 12);
+    if (!candidates.length) throw new Error('文字候補を出せませんでした。文字や記号を大きめにはっきり書いてください。');
     st.candidates = candidates;
     if (candidateBox) {
       candidateBox.style.display = 'block';
