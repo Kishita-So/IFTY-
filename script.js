@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP66 2026-09-30：PRACTICE弱点自動記録・全教科苦手判定 ★★★
+// ★★★ IFTY Q3 STEP67 2026-09-30：KANBUN 漢文・手書き・返点PRACTICE ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -7,7 +7,7 @@ let currentView = "vocab"; // 'vocab' or 'chat'
 let iftyPortalPage = 'home'; // 'home' | 'subject' | 'settings' | 'vocab' | 'chat'
 
 // Q3 STEP17：教科ごとのORDER / ALLIAコンテキスト
-const IFTY_SUBJECT_KEYS = ['ENGLISH', 'ANCIENT', 'SCIENCE', 'SOCIAL STUDIES'];
+const IFTY_SUBJECT_KEYS = ['ENGLISH', 'ANCIENT', 'KANBUN', 'SCIENCE', 'SOCIAL STUDIES'];
 const IFTY_ORDER_STORAGE_PREFIX = 'ifty_subject_orders_';
 const IFTY_ORDER_META_STORAGE_PREFIX = 'ifty_subject_order_meta_';
 const IFTY_ORDER_MAX_CHARS = 12000;
@@ -15,12 +15,14 @@ let currentIftySubject = 'ENGLISH';
 let iftySubjectOrders = {
   ENGLISH: { activeId: null, orders: [] },
   ANCIENT: { activeId: null, orders: [] },
+  KANBUN: { activeId: null, orders: [] },
   SCIENCE: { activeId: null, orders: [] },
   'SOCIAL STUDIES': { activeId: null, orders: [] }
 };
 let iftySubjectOrderUpdatedAt = {
   ENGLISH: 0,
   ANCIENT: 0,
+  KANBUN: 0,
   SCIENCE: 0,
   'SOCIAL STUDIES': 0
 };
@@ -193,6 +195,20 @@ let iftyAncientPracticeSelectedFolderIds = new Set();
 let iftyAncientPracticeSelectionInitialized = false;
 let iftyAncientPracticeQuestionCount = 5;
 let iftyAncientPracticeState = null;
+
+// Q3 STEP67：KANBUN / 漢文
+// 原文・書き下し文・現代語訳・返点をフォルダ単位で保存する。
+// PRACTICEでは文字入力に加え、スマホ/タブレットの指・ペンで使える手書きキャンバスを利用できる。
+let iftyKanbunTextDrafts = {};
+let iftyKanbunGenerationPending = {};
+let iftyKanbunSearchQuery = '';
+let iftyKanbunFolderSearchQueries = {};
+let iftyKanbunSelectedItemIds = new Set();
+let iftyKanbunPracticeQuestionCount = 5;
+let iftyKanbunPracticeState = null;
+let iftyKanbunReturnMarkEditorState = null;
+let iftyKanbunHandwritingState = { strokes: [], currentStroke: null };
+let iftyKanbunHelpHistory = [];
 
 let iftySubjectTermWriteState = null;
 
@@ -863,6 +879,7 @@ function renderIftySideMenu() {
       <div class="ifty-side-menu-label">SUBJECTS</div>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ENGLISH')">LANGUAGES</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ANCIENT')">ANCIENT</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('KANBUN')">KANBUN</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SCIENCE')">SCIENCE</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SOCIAL STUDIES')">SOCIAL STUDIES</button>
 
@@ -1009,6 +1026,7 @@ function makeEmptyIftySubjectOrders() {
   return {
     ENGLISH: makeEmptyIftyOrderSubjectState(),
     ANCIENT: makeEmptyIftyOrderSubjectState(),
+    KANBUN: makeEmptyIftyOrderSubjectState(),
     SCIENCE: makeEmptyIftyOrderSubjectState(),
     'SOCIAL STUDIES': makeEmptyIftyOrderSubjectState()
   };
@@ -1018,6 +1036,7 @@ function makeEmptyIftySubjectOrderMeta() {
   return {
     ENGLISH: 0,
     ANCIENT: 0,
+    KANBUN: 0,
     SCIENCE: 0,
     'SOCIAL STUDIES': 0
   };
@@ -2144,6 +2163,11 @@ function getIftyHomeStats() {
     : [];
   const ancientItems = ancientFolders.reduce((sum, folder) => sum + (Array.isArray(folder.items) ? folder.items.length : 0), 0);
 
+  const kanbunFolders = practiceData && practiceData.modules && practiceData.modules.kanbun && Array.isArray(practiceData.modules.kanbun.folders)
+    ? practiceData.modules.kanbun.folders
+    : [];
+  const kanbunItems = kanbunFolders.reduce((sum, folder) => sum + (Array.isArray(folder.items) ? folder.items.length : 0), 0);
+
   const learning = getIftyLearningStats();
   return {
     folders: Array.isArray(folders) ? folders.length : 0,
@@ -2166,6 +2190,10 @@ function getIftyHomeStats() {
     ancientItems,
     ancientWeak: getIftySubjectWeakEntries('ANCIENT').length,
     ancientDueReview: getIftySubjectReviewEntries('ANCIENT', { dueOnly: true }).length,
+    kanbunFolders: kanbunFolders.length,
+    kanbunItems,
+    kanbunWeak: getIftySubjectWeakEntries('KANBUN').length,
+    kanbunDueReview: getIftySubjectReviewEntries('KANBUN', { dueOnly: true }).length,
     ...learning
   };
 }
@@ -2214,6 +2242,13 @@ window.openIftyHome = function() {
           <div class="ifty-home-card-meta">フォルダ ${stats.ancientFolders} / 古文単語 ${stats.ancientItems}${stats.ancientDueReview ? ` / 🔁 今日 ${stats.ancientDueReview}` : ''}${stats.ancientWeak ? ` / 🎯 苦手 ${stats.ancientWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">古文単語 →</div>
+        </button>
+
+        <button class="ifty-home-card" type="button" onclick="openIftySubject('KANBUN')">
+          <div class="ifty-home-card-title">KANBUN</div>
+          <div class="ifty-home-card-meta">フォルダ ${stats.kanbunFolders} / 漢文 ${stats.kanbunItems}${stats.kanbunDueReview ? ` / 🔁 今日 ${stats.kanbunDueReview}` : ''}${stats.kanbunWeak ? ` / 🎯 苦手 ${stats.kanbunWeak}` : ''}</div>
+          <div class="ifty-home-card-spacer"></div>
+          <div class="ifty-home-card-action">漢文・返点・手書き →</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('SCIENCE')">
@@ -7443,6 +7478,546 @@ window.startIftyAncientFlashcards = function(folderId, direction = 'front') {
   renderFlashcardModal();
 };
 
+
+// ==========================================
+// Q3 STEP67：KANBUN / 漢文
+// ==========================================
+function getIftyKanbunTokens(text) {
+  return Array.from(String(text || '')).filter(ch => !/\s/.test(ch));
+}
+
+function normalizeIftyKanbunMark(value) {
+  return String(value || '').normalize('NFKC').trim().replace(/\s+/g, '').slice(0, 6);
+}
+
+function normalizeIftyKanbunReturnMarks(value, originalText = '') {
+  const tokens = getIftyKanbunTokens(originalText);
+  const max = tokens.length;
+  const source = Array.isArray(value) ? value : [];
+  const map = new Map();
+  source.forEach(row => {
+    const index = Number(row?.index ?? row?.charIndex);
+    const mark = normalizeIftyKanbunMark(row?.mark ?? row?.value);
+    if (!Number.isInteger(index) || index < 0 || index >= max || !mark) return;
+    map.set(index, mark);
+  });
+  return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([index, mark]) => ({ index, mark }));
+}
+
+function getIftyKanbunMarkArray(item) {
+  const tokens = getIftyKanbunTokens(item?.originalText || '');
+  const marks = Array(tokens.length).fill('');
+  normalizeIftyKanbunReturnMarks(item?.returnMarks, item?.originalText).forEach(row => {
+    if (row.index >= 0 && row.index < marks.length) marks[row.index] = row.mark;
+  });
+  return marks;
+}
+
+function convertIftyKanbunAnnotationsToReturnMarks(value, originalText = '') {
+  const tokens = getIftyKanbunTokens(originalText);
+  const rows = Array.isArray(value) ? value : [];
+  const converted = [];
+  rows.forEach(row => {
+    const char = String(row?.char || '').trim();
+    const mark = normalizeIftyKanbunMark(row?.returnMark ?? row?.mark);
+    const occurrence = Math.max(1, Math.trunc(Number(row?.occurrence) || 1));
+    if (!char || !mark) return;
+    let seen = 0;
+    for (let index = 0; index < tokens.length; index += 1) {
+      if (tokens[index] !== char) continue;
+      seen += 1;
+      if (seen === occurrence) {
+        converted.push({ index, mark });
+        break;
+      }
+    }
+  });
+  return normalizeIftyKanbunReturnMarks(converted, originalText);
+}
+
+function normalizeIftyKanbunItem(value) {
+  if (!value || typeof value !== 'object') return null;
+  const originalText = String(value.originalText || value.original || value.text || value.title || '').trim();
+  if (!originalText) return null;
+  const kundoku = String(value.kundoku || value.kakikudashi || '').trim();
+  const translation = String(value.translation || value.modernTranslation || '').trim();
+  const phrases = Array.isArray(value.phrases) ? value.phrases.slice(0, 12).map(row => ({
+    term: String(row?.term || row?.phrase || row?.pattern || '').trim(),
+    meaning: String(row?.meaning || row?.explanation || row?.translation || '').trim()
+  })).filter(row => row.term || row.meaning) : [];
+  const grammarPoints = Array.isArray(value.grammarPoints)
+    ? value.grammarPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12)
+    : phrases.map(row => [row.term, row.meaning].filter(Boolean).join('：')).filter(Boolean).slice(0, 12);
+  const keyPoints = Array.isArray(value.keyPoints) ? value.keyPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12) : [];
+  const returnMarks = Array.isArray(value.returnMarks) && value.returnMarks.length
+    ? normalizeIftyKanbunReturnMarks(value.returnMarks, originalText)
+    : convertIftyKanbunAnnotationsToReturnMarks(value.annotations, originalText);
+  return {
+    id: value.id || makeId('kanbunitem'),
+    title: String(value.title || originalText.slice(0, 36)).trim() || originalText.slice(0, 36),
+    originalText,
+    kundoku,
+    translation,
+    returnMarks,
+    annotations: Array.isArray(value.annotations) ? deepClone(value.annotations) : [],
+    phrases,
+    grammarPoints,
+    keyPoints,
+    memoryText: String(value.memoryText || [kundoku, translation].filter(Boolean).join('／')).trim(),
+    mastery: value.mastery === 'fixed' ? 'fixed' : 'unfixed',
+    review: value.review && typeof value.review === 'object' ? deepClone(value.review) : undefined,
+    study: value.study && typeof value.study === 'object' ? deepClone(value.study) : undefined,
+    source: String(value.source || 'MANUAL').trim(),
+    createdAt: Number(value.createdAt || 0) || Date.now(),
+    updatedAt: Number(value.updatedAt || 0) || Date.now()
+  };
+}
+
+function getIftyKanbunModule() {
+  normalizePracticeData();
+  return practiceData.modules.kanbun;
+}
+
+function getIftyKanbunFolder(folderId) {
+  return getIftyKanbunModule().folders.find(folder => String(folder.id) === String(folderId)) || null;
+}
+
+function getIftyKanbunItemById(itemId) {
+  const target = String(itemId || '');
+  for (const folder of getIftyKanbunModule().folders || []) {
+    const item = (folder.items || []).find(row => String(row?.id || '') === target);
+    if (item) return { folder, item };
+  }
+  return null;
+}
+
+function countIftyKanbunItems() {
+  return getIftyKanbunModule().folders.reduce((sum, folder) => sum + (Array.isArray(folder.items) ? folder.items.length : 0), 0);
+}
+
+function buildIftyKanbunSearchText(folder, item) {
+  return [folder?.name, item?.title, item?.originalText, item?.kundoku, item?.translation,
+    ...(Array.isArray(item?.grammarPoints) ? item.grammarPoints : []),
+    ...(Array.isArray(item?.keyPoints) ? item.keyPoints : [])]
+    .map(v => String(v || '').trim()).filter(Boolean).join(' ').toLowerCase();
+}
+
+function renderIftyKanbunMarkedText(item, options = {}) {
+  const interactive = options.interactive === true;
+  const selectedIndex = Number.isInteger(Number(options.selectedIndex)) ? Number(options.selectedIndex) : -1;
+  const selectFunction = String(options.selectFunction || 'selectIftyKanbunReturnMarkIndex').replace(/[^A-Za-z0-9_$]/g, '') || 'selectIftyKanbunReturnMarkIndex';
+  const marks = Array.isArray(options.marks) ? options.marks : getIftyKanbunMarkArray(item);
+  const tokens = getIftyKanbunTokens(item?.originalText || '');
+  if (!tokens.length) return '';
+  return `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:flex-start;line-height:1.15;">${tokens.map((ch, index) => {
+    const mark = String(marks[index] || '');
+    const selected = interactive && index === selectedIndex;
+    const click = interactive ? `onclick="${selectFunction}(${index})"` : '';
+    return `<button type="button" ${click} ${interactive ? '' : 'tabindex="-1"'} style="appearance:none;border:${selected ? '2px solid #7c3aed' : '1px solid #cbd5e1'};background:${selected ? '#f5f3ff' : 'white'};border-radius:7px;padding:5px 7px;min-width:34px;min-height:54px;display:inline-flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;cursor:${interactive ? 'pointer' : 'default'};box-sizing:border-box;">
+      <span style="font-size:1.2em;font-family:serif;color:#0f172a;">${escapeHtml(ch)}</span>
+      <span style="min-height:1.05em;font-size:.72em;font-weight:900;color:#b91c1c;">${escapeHtml(mark)}</span>
+    </button>`;
+  }).join('')}</div>`;
+}
+
+function renderIftyKanbunItemCard(folder, item) {
+  const index = (folder.items || []).findIndex(row => String(row.id) === String(item.id));
+  const last = Math.max(0, (folder.items || []).length - 1);
+  const grammarPoints = Array.isArray(item.grammarPoints) ? item.grammarPoints : [];
+  const keyPoints = Array.isArray(item.keyPoints) ? item.keyPoints : [];
+  const study = normalizeIftySubjectStudyState(item);
+  return `<article class="ifty-kanbun-item-card" data-folder-id="${escapeHtml(String(folder.id))}" data-ifty-search="${escapeHtml(buildIftyKanbunSearchText(folder, item))}" style="border:1px solid #cbd5e1;border-radius:10px;background:white;padding:12px;margin-top:9px;box-shadow:0 1px 3px rgba(15,23,42,.05);">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
+      <div style="min-width:0;flex:1;">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <input type="checkbox" ${iftyKanbunSelectedItemIds.has(String(item.id)) ? 'checked' : ''} onchange="toggleIftySubjectItemSelection('KANBUN','${item.id}',this.checked)" title="この漢文を選択" style="width:18px;height:18px;flex:none;">
+          <strong style="font-size:1.05em;color:#0f172a;font-family:serif;overflow-wrap:anywhere;">${escapeHtml(item.title || item.originalText || '無題')}</strong>
+          ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
+          ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
+          ${isIftySubjectWeakItem(item) ? '<span style="font-size:.68em;color:#be123c;font-weight:900;background:#fff1f2;border-radius:999px;padding:2px 6px;">🎯 苦手</span>' : ''}
+        </div>
+        ${study && study.total ? `<div style="margin-top:4px;color:#64748b;font-size:.72em;">学習 ${study.total}回 ・ 正解 ${study.correct} ・ 不正解 ${study.wrong} ・ 正答率 ${Math.round(study.correct / study.total * 100)}%</div>` : ''}
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;max-width:100%;">
+        <button id="iftyRegenKanbun_${item.id}" type="button" onclick="regenerateIftyKanbunItem('${folder.id}','${item.id}')" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;font-weight:900;cursor:pointer;">再生成</button>
+        <button type="button" onclick="openIftyKanbunReturnMarkEditor('${folder.id}','${item.id}')" style="border:none;background:#b91c1c;color:white;border-radius:6px;padding:5px 8px;font-weight:900;cursor:pointer;">返点</button>
+        <button type="button" onclick="toggleIftyKanbunItemReview('${folder.id}','${item.id}')" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;font-weight:900;cursor:pointer;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
+        <button type="button" onclick="moveIftyKanbunItem('${folder.id}','${item.id}',-1)" ${index <= 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:5px 8px;cursor:${index <= 0 ? 'not-allowed' : 'pointer'};">↑</button>
+        <button type="button" onclick="moveIftyKanbunItem('${folder.id}','${item.id}',1)" ${index >= last ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:5px 8px;cursor:${index >= last ? 'not-allowed' : 'pointer'};">↓</button>
+        <button type="button" onclick="openIftyKanbunItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:800;cursor:pointer;">編集</button>
+        <button type="button" onclick="deleteIftyKanbunItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:800;cursor:pointer;">削除</button>
+      </div>
+    </div>
+
+    <div style="margin-top:10px;padding:10px;border:1px solid #dbeafe;background:#f8fafc;border-radius:9px;">
+      <div style="font-size:.72em;font-weight:900;color:#475569;margin-bottom:6px;">原文・返点</div>
+      ${renderIftyKanbunMarkedText(item)}
+    </div>
+    ${item.kundoku ? `<div style="margin-top:8px;padding:9px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:8px;"><div style="font-size:.72em;font-weight:900;color:#0369a1;">書き下し文</div><div style="margin-top:4px;color:#0f172a;line-height:1.6;overflow-wrap:anywhere;">${escapeHtml(item.kundoku)}</div></div>` : ''}
+    ${item.translation ? `<div style="margin-top:8px;padding:9px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;"><div style="font-size:.72em;font-weight:900;color:#166534;">現代語訳</div><div style="margin-top:4px;color:#14532d;line-height:1.6;overflow-wrap:anywhere;">${escapeHtml(item.translation)}</div></div>` : ''}
+    ${grammarPoints.length ? `<div style="margin-top:8px;padding:9px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:8px;font-size:.82em;color:#581c87;"><strong>句法・文法：</strong>${grammarPoints.map(escapeHtml).join(' / ')}</div>` : ''}
+    ${keyPoints.length ? `<div style="margin-top:8px;font-size:.8em;color:#334155;line-height:1.5;">${keyPoints.map(point => `・${escapeHtml(point)}`).join('<br>')}</div>` : ''}
+  </article>`;
+}
+
+function renderIftyKanbunItemsHtml(folder) {
+  const items = Array.isArray(folder?.items) ? folder.items : [];
+  return items.length ? items.map(item => renderIftyKanbunItemCard(folder, item)).join('') : '<div style="margin-top:12px;padding:18px;text-align:center;border:1px dashed #cbd5e1;border-radius:8px;color:#94a3b8;">まだ漢文がありません。</div>';
+}
+
+function applyIftyKanbunSearchFilters() {
+  const globalQuery = String(iftyKanbunSearchQuery || '').trim().toLowerCase();
+  const cards = [...document.querySelectorAll('.ifty-kanbun-item-card')];
+  let visible = 0;
+  cards.forEach(card => {
+    const folderId = String(card.dataset.folderId || '');
+    const local = String(iftyKanbunFolderSearchQueries[folderId] || '').trim().toLowerCase();
+    const text = String(card.dataset.iftySearch || '');
+    const match = (!globalQuery || text.includes(globalQuery)) && (!local || text.includes(local));
+    card.style.display = match ? '' : 'none';
+    if (match) visible += 1;
+  });
+  const counter = document.getElementById('iftyKanbunSearchCount');
+  if (counter) counter.textContent = globalQuery ? `${visible} / ${cards.length}題表示` : `${cards.length}題`;
+}
+
+window.applyIftyKanbunSearch = function(value = null) {
+  const input = document.getElementById('iftyKanbunSearchInput');
+  iftyKanbunSearchQuery = String(value ?? input?.value ?? iftyKanbunSearchQuery ?? '').trim();
+  applyIftyKanbunSearchFilters();
+};
+
+window.applyIftyKanbunFolderSearch = function(folderId, value = null) {
+  const input = document.getElementById(`iftyKanbunFolderSearch_${folderId}`);
+  iftyKanbunFolderSearchQueries[String(folderId)] = String(value ?? input?.value ?? '').trim();
+  applyIftyKanbunSearchFilters();
+};
+
+function renderIftyKanbunFolder(folder, folderIndex) {
+  const pending = Number(iftyKanbunGenerationPending[folder.id] || 0);
+  const allSelected = (folder.items || []).length > 0 && (folder.items || []).every(item => iftyKanbunSelectedItemIds.has(String(item.id)));
+  return `<section style="margin-top:12px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;padding:12px;">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">
+      <div style="display:flex;gap:7px;align-items:center;min-width:0;flex:1;">
+        <button type="button" onclick="toggleIftyKanbunFolderCollapse('${folder.id}')" style="border:none;background:#f1f5f9;border-radius:6px;padding:6px 8px;cursor:pointer;">${folder.collapsed ? '▶' : '▼'}</button>
+        <strong style="color:#0f172a;overflow-wrap:anywhere;">${escapeHtml(folder.name)}</strong>
+        <span style="font-size:.72em;color:#64748b;">${(folder.items || []).length}題</span>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">
+        <button type="button" onclick="toggleIftySubjectFolderItemsSelection('KANBUN','${folder.id}')" style="border:none;background:${allSelected ? '#dbeafe' : '#f1f5f9'};color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">${allSelected ? '選択解除' : '全選択'}</button>
+        <button type="button" onclick="moveIftyKanbunFolder(${folderIndex},-1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;cursor:pointer;">↑</button>
+        <button type="button" onclick="moveIftyKanbunFolder(${folderIndex},1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;cursor:pointer;">↓</button>
+        <button type="button" onclick="renameIftyKanbunFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;cursor:pointer;">名前変更</button>
+        <button type="button" onclick="deleteIftyKanbunFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 8px;cursor:pointer;">削除</button>
+      </div>
+    </div>
+    ${folder.collapsed ? '' : `<div style="margin-top:10px;display:grid;gap:8px;">
+      <div style="display:flex;gap:7px;align-items:stretch;flex-wrap:wrap;">
+        <textarea id="iftyKanbunText_${folder.id}" rows="2" placeholder="漢文原文を入力（原文はそのまま保持します）" oninput="iftyKanbunTextDrafts['${folder.id}']=this.value;clearIftyAcademicTermSuggestion('KANBUN','${folder.id}')" style="flex:1;min-width:220px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;resize:vertical;">${escapeHtml(iftyKanbunTextDrafts[folder.id] || '')}</textarea>
+        <button type="button" onclick="generateIftyKanbunItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 13px;font-weight:900;cursor:pointer;min-height:44px;">ALLIA生成</button>
+      </div>
+      <div id="iftyKanbunTermSuggestion_${folder.id}">${renderIftyAcademicTermSuggestion('KANBUN', folder.id)}</div>
+      <div id="iftyKanbunPending_${folder.id}" style="min-height:1.2em;color:#7c3aed;font-size:.76em;font-weight:800;">${pending ? `ALLIA生成中… ${pending}件` : ''}</div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+        <input id="iftyKanbunFolderSearch_${folder.id}" value="${escapeHtml(iftyKanbunFolderSearchQueries[folder.id] || '')}" placeholder="このフォルダ内を検索" oninput="applyIftyKanbunFolderSearch('${folder.id}',this.value)" style="flex:1;min-width:180px;padding:8px;border:1px solid #cbd5e1;border-radius:7px;">
+      </div>
+      <div id="iftyKanbunItems_${folder.id}">${renderIftyKanbunItemsHtml(folder)}</div>
+    </div>`}
+  </section>`;
+}
+
+function refreshIftyKanbunFolderDynamic(folderId) {
+  const folder = getIftyKanbunFolder(folderId);
+  const wrap = document.getElementById(`iftyKanbunItems_${folderId}`);
+  if (folder && wrap) wrap.innerHTML = renderIftyKanbunItemsHtml(folder);
+  const summary = document.getElementById('iftyKanbunModuleSummary');
+  if (summary) summary.textContent = `フォルダ ${getIftyKanbunModule().folders.length} / 漢文 ${countIftyKanbunItems()}題`;
+  refreshIftySubjectSelectionToolbar('KANBUN');
+  const panel = document.getElementById('iftyKanbunReviewPanelWrap');
+  if (panel) panel.innerHTML = renderIftySubjectReviewPanel('KANBUN');
+  applyIftyKanbunSearchFilters();
+}
+
+window.renderIftyKanbunPage = function(options = {}) {
+  currentIftySubject = 'KANBUN';
+  const module = getIftyKanbunModule();
+  showIftyHubContent(`<section class="ifty-portal-shell">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <div><h1 class="ifty-portal-title">KANBUN</h1><div class="ifty-portal-subtitle">漢文原文・書き下し文・現代語訳・返点をまとめて学習します。</div></div>
+      <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+    </div>
+    ${renderIftySubjectHeaderActions('KANBUN')}
+    <div style="margin-top:8px;color:#64748b;font-size:.8em;line-height:1.5;">原文を入力するとALLIAが書き下し文・現代語訳・返点・句法を作成します。通常は入力した原文をそのまま使い、明確な誤入力候補がある場合だけ「もしかして」で確認します。返点はカードから手動編集できます。</div>
+
+    <div style="margin-top:14px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+      <input id="iftyKanbunNewFolderName" placeholder="新しいフォルダ名" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;" onkeydown="if(event.key==='Enter'){event.preventDefault();createIftyKanbunFolder();}">
+      <button type="button" onclick="createIftyKanbunFolder()" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">＋ フォルダ</button>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+      <input id="iftyKanbunSearchInput" value="${escapeHtml(iftyKanbunSearchQuery)}" placeholder="漢文・書き下し・訳・句法を検索" oninput="applyIftyKanbunSearch(this.value)" style="flex:1;min-width:210px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">
+      <button type="button" onclick="iftyKanbunSearchQuery='';const e=document.getElementById('iftyKanbunSearchInput');if(e)e.value='';applyIftyKanbunSearch('')" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">クリア</button>
+      <span id="iftyKanbunSearchCount" style="font-size:.78em;color:#64748b;font-weight:800;">${countIftyKanbunItems()}題</span>
+    </div>
+    ${renderIftySubjectSelectionToolbar('KANBUN')}
+    <div id="iftyKanbunModuleSummary" style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 漢文 ${countIftyKanbunItems()}題</div>
+    <div id="iftyKanbunReviewPanelWrap">${renderIftySubjectReviewPanel('KANBUN')}</div>
+    <div>${module.folders.length ? module.folders.map((folder,index)=>renderIftyKanbunFolder(folder,index)).join('') : '<div style="margin-top:16px;padding:24px;text-align:center;color:#94a3b8;border:1px dashed #cbd5e1;border-radius:10px;">まだフォルダがありません。</div>'}</div>
+  </section>`, 'kanbun');
+  applyIftyKanbunSearchFilters();
+};
+
+window.createIftyKanbunFolder = function() {
+  const input = document.getElementById('iftyKanbunNewFolderName');
+  const name = String(input?.value || '').trim();
+  if (!name) return;
+  const module = getIftyKanbunModule();
+  if (module.folders.some(folder => String(folder.name).trim().toLowerCase() === name.toLowerCase())) { alert('同じ名前のフォルダがあります。'); return; }
+  recordUndoState('漢文フォルダ作成');
+  module.folders.push({ id: makeId('kanbunfolder'), name, collapsed: false, items: [] });
+  if (input) input.value = '';
+  savePracticeData(); renderIftyKanbunPage();
+};
+
+window.renameIftyKanbunFolder = function(folderId) {
+  const folder = getIftyKanbunFolder(folderId); if (!folder) return;
+  const name = prompt('新しいフォルダ名', folder.name); if (name == null) return;
+  const trimmed = String(name).trim(); if (!trimmed || trimmed === folder.name) return;
+  recordUndoState('漢文フォルダ名変更'); folder.name = trimmed; savePracticeData(); renderIftyKanbunPage();
+};
+
+window.deleteIftyKanbunFolder = function(folderId) {
+  const module = getIftyKanbunModule(); const index = module.folders.findIndex(folder => String(folder.id) === String(folderId)); if (index < 0) return;
+  const folder = module.folders[index]; if (!confirm(`フォルダ「${folder.name}」を削除しますか？\n中の漢文 ${folder.items.length}題も削除されます。`)) return;
+  recordUndoState('漢文フォルダ削除');
+  (folder.items || []).forEach(item => iftyKanbunSelectedItemIds.delete(String(item.id)));
+  module.folders.splice(index, 1); delete iftyKanbunTextDrafts[folderId]; delete iftyKanbunGenerationPending[folderId]; delete iftyKanbunFolderSearchQueries[folderId];
+  savePracticeData(); renderIftyKanbunPage();
+};
+
+window.toggleIftyKanbunFolderCollapse = function(folderId) { const folder=getIftyKanbunFolder(folderId); if(!folder)return; folder.collapsed=!folder.collapsed; savePracticeData(); renderIftyKanbunPage(); };
+window.moveIftyKanbunFolder = function(index,direction) { const module=getIftyKanbunModule(); const to=Number(index)+(direction<0?-1:1); if(index<0||to<0||index>=module.folders.length||to>=module.folders.length)return; recordUndoState('漢文フォルダ並べ替え'); [module.folders[index],module.folders[to]]=[module.folders[to],module.folders[index]]; savePracticeData(); renderIftyKanbunPage(); };
+
+window.generateIftyKanbunItem = async function(folderId, options = {}) {
+  const folder = getIftyKanbunFolder(folderId);
+  const input = document.getElementById(`iftyKanbunText_${folderId}`);
+  if (!folder || !input) return;
+  const originalText = String(options?.forcedText ?? input.value ?? '').trim();
+  if (!originalText) { input.focus(); return; }
+  if (!ensureIftyOnline('漢文生成')) return;
+
+  if (options?.skipTermCheck !== true) {
+    const suggestion = await requestIftyAcademicTermSuggestion('KANBUN', originalText, []);
+    if (suggestion) {
+      setIftyAcademicTermSuggestion('KANBUN', folderId, originalText, suggestion);
+      focusIftyAcademicTermInput('KANBUN', folderId);
+      return;
+    }
+  }
+  window.clearIftyAcademicTermSuggestion('KANBUN', folderId);
+
+  if (String(input.value || '').trim() === originalText) input.value = '';
+  if (String(iftyKanbunTextDrafts[folderId] || '').trim() === originalText) iftyKanbunTextDrafts[folderId] = '';
+  iftyKanbunGenerationPending[folderId] = Number(iftyKanbunGenerationPending[folderId] || 0) + 1;
+  const setStatus = message => { const el=document.getElementById(`iftyKanbunPending_${folderId}`); if(el){el.textContent=message || (iftyKanbunGenerationPending[folderId] ? `ALLIA生成中… ${iftyKanbunGenerationPending[folderId]}件` : ''); el.style.color=message?'#dc2626':'#7c3aed';} };
+  setStatus('');
+  try {
+    const response = await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_generate',originalText,order:getIftySubjectOrder('KANBUN')})});
+    const data = await response.json().catch(()=>({}));
+    if(!response.ok||data.error) throw new Error(data.error||`HTTP ${response.status}`);
+    const latest = getIftyKanbunFolder(folderId); if(!latest)return;
+    const item = normalizeIftyKanbunItem({...data,id:makeId('kanbunitem'),originalText,title:data.title||originalText.slice(0,36),source:'ALLIA',createdAt:Date.now(),updatedAt:Date.now()});
+    if(!item) throw new Error('漢文データの生成に失敗しました。');
+    recordUndoState('漢文追加'); latest.items.push(item); savePracticeData();
+  } catch(error) { setStatus(String(error.message||error)); }
+  finally { iftyKanbunGenerationPending[folderId]=Math.max(0,Number(iftyKanbunGenerationPending[folderId]||0)-1); refreshIftyKanbunFolderDynamic(folderId); setStatus(''); }
+};
+
+window.regenerateIftyKanbunItem = async function(folderId,itemId) {
+  const ref=getIftyKanbunItemById(itemId); if(!ref?.item||String(ref.folder.id)!==String(folderId))return;
+  const item=ref.item; if(!confirmIftyCarefulRegeneration(item.title||item.originalText))return; if(!ensureIftyOnline('漢文の再生成'))return;
+  setIftyRegenerateButtonState(`iftyRegenKanbun_${item.id}`,true);
+  try {
+    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_generate',originalText:item.originalText,order:getIftySubjectOrder('KANBUN'),carefulRegenerate:true,previousData:{kundoku:item.kundoku,translation:item.translation,returnMarks:item.returnMarks,grammarPoints:item.grammarPoints,keyPoints:item.keyPoints}})});
+    const data=await response.json().catch(()=>({})); if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);
+    recordUndoState('漢文再生成');
+    const next=normalizeIftyKanbunItem({...item,...data,originalText:item.originalText,id:item.id,source:'ALLIA',updatedAt:Date.now(),regeneratedAt:Date.now()});
+    Object.assign(item,next); savePracticeData(); refreshIftyKanbunFolderDynamic(folderId);
+  } catch(error){alert(String(error.message||error));}
+  finally{setIftyRegenerateButtonState(`iftyRegenKanbun_${item.id}`,false);}
+};
+
+window.moveIftyKanbunItem = function(folderId,itemId,direction){const folder=getIftyKanbunFolder(folderId);if(!folder)return;const i=folder.items.findIndex(item=>String(item.id)===String(itemId));const to=i+(direction<0?-1:1);if(i<0||to<0||to>=folder.items.length)return;recordUndoState('漢文並べ替え');[folder.items[i],folder.items[to]]=[folder.items[to],folder.items[i]];savePracticeData();refreshIftyKanbunFolderDynamic(folderId);};
+window.deleteIftyKanbunItem = function(folderId,itemId){const folder=getIftyKanbunFolder(folderId);if(!folder)return;const i=folder.items.findIndex(item=>String(item.id)===String(itemId));if(i<0)return;if(!confirm('この漢文を削除しますか？'))return;recordUndoState('漢文削除');iftyKanbunSelectedItemIds.delete(String(itemId));folder.items.splice(i,1);savePracticeData();refreshIftyKanbunFolderDynamic(folderId);};
+
+window.openIftyKanbunItemEditor = function(folderId,itemId){
+  const ref=getIftyKanbunItemById(itemId);if(!ref?.item||String(ref.folder.id)!==String(folderId))return;const item=ref.item;
+  document.getElementById('iftyKanbunEditorModal')?.remove();
+  const modal=document.createElement('div');modal.id='iftyKanbunEditorModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12140;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';
+  const field=(id,label,value,rows=1)=>rows>1?`<div><label style="font-size:.78em;font-weight:900;color:#334155;">${label}</label><textarea id="${id}" rows="${rows}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">${escapeHtml(value||'')}</textarea></div>`:`<div><label style="font-size:.78em;font-weight:900;color:#334155;">${label}</label><input id="${id}" value="${escapeHtml(value||'')}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></div>`;
+  modal.innerHTML=`<div style="width:min(720px,100%);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><h2 style="margin:0;font-size:1.2em;">漢文を編集</h2><button type="button" onclick="document.getElementById('iftyKanbunEditorModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="display:grid;gap:10px;margin-top:12px;">${field('iftyKanbunEditTitle','題名',item.title)}${field('iftyKanbunEditOriginal','原文',item.originalText,4)}${field('iftyKanbunEditKundoku','書き下し文',item.kundoku,4)}${field('iftyKanbunEditTranslation','現代語訳',item.translation,4)}${field('iftyKanbunEditGrammar','句法・文法（1行1つ）',(item.grammarPoints||[]).join('\n'),4)}${field('iftyKanbunEditPoints','重要ポイント（1行1つ）',(item.keyPoints||[]).join('\n'),4)}<div style="font-size:.78em;color:#64748b;">返点は「返点」ボタンの専用画面で編集します。</div></div><button type="button" onclick="saveIftyKanbunItemEditor('${folderId}','${itemId}')" style="width:100%;margin-top:14px;border:none;background:#0284c7;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">保存</button></div>`;
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});document.body.appendChild(modal);
+};
+
+window.saveIftyKanbunItemEditor = function(folderId,itemId){
+  const ref=getIftyKanbunItemById(itemId);if(!ref?.item||String(ref.folder.id)!==String(folderId))return;const item=ref.item;const value=id=>String(document.getElementById(id)?.value||'').trim();const original=value('iftyKanbunEditOriginal');if(!original){alert('原文を入力してください。');return;}
+  recordUndoState('漢文編集');item.title=value('iftyKanbunEditTitle')||original.slice(0,36);item.originalText=original;item.kundoku=value('iftyKanbunEditKundoku');item.translation=value('iftyKanbunEditTranslation');item.returnMarks=normalizeIftyKanbunReturnMarks(item.returnMarks,original);item.grammarPoints=value('iftyKanbunEditGrammar').split(/\n+/).map(v=>v.trim()).filter(Boolean).slice(0,12);item.keyPoints=value('iftyKanbunEditPoints').split(/\n+/).map(v=>v.trim()).filter(Boolean).slice(0,12);item.memoryText=[item.kundoku,item.translation].filter(Boolean).join('／');item.updatedAt=Date.now();savePracticeData();document.getElementById('iftyKanbunEditorModal')?.remove();refreshIftyKanbunFolderDynamic(folderId);
+};
+
+function renderIftyKanbunReturnMarkEditor(){
+  const st=iftyKanbunReturnMarkEditorState;if(!st)return;const ref=getIftyKanbunItemById(st.itemId);if(!ref?.item)return;const modal=document.getElementById('iftyKanbunReturnMarkModal');if(!modal)return;
+  const palette=['レ','一','二','三','四','上','中','下','甲','乙','丙','丁','天','地','人','一レ','上レ','甲レ'];
+  modal.innerHTML=`<div style="width:min(760px,100%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><h2 style="margin:0;font-size:1.2em;">返点を打つ</h2><div style="font-size:.78em;color:#64748b;margin-top:3px;">字をタップ → 返点を選択。スマホ・タブレットでも折り返します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunReturnMarkModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="margin-top:14px;">${renderIftyKanbunMarkedText(ref.item,{interactive:true,selectedIndex:st.selectedIndex,marks:st.marks})}</div><div style="margin-top:14px;padding:11px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;"><div style="font-size:.76em;font-weight:900;color:#334155;margin-bottom:8px;">返点</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark=>`<button type="button" onclick="setIftyKanbunReturnMarkDraft('${mark}')" style="border:1px solid #cbd5e1;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${mark}</button>`).join('')}<button type="button" onclick="setIftyKanbunReturnMarkDraft('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">消す</button></div><div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;"><input id="iftyKanbunCustomMark" placeholder="その他の返点" maxlength="6" style="flex:1;min-width:140px;padding:8px;border:1px solid #cbd5e1;border-radius:7px;"><button type="button" onclick="setIftyKanbunReturnMarkDraft(document.getElementById('iftyKanbunCustomMark')?.value||'')" style="border:none;background:#64748b;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">設定</button></div></div><button type="button" onclick="saveIftyKanbunReturnMarks()" style="width:100%;margin-top:14px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">返点を保存</button></div>`;
+}
+
+window.openIftyKanbunReturnMarkEditor=function(folderId,itemId){const ref=getIftyKanbunItemById(itemId);if(!ref?.item||String(ref.folder.id)!==String(folderId))return;document.getElementById('iftyKanbunReturnMarkModal')?.remove();iftyKanbunReturnMarkEditorState={folderId:String(folderId),itemId:String(itemId),selectedIndex:0,marks:getIftyKanbunMarkArray(ref.item)};const modal=document.createElement('div');modal.id='iftyKanbunReturnMarkModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12150;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});document.body.appendChild(modal);renderIftyKanbunReturnMarkEditor();};
+window.selectIftyKanbunReturnMarkIndex=function(index){if(!iftyKanbunReturnMarkEditorState)return;iftyKanbunReturnMarkEditorState.selectedIndex=Number(index);renderIftyKanbunReturnMarkEditor();};
+window.setIftyKanbunReturnMarkDraft=function(mark){const st=iftyKanbunReturnMarkEditorState;if(!st||st.selectedIndex<0||st.selectedIndex>=st.marks.length)return;st.marks[st.selectedIndex]=normalizeIftyKanbunMark(mark);if(st.selectedIndex<st.marks.length-1)st.selectedIndex+=1;renderIftyKanbunReturnMarkEditor();};
+window.saveIftyKanbunReturnMarks=function(){const st=iftyKanbunReturnMarkEditorState;if(!st)return;const ref=getIftyKanbunItemById(st.itemId);if(!ref?.item)return;recordUndoState('漢文返点編集');ref.item.returnMarks=st.marks.map((mark,index)=>mark?{index,mark}:null).filter(Boolean);ref.item.updatedAt=Date.now();savePracticeData();document.getElementById('iftyKanbunReturnMarkModal')?.remove();refreshIftyKanbunFolderDynamic(st.folderId);iftyKanbunReturnMarkEditorState=null;};
+
+function getIftyKanbunPracticeModeMeta(mode){
+  const meta={kundoku:{title:'書き下し',description:'原文を見て書き下し文を答える。文字入力または手書きで回答。',color:'#0369a1'},translation:{title:'現代語訳',description:'原文を現代日本語へ訳す。文字入力または手書きで回答。',color:'#166534'},kaeriten:{title:'返点',description:'原文の各字をタップしてレ点・一二点・上下点などを配置する。',color:'#b91c1c'}};
+  return meta[mode]||meta.kundoku;
+}
+
+function getIftyKanbunPracticeRefs(){
+  if (iftySubjectQuizRunOverride?.subject === 'KANBUN') return (iftySubjectQuizRunOverride.itemIds||[]).map(id=>getIftyKanbunItemById(id)).filter(Boolean);
+  return (getIftyKanbunModule().folders||[]).flatMap(folder=>(folder.items||[]).map(item=>({folder,item})));
+}
+
+window.startIftyKanbunPractice=async function(mode='kundoku'){
+  const safe=['kundoku','translation','kaeriten'].includes(mode)?mode:'kundoku';
+  let refs=getIftyKanbunPracticeRefs();
+  if(safe==='kundoku')refs=refs.filter(ref=>String(ref.item.kundoku||'').trim());
+  if(safe==='translation')refs=refs.filter(ref=>String(ref.item.translation||'').trim());
+  if(safe==='kaeriten')refs=refs.filter(ref=>normalizeIftyKanbunReturnMarks(ref.item.returnMarks,ref.item.originalText).length);
+  if(!refs.length){alert(safe==='kaeriten'?'返点が登録された漢文がありません。':'この形式で出題できる漢文がありません。');return;}
+  const picked=shuffleArray([...refs]).slice(0,Math.min(iftyKanbunPracticeQuestionCount,refs.length));
+  iftyKanbunPracticeState={mode:safe,questions:picked.map(ref=>({targetItemId:String(ref.item.id),originalText:ref.item.originalText,kundoku:ref.item.kundoku,translation:ref.item.translation,returnMarks:normalizeIftyKanbunReturnMarks(ref.item.returnMarks,ref.item.originalText)})),index:0,correct:0,wrong:0,answered:false,grading:false,challengePending:false,feedback:'',modelAnswer:'',correctLast:false,lastSubmission:null,answerMarks:[],selectedMarkIndex:0};
+  iftyKanbunHandwritingState={strokes:[],currentStroke:null};iftyKanbunHelpHistory=[];closePracticeModal();renderIftyKanbunPracticePlayer();
+};
+
+function getCurrentIftyKanbunPracticeQuestion(){return iftyKanbunPracticeState?.questions?.[iftyKanbunPracticeState.index]||null;}
+function normalizeIftyKanbunMarkAnswer(value){return normalizeIftyKanbunMark(value).replace(/[・･]/g,'');}
+
+function resetIftyKanbunHandwriting(){iftyKanbunHandwritingState={strokes:[],currentStroke:null};}
+function redrawIftyKanbunHandwritingCanvas(){
+  const canvas=document.getElementById('iftyKanbunHandwritingCanvas');if(!canvas)return;const rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return;const dpr=Math.max(1,window.devicePixelRatio||1);canvas.width=Math.round(rect.width*dpr);canvas.height=Math.round(rect.height*dpr);const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,rect.width,rect.height);ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#0f172a';ctx.lineWidth=3;
+  (iftyKanbunHandwritingState.strokes||[]).forEach(stroke=>{if(!stroke.length)return;ctx.beginPath();stroke.forEach((p,i)=>{const x=p.x*rect.width,y=p.y*rect.height;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});
+}
+function initIftyKanbunHandwritingCanvas(){
+  const canvas=document.getElementById('iftyKanbunHandwritingCanvas');if(!canvas||canvas.dataset.ready==='1')return;canvas.dataset.ready='1';canvas.style.touchAction='none';const point=e=>{const r=canvas.getBoundingClientRect();return{x:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y:Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))};};
+  canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.setPointerCapture?.(e.pointerId);const stroke=[point(e)];iftyKanbunHandwritingState.currentStroke=stroke;iftyKanbunHandwritingState.strokes.push(stroke);redrawIftyKanbunHandwritingCanvas();});
+  canvas.addEventListener('pointermove',e=>{if(!iftyKanbunHandwritingState.currentStroke)return;e.preventDefault();iftyKanbunHandwritingState.currentStroke.push(point(e));redrawIftyKanbunHandwritingCanvas();});
+  const end=e=>{if(iftyKanbunHandwritingState.currentStroke){e?.preventDefault?.();iftyKanbunHandwritingState.currentStroke=null;redrawIftyKanbunHandwritingCanvas();}};canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);canvas.addEventListener('pointerleave',e=>{if(e.buttons===0)end(e);});redrawIftyKanbunHandwritingCanvas();
+}
+window.clearIftyKanbunHandwriting=function(){resetIftyKanbunHandwriting();redrawIftyKanbunHandwritingCanvas();};
+window.undoIftyKanbunHandwriting=function(){iftyKanbunHandwritingState.strokes.pop();iftyKanbunHandwritingState.currentStroke=null;redrawIftyKanbunHandwritingCanvas();};
+function getIftyKanbunHandwritingImage(){const canvas=document.getElementById('iftyKanbunHandwritingCanvas');if(!canvas||(iftyKanbunHandwritingState.strokes||[]).length===0)return'';return canvas.toDataURL('image/png');}
+
+function renderIftyKanbunPracticePlayer(){
+  const st=iftyKanbunPracticeState;
+  if(!st)return;
+  let modal=document.getElementById('iftyKanbunPracticeModal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='iftyKanbunPracticeModal';
+    modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.64);z-index:12130;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';
+    document.body.appendChild(modal);
+  }
+  modal.style.display='flex';
+  const q=getCurrentIftyKanbunPracticeQuestion();
+  if(!q){
+    modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(520px,100%);padding:26px;text-align:center;"><h2 style="margin-top:0;color:#0f172a;">KANBUN PRACTICE 完了</h2><div style="font-size:1.2em;font-weight:900;color:#0f766e;">${st.correct}正解 / ${st.wrong}不正解</div><button type="button" onclick="document.getElementById('iftyKanbunPracticeModal').remove();setIftyUnifiedPracticeSubject('KANBUN')" style="margin-top:15px;border:none;background:#0f766e;color:white;border-radius:8px;padding:11px 16px;font-weight:900;cursor:pointer;">PRACTICEへ戻る</button></div>`;
+    return;
+  }
+  const meta=getIftyKanbunPracticeModeMeta(st.mode);
+  const tokens=getIftyKanbunTokens(q.originalText);
+  if(st.mode==='kaeriten'&&(!Array.isArray(st.answerMarks)||st.answerMarks.length!==tokens.length))st.answerMarks=Array(tokens.length).fill('');
+  const answered=st.answered;
+  const canChallenge=answered&&!st.correctLast&&st.mode!=='kaeriten'&&st.lastSubmission&&!st.lastSubmission.challenged;
+  const challengeArea=canChallenge?`<div style="margin-top:12px;padding:11px;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;"><div style="font-weight:900;color:#92400e;">⚖️ 採点に異議がある場合</div><textarea id="iftyKanbunChallengeReason" rows="2" placeholder="Challenge理由（任意）" style="width:100%;box-sizing:border-box;margin-top:7px;padding:9px;border:1px solid #f59e0b;border-radius:7px;resize:vertical;"></textarea><button type="button" onclick="submitIftyKanbunPracticeChallenge()" ${st.challengePending?'disabled':''} style="width:100%;margin-top:7px;border:none;background:#d97706;color:white;border-radius:7px;padding:9px;font-weight:900;cursor:${st.challengePending?'wait':'pointer'};opacity:${st.challengePending?'.6':'1'};">${st.challengePending?'ALLIAが再審査中…':'⚖️ Challenge（ALLIA）'}</button><div id="iftyKanbunChallengeStatus" style="margin-top:5px;color:#92400e;font-size:.72em;"></div></div>`:'';
+  const result=answered?`<div style="margin-top:12px;padding:11px;border:1px solid ${st.correctLast?'#86efac':'#fecaca'};background:${st.correctLast?'#f0fdf4':'#fef2f2'};border-radius:9px;"><div style="font-weight:900;color:${st.correctLast?'#166534':'#b91c1c'};">${st.correctLast?'⭕ 正解':'❌ 不正解'}</div>${st.feedback?`<div style="margin-top:5px;color:#334155;line-height:1.5;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:7px;color:#475569;font-size:.84em;white-space:pre-wrap;"><strong>解答例：</strong>${escapeHtml(st.modelAnswer)}</div>`:''}${st.mode==='kaeriten'?`<div style="margin-top:9px;">${renderIftyKanbunMarkedText({originalText:q.originalText,returnMarks:q.returnMarks})}</div>`:''}${challengeArea}</div>`:'';
+  const answerArea=st.mode==='kaeriten'
+    ? `<div style="margin-top:14px;"><div style="font-size:.78em;color:#64748b;margin-bottom:7px;">字をタップして返点を選んでください。</div>${renderIftyKanbunPracticeMarks(q,st)}${answered?'':`<button type="button" onclick="submitIftyKanbunPracticeKaeriten()" style="width:100%;margin-top:12px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">採点</button>`}</div>`
+    : `<div style="margin-top:14px;"><textarea id="iftyKanbunPracticeAnswer" rows="4" placeholder="文字入力で答える（手書きだけでも可）" ${answered?'disabled':''} style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:1em;resize:vertical;"></textarea><div style="margin-top:9px;padding:9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;"><b style="font-size:.82em;color:#334155;">✍️ 手書き</b><div style="display:flex;gap:6px;"><button type="button" onclick="undoIftyKanbunHandwriting()" ${answered?'disabled':''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;">1つ戻す</button><button type="button" onclick="clearIftyKanbunHandwriting()" ${answered?'disabled':''} style="border:none;background:#fee2e2;color:#991b1b;border-radius:6px;padding:6px 8px;font-weight:900;">消す</button></div></div><canvas id="iftyKanbunHandwritingCanvas" style="display:block;width:100%;height:250px;margin-top:8px;background:white;border:1px dashed #94a3b8;border-radius:8px;"></canvas><div style="margin-top:5px;color:#64748b;font-size:.7em;">指・Apple Pencil等で書けます。手書き画像は採点時だけALLIAへ送ります。</div></div>${answered?'':`<button type="button" onclick="submitIftyKanbunPracticeWritten()" style="width:100%;margin-top:12px;border:none;background:${meta.color};color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">採点</button>`}<div id="iftyKanbunPracticeGradeStatus" style="margin-top:6px;color:#64748b;font-size:.76em;"></div></div>`;
+  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(760px,100%);max-height:94vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.3);"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><div style="font-size:.78em;font-weight:900;color:${meta.color};">${escapeHtml(meta.title)}　${st.index+1}/${st.questions.length}</div><div style="font-size:.72em;color:#64748b;margin-top:2px;">正解 ${st.correct} / 不正解 ${st.wrong}</div></div><button type="button" onclick="document.getElementById('iftyKanbunPracticeModal')?.remove();setIftyUnifiedPracticeSubject('KANBUN')" style="border:none;background:none;font-size:1.3em;color:#64748b;cursor:pointer;">✕</button></div><div style="margin-top:13px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;"><div style="font-size:.72em;font-weight:900;color:#64748b;margin-bottom:6px;">原文</div><div style="font-family:serif;font-size:1.28em;line-height:1.7;color:#0f172a;overflow-wrap:anywhere;">${escapeHtml(q.originalText)}</div></div><div style="margin-top:9px;color:#475569;font-size:.84em;">${escapeHtml(meta.description)}</div><button type="button" onclick="openIftyKanbunQuestionHelp()" style="margin-top:9px;border:1px solid #c4b5fd;background:#faf5ff;color:#6d28d9;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">🤖 ALLIAに質問</button>${answerArea}${result}${answered?`<button type="button" onclick="nextIftyKanbunPracticeQuestion()" style="width:100%;margin-top:12px;border:none;background:#0f766e;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">次へ</button>`:''}</div>`;
+  if(st.mode!=='kaeriten'&&!answered)requestAnimationFrame(initIftyKanbunHandwritingCanvas);
+}
+
+function renderIftyKanbunPracticeMarks(q,st){
+  const palette=['レ','一','二','三','四','上','中','下','甲','乙','丙','丁','天','地','人','一レ','上レ','甲レ'];
+  const fake={originalText:q.originalText,returnMarks:[]};
+  return `<div>${renderIftyKanbunMarkedText(fake,{interactive:true,selectedIndex:st.selectedMarkIndex,marks:st.answerMarks,selectFunction:'selectIftyKanbunPracticeMarkIndex'})}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">${palette.map(mark=>`<button type="button" onclick="chooseIftyKanbunPracticeMark('${mark}')" style="border:1px solid #fecaca;background:#fff;color:#991b1b;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${mark}</button>`).join('')}<button type="button" onclick="chooseIftyKanbunPracticeMark('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">消す</button></div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;"><input id="iftyKanbunPracticeCustomMark" placeholder="その他の返点" maxlength="6" style="flex:1;min-width:130px;padding:7px 8px;border:1px solid #cbd5e1;border-radius:7px;"><button type="button" onclick="chooseIftyKanbunPracticeMark(document.getElementById('iftyKanbunPracticeCustomMark')?.value||'')" style="border:none;background:#64748b;color:white;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">設定</button></div>`;
+}
+window.selectIftyKanbunPracticeMarkIndex=function(index){if(!iftyKanbunPracticeState||iftyKanbunPracticeState.answered)return;iftyKanbunPracticeState.selectedMarkIndex=Number(index);renderIftyKanbunPracticePlayer();};
+window.chooseIftyKanbunPracticeMark=function(mark){const st=iftyKanbunPracticeState;if(!st||st.answered)return;const i=Number(st.selectedMarkIndex);if(i<0||i>=st.answerMarks.length)return;st.answerMarks[i]=normalizeIftyKanbunMark(mark);if(i<st.answerMarks.length-1)st.selectedMarkIndex=i+1;renderIftyKanbunPracticePlayer();};
+
+window.submitIftyKanbunPracticeKaeriten=function(){
+  const st=iftyKanbunPracticeState,q=getCurrentIftyKanbunPracticeQuestion();
+  if(!st||!q||st.answered)return;
+  const correctMarks=Array(getIftyKanbunTokens(q.originalText).length).fill('');
+  q.returnMarks.forEach(row=>{if(row.index>=0&&row.index<correctMarks.length)correctMarks[row.index]=normalizeIftyKanbunMark(row.mark);});
+  const correct=st.answerMarks.length===correctMarks.length&&st.answerMarks.every((mark,i)=>normalizeIftyKanbunMarkAnswer(mark)===normalizeIftyKanbunMarkAnswer(correctMarks[i]));
+  st.answered=true;st.correctLast=correct;st.feedback=correct?'返点の位置は一致しています。':'返点の位置を見直してください。';st.modelAnswer='赤字の返点を確認してください。';st.lastSubmission=null;
+  if(correct)st.correct+=1;else st.wrong+=1;
+  recordIftySubjectStudyEvent('KANBUN',q.targetItemId,correct,'kanbun_kaeriten');
+  renderIftyKanbunPracticePlayer();
+};
+
+window.submitIftyKanbunPracticeWritten=async function(){
+  const st=iftyKanbunPracticeState,q=getCurrentIftyKanbunPracticeQuestion();
+  if(!st||!q||st.answered||st.grading)return;
+  const answer=String(document.getElementById('iftyKanbunPracticeAnswer')?.value||'').trim();
+  const handwriting=getIftyKanbunHandwritingImage();
+  if(!answer&&!handwriting){const el=document.getElementById('iftyKanbunPracticeGradeStatus');if(el)el.textContent='文字入力または手書きで回答してください。';return;}
+  if(!ensureIftyOnline('漢文PRACTICE採点'))return;
+  st.grading=true;
+  const status=document.getElementById('iftyKanbunPracticeGradeStatus');if(status)status.textContent='ALLIAが採点中…';
+  try{
+    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_practice_grade',mode:st.mode,originalText:q.originalText,kundoku:q.kundoku,translation:q.translation,userAnswer:answer,handwritingImage:handwriting,subject:'KANBUN',order:getIftySubjectOrder('KANBUN')})});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);
+    st.grading=false;st.answered=true;st.correctLast=data.correct===true;st.feedback=String(data.feedback||'').trim();st.modelAnswer=String(data.modelAnswer||(st.mode==='kundoku'?q.kundoku:q.translation)||'').trim();
+    st.lastSubmission={typedAnswer:answer,handwritingImage:handwriting,firstFeedback:st.feedback,firstModelAnswer:st.modelAnswer,challenged:false};
+    if(st.correctLast)st.correct+=1;else st.wrong+=1;
+    recordIftySubjectStudyEvent('KANBUN',q.targetItemId,st.correctLast,`kanbun_${st.mode}`);
+    renderIftyKanbunPracticePlayer();
+  }catch(error){st.grading=false;const el=document.getElementById('iftyKanbunPracticeGradeStatus');if(el)el.textContent=String(error.message||error);}
+};
+
+window.submitIftyKanbunPracticeChallenge=async function(){
+  const st=iftyKanbunPracticeState,q=getCurrentIftyKanbunPracticeQuestion(),last=st?.lastSubmission;
+  if(!st||!q||!last||st.correctLast||last.challenged||st.challengePending||st.mode==='kaeriten')return;
+  if(!ensureIftyOnline('漢文Challenge再審査'))return;
+  const reason=String(document.getElementById('iftyKanbunChallengeReason')?.value||'').trim();
+  st.challengePending=true;
+  renderIftyKanbunPracticePlayer();
+  try{
+    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_practice_challenge',mode:st.mode,originalText:q.originalText,kundoku:q.kundoku,translation:q.translation,userAnswer:last.typedAnswer||'',handwritingImage:last.handwritingImage||'',firstFeedback:last.firstFeedback||'',firstModelAnswer:last.firstModelAnswer||'',challengeReason:reason,subject:'KANBUN',order:getIftySubjectOrder('KANBUN')})});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);
+    st.challengePending=false;last.challenged=true;
+    const accepted=data.challengeAccepted===true||data.correct===true;
+    if(accepted){
+      st.wrong=Math.max(0,st.wrong-1);st.correct+=1;st.correctLast=true;
+      correctIftySubjectLastStudyOutcome('KANBUN',q.targetItemId);
+    }
+    st.feedback=String(data.feedback||st.feedback||'Challengeを再審査しました。').trim();
+    st.modelAnswer=String(data.modelAnswer||st.modelAnswer||'').trim();
+    renderIftyKanbunPracticePlayer();
+  }catch(error){st.challengePending=false;renderIftyKanbunPracticePlayer();setTimeout(()=>alert(String(error.message||error)),20);}
+};
+
+window.nextIftyKanbunPracticeQuestion=function(){
+  const st=iftyKanbunPracticeState;if(!st||!st.answered)return;
+  st.index+=1;st.answered=false;st.grading=false;st.challengePending=false;st.feedback='';st.modelAnswer='';st.correctLast=false;st.lastSubmission=null;st.answerMarks=[];st.selectedMarkIndex=0;
+  resetIftyKanbunHandwriting();iftyKanbunHelpHistory=[];renderIftyKanbunPracticePlayer();
+};
+
+window.openIftyKanbunQuestionHelp=function(){const q=getCurrentIftyKanbunPracticeQuestion();if(!q)return;document.getElementById('iftyKanbunHelpModal')?.remove();const modal=document.createElement('div');modal.id='iftyKanbunHelpModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:12170;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';modal.innerHTML=`<div style="width:min(620px,100%);max-height:88vh;overflow:auto;background:white;border-radius:14px;padding:16px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b style="color:#6d28d9;">🤖 ALLIAに質問</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">今の漢文問題を開いたまま質問できます。</div></div><button type="button" onclick="document.getElementById('iftyKanbunHelpModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div><div id="iftyKanbunHelpHistory" style="margin-top:10px;display:grid;gap:7px;"></div><div style="display:flex;gap:7px;margin-top:10px;align-items:flex-end;"><textarea id="iftyKanbunHelpInput" rows="2" placeholder="例：この『未』はどう読む？／答えは言わずヒントだけ" style="flex:1;min-width:0;padding:9px;border:1px solid #c4b5fd;border-radius:8px;resize:vertical;"></textarea><button type="button" onclick="askIftyKanbunQuestionHelp()" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px 12px;font-weight:900;cursor:pointer;">送信</button></div><div id="iftyKanbunHelpStatus" style="margin-top:5px;font-size:.72em;color:#64748b;"></div></div>`;document.body.appendChild(modal);renderIftyKanbunHelpHistory();document.getElementById('iftyKanbunHelpInput')?.focus();};
+function renderIftyKanbunHelpHistory(){const wrap=document.getElementById('iftyKanbunHelpHistory');if(!wrap)return;wrap.innerHTML=iftyKanbunHelpHistory.map(row=>`<div style="padding:8px 10px;border-radius:8px;background:${row.role==='user'?'#f1f5f9':'#faf5ff'};color:#334155;white-space:pre-wrap;line-height:1.5;"><b style="font-size:.72em;color:${row.role==='user'?'#475569':'#6d28d9'};">${row.role==='user'?'自分':'ALLIA'}</b><div style="margin-top:3px;">${escapeHtml(row.text)}</div></div>`).join('');wrap.scrollTop=wrap.scrollHeight;}
+window.askIftyKanbunQuestionHelp=async function(){const q=getCurrentIftyKanbunPracticeQuestion();const input=document.getElementById('iftyKanbunHelpInput');const userQuestion=String(input?.value||'').trim();if(!q||!userQuestion)return;if(!ensureIftyOnline('ALLIA質問'))return;const history=iftyKanbunHelpHistory.slice(-8);iftyKanbunHelpHistory.push({role:'user',text:userQuestion});if(input)input.value='';renderIftyKanbunHelpHistory();const status=document.getElementById('iftyKanbunHelpStatus');if(status)status.textContent='ALLIAが考えています…';try{const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_help',quizType:`kanbun_${iftyKanbunPracticeState?.mode||''}`,direction:'',question:`原文：${q.originalText}`,instruction:getIftyKanbunPracticeModeMeta(iftyKanbunPracticeState?.mode).description,userQuestion,options:[],history,subject:'KANBUN',order:getIftySubjectOrder('KANBUN')})});const data=await response.json().catch(()=>({}));if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);iftyKanbunHelpHistory.push({role:'assistant',text:String(data.answer||'説明を生成できませんでした。')});renderIftyKanbunHelpHistory();if(status)status.textContent='';}catch(error){if(status)status.textContent=String(error.message||error);}};
+
 window.openIftySubject = function(subject) {
   const normalized = normalizeIftySubject(subject);
   currentIftySubject = normalized;
@@ -7469,10 +8044,19 @@ window.openIftySubject = function(subject) {
     return;
   }
 
+  if (normalized === 'KANBUN') {
+    renderIftyKanbunPage();
+    return;
+  }
+
   const subjectInfo = {
     'ANCIENT': {
       title: 'ANCIENT',
-      description: '古文・漢文などを扱う科目ページです。'
+      description: '古文を扱う科目ページです。'
+    },
+    'KANBUN': {
+      title: 'KANBUN',
+      description: '漢文・返点・書き下しを扱う科目ページです。'
     },
     'SCIENCE': {
       title: 'SCIENCE',
@@ -7630,7 +8214,7 @@ window.openIftySettings = function() {
 
       <div class="ifty-settings-section">
         <h3>SUGGESTION AUTO-ACCEPT</h3>
-        <div class="ifty-settings-note">LANGUAGES・ANCIENT・SCIENCE・SOCIAL STUDIESで「もしかして」が表示されたあと、応答がなければ候補側を自動追加します。現在：${iftySpellingAutoAcceptSeconds}秒。</div>
+        <div class="ifty-settings-note">LANGUAGES・ANCIENT・KANBUN・SCIENCE・SOCIAL STUDIESで「もしかして」が表示されたあと、応答がなければ候補側を自動追加します。現在：${iftySpellingAutoAcceptSeconds}秒。</div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px;">
           <input id="iftySpellingAutoAcceptSecondsInput" type="number" min="${IFTY_SPELLING_AUTO_ACCEPT_MIN_SECONDS}" max="${IFTY_SPELLING_AUTO_ACCEPT_MAX_SECONDS}" step="1" value="${iftySpellingAutoAcceptSeconds}" inputmode="numeric" style="width:90px;padding:9px 10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
           <span style="font-weight:800;">秒後</span>
@@ -10475,6 +11059,7 @@ function getIftySubjectStudyItem(subject, itemId) {
   if (key === 'SOCIAL STUDIES') return getIftySocialItemById(itemId)?.item || null;
   if (key === 'SCIENCE') return getIftyScienceItemById(itemId)?.item || null;
   if (key === 'ANCIENT') return getIftyAncientItemById(itemId)?.item || null;
+  if (key === 'KANBUN') return getIftyKanbunItemById(itemId)?.item || null;
   return null;
 }
 
@@ -10523,6 +11108,7 @@ function getIftySubjectWeakEntries(subject) {
   if (key === 'SOCIAL STUDIES') foldersToUse = getIftySocialModule().folders || [];
   else if (key === 'SCIENCE') foldersToUse = getIftyScienceModule().folders || [];
   else if (key === 'ANCIENT') foldersToUse = getIftyAncientModule().folders || [];
+  else if (key === 'KANBUN') foldersToUse = getIftyKanbunModule().folders || [];
   const entries = [];
   foldersToUse.forEach(folder => (folder.items || []).forEach(item => {
     if (!isIftySubjectWeakItem(item)) return;
@@ -10918,6 +11504,7 @@ function getIftySubjectReviewModuleKey(subject) {
   if (key === 'SOCIAL STUDIES') return 'socialStudies';
   if (key === 'SCIENCE') return 'science';
   if (key === 'ANCIENT') return 'ancient';
+  if (key === 'KANBUN') return 'kanbun';
   return '';
 }
 
@@ -10925,6 +11512,7 @@ function getIftySubjectReviewLabel(subject) {
   const key = normalizeIftySubject(subject);
   if (key === 'SCIENCE') return '理科';
   if (key === 'ANCIENT') return '古文単語';
+  if (key === 'KANBUN') return '漢文';
   return '社会';
 }
 
@@ -10933,6 +11521,7 @@ function getIftySubjectReviewItemRef(subject, itemId) {
   if (key === 'SOCIAL STUDIES') return getIftySocialItemById(itemId);
   if (key === 'SCIENCE') return getIftyScienceItemById(itemId);
   if (key === 'ANCIENT') return getIftyAncientItemById(itemId);
+  if (key === 'KANBUN') return getIftyKanbunItemById(itemId);
   return null;
 }
 
@@ -11095,11 +11684,12 @@ function toggleIftySubjectItemReview(subject, folderId, itemId) {
   savePracticeData();
   if (key === 'SCIENCE') refreshIftyScienceFolderDynamic(ref.folder.id);
   else if (key === 'ANCIENT') refreshIftyAncientFolderDynamic(ref.folder.id);
+  else if (key === 'KANBUN') refreshIftyKanbunFolderDynamic(ref.folder.id);
   else refreshIftySocialFolderDynamic(ref.folder.id);
 
   const panelId = key === 'SCIENCE'
     ? 'iftyScienceReviewPanelWrap'
-    : (key === 'ANCIENT' ? 'iftyAncientReviewPanelWrap' : 'iftySocialReviewPanelWrap');
+    : (key === 'ANCIENT' ? 'iftyAncientReviewPanelWrap' : (key === 'KANBUN' ? 'iftyKanbunReviewPanelWrap' : 'iftySocialReviewPanelWrap'));
   const panel = document.getElementById(panelId);
   if (panel) panel.innerHTML = renderIftySubjectReviewPanel(key);
 }
@@ -11116,6 +11706,10 @@ window.toggleIftyAncientItemReview = function(folderId, itemId) {
   toggleIftySubjectItemReview('ANCIENT', folderId, itemId);
 };
 
+window.toggleIftyKanbunItemReview = function(folderId, itemId) {
+  toggleIftySubjectItemReview('KANBUN', folderId, itemId);
+};
+
 function renderIftySubjectReviewPanel(subject) {
   const key = normalizeIftySubject(subject);
   const label = getIftySubjectReviewLabel(key);
@@ -11129,7 +11723,7 @@ function renderIftySubjectReviewPanel(subject) {
         const title = String(item.title || item.word || item.topic || '無題');
         const summary = String(item.memoryText || '').trim().replace(/\s+/g, ' ');
         const stage = review.level < 0 ? '今すぐ' : `${IFTY_REVIEW_INTERVAL_DAYS[Math.max(0, review.level)]}日段階`;
-        const toggleFn = key === 'SCIENCE' ? 'toggleIftyScienceItemReview' : 'toggleIftySocialItemReview';
+        const toggleFn = key === 'SCIENCE' ? 'toggleIftyScienceItemReview' : (key === 'KANBUN' ? 'toggleIftyKanbunItemReview' : 'toggleIftySocialItemReview');
         return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #fed7aa;">
           <div style="min-width:0;flex:1;">
             <div style="font-weight:900;color:#7c2d12;overflow-wrap:anywhere;">${escapeHtml(title)}</div>
@@ -11163,25 +11757,27 @@ window.startIftySubjectDueReviewFlashcards = function(subject, direction = 'fron
 
   currentFlashcardMode = key === 'SCIENCE'
     ? 'science_review_due'
-    : (key === 'ANCIENT' ? 'ancient_review_due' : 'social_review_due');
+    : (key === 'ANCIENT' ? 'ancient_review_due' : (key === 'KANBUN' ? 'kanbun_review_due' : 'social_review_due'));
   cardMode = direction === 'back' ? 'back' : 'front';
   isRandomMode = false;
 
   flashcardList = entries.map(({ item }) => ({
     id: String(item.id || ''),
-    word: String(item.word || item.title || item.topic || '無題'),
-    meanings: Array.isArray(item.meanings) && item.meanings.length
-      ? item.meanings
-      : [String(item.memoryText || '').trim()],
+    word: key === 'KANBUN' ? String(item.originalText || item.title || '無題') : String(item.word || item.title || item.topic || '無題'),
+    meanings: key === 'KANBUN'
+      ? [String(item.kundoku || '').trim(), String(item.translation || '').trim()].filter(Boolean)
+      : (Array.isArray(item.meanings) && item.meanings.length ? item.meanings : [String(item.memoryText || '').trim()]),
     mastery: item.mastery || 'unfixed',
-    language: key === 'ANCIENT' ? '日本語（古文）' : '日本語',
+    language: key === 'ANCIENT' ? '日本語（古文）' : (key === 'KANBUN' ? '日本語（漢文）' : '日本語'),
     languageCode: 'ja',
     __iftySubjectReviewDue: true,
     ...(key === 'SCIENCE'
       ? { __iftyScienceFlashcard: true, __iftyScienceItemId: String(item.id || '') }
       : (key === 'ANCIENT'
           ? { __iftyAncientFlashcard: true, __iftyAncientItemId: String(item.id || '') }
-          : { __iftySocialFlashcard: true, __iftySocialItemId: String(item.id || '') }))
+          : (key === 'KANBUN'
+              ? { __iftyKanbunFlashcard: true, __iftyKanbunItemId: String(item.id || '') }
+              : { __iftySocialFlashcard: true, __iftySocialItemId: String(item.id || '') })))
   }));
 
   currentFlashcardIndex = 0;
@@ -11964,7 +12560,7 @@ function getIftyBasicCloze(item) {
 
 function renderIftyBasicPracticeTabs(active = 'BASIC SENTENCES') {
   const btn = (name, label) => `<button type="button" onclick="setIftyUnifiedPracticeSubject('${name}')" style="border:${active===name?'none':'1px solid #cbd5e1'};background:${active===name?'#7c3aed':'white'};color:${active===name?'white':'#334155'};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${label}</button>`;
-  return `<div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">${btn('ENGLISH','LANGUAGES')}${btn('ANCIENT','ANCIENT')}${btn('SOCIAL STUDIES','SOCIAL STUDIES')}${btn('SCIENCE','SCIENCE')}${btn('BASIC SENTENCES','BASIC SENTENCES')}</div>`;
+  return `<div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">${btn('ENGLISH','LANGUAGES')}${btn('ANCIENT','ANCIENT')}${btn('KANBUN','KANBUN')}${btn('SOCIAL STUDIES','SOCIAL STUDIES')}${btn('SCIENCE','SCIENCE')}${btn('BASIC SENTENCES','BASIC SENTENCES')}</div>`;
 }
 
 function renderIftyBasicSentencePracticeHome(modal) {
@@ -12421,7 +13017,9 @@ function normalizeIftySubjectQuizSet(value, index = 0, subject = '') {
     ? ['simple','term_write','era','order','explanation','image']
     : (key === 'SCIENCE'
         ? ['simple','term_write','formula','order','explanation','image']
-        : ['choice','term_write','reading_write','meaning_write','example','grammar_conjugate','grammar_identify','grammar_table','grammar_explain']);
+        : (key === 'KANBUN'
+            ? ['kundoku','translation','kaeriten']
+            : ['choice','term_write','reading_write','meaning_write','example','grammar_conjugate','grammar_identify','grammar_table','grammar_explain']));
   const defaultMode = allowed[0];
   return {
     id: String(source.id || makeId('subjectquizset')),
@@ -12599,6 +13197,24 @@ function normalizePracticeData() {
   practiceData.modules.ancient.flashcardSets = practiceData.modules.ancient.flashcardSets.map(normalizeIftySubjectFlashcardSet);
   if (!Array.isArray(practiceData.modules.ancient.quizSets)) practiceData.modules.ancient.quizSets = [];
   practiceData.modules.ancient.quizSets = practiceData.modules.ancient.quizSets.map((set, index) => normalizeIftySubjectQuizSet(set, index, 'ANCIENT'));
+
+  if (!practiceData.modules.kanbun || typeof practiceData.modules.kanbun !== 'object') {
+    practiceData.modules.kanbun = { folders: [] };
+  }
+  if (!Array.isArray(practiceData.modules.kanbun.folders)) practiceData.modules.kanbun.folders = [];
+  practiceData.modules.kanbun.folders = practiceData.modules.kanbun.folders.map(folder => {
+    const source = folder && typeof folder === 'object' ? folder : {};
+    return {
+      id: source.id || makeId('kanbunfolder'),
+      name: String(source.name || '漢文').trim() || '漢文',
+      collapsed: !!source.collapsed,
+      items: Array.isArray(source.items) ? source.items.map(normalizeIftyKanbunItem).filter(Boolean) : []
+    };
+  });
+  if (!Array.isArray(practiceData.modules.kanbun.flashcardSets)) practiceData.modules.kanbun.flashcardSets = [];
+  practiceData.modules.kanbun.flashcardSets = practiceData.modules.kanbun.flashcardSets.map(normalizeIftySubjectFlashcardSet);
+  if (!Array.isArray(practiceData.modules.kanbun.quizSets)) practiceData.modules.kanbun.quizSets = [];
+  practiceData.modules.kanbun.quizSets = practiceData.modules.kanbun.quizSets.map((set, index) => normalizeIftySubjectQuizSet(set, index, 'KANBUN'));
 
 }
 function loadPracticeData(username) {
@@ -12926,6 +13542,7 @@ function getIftyAcademicTermSuggestionAreaId(subject, folderId) {
   if (key === 'SOCIAL STUDIES') return `iftySocialTermSuggestion_${folderId}`;
   if (key === 'SCIENCE') return `iftyScienceTermSuggestion_${folderId}`;
   if (key === 'ANCIENT') return `iftyAncientTermSuggestion_${folderId}`;
+  if (key === 'KANBUN') return `iftyKanbunTermSuggestion_${folderId}`;
   return '';
 }
 
@@ -12935,6 +13552,7 @@ function focusIftyAcademicTermInput(subject, folderId) {
   if (key === 'SOCIAL STUDIES') input = document.getElementById(`iftySocialTopic_${folderId}`);
   else if (key === 'SCIENCE') input = document.getElementById(`iftyScienceTopic_${folderId}`);
   else if (key === 'ANCIENT') input = document.getElementById(`iftyAncientWord_${folderId}`);
+  else if (key === 'KANBUN') input = document.getElementById(`iftyKanbunText_${folderId}`);
   if (!input) return;
   try { input.focus({ preventScroll: true }); } catch (_) { input.focus(); }
 }
@@ -12955,6 +13573,10 @@ function clearIftyAcademicTermInputIfMatches(subject, folderId, expectedText) {
     const input = document.getElementById(`iftyAncientWord_${folderId}`);
     if (input && String(input.value || '').trim() === expected) input.value = '';
     if (String(iftyAncientWordDrafts[folderId] || '').trim() === expected) iftyAncientWordDrafts[folderId] = '';
+  } else if (key === 'KANBUN') {
+    const input = document.getElementById(`iftyKanbunText_${folderId}`);
+    if (input && String(input.value || '').trim() === expected) input.value = '';
+    if (String(iftyKanbunTextDrafts[folderId] || '').trim() === expected) iftyKanbunTextDrafts[folderId] = '';
   }
 }
 
@@ -13014,6 +13636,10 @@ async function dispatchIftyAcademicTermGeneration(subject, folderId, text) {
   }
   if (key === 'ANCIENT') {
     await window.generateIftyAncientWord(folderId, { forcedWord: text, skipTermCheck: true });
+    return;
+  }
+  if (key === 'KANBUN') {
+    await window.generateIftyKanbunItem(folderId, { forcedText: text, skipTermCheck: true });
   }
 }
 
@@ -13989,6 +14615,7 @@ window.openPracticeHome = function(subject) {
   if (requested === 'SOCIAL STUDIES') iftyUnifiedPracticeSubject = 'SOCIAL STUDIES';
   else if (requested === 'SCIENCE') iftyUnifiedPracticeSubject = 'SCIENCE';
   else if (requested === 'ANCIENT') iftyUnifiedPracticeSubject = 'ANCIENT';
+  else if (requested === 'KANBUN') iftyUnifiedPracticeSubject = 'KANBUN';
   else if (requested === 'BASIC SENTENCES') iftyUnifiedPracticeSubject = 'BASIC SENTENCES';
   else if (
     requested === 'ENGLISH' ||
@@ -14000,6 +14627,7 @@ window.openPracticeHome = function(subject) {
   else if (currentIftySubject === 'SOCIAL STUDIES') iftyUnifiedPracticeSubject = 'SOCIAL STUDIES';
   else if (currentIftySubject === 'SCIENCE') iftyUnifiedPracticeSubject = 'SCIENCE';
   else if (currentIftySubject === 'ANCIENT') iftyUnifiedPracticeSubject = 'ANCIENT';
+  else if (currentIftySubject === 'KANBUN') iftyUnifiedPracticeSubject = 'KANBUN';
   else iftyUnifiedPracticeSubject = 'ENGLISH';
   let modal = document.getElementById('practiceModal');
   if (!modal) {
@@ -14025,7 +14653,9 @@ window.setIftyUnifiedPracticeSubject = function(subject) {
         ? 'SCIENCE'
         : (value === 'ANCIENT'
             ? 'ANCIENT'
-            : (value === 'BASIC SENTENCES' ? 'BASIC SENTENCES' : 'ENGLISH')));
+            : (value === 'KANBUN'
+                ? 'KANBUN'
+                : (value === 'BASIC SENTENCES' ? 'BASIC SENTENCES' : 'ENGLISH'))));
   renderPracticeHome();
 };
 
@@ -14047,6 +14677,11 @@ function renderPracticeHome() {
     renderIftySubjectPracticeFolderHub(modal, 'ANCIENT');
     return;
   }
+  if (iftyUnifiedPracticeSubject === 'KANBUN') {
+    iftySubjectQuizRunOverride = null;
+    renderIftySubjectPracticeFolderHub(modal, 'KANBUN');
+    return;
+  }
   if (iftyUnifiedPracticeSubject === 'BASIC SENTENCES') {
     renderIftyBasicSentencePracticeHome(modal);
     return;
@@ -14062,6 +14697,7 @@ function renderPracticeHome() {
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">LANGUAGES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANBUN</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
@@ -14121,6 +14757,7 @@ function getIftySubjectSelectionSet(subject) {
   if (key === 'SOCIAL STUDIES') return iftySocialSelectedItemIds;
   if (key === 'SCIENCE') return iftyScienceSelectedItemIds;
   if (key === 'ANCIENT') return iftyAncientSelectedItemIds;
+  if (key === 'KANBUN') return iftyKanbunSelectedItemIds;
   return new Set();
 }
 
@@ -14129,6 +14766,7 @@ function getIftySubjectFoldersForBulk(subject) {
   if (key === 'SOCIAL STUDIES') return getIftySocialModule().folders || [];
   if (key === 'SCIENCE') return getIftyScienceModule().folders || [];
   if (key === 'ANCIENT') return getIftyAncientModule().folders || [];
+  if (key === 'KANBUN') return getIftyKanbunModule().folders || [];
   return [];
 }
 
@@ -14137,11 +14775,13 @@ function getIftySubjectItemRefForBulk(subject, itemId) {
   if (key === 'SOCIAL STUDIES') return getIftySocialItemById(itemId);
   if (key === 'SCIENCE') return getIftyScienceItemById(itemId);
   if (key === 'ANCIENT') return getIftyAncientItemById(itemId);
+  if (key === 'KANBUN') return getIftyKanbunItemById(itemId);
   return null;
 }
 
 function getIftySubjectBulkLabel(subject) {
-  return normalizeIftySubject(subject) === 'ANCIENT' ? '語' : '項目';
+  const key = normalizeIftySubject(subject);
+  return key === 'ANCIENT' ? '語' : (key === 'KANBUN' ? '題' : '項目');
 }
 
 function cleanIftySubjectSelection(subject) {
@@ -14222,6 +14862,7 @@ window.moveIftySubjectSelectedItemsTo = function(subject, destinationId) {
   if (key === 'SOCIAL STUDIES') renderIftySocialStudiesPage({ preserveScroll: true });
   else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
   else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
+  else if (key === 'KANBUN') renderIftyKanbunPage({ preserveScroll: true });
 };
 
 function renderIftySubjectSelectionToolbar(subject) {
@@ -14276,6 +14917,7 @@ window.toggleIftySubjectFolderItemsSelection = function(subject, folderId) {
   if (key === 'SOCIAL STUDIES') refreshIftySocialFolderDynamic(folderId);
   else if (key === 'SCIENCE') refreshIftyScienceFolderDynamic(folderId);
   else if (key === 'ANCIENT') refreshIftyAncientFolderDynamic(folderId);
+  else if (key === 'KANBUN') refreshIftyKanbunFolderDynamic(folderId);
 
   refreshIftySubjectSelectionToolbar(key);
 };
@@ -14290,6 +14932,7 @@ window.selectAllIftySubjectItems = function(subject) {
   if (key === 'SOCIAL STUDIES') renderIftySocialStudiesPage({ preserveScroll: true });
   else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
   else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
+  else if (key === 'KANBUN') renderIftyKanbunPage({ preserveScroll: true });
 };
 
 window.clearIftySubjectItemSelections = function(subject) {
@@ -14299,6 +14942,7 @@ window.clearIftySubjectItemSelections = function(subject) {
   if (key === 'SOCIAL STUDIES') renderIftySocialStudiesPage({ preserveScroll: true });
   else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
   else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
+  else if (key === 'KANBUN') renderIftyKanbunPage({ preserveScroll: true });
 };
 
 window.bulkDeleteIftySubjectSelectedItems = function(subject) {
@@ -14319,6 +14963,7 @@ window.bulkDeleteIftySubjectSelectedItems = function(subject) {
   if (key === 'SOCIAL STUDIES') renderIftySocialStudiesPage({ preserveScroll: true });
   else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
   else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
+  else if (key === 'KANBUN') renderIftyKanbunPage({ preserveScroll: true });
 };
 
 window.bulkMoveIftySubjectSelectedItems = function(subject) {
@@ -14360,6 +15005,7 @@ window.bulkMoveIftySubjectSelectedItems = function(subject) {
   if (key === 'SOCIAL STUDIES') renderIftySocialStudiesPage({ preserveScroll: true });
   else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
   else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
+  else if (key === 'KANBUN') renderIftyKanbunPage({ preserveScroll: true });
 };
 
 
@@ -14371,7 +15017,7 @@ function getIftySubjectQuizSets(subject) {
   const key = normalizeIftySubject(subject);
   const module = key === 'SOCIAL STUDIES'
     ? practiceData?.modules?.socialStudies
-    : (key === 'SCIENCE' ? practiceData?.modules?.science : (key === 'ANCIENT' ? practiceData?.modules?.ancient : null));
+    : (key === 'SCIENCE' ? practiceData?.modules?.science : (key === 'ANCIENT' ? practiceData?.modules?.ancient : (key === 'KANBUN' ? practiceData?.modules?.kanbun : null)));
   if (!module) return [];
   if (!Array.isArray(module.quizSets)) module.quizSets = [];
   return module.quizSets;
@@ -14387,11 +15033,13 @@ function getIftySubjectQuizModeOptions(subject) {
     ? ['simple','term_write','era','order','explanation','image']
     : (key === 'SCIENCE'
         ? ['simple','term_write','formula','order','explanation','image']
-        : ['choice','term_write','reading_write','meaning_write','example','grammar_conjugate','grammar_identify','grammar_table','grammar_explain']);
+        : (key === 'KANBUN'
+            ? ['kundoku','translation','kaeriten']
+            : ['choice','term_write','reading_write','meaning_write','example','grammar_conjugate','grammar_identify','grammar_table','grammar_explain']));
   return modes.map(mode => {
     const meta = key === 'SOCIAL STUDIES'
       ? getIftySocialPracticeModeMeta(mode)
-      : (key === 'SCIENCE' ? getIftySciencePracticeModeMeta(mode) : getIftyAncientPracticeModeMeta(mode));
+      : (key === 'SCIENCE' ? getIftySciencePracticeModeMeta(mode) : (key === 'KANBUN' ? getIftyKanbunPracticeModeMeta(mode) : getIftyAncientPracticeModeMeta(mode)));
     return { mode, title: meta.title, description: meta.description };
   });
 }
@@ -14530,6 +15178,7 @@ window.startIftySubjectQuizSet = async function(subject,setId){
   if(key==='SOCIAL STUDIES'){iftySocialPracticeQuestionCount=set.questionCount;await startIftySocialPractice(set.mode);}
   else if(key==='SCIENCE'){iftySciencePracticeQuestionCount=set.questionCount;await startIftySciencePractice(set.mode);}
   else if(key==='ANCIENT'){iftyAncientPracticeQuestionCount=set.questionCount;await startIftyAncientPractice(set.mode);}
+  else if(key==='KANBUN'){iftyKanbunPracticeQuestionCount=set.questionCount;await startIftyKanbunPractice(set.mode);}
 };
 
 function renderIftySubjectPracticeFolderHub(modal, subject) {
@@ -14540,6 +15189,7 @@ function renderIftySubjectPracticeFolderHub(modal, subject) {
     <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
       <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="${active('ENGLISH')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">LANGUAGES</button>
       <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="${active('ANCIENT')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
+      <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="${active('KANBUN')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANBUN</button>
       <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="${active('SOCIAL STUDIES')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
       <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="${active('SCIENCE')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
       <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
@@ -14553,6 +15203,7 @@ function getIftySubjectFlashcardModule(subject) {
   const key = normalizeIftySubject(subject);
   const modules = practiceData && practiceData.modules ? practiceData.modules : {};
   if (key === 'ANCIENT') return modules.ancient || null;
+  if (key === 'KANBUN') return modules.kanbun || null;
   if (key === 'SCIENCE') return modules.science || null;
   if (key === 'SOCIAL STUDIES') return modules.socialStudies || null;
   return null;
@@ -14606,6 +15257,7 @@ function getIftySelectedSubjectFlashcardRefs(subject) {
 function getIftySubjectFlashcardFront(subject, item) {
   const key = normalizeIftySubject(subject);
   if (key === 'ANCIENT') return String(item?.word || item?.title || '').trim();
+  if (key === 'KANBUN') return String(item?.originalText || item?.title || '').trim();
   return String(item?.title || item?.topic || '').trim();
 }
 
@@ -14615,16 +15267,21 @@ function getIftySubjectFlashcardBack(subject, item) {
     const meanings = Array.isArray(item?.meanings) ? item.meanings.map(v => String(v || '').trim()).filter(Boolean) : [];
     return meanings.join(' / ') || String(item?.memoryText || '').trim();
   }
+  if (key === 'KANBUN') {
+    return [String(item?.kundoku || '').trim(), String(item?.translation || '').trim()].filter(Boolean).join(' / ') || String(item?.memoryText || '').trim();
+  }
   return String(item?.memoryText || '').trim();
 }
 
 function getIftySubjectFlashcardNoun(subject) {
-  return normalizeIftySubject(subject) === 'ANCIENT' ? '単語' : '項目';
+  const key = normalizeIftySubject(subject);
+  return key === 'ANCIENT' ? '単語' : (key === 'KANBUN' ? '題' : '項目');
 }
 
 function getIftySubjectFlashcardDirectionLabels(subject) {
   const key = normalizeIftySubject(subject);
   if (key === 'ANCIENT') return { front: '単語 → 意味', back: '意味 → 単語' };
+  if (key === 'KANBUN') return { front: '原文 → 書き下し・訳', back: '書き下し・訳 → 原文' };
   return { front: '用語 → 説明', back: '説明 → 用語' };
 }
 
@@ -15403,6 +16060,7 @@ function renderIftyUnifiedAncientPracticeHome(modal) {
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">LANGUAGES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANBUN</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
@@ -15958,6 +16616,7 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">LANGUAGES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANBUN</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
@@ -16041,6 +16700,7 @@ function renderIftyUnifiedSciencePracticeHome(modal) {
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">LANGUAGES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANBUN</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
@@ -17604,6 +18264,17 @@ folderCollection: 'folders',
       itemSchema: ['title','word','reading','partOfSpeech','meanings','modernCaution','usage','examples','relatedWords','keyPoints','memoryText','source','createdAt','updatedAt'],
       supportsPractice: true
     },
+    KANBUN: {
+      storage: 'practiceModule',
+      moduleKey: 'kanbun',
+      folderCollection: 'folders',
+      itemCollection: 'items',
+      itemLabelField: 'title',
+      generator: 'kanbun_study',
+      folderDefaults: { collapsed: false },
+      itemSchema: ['title','originalText','kundoku','translation','returnMarks','grammarPoints','keyPoints','memoryText','source','createdAt','updatedAt'],
+      supportsPractice: true
+    },
     SCIENCE: {
       storage: 'practiceModule',
       moduleKey: 'science',
@@ -17852,14 +18523,15 @@ window.renderFlashcardModal = function() {
     const isScienceReviewSession = currentFlashcardMode === 'science_review_due';
     const isAncientSession = currentFlashcardMode === 'ancient';
     const isAncientReviewSession = currentFlashcardMode === 'ancient_review_due';
+    const isKanbunReviewSession = currentFlashcardMode === 'kanbun_review_due';
     if (isReviewSession || isWeakSession) renderFolders();
     modal.innerHTML = `
       <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
         <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 10px;">🎉 完了！</h3>
-        <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">${(isReviewSession || isSocialReviewSession || isScienceReviewSession || isAncientReviewSession) ? '今日の復習を終了しました。' : (isWeakSession ? '苦手候補の学習を終了しました。' : 'すべてのカードを終了しました。')}</p>
+        <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">${(isReviewSession || isSocialReviewSession || isScienceReviewSession || isAncientReviewSession || isKanbunReviewSession) ? '今日の復習を終了しました。' : (isWeakSession ? '苦手候補の学習を終了しました。' : 'すべてのカードを終了しました。')}</p>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-          ${(isReviewSession || isWeakSession || isSocialSession || isScienceSession || isSocialReviewSession || isScienceReviewSession || isAncientSession || isAncientReviewSession) ? '' : '<button onclick="closeFlashcardModal(); openPracticeHome(\'ENGLISH\');" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>'}
-          <button onclick="closeFlashcardModal();${isSocialReviewSession ? "renderIftySocialStudiesPage();" : (isScienceReviewSession ? "renderIftySciencePage();" : (isAncientReviewSession || isAncientSession ? "renderIftyAncientPage();" : (isSocialSession ? "openPracticeHome('SOCIAL STUDIES');" : (isScienceSession ? "openPracticeHome('SCIENCE');" : ''))))}" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">${isReviewSession ? '復習フォルダへ戻る' : (isWeakSession ? '語彙帳へ戻る' : (isSocialReviewSession ? '社会へ戻る' : (isScienceReviewSession ? '理科へ戻る' : (isAncientReviewSession || isAncientSession ? '古文単語へ戻る' : (isSocialSession ? '社会PRACTICEへ戻る' : (isScienceSession ? '理科PRACTICEへ戻る' : '閉じる'))))))}</button>
+          ${(isReviewSession || isWeakSession || isSocialSession || isScienceSession || isSocialReviewSession || isScienceReviewSession || isAncientSession || isAncientReviewSession || isKanbunReviewSession) ? '' : '<button onclick="closeFlashcardModal(); openPracticeHome(\'ENGLISH\');" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>'}
+          <button onclick="closeFlashcardModal();${isSocialReviewSession ? "renderIftySocialStudiesPage();" : (isScienceReviewSession ? "renderIftySciencePage();" : (isAncientReviewSession || isAncientSession ? "renderIftyAncientPage();" : (isKanbunReviewSession ? "renderIftyKanbunPage();" : (isSocialSession ? "openPracticeHome('SOCIAL STUDIES');" : (isScienceSession ? "openPracticeHome('SCIENCE');" : '')))))}" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">${isReviewSession ? '復習フォルダへ戻る' : (isWeakSession ? '語彙帳へ戻る' : (isSocialReviewSession ? '社会へ戻る' : (isScienceReviewSession ? '理科へ戻る' : (isAncientReviewSession || isAncientSession ? '古文単語へ戻る' : (isKanbunReviewSession ? '漢文へ戻る' : (isSocialSession ? '社会PRACTICEへ戻る' : (isScienceSession ? '理科PRACTICEへ戻る' : '閉じる')))))))}</button>
         </div>
       </div>
     `;
@@ -17919,6 +18591,14 @@ window.setMasteryAndNext = function(status) {
       savePracticeData();
     } else if (current.__iftyAncientFlashcard) {
       const ref = getIftyAncientItemById(current.__iftyAncientItemId || current.id);
+      if (ref && ref.item) {
+        ref.item.mastery = status;
+        if (current.__iftySubjectReviewDue) applyIftyEntityReviewResult(ref.item, correct);
+        else enrollIftyEntityReviewFromStudy(ref.item, correct);
+      }
+      savePracticeData();
+    } else if (current.__iftyKanbunFlashcard) {
+      const ref = getIftyKanbunItemById(current.__iftyKanbunItemId || current.id);
       if (ref && ref.item) {
         ref.item.mastery = status;
         if (current.__iftySubjectReviewDue) applyIftyEntityReviewResult(ref.item, correct);
