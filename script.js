@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP70 2026-09-30：KANBUN 縦書き入力・返点/送り仮名・手書き候補選択 ★★★
+// ★★★ IFTY Q3 STEP71 2026-09-30：KANBUN 手書き認識強化・訓点表示修正・送り仮名カタカナ化 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -7489,6 +7489,47 @@ function getIftyKanbunTokens(text) {
   return Array.from(String(text || '')).filter(ch => !/\s/.test(ch));
 }
 
+function convertIftyKanbunOkuriganaToKatakana(value) {
+  const normalized = String(value || '').normalize('NFKC').trim().replace(/\s+/g, '');
+  return Array.from(normalized).map(ch => {
+    const code = ch.codePointAt(0);
+    if (code >= 0x3041 && code <= 0x3096) return String.fromCodePoint(code + 0x60);
+    if (ch === 'ゝ') return 'ヽ';
+    if (ch === 'ゞ') return 'ヾ';
+    return ch;
+  }).join('').slice(0, 12);
+}
+
+window.normalizeIftyKanbunOkuriganaInput = function(input, event = null) {
+  if (!input || event?.isComposing) return;
+  const value = convertIftyKanbunOkuriganaToKatakana(input.value);
+  if (input.value !== value) input.value = value;
+};
+
+function getIftyKanbunReturnMarkParts(mark) {
+  const value = normalizeIftyKanbunMark(mark);
+  if (!value) return [];
+  if (value.endsWith('レ') && value !== 'レ') return [value.slice(0, -1), 'レ'].filter(Boolean);
+  return [value];
+}
+
+function getIftyKanbunReturnMarkGlyph(mark) {
+  const map = {
+    'レ':'㆑','一':'㆒','二':'㆓','三':'㆔','四':'㆕',
+    '上':'㆖','中':'㆗','下':'㆘','甲':'㆙','乙':'㆚','丙':'㆛','丁':'㆜',
+    '天':'㆝','地':'㆞','人':'㆟'
+  };
+  return map[mark] || mark;
+}
+
+function renderIftyKanbunReturnMarkGlyph(mark, options = {}) {
+  const parts = getIftyKanbunReturnMarkParts(mark);
+  if (!parts.length) return '';
+  const compact = options.compact === true;
+  const size = compact ? '1.05em' : '13px';
+  return `<span aria-label="${escapeHtml(normalizeIftyKanbunMark(mark))}" style="display:inline-flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:0;line-height:.82;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:${size};font-weight:900;white-space:nowrap;">${parts.map(part => `<span>${escapeHtml(getIftyKanbunReturnMarkGlyph(part))}</span>`).join('')}</span>`;
+}
+
 function normalizeIftyKanbunMark(value) {
   return String(value || '').normalize('NFKC').trim().replace(/\s+/g, '').slice(0, 6);
 }
@@ -7523,7 +7564,7 @@ function normalizeIftyKanbunOkurigana(value, originalText = '') {
   const map = new Map();
   source.forEach(row => {
     const index = Number(row?.index ?? row?.charIndex);
-    const kana = String(row?.text ?? row?.okurigana ?? row?.value ?? '').normalize('NFKC').trim().replace(/\s+/g, '').slice(0, 12);
+    const kana = convertIftyKanbunOkuriganaToKatakana(row?.text ?? row?.okurigana ?? row?.value ?? '');
     if (!Number.isInteger(index) || index < 0 || index >= max || !kana) return;
     map.set(index, kana);
   });
@@ -7536,7 +7577,7 @@ function convertIftyKanbunAnnotationsToOkurigana(value, originalText = '') {
   const converted = [];
   rows.forEach(row => {
     const directIndex = Number(row?.index ?? row?.charIndex);
-    const kana = String(row?.okurigana ?? row?.kana ?? '').normalize('NFKC').trim().replace(/\s+/g, '').slice(0, 12);
+    const kana = convertIftyKanbunOkuriganaToKatakana(row?.okurigana ?? row?.kana ?? '');
     if (!kana) return;
     if (Number.isInteger(directIndex) && directIndex >= 0 && directIndex < tokens.length) {
       converted.push({ index: directIndex, text: kana });
@@ -7672,24 +7713,25 @@ function renderIftyKanbunMarkedText(item, options = {}) {
   const tokens = getIftyKanbunTokens(item?.originalText || '');
   if (!tokens.length) return '<div style="color:#94a3b8;font-size:.78em;">原文を入力するとここに縦書きで表示されます。</div>';
 
-  // 漢文本文は一字ずつ上→下、列は右→左。送り仮名は字の右、返点は字の左下へ小さく表示する。
+  // 漢文本文は一字ずつ上→下、列は右→左。送り仮名は字の右、返点は字の左下。
+  // 複合返点（上レ・一レなど）は横書きにせず、Unicode漢文用記号を縦に積む。
   const rowsPerColumn = Math.max(6, Math.min(16, Number(options.rowsPerColumn) || 11));
   const columns = [];
   for (let start = 0; start < tokens.length; start += rowsPerColumn) {
     columns.push(tokens.slice(start, start + rowsPerColumn).map((ch, offset) => ({ ch, index: start + offset })));
   }
 
-  return `<div style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;padding:8px 4px 12px;">
-    <div style="display:flex;flex-direction:row-reverse;justify-content:flex-start;align-items:flex-start;gap:12px;width:max-content;min-width:100%;">
-      ${columns.map(column => `<div style="display:flex;flex-direction:column;gap:1px;flex:none;">${column.map(({ ch, index }) => {
+  return `<div style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;padding:8px 6px 14px;">
+    <div style="display:flex;flex-direction:row-reverse;justify-content:flex-start;align-items:flex-start;gap:14px;width:max-content;min-width:100%;">
+      ${columns.map(column => `<div style="display:flex;flex-direction:column;gap:2px;flex:none;">${column.map(({ ch, index }) => {
         const mark = String(marks[index] || '');
-        const kana = String(okurigana[index] || '');
+        const kana = convertIftyKanbunOkuriganaToKatakana(okurigana[index] || '');
         const selected = interactive && index === selectedIndex;
         const click = interactive ? `onclick="${selectFunction}(${index})"` : '';
-        return `<button type="button" ${click} ${interactive ? '' : 'tabindex="-1"'} style="appearance:none;position:relative;border:${selected ? '2px solid #7c3aed' : '1px solid transparent'};background:${selected ? '#f5f3ff' : 'transparent'};border-radius:7px;padding:0;width:56px;height:54px;cursor:${interactive ? 'pointer' : 'default'};box-sizing:border-box;flex:none;">
-          <span style="position:absolute;left:2px;bottom:1px;min-width:13px;font-size:.72em;line-height:1;font-weight:900;color:#b91c1c;white-space:nowrap;">${escapeHtml(mark)}</span>
-          <span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:1.55em;line-height:1;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#0f172a;white-space:nowrap;">${escapeHtml(ch)}</span>
-          ${kana ? `<span style="position:absolute;right:0;top:3px;max-height:46px;writing-mode:vertical-rl;text-orientation:upright;font-size:.52em;line-height:1;color:#334155;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;white-space:nowrap;">${escapeHtml(kana)}</span>` : ''}
+        return `<button type="button" ${click} ${interactive ? '' : 'tabindex="-1"'} style="appearance:none;position:relative;overflow:visible;border:${selected ? '2px solid #7c3aed' : '1px solid transparent'};background:${selected ? '#f5f3ff' : 'transparent'};border-radius:8px;padding:0;width:72px;height:66px;cursor:${interactive ? 'pointer' : 'default'};box-sizing:border-box;flex:none;">
+          ${mark ? `<span style="position:absolute;left:1px;bottom:1px;width:20px;min-height:16px;display:flex;align-items:flex-end;justify-content:center;color:#b91c1c;z-index:2;">${renderIftyKanbunReturnMarkGlyph(mark)}</span>` : ''}
+          <span style="position:absolute;left:40%;top:50%;transform:translate(-50%,-50%);font-size:30px;line-height:1;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#0f172a;white-space:nowrap;">${escapeHtml(ch)}</span>
+          ${kana ? `<span style="position:absolute;right:2px;top:3px;bottom:3px;max-height:60px;writing-mode:vertical-rl;text-orientation:upright;font-size:12px;line-height:1.05;font-weight:800;letter-spacing:-.02em;color:#075985;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;white-space:nowrap;z-index:2;">${escapeHtml(kana)}</span>` : ''}
         </button>`;
       }).join('')}</div>`).join('')}
     </div>
@@ -7829,7 +7871,7 @@ window.openIftyKanbunReturnMarkInputPalette = function(targetId) {
   const palette = getIftyKanbunInputReturnMarkPalette();
   modal.innerHTML = `<div style="width:min(620px,100%);background:white;border-radius:14px 14px 8px 8px;padding:14px;box-sizing:border-box;box-shadow:0 -8px 30px rgba(15,23,42,.18);">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>返点を入力</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">選んだ返点をカーソル位置へ挿入します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunInputMarkPalette')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;">${palette.map(mark => `<button type="button" onclick="insertIftyKanbunTextAtCursor('${String(targetId).replace(/'/g,"\\'")}','${mark}');document.getElementById('iftyKanbunInputMarkPalette')?.remove()" style="border:1px solid #fecaca;background:#fff;color:#991b1b;border-radius:8px;min-width:42px;padding:9px 10px;font-size:1em;font-weight:900;cursor:pointer;">${mark}</button>`).join('')}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;">${palette.map(mark => `<button type="button" onclick="insertIftyKanbunTextAtCursor('${String(targetId).replace(/'/g,"\\'")}','${mark}');document.getElementById('iftyKanbunInputMarkPalette')?.remove()" style="border:1px solid #fecaca;background:#fff;color:#991b1b;border-radius:8px;min-width:42px;padding:9px 10px;font-size:1em;font-weight:900;cursor:pointer;">${renderIftyKanbunReturnMarkGlyph(mark,{compact:true})}</button>`).join('')}</div>
   </div>`;
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   document.body.appendChild(modal);
@@ -7851,7 +7893,7 @@ function drawIftyKanbunInputHandwritingCanvas() {
   ctx.fillRect(0, 0, width, height);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.strokeStyle = '#0f172a';
+  ctx.strokeStyle = '#000000';
   ctx.lineWidth = 3;
   (iftyKanbunInputHandwritingState.strokes || []).forEach(stroke => {
     if (!stroke.length) return;
@@ -7951,8 +7993,8 @@ function buildIftyKanbunInputHandwritingRecognitionImage() {
   // 大きな余白をAIへ送らず、筆跡だけを白い正方形へ拡大して認識しやすくする。
   const inkWidth = Math.max(8, maxX - minX);
   const inkHeight = Math.max(8, maxY - minY);
-  const size = 512;
-  const padding = 54;
+  const size = 768;
+  const padding = 72;
   const scale = Math.min((size - padding * 2) / inkWidth, (size - padding * 2) / inkHeight);
   const offsetX = (size - inkWidth * scale) / 2 - minX * scale;
   const offsetY = (size - inkHeight * scale) / 2 - minY * scale;
@@ -7967,7 +8009,7 @@ function buildIftyKanbunInputHandwritingRecognitionImage() {
   ctx.strokeStyle = '#0f172a';
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.lineWidth = Math.max(6, Math.min(15, 3 * scale));
+  ctx.lineWidth = Math.max(7, Math.min(18, 3.2 * scale));
 
   strokes.forEach(stroke => {
     if (!stroke.length) return;
@@ -8024,10 +8066,12 @@ window.recognizeIftyKanbunInputHandwriting = async function() {
     const full = String(target?.value || '');
     const caret = Number.isInteger(target?.selectionStart) ? target.selectionStart : full.length;
     const context = `${full.slice(Math.max(0, caret - 8), caret)}□${full.slice(caret, caret + 8)}`;
-    const response = await fetch(WORKER_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ type:'kanbun_handwriting_recognize', image, context, strokeCount:(st.strokes || []).length, singleCharacterPreferred:true, order:getIftySubjectOrder('KANBUN') }) });
+    const response = await fetch(WORKER_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ type:'kanbun_handwriting_recognize', image, context, strokeCount:(st.strokes || []).length, singleCharacterPreferred:true, imageSize:768, order:getIftySubjectOrder('KANBUN') }) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.error) throw new Error(String(data.details || data.error || `HTTP ${response.status}`));
-    const candidates = [...new Set((Array.isArray(data.candidates) ? data.candidates : [data.text]).map(v => String(v || '').trim()).filter(Boolean))].slice(0, 8);
+    const rawCandidates = (Array.isArray(data.candidates) ? data.candidates : [data.text]).map(v => String(v || '').trim()).filter(Boolean);
+    const oneChar = rawCandidates.filter(v => Array.from(v).length === 1);
+    const candidates = [...new Set(oneChar.length ? oneChar : rawCandidates)].slice(0, 8);
     if (!candidates.length) throw new Error('文字候補を出せませんでした。1字を大きく、線をはっきり書いてください。');
     st.candidates = candidates;
     if (candidateBox) {
@@ -8072,14 +8116,23 @@ function renderIftyKanbunDraftReturnMarkEditor() {
   modal.innerHTML = `<div style="width:min(780px,100%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:15px;box-sizing:border-box;">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>原文に訓点を付ける</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">縦書きの字をタップし、返点と送り仮名を設定します。送り仮名は字の右、返点は左下へ小さく表示します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunDraftReturnMarkModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
     <div style="margin-top:12px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;padding:6px;">${renderIftyKanbunMarkedText(item,{interactive:true,selectedIndex:st.selectedIndex,marks:st.marks,okurigana:st.okurigana,selectFunction:'selectIftyKanbunDraftReturnMarkIndex'})}</div>
-    <div style="margin-top:12px;padding:10px;border:1px solid #fecaca;border-radius:10px;background:#fff7f7;"><div style="font-size:.76em;font-weight:900;color:#991b1b;margin-bottom:7px;">返点</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark => `<button type="button" onclick="setIftyKanbunDraftReturnMark('${mark}')" style="border:1px solid #fecaca;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;">${mark}</button>`).join('')}<button type="button" onclick="setIftyKanbunDraftReturnMark('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;">消す</button></div></div>
-    <div style="margin-top:10px;padding:10px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:7px;">送り仮名</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"><input id="iftyKanbunDraftOkurigana" value="${escapeHtml(selectedKana)}" placeholder="例：シテ / ヲ / ニ" maxlength="12" style="flex:1;min-width:150px;padding:8px;border:1px solid #7dd3fc;border-radius:7px;font-family:serif;"><button type="button" onclick="setIftyKanbunDraftOkurigana(document.getElementById('iftyKanbunDraftOkurigana')?.value||'')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:8px 10px;font-weight:900;">設定</button><button type="button" onclick="setIftyKanbunDraftOkurigana('')" style="border:none;background:#e0f2fe;color:#0369a1;border-radius:7px;padding:8px 10px;font-weight:900;">消す</button></div></div>
+    <div style="margin-top:12px;padding:10px;border:1px solid #fecaca;border-radius:10px;background:#fff7f7;"><div style="font-size:.76em;font-weight:900;color:#991b1b;margin-bottom:7px;">返点</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark => `<button type="button" onclick="setIftyKanbunDraftReturnMark('${mark}')" style="border:1px solid #fecaca;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;">${renderIftyKanbunReturnMarkGlyph(mark,{compact:true})}</button>`).join('')}<button type="button" onclick="setIftyKanbunDraftReturnMark('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;">消す</button></div></div>
+    <div style="margin-top:10px;padding:10px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:7px;">送り仮名</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"><input id="iftyKanbunDraftOkurigana" value="${escapeHtml(selectedKana)}" placeholder="例：して → シテ" maxlength="12" oninput="normalizeIftyKanbunOkuriganaInput(this,event)" oncompositionend="normalizeIftyKanbunOkuriganaInput(this,event)" onblur="normalizeIftyKanbunOkuriganaInput(this,event)" style="flex:1;min-width:150px;padding:8px;border:1px solid #7dd3fc;border-radius:7px;font-family:serif;"><button type="button" onclick="setIftyKanbunDraftOkurigana(document.getElementById('iftyKanbunDraftOkurigana')?.value||'')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:8px 10px;font-weight:900;">設定</button><button type="button" onclick="setIftyKanbunDraftOkurigana('')" style="border:none;background:#e0f2fe;color:#0369a1;border-radius:7px;padding:8px 10px;font-weight:900;">消す</button></div></div>
     <button type="button" onclick="saveIftyKanbunDraftReturnMarks()" style="width:100%;margin-top:13px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:10px;font-weight:900;">訓点を保存</button>
   </div>`;
 }
 
+function captureIftyKanbunDraftOkuriganaInput() {
+  const st = iftyKanbunDraftReturnMarkEditorState;
+  if (!st || st.selectedIndex < 0 || st.selectedIndex >= st.okurigana.length) return;
+  const input = document.getElementById('iftyKanbunDraftOkurigana');
+  if (!input) return;
+  st.okurigana[st.selectedIndex] = convertIftyKanbunOkuriganaToKatakana(input.value);
+}
+
 window.selectIftyKanbunDraftReturnMarkIndex = function(index) {
   if (!iftyKanbunDraftReturnMarkEditorState) return;
+  captureIftyKanbunDraftOkuriganaInput();
   iftyKanbunDraftReturnMarkEditorState.selectedIndex = Number(index);
   renderIftyKanbunDraftReturnMarkEditor();
 };
@@ -8087,6 +8140,7 @@ window.selectIftyKanbunDraftReturnMarkIndex = function(index) {
 window.setIftyKanbunDraftReturnMark = function(mark) {
   const st = iftyKanbunDraftReturnMarkEditorState;
   if (!st || st.selectedIndex < 0 || st.selectedIndex >= st.marks.length) return;
+  captureIftyKanbunDraftOkuriganaInput();
   st.marks[st.selectedIndex] = normalizeIftyKanbunMark(mark);
   renderIftyKanbunDraftReturnMarkEditor();
 };
@@ -8094,13 +8148,14 @@ window.setIftyKanbunDraftReturnMark = function(mark) {
 window.setIftyKanbunDraftOkurigana = function(value) {
   const st = iftyKanbunDraftReturnMarkEditorState;
   if (!st || st.selectedIndex < 0 || st.selectedIndex >= st.okurigana.length) return;
-  st.okurigana[st.selectedIndex] = String(value || '').normalize('NFKC').trim().replace(/\s+/g,'').slice(0,12);
+  st.okurigana[st.selectedIndex] = convertIftyKanbunOkuriganaToKatakana(value);
   renderIftyKanbunDraftReturnMarkEditor();
 };
 
 window.saveIftyKanbunDraftReturnMarks = function() {
   const st = iftyKanbunDraftReturnMarkEditorState;
   if (!st) return;
+  captureIftyKanbunDraftOkuriganaInput();
   iftyKanbunDraftReturnMarks[st.folderId] = { text:st.text, marks:Array.from(st.marks || []), okurigana:Array.from(st.okurigana || []) };
   const markCount = st.marks.filter(Boolean).length;
   const kanaCount = st.okurigana.filter(Boolean).length;
@@ -8252,7 +8307,7 @@ window.generateIftyKanbunItem = async function(folderId, options = {}) {
     ? Array.from(draftMarkState.marks || []).map((mark,index) => normalizeIftyKanbunMark(mark) ? ({ index, mark: normalizeIftyKanbunMark(mark) }) : null).filter(Boolean)
     : [];
   const userOkurigana = draftMarkState && String(draftMarkState.text || '').trim() === originalText
-    ? Array.from(draftMarkState.okurigana || []).map((kana,index) => String(kana || '').trim() ? ({ index, text:String(kana || '').normalize('NFKC').trim().replace(/\s+/g,'').slice(0,12) }) : null).filter(Boolean)
+    ? Array.from(draftMarkState.okurigana || []).map((kana,index) => String(kana || '').trim() ? ({ index, text:convertIftyKanbunOkuriganaToKatakana(kana) }) : null).filter(Boolean)
     : [];
 
   if (String(input.value || '').trim() === originalText) input.value = '';
@@ -8313,14 +8368,15 @@ function renderIftyKanbunReturnMarkEditor(){
   const st=iftyKanbunReturnMarkEditorState;if(!st)return;const ref=getIftyKanbunItemById(st.itemId);if(!ref?.item)return;const modal=document.getElementById('iftyKanbunReturnMarkModal');if(!modal)return;
   const palette=getIftyKanbunInputReturnMarkPalette();
   const selectedKana=st.selectedIndex>=0?String(st.okurigana?.[st.selectedIndex]||''):'';
-  modal.innerHTML=`<div style="width:min(780px,100%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><h2 style="margin:0;font-size:1.2em;">訓点を付ける</h2><div style="font-size:.78em;color:#64748b;margin-top:3px;">縦書きの字をタップ → 返点と送り仮名を設定。送り仮名は右、返点は左下に小さく表示します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunReturnMarkModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="margin-top:14px;border:1px solid #e2e8f0;border-radius:10px;padding:6px;">${renderIftyKanbunMarkedText(ref.item,{interactive:true,selectedIndex:st.selectedIndex,marks:st.marks,okurigana:st.okurigana})}</div><div style="margin-top:14px;padding:11px;border:1px solid #fecaca;border-radius:10px;background:#fff7f7;"><div style="font-size:.76em;font-weight:900;color:#991b1b;margin-bottom:8px;">返点</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark=>`<button type="button" onclick="setIftyKanbunReturnMarkDraft('${mark}')" style="border:1px solid #cbd5e1;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${mark}</button>`).join('')}<button type="button" onclick="setIftyKanbunReturnMarkDraft('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">消す</button></div></div><div style="margin-top:10px;padding:11px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:8px;">送り仮名</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"><input id="iftyKanbunItemOkurigana" value="${escapeHtml(selectedKana)}" placeholder="例：シテ / ヲ / ニ" maxlength="12" style="flex:1;min-width:150px;padding:8px;border:1px solid #7dd3fc;border-radius:7px;font-family:serif;"><button type="button" onclick="setIftyKanbunOkuriganaDraft(document.getElementById('iftyKanbunItemOkurigana')?.value||'')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:8px 10px;font-weight:900;">設定</button><button type="button" onclick="setIftyKanbunOkuriganaDraft('')" style="border:none;background:#e0f2fe;color:#0369a1;border-radius:7px;padding:8px 10px;font-weight:900;">消す</button></div></div><button type="button" onclick="saveIftyKanbunReturnMarks()" style="width:100%;margin-top:14px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">訓点を保存</button></div>`;
+  modal.innerHTML=`<div style="width:min(780px,100%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><h2 style="margin:0;font-size:1.2em;">訓点を付ける</h2><div style="font-size:.78em;color:#64748b;margin-top:3px;">縦書きの字をタップ → 返点と送り仮名を設定。送り仮名は右、返点は左下に小さく表示します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunReturnMarkModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="margin-top:14px;border:1px solid #e2e8f0;border-radius:10px;padding:6px;">${renderIftyKanbunMarkedText(ref.item,{interactive:true,selectedIndex:st.selectedIndex,marks:st.marks,okurigana:st.okurigana})}</div><div style="margin-top:14px;padding:11px;border:1px solid #fecaca;border-radius:10px;background:#fff7f7;"><div style="font-size:.76em;font-weight:900;color:#991b1b;margin-bottom:8px;">返点</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark=>`<button type="button" onclick="setIftyKanbunReturnMarkDraft('${mark}')" style="border:1px solid #cbd5e1;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${renderIftyKanbunReturnMarkGlyph(mark,{compact:true})}</button>`).join('')}<button type="button" onclick="setIftyKanbunReturnMarkDraft('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">消す</button></div></div><div style="margin-top:10px;padding:11px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:8px;">送り仮名</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"><input id="iftyKanbunItemOkurigana" value="${escapeHtml(selectedKana)}" placeholder="例：して → シテ" maxlength="12" oninput="normalizeIftyKanbunOkuriganaInput(this,event)" oncompositionend="normalizeIftyKanbunOkuriganaInput(this,event)" onblur="normalizeIftyKanbunOkuriganaInput(this,event)" style="flex:1;min-width:150px;padding:8px;border:1px solid #7dd3fc;border-radius:7px;font-family:serif;"><button type="button" onclick="setIftyKanbunOkuriganaDraft(document.getElementById('iftyKanbunItemOkurigana')?.value||'')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:8px 10px;font-weight:900;">設定</button><button type="button" onclick="setIftyKanbunOkuriganaDraft('')" style="border:none;background:#e0f2fe;color:#0369a1;border-radius:7px;padding:8px 10px;font-weight:900;">消す</button></div></div><button type="button" onclick="saveIftyKanbunReturnMarks()" style="width:100%;margin-top:14px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">訓点を保存</button></div>`;
 }
 
 window.openIftyKanbunReturnMarkEditor=function(folderId,itemId){const ref=getIftyKanbunItemById(itemId);if(!ref?.item||String(ref.folder.id)!==String(folderId))return;document.getElementById('iftyKanbunReturnMarkModal')?.remove();iftyKanbunReturnMarkEditorState={folderId:String(folderId),itemId:String(itemId),selectedIndex:0,marks:getIftyKanbunMarkArray(ref.item),okurigana:getIftyKanbunOkuriganaArray(ref.item)};const modal=document.createElement('div');modal.id='iftyKanbunReturnMarkModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12150;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});document.body.appendChild(modal);renderIftyKanbunReturnMarkEditor();};
-window.selectIftyKanbunReturnMarkIndex=function(index){if(!iftyKanbunReturnMarkEditorState)return;iftyKanbunReturnMarkEditorState.selectedIndex=Number(index);renderIftyKanbunReturnMarkEditor();};
-window.setIftyKanbunReturnMarkDraft=function(mark){const st=iftyKanbunReturnMarkEditorState;if(!st||st.selectedIndex<0||st.selectedIndex>=st.marks.length)return;st.marks[st.selectedIndex]=normalizeIftyKanbunMark(mark);renderIftyKanbunReturnMarkEditor();};
-window.setIftyKanbunOkuriganaDraft=function(value){const st=iftyKanbunReturnMarkEditorState;if(!st||st.selectedIndex<0||st.selectedIndex>=st.okurigana.length)return;st.okurigana[st.selectedIndex]=String(value||'').normalize('NFKC').trim().replace(/\s+/g,'').slice(0,12);renderIftyKanbunReturnMarkEditor();};
-window.saveIftyKanbunReturnMarks=function(){const st=iftyKanbunReturnMarkEditorState;if(!st)return;const ref=getIftyKanbunItemById(st.itemId);if(!ref?.item)return;recordUndoState('漢文訓点編集');ref.item.returnMarks=st.marks.map((mark,index)=>mark?{index,mark}:null).filter(Boolean);ref.item.okurigana=st.okurigana.map((text,index)=>text?{index,text}:null).filter(Boolean);ref.item.updatedAt=Date.now();savePracticeData();document.getElementById('iftyKanbunReturnMarkModal')?.remove();refreshIftyKanbunFolderDynamic(st.folderId);iftyKanbunReturnMarkEditorState=null;};
+function captureIftyKanbunItemOkuriganaInput(){const st=iftyKanbunReturnMarkEditorState;if(!st||st.selectedIndex<0||st.selectedIndex>=st.okurigana.length)return;const input=document.getElementById('iftyKanbunItemOkurigana');if(!input)return;st.okurigana[st.selectedIndex]=convertIftyKanbunOkuriganaToKatakana(input.value);}
+window.selectIftyKanbunReturnMarkIndex=function(index){if(!iftyKanbunReturnMarkEditorState)return;captureIftyKanbunItemOkuriganaInput();iftyKanbunReturnMarkEditorState.selectedIndex=Number(index);renderIftyKanbunReturnMarkEditor();};
+window.setIftyKanbunReturnMarkDraft=function(mark){const st=iftyKanbunReturnMarkEditorState;if(!st||st.selectedIndex<0||st.selectedIndex>=st.marks.length)return;captureIftyKanbunItemOkuriganaInput();st.marks[st.selectedIndex]=normalizeIftyKanbunMark(mark);renderIftyKanbunReturnMarkEditor();};
+window.setIftyKanbunOkuriganaDraft=function(value){const st=iftyKanbunReturnMarkEditorState;if(!st||st.selectedIndex<0||st.selectedIndex>=st.okurigana.length)return;st.okurigana[st.selectedIndex]=convertIftyKanbunOkuriganaToKatakana(value);renderIftyKanbunReturnMarkEditor();};
+window.saveIftyKanbunReturnMarks=function(){const st=iftyKanbunReturnMarkEditorState;if(!st)return;captureIftyKanbunItemOkuriganaInput();const ref=getIftyKanbunItemById(st.itemId);if(!ref?.item)return;recordUndoState('漢文訓点編集');ref.item.returnMarks=st.marks.map((mark,index)=>mark?{index,mark}:null).filter(Boolean);ref.item.okurigana=st.okurigana.map((text,index)=>text?{index,text:convertIftyKanbunOkuriganaToKatakana(text)}:null).filter(Boolean);ref.item.updatedAt=Date.now();savePracticeData();document.getElementById('iftyKanbunReturnMarkModal')?.remove();refreshIftyKanbunFolderDynamic(st.folderId);iftyKanbunReturnMarkEditorState=null;};
 
 function getIftyKanbunPracticeModeMeta(mode){
   const meta={kundoku:{title:'書き下し',description:'原文を見て書き下し文を答える。文字入力または手書きで回答。',color:'#0369a1'},translation:{title:'現代語訳',description:'原文を現代日本語へ訳す。文字入力または手書きで回答。',color:'#166534'},kaeriten:{title:'返点',description:'原文の各字をタップしてレ点・一二点・上下点などを配置する。',color:'#b91c1c'}};
@@ -8395,7 +8451,7 @@ function renderIftyKanbunPracticePlayer(){
 function renderIftyKanbunPracticeMarks(q,st){
   const palette=getIftyKanbunInputReturnMarkPalette();
   const fake={originalText:q.originalText,returnMarks:[]};
-  return `<div>${renderIftyKanbunMarkedText(fake,{interactive:true,selectedIndex:st.selectedMarkIndex,marks:st.answerMarks,selectFunction:'selectIftyKanbunPracticeMarkIndex'})}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">${palette.map(mark=>`<button type="button" onclick="chooseIftyKanbunPracticeMark('${mark}')" style="border:1px solid #fecaca;background:#fff;color:#991b1b;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${mark}</button>`).join('')}<button type="button" onclick="chooseIftyKanbunPracticeMark('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">消す</button></div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;"><input id="iftyKanbunPracticeCustomMark" placeholder="その他の返点" maxlength="6" style="flex:1;min-width:130px;padding:7px 8px;border:1px solid #cbd5e1;border-radius:7px;"><button type="button" onclick="chooseIftyKanbunPracticeMark(document.getElementById('iftyKanbunPracticeCustomMark')?.value||'')" style="border:none;background:#64748b;color:white;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">設定</button></div>`;
+  return `<div>${renderIftyKanbunMarkedText(fake,{interactive:true,selectedIndex:st.selectedMarkIndex,marks:st.answerMarks,selectFunction:'selectIftyKanbunPracticeMarkIndex'})}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">${palette.map(mark=>`<button type="button" onclick="chooseIftyKanbunPracticeMark('${mark}')" style="border:1px solid #fecaca;background:#fff;color:#991b1b;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${renderIftyKanbunReturnMarkGlyph(mark,{compact:true})}</button>`).join('')}<button type="button" onclick="chooseIftyKanbunPracticeMark('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">消す</button></div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;"><input id="iftyKanbunPracticeCustomMark" placeholder="その他の返点" maxlength="6" style="flex:1;min-width:130px;padding:7px 8px;border:1px solid #cbd5e1;border-radius:7px;"><button type="button" onclick="chooseIftyKanbunPracticeMark(document.getElementById('iftyKanbunPracticeCustomMark')?.value||'')" style="border:none;background:#64748b;color:white;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">設定</button></div>`;
 }
 window.selectIftyKanbunPracticeMarkIndex=function(index){if(!iftyKanbunPracticeState||iftyKanbunPracticeState.answered)return;iftyKanbunPracticeState.selectedMarkIndex=Number(index);renderIftyKanbunPracticePlayer();};
 window.chooseIftyKanbunPracticeMark=function(mark){const st=iftyKanbunPracticeState;if(!st||st.answered)return;const i=Number(st.selectedMarkIndex);if(i<0||i>=st.answerMarks.length)return;st.answerMarks[i]=normalizeIftyKanbunMark(mark);if(i<st.answerMarks.length-1)st.selectedMarkIndex=i+1;renderIftyKanbunPracticePlayer();};
