@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP65 2026-09-29：全教科「もしかして」+ 文脈和訳 + 活用問題 + 問題内ALLIA ★★★
+// ★★★ IFTY Q3 STEP66 2026-09-30：PRACTICE弱点自動記録・全教科苦手判定 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -2156,12 +2156,15 @@ function getIftyHomeStats() {
     years: countIftyYearEntries(),
     socialFolders: socialFolders.length,
     socialItems,
+    socialWeak: getIftySubjectWeakEntries('SOCIAL STUDIES').length,
     socialDueReview: getIftySubjectReviewEntries('SOCIAL STUDIES', { dueOnly: true }).length,
     scienceFolders: scienceFolders.length,
     scienceItems,
+    scienceWeak: getIftySubjectWeakEntries('SCIENCE').length,
     scienceDueReview: getIftySubjectReviewEntries('SCIENCE', { dueOnly: true }).length,
     ancientFolders: ancientFolders.length,
     ancientItems,
+    ancientWeak: getIftySubjectWeakEntries('ANCIENT').length,
     ancientDueReview: getIftySubjectReviewEntries('ANCIENT', { dueOnly: true }).length,
     ...learning
   };
@@ -2208,21 +2211,21 @@ window.openIftyHome = function() {
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('ANCIENT')">
           <div class="ifty-home-card-title">ANCIENT</div>
-          <div class="ifty-home-card-meta">フォルダ ${stats.ancientFolders} / 古文単語 ${stats.ancientItems}${stats.ancientDueReview ? ` / 🔁 今日 ${stats.ancientDueReview}` : ''}</div>
+          <div class="ifty-home-card-meta">フォルダ ${stats.ancientFolders} / 古文単語 ${stats.ancientItems}${stats.ancientDueReview ? ` / 🔁 今日 ${stats.ancientDueReview}` : ''}${stats.ancientWeak ? ` / 🎯 苦手 ${stats.ancientWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">古文単語 →</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('SCIENCE')">
           <div class="ifty-home-card-title">SCIENCE</div>
-          <div class="ifty-home-card-meta">フォルダ ${stats.scienceFolders} / 項目 ${stats.scienceItems}${stats.scienceDueReview ? ` / 🔁 今日 ${stats.scienceDueReview}` : ''}</div>
+          <div class="ifty-home-card-meta">フォルダ ${stats.scienceFolders} / 項目 ${stats.scienceItems}${stats.scienceDueReview ? ` / 🔁 今日 ${stats.scienceDueReview}` : ''}${stats.scienceWeak ? ` / 🎯 苦手 ${stats.scienceWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">物理・化学・生物・地学 →</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('SOCIAL STUDIES')">
           <div class="ifty-home-card-title">SOCIAL STUDIES</div>
-          <div class="ifty-home-card-meta">フォルダ ${stats.socialFolders} / 項目 ${stats.socialItems}${stats.socialDueReview ? ` / 🔁 今日 ${stats.socialDueReview}` : ''}</div>
+          <div class="ifty-home-card-meta">フォルダ ${stats.socialFolders} / 項目 ${stats.socialItems}${stats.socialDueReview ? ` / 🔁 今日 ${stats.socialDueReview}` : ''}${stats.socialWeak ? ` / 🎯 苦手 ${stats.socialWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">日本史・世界史・地理・公共 →</div>
         </button>
@@ -2883,6 +2886,7 @@ function normalizeIftySocialItem(value) {
     workTitle: text('workTitle'),
     mastery: value.mastery === 'fixed' ? 'fixed' : 'unfixed',
     review: value.review && typeof value.review === 'object' ? deepClone(value.review) : undefined,
+    study: value.study && typeof value.study === 'object' ? deepClone(value.study) : undefined,
     source: String(value.source || 'MANUAL').trim(),
     createdAt: Number(value.createdAt || 0) || Date.now(),
     updatedAt: Number(value.updatedAt || 0) || Date.now()
@@ -3944,8 +3948,10 @@ window.answerIftySocialVisualQuiz = function(itemId) {
   const correctId = String(state.queue[state.index]);
   state.selectedId = String(itemId);
   state.answered = true;
-  if (state.selectedId === correctId) state.correct += 1;
+  const correct = state.selectedId === correctId;
+  if (correct) state.correct += 1;
   else state.wrong += 1;
+  recordIftySubjectStudyEvent('SOCIAL STUDIES', correctId, correct, 'social_image_quiz');
   renderIftySocialVisualQuiz();
 };
 
@@ -4649,6 +4655,7 @@ window.answerIftySocialPracticeChoice = function(optionId) {
   state.answered = true;
   const correct = arraysAsSetsEqual(state.selectedIds, question.correctIds || []);
   if (correct) state.correct += 1; else state.wrong += 1;
+  recordIftySubjectStudyEvent('SOCIAL STUDIES', question.targetItemId || question.imageItemId, correct, `social_${state.mode}`);
   renderIftySocialPracticePlayer();
 };
 
@@ -4668,6 +4675,7 @@ window.submitIftySocialPracticeEra = function() {
   state.answered = true;
   const correct = arraysAsSetsEqual(state.selectedIds, question.correctIds || []);
   if (correct) state.correct += 1; else state.wrong += 1;
+  recordIftySubjectStudyEvent('SOCIAL STUDIES', question.targetItemId || question.imageItemId, correct, `social_${state.mode}`);
   renderIftySocialPracticePlayer();
 };
 
@@ -4689,6 +4697,7 @@ window.submitIftySocialPracticeOrder = function() {
   const correct = state.orderIds.length === (question.correctOrder || []).length
     && state.orderIds.every((id, index) => String(id) === String(question.correctOrder[index]));
   if (correct) state.correct += 1; else state.wrong += 1;
+  recordIftySubjectStudyEvent('SOCIAL STUDIES', question.targetItemId || question.imageItemId, correct, `social_${state.mode}`);
   renderIftySocialPracticePlayer();
 };
 
@@ -4742,6 +4751,7 @@ window.submitIftySocialPracticeExplanation = async function() {
     state.feedback = String(data.feedback || '').trim();
     state.modelAnswer = String(data.modelAnswer || question.referenceAnswer || '').trim();
     if (state.correctLast) state.correct += 1; else state.wrong += 1;
+    recordIftySubjectStudyEvent('SOCIAL STUDIES', question.targetItemId, state.correctLast, 'social_explanation');
     renderIftySocialPracticePlayer();
   } catch (error) {
     console.error('社会PRACTICE採点エラー:', error);
@@ -4834,6 +4844,7 @@ function normalizeIftyScienceItem(value) {
     workTitle: text('workTitle'),
     mastery: value.mastery === 'fixed' ? 'fixed' : 'unfixed',
     review: value.review && typeof value.review === 'object' ? deepClone(value.review) : undefined,
+    study: value.study && typeof value.study === 'object' ? deepClone(value.study) : undefined,
     source: String(value.source || 'MANUAL').trim(),
     createdAt: Number(value.createdAt || 0) || Date.now(),
     updatedAt: Number(value.updatedAt || 0) || Date.now()
@@ -6030,8 +6041,10 @@ window.answerIftyScienceVisualQuiz = function(itemId) {
   const correctId = String(state.queue[state.index]);
   state.selectedId = String(itemId);
   state.answered = true;
-  if (state.selectedId === correctId) state.correct += 1;
+  const correct = state.selectedId === correctId;
+  if (correct) state.correct += 1;
   else state.wrong += 1;
+  recordIftySubjectStudyEvent('SCIENCE', correctId, correct, 'science_image_quiz');
   renderIftyScienceVisualQuiz();
 };
 
@@ -6730,6 +6743,7 @@ window.answerIftySciencePracticeChoice = function(optionId) {
   state.answered = true;
   const correct = arraysAsSetsEqual(state.selectedIds, question.correctIds || []);
   if (correct) state.correct += 1; else state.wrong += 1;
+  recordIftySubjectStudyEvent('SCIENCE', question.targetItemId || question.imageItemId, correct, `science_${state.mode}`);
   renderIftySciencePracticePlayer();
 };
 
@@ -6749,6 +6763,7 @@ window.submitIftySciencePracticeFormula = function() {
   state.answered = true;
   const correct = arraysAsSetsEqual(state.selectedIds, question.correctIds || []);
   if (correct) state.correct += 1; else state.wrong += 1;
+  recordIftySubjectStudyEvent('SCIENCE', question.targetItemId || question.imageItemId, correct, `science_${state.mode}`);
   renderIftySciencePracticePlayer();
 };
 
@@ -6770,6 +6785,7 @@ window.submitIftySciencePracticeOrder = function() {
   const correct = state.orderIds.length === (question.correctOrder || []).length
     && state.orderIds.every((id, index) => String(id) === String(question.correctOrder[index]));
   if (correct) state.correct += 1; else state.wrong += 1;
+  recordIftySubjectStudyEvent('SCIENCE', question.targetItemId || question.imageItemId, correct, `science_${state.mode}`);
   renderIftySciencePracticePlayer();
 };
 
@@ -6820,6 +6836,7 @@ window.submitIftySciencePracticeExplanation = async function() {
     state.feedback = String(data.feedback || '').trim();
     state.modelAnswer = String(data.modelAnswer || question.referenceAnswer || '').trim();
     if (state.correctLast) state.correct += 1; else state.wrong += 1;
+    recordIftySubjectStudyEvent('SCIENCE', question.targetItemId, state.correctLast, 'science_explanation');
     renderIftySciencePracticePlayer();
   } catch (error) {
     console.error('理科PRACTICE採点エラー:', error);
@@ -10428,6 +10445,94 @@ function normalizeIftyStudyState(word) {
   return study;
 }
 
+function normalizeIftySubjectStudyState(item) {
+  if (!item || typeof item !== 'object') return null;
+  if (!item.study || typeof item.study !== 'object') item.study = {};
+  const study = item.study;
+  ['total','correct','wrong'].forEach(key => {
+    const value = Number(study[key]);
+    study[key] = Number.isFinite(value) && value >= 0 ? Math.trunc(value) : 0;
+  });
+  study.firstStudiedAt = Number.isFinite(Number(study.firstStudiedAt)) && Number(study.firstStudiedAt) > 0 ? Number(study.firstStudiedAt) : 0;
+  study.lastStudiedAt = Number.isFinite(Number(study.lastStudiedAt)) && Number(study.lastStudiedAt) > 0 ? Number(study.lastStudiedAt) : 0;
+  if (!study.daily || typeof study.daily !== 'object' || Array.isArray(study.daily)) study.daily = {};
+  Object.keys(study.daily).forEach(key => {
+    const row = study.daily[key];
+    if (!row || typeof row !== 'object') { delete study.daily[key]; return; }
+    ['attempts','correct','wrong'].forEach(name => {
+      const value = Number(row[name]);
+      row[name] = Number.isFinite(value) && value >= 0 ? Math.trunc(value) : 0;
+    });
+  });
+  const dayKeys = Object.keys(study.daily).sort().reverse();
+  dayKeys.slice(IFTY_STUDY_HISTORY_MAX_DAYS).forEach(key => delete study.daily[key]);
+  if (!study.sources || typeof study.sources !== 'object' || Array.isArray(study.sources)) study.sources = {};
+  return study;
+}
+
+function getIftySubjectStudyItem(subject, itemId) {
+  const key = normalizeIftySubject(subject);
+  if (key === 'SOCIAL STUDIES') return getIftySocialItemById(itemId)?.item || null;
+  if (key === 'SCIENCE') return getIftyScienceItemById(itemId)?.item || null;
+  if (key === 'ANCIENT') return getIftyAncientItemById(itemId)?.item || null;
+  return null;
+}
+
+function recordIftySubjectStudyEvent(subject, itemId, correct, source = 'practice') {
+  if (!itemId) return false;
+  const item = getIftySubjectStudyItem(subject, itemId);
+  if (!item) return false;
+  const study = normalizeIftySubjectStudyState(item);
+  const now = Date.now();
+  const dayKey = getIftyLocalDateKey(now);
+  if (!study.firstStudiedAt) study.firstStudiedAt = now;
+  study.lastStudiedAt = now;
+  study.total += 1;
+  if (correct) study.correct += 1; else study.wrong += 1;
+  if (!study.daily[dayKey]) study.daily[dayKey] = { attempts: 0, correct: 0, wrong: 0 };
+  study.daily[dayKey].attempts += 1;
+  if (correct) study.daily[dayKey].correct += 1; else study.daily[dayKey].wrong += 1;
+  const sourceKey = String(source || 'practice').slice(0, 40);
+  study.sources[sourceKey] = (Number(study.sources[sourceKey]) || 0) + 1;
+  savePracticeData();
+  return true;
+}
+
+function correctIftySubjectLastStudyOutcome(subject, itemId) {
+  const item = getIftySubjectStudyItem(subject, itemId);
+  if (!item) return false;
+  const study = normalizeIftySubjectStudyState(item);
+  if (!study || study.wrong <= 0) return false;
+  study.wrong -= 1;
+  study.correct += 1;
+  const row = study.daily[getIftyLocalDateKey()];
+  if (row && row.wrong > 0) { row.wrong -= 1; row.correct += 1; }
+  savePracticeData();
+  return true;
+}
+
+function isIftySubjectWeakItem(item) {
+  const study = normalizeIftySubjectStudyState(item);
+  if (!study || study.total < IFTY_WEAK_MIN_ATTEMPTS || study.wrong < IFTY_WEAK_MIN_WRONG) return false;
+  return (study.correct / study.total) < IFTY_WEAK_MAX_ACCURACY;
+}
+
+function getIftySubjectWeakEntries(subject) {
+  const key = normalizeIftySubject(subject);
+  let foldersToUse = [];
+  if (key === 'SOCIAL STUDIES') foldersToUse = getIftySocialModule().folders || [];
+  else if (key === 'SCIENCE') foldersToUse = getIftyScienceModule().folders || [];
+  else if (key === 'ANCIENT') foldersToUse = getIftyAncientModule().folders || [];
+  const entries = [];
+  foldersToUse.forEach(folder => (folder.items || []).forEach(item => {
+    if (!isIftySubjectWeakItem(item)) return;
+    const study = normalizeIftySubjectStudyState(item);
+    entries.push({ folder, item, study, accuracy: study.total ? study.correct / study.total : 0 });
+  }));
+  entries.sort((a,b) => a.accuracy - b.accuracy || b.study.wrong - a.study.wrong);
+  return entries;
+}
+
 function normalizeIftyReviewState(word) {
   if (!word || typeof word !== 'object') return null;
   if (!word.review || typeof word.review !== 'object') return null;
@@ -12243,6 +12348,7 @@ function normalizeIftyAncientItem(value) {
     memoryText: meanings.join('／') || text('memoryText'),
     mastery: value.mastery === 'fixed' ? 'fixed' : 'unfixed',
     review: value.review && typeof value.review === 'object' ? deepClone(value.review) : undefined,
+    study: value.study && typeof value.study === 'object' ? deepClone(value.study) : undefined,
     source: String(value.source || 'MANUAL').trim(),
     createdAt: Number(value.createdAt || 0) || Date.now(),
     updatedAt: Number(value.updatedAt || 0) || Date.now()
@@ -15651,6 +15757,7 @@ window.answerIftyAncientPracticeChoice = function(optionId) {
   if (correct) st.correct += 1;
   else st.wrong += 1;
   st.last = { userAnswer: q.options.find(option => String(option.id) === String(optionId))?.label || '', correct };
+  recordIftySubjectStudyEvent('ANCIENT', q.targetItemId, correct, `ancient_${st.mode}`);
   renderIftyAncientPracticeFeedback(correct, correct ? '正解です。' : '選択肢を見直してください。', q.modelAnswer, false);
 };
 
@@ -15680,6 +15787,7 @@ window.submitIftyAncientPracticeAnswer = async function() {
     if (correct) st.correct += 1;
     else st.wrong += 1;
     st.last = { userAnswer, correct, challenged: false };
+    recordIftySubjectStudyEvent('ANCIENT', q.targetItemId, correct, `ancient_${st.mode}`);
     renderIftyAncientPracticeFeedback(
       correct,
       correct
@@ -15725,6 +15833,7 @@ window.submitIftyAncientPracticeAnswer = async function() {
     if (correct) st.correct += 1;
     else st.wrong += 1;
     st.last = { userAnswer, correct };
+    recordIftySubjectStudyEvent('ANCIENT', q.targetItemId, correct, `ancient_${st.mode}`);
     renderIftyAncientPracticeFeedback(correct, data.feedback || '', data.modelAnswer || q.modelAnswer, false);
   } catch (error) {
     alert(String(error.message || error));
@@ -15786,6 +15895,7 @@ window.submitIftyAncientPracticeChallenge = async function() {
       st.wrong = Math.max(0, st.wrong - 1);
       st.correct += 1;
       st.last.correct = true;
+      correctIftySubjectLastStudyOutcome('ANCIENT', q.targetItemId);
     }
     renderIftyAncientPracticeFeedback(accepted, data.feedback || 'Challengeを再審査しました。', q.modelAnswer, false);
   } catch (error) {
@@ -16135,6 +16245,7 @@ window.submitIftySubjectTermWriteAnswer = function() {
   if (correct) st.correct += 1;
   else st.wrong += 1;
   st.last = { userAnswer, correct, challenged: false };
+  recordIftySubjectStudyEvent(st.subject, q.itemId, correct, 'term_write');
 
   renderIftySubjectTermWriteFeedback(correct, correct ? '登録された用語と一致しました。' : '登録された用語とは一致しませんでした。');
 };
@@ -16202,6 +16313,7 @@ window.submitIftySubjectTermWriteChallenge = async function() {
       st.wrong = Math.max(0, st.wrong - 1);
       st.correct += 1;
       st.last.correct = true;
+      correctIftySubjectLastStudyOutcome(st.subject, q.itemId);
     }
     renderIftySubjectTermWriteFeedback(accepted, data.feedback || 'Challengeを再審査しました。');
   } catch (error) {
