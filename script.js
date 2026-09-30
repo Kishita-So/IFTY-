@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP75 2026-09-30：KANBUN 送り仮名位置調整 + 句法例文表示 ★★★
+// ★★★ IFTY Q3 STEP76 2026-09-30：KANBUN 例文生成保証 + 例文単独追加 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -7789,7 +7789,7 @@ function renderIftyKanbunItemCard(folder, item) {
     ${item.kundoku ? `<div style="margin-top:8px;padding:9px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:8px;"><div style="font-size:.72em;font-weight:900;color:#0369a1;">書き下し文</div><div style="margin-top:4px;color:#0f172a;line-height:1.6;overflow-wrap:anywhere;">${escapeHtml(item.kundoku)}</div></div>` : ''}
     ${item.translation ? `<div style="margin-top:8px;padding:9px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;"><div style="font-size:.72em;font-weight:900;color:#166534;">現代語訳</div><div style="margin-top:4px;color:#14532d;line-height:1.6;overflow-wrap:anywhere;">${escapeHtml(item.translation)}</div></div>` : ''}
     ${grammarPoints.length ? `<div style="margin-top:8px;padding:9px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:8px;font-size:.82em;color:#581c87;"><strong>句法・文法：</strong>${grammarPoints.map(escapeHtml).join(' / ')}</div>` : ''}
-    ${examples.length ? `<div style="margin-top:8px;padding:9px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;"><div style="font-size:.72em;font-weight:900;color:#92400e;margin-bottom:6px;">例文</div>${examples.map((ex,i)=>`<div style="${i?'margin-top:8px;padding-top:8px;border-top:1px dashed #fcd34d;':''}"><div style="font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#0f172a;font-size:1.02em;line-height:1.55;overflow-wrap:anywhere;">${escapeHtml(ex.original||'')}</div>${ex.kundoku?`<div style="margin-top:3px;color:#075985;font-size:.84em;line-height:1.5;"><strong>書き下し：</strong>${escapeHtml(ex.kundoku)}</div>`:''}${ex.translation?`<div style="margin-top:2px;color:#166534;font-size:.84em;line-height:1.5;"><strong>訳：</strong>${escapeHtml(ex.translation)}</div>`:''}${ex.point?`<div style="margin-top:2px;color:#92400e;font-size:.78em;line-height:1.45;">${escapeHtml(ex.point)}</div>`:''}</div>`).join('')}</div>` : ''}
+    ${examples.length ? `<div style="margin-top:8px;padding:9px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;"><div style="font-size:.72em;font-weight:900;color:#92400e;margin-bottom:6px;">例文</div>${examples.map((ex,i)=>`<div style="${i?'margin-top:8px;padding-top:8px;border-top:1px dashed #fcd34d;':''}"><div style="font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#0f172a;font-size:1.02em;line-height:1.55;overflow-wrap:anywhere;">${escapeHtml(ex.original||'')}</div>${ex.kundoku?`<div style="margin-top:3px;color:#075985;font-size:.84em;line-height:1.5;"><strong>書き下し：</strong>${escapeHtml(ex.kundoku)}</div>`:''}${ex.translation?`<div style="margin-top:2px;color:#166534;font-size:.84em;line-height:1.5;"><strong>訳：</strong>${escapeHtml(ex.translation)}</div>`:''}${ex.point?`<div style="margin-top:2px;color:#92400e;font-size:.78em;line-height:1.45;">${escapeHtml(ex.point)}</div>`:''}</div>`).join('')}</div>` : `<div style="margin-top:8px;padding:9px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;"><div><div style="font-size:.72em;font-weight:900;color:#92400e;">例文</div><div style="margin-top:3px;font-size:.78em;color:#a16207;">例文がまだありません。</div></div><button id="iftyKanbunExamples_${item.id}" type="button" onclick="generateIftyKanbunExamples('${folder.id}','${item.id}')" style="border:none;background:#d97706;color:white;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">例文を生成</button></div>`}
     ${keyPoints.length ? `<div style="margin-top:8px;font-size:.8em;color:#334155;line-height:1.5;">${keyPoints.map(point => `・${escapeHtml(point)}`).join('<br>')}</div>` : ''}
   </article>`;
 }
@@ -8395,6 +8395,33 @@ window.generateIftyKanbunItem = async function(folderId, options = {}) {
     recordUndoState('漢文追加'); latest.items.push(item); delete iftyKanbunDraftReturnMarks[String(folderId)]; savePracticeData();
   } catch(error) { setStatus(String(error.message||error)); }
   finally { iftyKanbunGenerationPending[folderId]=Math.max(0,Number(iftyKanbunGenerationPending[folderId]||0)-1); refreshIftyKanbunFolderDynamic(folderId); setStatus(''); }
+};
+
+
+window.generateIftyKanbunExamples = async function(folderId,itemId) {
+  const ref=getIftyKanbunItemById(itemId); if(!ref?.item||String(ref.folder.id)!==String(folderId))return;
+  const item=ref.item; if(!ensureIftyOnline('漢文の例文生成'))return;
+  const button=document.getElementById(`iftyKanbunExamples_${item.id}`);
+  const oldText=button?.textContent||'例文を生成'; if(button){button.disabled=true;button.textContent='生成中…';button.style.opacity='.65';}
+  try {
+    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      type:'kanbun_examples_generate',
+      originalText:item.originalText,
+      kundoku:item.kundoku,
+      translation:item.translation,
+      phrases:item.phrases,
+      grammarPoints:item.grammarPoints,
+      userReturnMarks:normalizeIftyKanbunReturnMarks(item.returnMarks,item.originalText),
+      userOkurigana:normalizeIftyKanbunOkurigana(item.okurigana,item.originalText),
+      desiredCount:/[ABCXY〜～ー]/u.test(item.originalText)?2:2,
+      order:getIftySubjectOrder('KANBUN')
+    })});
+    const data=await response.json().catch(()=>({})); if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);
+    const examples=Array.isArray(data.examples)?data.examples.map(ex=>({original:String(ex?.original||'').trim(),kundoku:String(ex?.kundoku||'').trim(),translation:String(ex?.translation||'').trim(),point:String(ex?.point||'').trim()})).filter(ex=>ex.original||ex.kundoku||ex.translation||ex.point).slice(0,4):[];
+    if(!examples.length)throw new Error('例文を生成できませんでした。');
+    recordUndoState('漢文例文追加'); item.examples=examples; item.updatedAt=Date.now(); savePracticeData(); refreshIftyKanbunFolderDynamic(folderId);
+  } catch(error){alert(String(error.message||error));}
+  finally{const current=document.getElementById(`iftyKanbunExamples_${item.id}`);if(current){current.disabled=false;current.textContent=oldText;current.style.opacity='1';}}
 };
 
 window.regenerateIftyKanbunItem = async function(folderId,itemId) {
