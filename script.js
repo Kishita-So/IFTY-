@@ -7488,7 +7488,7 @@ window.startIftyAncientFlashcards = function(folderId, direction = 'front') {
 
 
 // ==========================================
-// Q3 STEP68：KANBUN / 漢文
+// Q3 STEP74：KANBUN / 漢文
 // ==========================================
 function getIftyKanbunTokens(text) {
   return Array.from(String(text || '')).filter(ch => !/\s/.test(ch));
@@ -7954,6 +7954,7 @@ window.openIftyKanbunInputHandwriting = function(targetId, folderId = '') {
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12160;display:flex;align-items:center;justify-content:center;padding:10px;box-sizing:border-box;';
   modal.innerHTML = `<div style="width:min(720px,100%);max-height:94vh;overflow:auto;background:white;border-radius:14px;padding:14px;box-sizing:border-box;">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>✍️ 手書き入力</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">漢字だけでなく、かな・英字・数字・記号・短い句法も認識します。A / B / 〜 / ー は下のボタンなら認識なしで直接入力できます。</div></div><button type="button" onclick="document.getElementById('iftyKanbunInputHandwritingModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
+    <div style="margin-top:11px;padding:9px;border:1px solid #a7f3d0;background:#ecfdf5;border-radius:9px;"><div style="font-size:.72em;font-weight:900;color:#065f46;margin-bottom:6px;">端末の手書き入力（iPadはここを推奨）</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"><input id="iftyKanbunDeviceHandwritingInput" lang="ja" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Apple Pencilでこの欄へ直接書く／キーボードでも可" style="flex:1;min-width:220px;padding:10px 11px;border:1px solid #6ee7b7;border-radius:8px;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.05em;"><button type="button" onclick="insertIftyKanbunDeviceHandwriting()" style="border:none;background:#059669;color:white;border-radius:8px;padding:9px 12px;font-weight:900;">挿入</button></div><div style="margin-top:4px;font-size:.68em;color:#047857;">ここは端末側の文字入力を使うため、AI画像認識より安定する場合があります。下のキャンバスはAI候補用です。</div></div>
     <canvas id="iftyKanbunInputHandwritingCanvas" style="display:block;width:100%;height:320px;margin-top:11px;border:1px solid #94a3b8;border-radius:10px;background:white;touch-action:none;"></canvas>
     <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;padding:8px 9px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:9px;"><span style="font-size:.72em;font-weight:900;color:#075985;">句法クイック入力</span>${['A','B','〜','ー'].map(ch => `<button type="button" onclick="insertIftyKanbunHandwritingQuick('${ch}')" style="min-width:42px;border:1px solid #7dd3fc;background:white;color:#0f172a;border-radius:7px;padding:7px 10px;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.05em;font-weight:900;">${ch}</button>`).join('')}<span style="margin-left:auto;font-size:.7em;color:#64748b;">認識：</span><select id="iftyKanbunHandwritingRecognitionMode" onchange="setIftyKanbunHandwritingRecognitionMode(this.value)" style="border:1px solid #cbd5e1;background:white;border-radius:7px;padding:6px 8px;font-weight:800;color:#334155;"><option value="auto">自動</option><option value="single">1文字</option><option value="sequence">短い文字列</option></select></div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;"><button type="button" onclick="undoIftyKanbunInputHandwritingStroke()" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;padding:9px 11px;font-weight:900;">1画戻す</button><button type="button" onclick="clearIftyKanbunInputHandwriting()" style="border:none;background:#fee2e2;color:#991b1b;border-radius:8px;padding:9px 11px;font-weight:900;">全消去</button><button id="iftyKanbunInputHandwritingRecognize" type="button" onclick="recognizeIftyKanbunInputHandwriting()" style="margin-left:auto;border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 12px;font-weight:900;">候補を出す</button></div>
@@ -7976,6 +7977,17 @@ window.insertIftyKanbunHandwritingQuick = function(value) {
   const text = String(value || '');
   if (!st || !text) return;
   insertIftyKanbunTextAtCursor(st.targetId, text);
+  const status = document.getElementById('iftyKanbunInputHandwritingStatus');
+  if (status) status.textContent = `「${text}」を挿入しました。`;
+};
+
+window.insertIftyKanbunDeviceHandwriting = function() {
+  const st = iftyKanbunInputHandwritingState;
+  const input = document.getElementById('iftyKanbunDeviceHandwritingInput');
+  const text = String(input?.value || '').trim();
+  if (!st || !text) { input?.focus(); return; }
+  insertIftyKanbunTextAtCursor(st.targetId, text);
+  if (input) input.value = '';
   const status = document.getElementById('iftyKanbunInputHandwritingStatus');
   if (status) status.textContent = `「${text}」を挿入しました。`;
 };
@@ -8362,7 +8374,7 @@ window.generateIftyKanbunItem = async function(folderId, options = {}) {
   const setStatus = message => { const el=document.getElementById(`iftyKanbunPending_${folderId}`); if(el){el.textContent=message || (iftyKanbunGenerationPending[folderId] ? `ALLIA生成中… ${iftyKanbunGenerationPending[folderId]}件` : ''); el.style.color=message?'#dc2626':'#7c3aed';} };
   setStatus('');
   try {
-    const response = await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_generate',originalText,order:getIftySubjectOrder('KANBUN')})});
+    const response = await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_generate',originalText,userReturnMarks,userOkurigana,order:getIftySubjectOrder('KANBUN')})});
     const data = await response.json().catch(()=>({}));
     if(!response.ok||data.error) throw new Error(data.error||`HTTP ${response.status}`);
     const latest = getIftyKanbunFolder(folderId); if(!latest)return;
@@ -8380,7 +8392,7 @@ window.regenerateIftyKanbunItem = async function(folderId,itemId) {
   const item=ref.item; if(!confirmIftyCarefulRegeneration(item.title||item.originalText))return; if(!ensureIftyOnline('漢文の再生成'))return;
   setIftyRegenerateButtonState(`iftyRegenKanbun_${item.id}`,true);
   try {
-    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_generate',originalText:item.originalText,order:getIftySubjectOrder('KANBUN'),carefulRegenerate:true,previousData:{kundoku:item.kundoku,translation:item.translation,returnMarks:item.returnMarks,grammarPoints:item.grammarPoints,keyPoints:item.keyPoints}})});
+    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_generate',originalText:item.originalText,userReturnMarks:normalizeIftyKanbunReturnMarks(item.returnMarks,item.originalText),userOkurigana:normalizeIftyKanbunOkurigana(item.okurigana,item.originalText),order:getIftySubjectOrder('KANBUN'),carefulRegenerate:true,previousData:{kundoku:item.kundoku,translation:item.translation,returnMarks:item.returnMarks,okurigana:item.okurigana,grammarPoints:item.grammarPoints,keyPoints:item.keyPoints}})});
     const data=await response.json().catch(()=>({})); if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);
     recordUndoState('漢文再生成');
     const next=normalizeIftyKanbunItem({...item,...data,originalText:item.originalText,id:item.id,source:'ALLIA',updatedAt:Date.now(),regeneratedAt:Date.now()});
