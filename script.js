@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP67 2026-09-30：KANBUN 漢文・手書き・返点PRACTICE ★★★
+// ★★★ IFTY Q3 STEP68 2026-09-30：KANBUN 縦書き・入力用手書き認識・返点入力 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -196,7 +196,7 @@ let iftyAncientPracticeSelectionInitialized = false;
 let iftyAncientPracticeQuestionCount = 5;
 let iftyAncientPracticeState = null;
 
-// Q3 STEP67：KANBUN / 漢文
+// Q3 STEP68：KANBUN / 漢文
 // 原文・書き下し文・現代語訳・返点をフォルダ単位で保存する。
 // PRACTICEでは文字入力に加え、スマホ/タブレットの指・ペンで使える手書きキャンバスを利用できる。
 let iftyKanbunTextDrafts = {};
@@ -208,6 +208,9 @@ let iftyKanbunPracticeQuestionCount = 5;
 let iftyKanbunPracticeState = null;
 let iftyKanbunReturnMarkEditorState = null;
 let iftyKanbunHandwritingState = { strokes: [], currentStroke: null };
+let iftyKanbunInputHandwritingState = { targetId: '', folderId: '', strokes: [], currentStroke: null, recognizing: false };
+let iftyKanbunDraftReturnMarks = {};
+let iftyKanbunDraftReturnMarkEditorState = null;
 let iftyKanbunHelpHistory = [];
 
 let iftySubjectTermWriteState = null;
@@ -7480,7 +7483,7 @@ window.startIftyAncientFlashcards = function(folderId, direction = 'front') {
 
 
 // ==========================================
-// Q3 STEP67：KANBUN / 漢文
+// Q3 STEP68：KANBUN / 漢文
 // ==========================================
 function getIftyKanbunTokens(text) {
   return Array.from(String(text || '')).filter(ch => !/\s/.test(ch));
@@ -7549,7 +7552,7 @@ function normalizeIftyKanbunItem(value) {
     ? value.grammarPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12)
     : phrases.map(row => [row.term, row.meaning].filter(Boolean).join('：')).filter(Boolean).slice(0, 12);
   const keyPoints = Array.isArray(value.keyPoints) ? value.keyPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12) : [];
-  const returnMarks = Array.isArray(value.returnMarks) && value.returnMarks.length
+  const returnMarks = Array.isArray(value.returnMarks)
     ? normalizeIftyKanbunReturnMarks(value.returnMarks, originalText)
     : convertIftyKanbunAnnotationsToReturnMarks(value.annotations, originalText);
   return {
@@ -7609,15 +7612,27 @@ function renderIftyKanbunMarkedText(item, options = {}) {
   const marks = Array.isArray(options.marks) ? options.marks : getIftyKanbunMarkArray(item);
   const tokens = getIftyKanbunTokens(item?.originalText || '');
   if (!tokens.length) return '';
-  return `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:flex-start;line-height:1.15;">${tokens.map((ch, index) => {
-    const mark = String(marks[index] || '');
-    const selected = interactive && index === selectedIndex;
-    const click = interactive ? `onclick="${selectFunction}(${index})"` : '';
-    return `<button type="button" ${click} ${interactive ? '' : 'tabindex="-1"'} style="appearance:none;border:${selected ? '2px solid #7c3aed' : '1px solid #cbd5e1'};background:${selected ? '#f5f3ff' : 'white'};border-radius:7px;padding:5px 7px;min-width:34px;min-height:54px;display:inline-flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;cursor:${interactive ? 'pointer' : 'default'};box-sizing:border-box;">
-      <span style="font-size:1.2em;font-family:serif;color:#0f172a;">${escapeHtml(ch)}</span>
-      <span style="min-height:1.05em;font-size:.72em;font-weight:900;color:#b91c1c;">${escapeHtml(mark)}</span>
-    </button>`;
-  }).join('')}</div>`;
+
+  // 漢文は縦方向に読み、列は右から左へ進む。スマホでは横スクロールで列を追えるようにする。
+  const rowsPerColumn = Math.max(6, Math.min(14, Number(options.rowsPerColumn) || 10));
+  const columns = [];
+  for (let start = 0; start < tokens.length; start += rowsPerColumn) {
+    columns.push(tokens.slice(start, start + rowsPerColumn).map((ch, offset) => ({ ch, index: start + offset })));
+  }
+
+  return `<div style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;padding:4px 2px 8px;">
+    <div style="display:flex;flex-direction:row-reverse;justify-content:flex-start;align-items:flex-start;gap:8px;width:max-content;min-width:100%;">
+      ${columns.map(column => `<div style="display:flex;flex-direction:column;gap:4px;flex:none;">${column.map(({ ch, index }) => {
+        const mark = String(marks[index] || '');
+        const selected = interactive && index === selectedIndex;
+        const click = interactive ? `onclick="${selectFunction}(${index})"` : '';
+        return `<button type="button" ${click} ${interactive ? '' : 'tabindex="-1"'} style="appearance:none;border:${selected ? '2px solid #7c3aed' : '1px solid #cbd5e1'};background:${selected ? '#f5f3ff' : 'white'};border-radius:7px;padding:3px 4px;width:48px;min-height:38px;display:grid;grid-template-columns:14px 1fr;align-items:center;justify-items:center;gap:2px;cursor:${interactive ? 'pointer' : 'default'};box-sizing:border-box;">
+          <span style="min-width:12px;font-size:.68em;line-height:1;font-weight:900;color:#b91c1c;word-break:break-all;">${escapeHtml(mark)}</span>
+          <span style="font-size:1.18em;line-height:1.15;font-family:serif;color:#0f172a;">${escapeHtml(ch)}</span>
+        </button>`;
+      }).join('')}</div>`).join('')}
+    </div>
+  </div>`;
 }
 
 function renderIftyKanbunItemCard(folder, item) {
@@ -7693,6 +7708,231 @@ window.applyIftyKanbunFolderSearch = function(folderId, value = null) {
   applyIftyKanbunSearchFilters();
 };
 
+
+function getIftyKanbunInputReturnMarkPalette() {
+  return ['レ','一','二','三','四','上','中','下','甲','乙','丙','丁','天','地','人','一レ','上レ','甲レ'];
+}
+
+function syncIftyKanbunDraftText(folderId, value) {
+  const id = String(folderId || '');
+  const text = String(value || '');
+  iftyKanbunTextDrafts[id] = text;
+  const saved = iftyKanbunDraftReturnMarks[id];
+  if (saved && String(saved.text || '') !== text) delete iftyKanbunDraftReturnMarks[id];
+  window.clearIftyAcademicTermSuggestion('KANBUN', id);
+  const badge = document.getElementById(`iftyKanbunDraftMarkCount_${id}`);
+  if (badge) badge.textContent = '';
+}
+
+function insertIftyKanbunTextAtCursor(targetId, text) {
+  const input = document.getElementById(String(targetId || ''));
+  const insert = String(text || '');
+  if (!input || !insert) return;
+  const start = Number.isInteger(input.selectionStart) ? input.selectionStart : String(input.value || '').length;
+  const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+  const before = String(input.value || '').slice(0, start);
+  const after = String(input.value || '').slice(end);
+  input.value = before + insert + after;
+  const caret = start + insert.length;
+  try { input.setSelectionRange(caret, caret); } catch {}
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.focus();
+}
+
+window.openIftyKanbunReturnMarkInputPalette = function(targetId) {
+  const target = document.getElementById(String(targetId || ''));
+  if (!target) return;
+  document.getElementById('iftyKanbunInputMarkPalette')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'iftyKanbunInputMarkPalette';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.58);z-index:12158;display:flex;align-items:flex-end;justify-content:center;padding:10px;box-sizing:border-box;';
+  const palette = getIftyKanbunInputReturnMarkPalette();
+  modal.innerHTML = `<div style="width:min(620px,100%);background:white;border-radius:14px 14px 8px 8px;padding:14px;box-sizing:border-box;box-shadow:0 -8px 30px rgba(15,23,42,.18);">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>返点を入力</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">選んだ返点をカーソル位置へ挿入します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunInputMarkPalette')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;">${palette.map(mark => `<button type="button" onclick="insertIftyKanbunTextAtCursor('${String(targetId).replace(/'/g,"\\'")}','${mark}');document.getElementById('iftyKanbunInputMarkPalette')?.remove()" style="border:1px solid #fecaca;background:#fff;color:#991b1b;border-radius:8px;min-width:42px;padding:9px 10px;font-size:1em;font-weight:900;cursor:pointer;">${mark}</button>`).join('')}</div>
+  </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+};
+
+function drawIftyKanbunInputHandwritingCanvas() {
+  const canvas = document.getElementById('iftyKanbunInputHandwritingCanvas');
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const ratio = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  const width = Math.max(280, Math.round(rect.width || 560));
+  const height = Math.max(220, Math.round(rect.height || 300));
+  canvas.width = Math.round(width * ratio);
+  canvas.height = Math.round(height * ratio);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 3;
+  (iftyKanbunInputHandwritingState.strokes || []).forEach(stroke => {
+    if (!stroke.length) return;
+    ctx.beginPath();
+    ctx.moveTo(stroke[0].x, stroke[0].y);
+    stroke.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+    ctx.stroke();
+  });
+}
+
+function bindIftyKanbunInputHandwritingCanvas() {
+  const canvas = document.getElementById('iftyKanbunInputHandwritingCanvas');
+  if (!canvas || canvas.dataset.bound === '1') return;
+  canvas.dataset.bound = '1';
+  canvas.style.touchAction = 'none';
+  const point = event => {
+    const rect = canvas.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  };
+  canvas.addEventListener('pointerdown', event => {
+    event.preventDefault();
+    try { canvas.setPointerCapture(event.pointerId); } catch {}
+    const stroke = [point(event)];
+    iftyKanbunInputHandwritingState.currentStroke = stroke;
+    iftyKanbunInputHandwritingState.strokes.push(stroke);
+    drawIftyKanbunInputHandwritingCanvas();
+  });
+  canvas.addEventListener('pointermove', event => {
+    const stroke = iftyKanbunInputHandwritingState.currentStroke;
+    if (!stroke) return;
+    event.preventDefault();
+    stroke.push(point(event));
+    drawIftyKanbunInputHandwritingCanvas();
+  });
+  const end = event => {
+    if (!iftyKanbunInputHandwritingState.currentStroke) return;
+    event.preventDefault();
+    iftyKanbunInputHandwritingState.currentStroke = null;
+  };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('pointerleave', event => { if (event.buttons === 0) iftyKanbunInputHandwritingState.currentStroke = null; });
+}
+
+window.openIftyKanbunInputHandwriting = function(targetId, folderId = '') {
+  const target = document.getElementById(String(targetId || ''));
+  if (!target) return;
+  document.getElementById('iftyKanbunInputHandwritingModal')?.remove();
+  iftyKanbunInputHandwritingState = { targetId: String(targetId), folderId: String(folderId || ''), strokes: [], currentStroke: null, recognizing: false };
+  const modal = document.createElement('div');
+  modal.id = 'iftyKanbunInputHandwritingModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12160;display:flex;align-items:center;justify-content:center;padding:10px;box-sizing:border-box;';
+  modal.innerHTML = `<div style="width:min(720px,100%);max-height:94vh;overflow:auto;background:white;border-radius:14px;padding:14px;box-sizing:border-box;">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>✍️ 手書き入力</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">Apple Pencil・指で書き、ALLIAで文字に変換して入力欄へ挿入します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunInputHandwritingModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
+    <canvas id="iftyKanbunInputHandwritingCanvas" style="display:block;width:100%;height:300px;margin-top:11px;border:1px solid #94a3b8;border-radius:10px;background:white;touch-action:none;"></canvas>
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;"><button type="button" onclick="undoIftyKanbunInputHandwritingStroke()" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;padding:9px 11px;font-weight:900;">1画戻す</button><button type="button" onclick="clearIftyKanbunInputHandwriting()" style="border:none;background:#fee2e2;color:#991b1b;border-radius:8px;padding:9px 11px;font-weight:900;">全消去</button><button id="iftyKanbunInputHandwritingRecognize" type="button" onclick="recognizeIftyKanbunInputHandwriting()" style="margin-left:auto;border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 12px;font-weight:900;">認識して挿入</button></div>
+    <div id="iftyKanbunInputHandwritingStatus" style="min-height:1.2em;margin-top:7px;font-size:.76em;color:#64748b;"></div>
+  </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  requestAnimationFrame(() => { drawIftyKanbunInputHandwritingCanvas(); bindIftyKanbunInputHandwritingCanvas(); });
+};
+
+window.undoIftyKanbunInputHandwritingStroke = function() {
+  iftyKanbunInputHandwritingState.strokes.pop();
+  iftyKanbunInputHandwritingState.currentStroke = null;
+  drawIftyKanbunInputHandwritingCanvas();
+};
+
+window.clearIftyKanbunInputHandwriting = function() {
+  iftyKanbunInputHandwritingState.strokes = [];
+  iftyKanbunInputHandwritingState.currentStroke = null;
+  drawIftyKanbunInputHandwritingCanvas();
+};
+
+window.recognizeIftyKanbunInputHandwriting = async function() {
+  const st = iftyKanbunInputHandwritingState;
+  if (!st || st.recognizing || !(st.strokes || []).length) return;
+  if (!ensureIftyOnline('漢文の手書き認識')) return;
+  const canvas = document.getElementById('iftyKanbunInputHandwritingCanvas');
+  const status = document.getElementById('iftyKanbunInputHandwritingStatus');
+  const button = document.getElementById('iftyKanbunInputHandwritingRecognize');
+  if (!canvas) return;
+  st.recognizing = true;
+  if (status) status.textContent = '手書きを認識しています…';
+  if (button) { button.disabled = true; button.textContent = '認識中…'; }
+  try {
+    const image = canvas.toDataURL('image/png');
+    const response = await fetch(WORKER_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ type:'kanbun_handwriting_recognize', image, order:getIftySubjectOrder('KANBUN') }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+    const text = String(data.text || '').trim();
+    if (!text) throw new Error('文字を認識できませんでした。大きめにはっきり書いてください。');
+    insertIftyKanbunTextAtCursor(st.targetId, text);
+    document.getElementById('iftyKanbunInputHandwritingModal')?.remove();
+  } catch (error) {
+    if (status) status.textContent = String(error.message || error);
+  } finally {
+    st.recognizing = false;
+    if (button) { button.disabled = false; button.textContent = '認識して挿入'; }
+  }
+};
+
+window.openIftyKanbunDraftReturnMarkEditor = function(folderId) {
+  const id = String(folderId || '');
+  const input = document.getElementById(`iftyKanbunText_${id}`);
+  const text = String(input?.value || '').trim();
+  if (!text) { input?.focus(); return; }
+  const existing = iftyKanbunDraftReturnMarks[id];
+  const marks = existing && String(existing.text || '') === text
+    ? Array.from(existing.marks || [])
+    : Array(getIftyKanbunTokens(text).length).fill('');
+  document.getElementById('iftyKanbunDraftReturnMarkModal')?.remove();
+  iftyKanbunDraftReturnMarkEditorState = { folderId:id, text, marks, selectedIndex:0 };
+  const modal = document.createElement('div');
+  modal.id = 'iftyKanbunDraftReturnMarkModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12155;display:flex;align-items:center;justify-content:center;padding:10px;box-sizing:border-box;';
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  renderIftyKanbunDraftReturnMarkEditor();
+};
+
+function renderIftyKanbunDraftReturnMarkEditor() {
+  const st = iftyKanbunDraftReturnMarkEditorState;
+  const modal = document.getElementById('iftyKanbunDraftReturnMarkModal');
+  if (!st || !modal) return;
+  const item = { originalText: st.text, returnMarks: [] };
+  const palette = getIftyKanbunInputReturnMarkPalette();
+  modal.innerHTML = `<div style="width:min(760px,100%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:15px;box-sizing:border-box;">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>原文に返点を付ける</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">字をタップ → 返点を選択。保存すると、この原文を生成するときに使用します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunDraftReturnMarkModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
+    <div style="margin-top:12px;">${renderIftyKanbunMarkedText(item,{interactive:true,selectedIndex:st.selectedIndex,marks:st.marks,selectFunction:'selectIftyKanbunDraftReturnMarkIndex'})}</div>
+    <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark => `<button type="button" onclick="setIftyKanbunDraftReturnMark('${mark}')" style="border:1px solid #fecaca;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;">${mark}</button>`).join('')}<button type="button" onclick="setIftyKanbunDraftReturnMark('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;">消す</button></div>
+    <button type="button" onclick="saveIftyKanbunDraftReturnMarks()" style="width:100%;margin-top:13px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:10px;font-weight:900;">返点を保存</button>
+  </div>`;
+}
+
+window.selectIftyKanbunDraftReturnMarkIndex = function(index) {
+  if (!iftyKanbunDraftReturnMarkEditorState) return;
+  iftyKanbunDraftReturnMarkEditorState.selectedIndex = Number(index);
+  renderIftyKanbunDraftReturnMarkEditor();
+};
+
+window.setIftyKanbunDraftReturnMark = function(mark) {
+  const st = iftyKanbunDraftReturnMarkEditorState;
+  if (!st || st.selectedIndex < 0 || st.selectedIndex >= st.marks.length) return;
+  st.marks[st.selectedIndex] = normalizeIftyKanbunMark(mark);
+  if (st.selectedIndex < st.marks.length - 1) st.selectedIndex += 1;
+  renderIftyKanbunDraftReturnMarkEditor();
+};
+
+window.saveIftyKanbunDraftReturnMarks = function() {
+  const st = iftyKanbunDraftReturnMarkEditorState;
+  if (!st) return;
+  iftyKanbunDraftReturnMarks[st.folderId] = { text:st.text, marks:Array.from(st.marks || []) };
+  const count = st.marks.filter(Boolean).length;
+  const badge = document.getElementById(`iftyKanbunDraftMarkCount_${st.folderId}`);
+  if (badge) badge.textContent = count ? `返点 ${count}個設定済み` : '';
+  document.getElementById('iftyKanbunDraftReturnMarkModal')?.remove();
+  iftyKanbunDraftReturnMarkEditorState = null;
+};
+
 function renderIftyKanbunFolder(folder, folderIndex) {
   const pending = Number(iftyKanbunGenerationPending[folder.id] || 0);
   const allSelected = (folder.items || []).length > 0 && (folder.items || []).every(item => iftyKanbunSelectedItemIds.has(String(item.id)));
@@ -7712,9 +7952,14 @@ function renderIftyKanbunFolder(folder, folderIndex) {
       </div>
     </div>
     ${folder.collapsed ? '' : `<div style="margin-top:10px;display:grid;gap:8px;">
-      <div style="display:flex;gap:7px;align-items:stretch;flex-wrap:wrap;">
-        <textarea id="iftyKanbunText_${folder.id}" rows="2" placeholder="漢文原文を入力（原文はそのまま保持します）" oninput="iftyKanbunTextDrafts['${folder.id}']=this.value;clearIftyAcademicTermSuggestion('KANBUN','${folder.id}')" style="flex:1;min-width:220px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;resize:vertical;">${escapeHtml(iftyKanbunTextDrafts[folder.id] || '')}</textarea>
-        <button type="button" onclick="generateIftyKanbunItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 13px;font-weight:900;cursor:pointer;min-height:44px;">ALLIA生成</button>
+      <div style="display:grid;gap:7px;">
+        <textarea id="iftyKanbunText_${folder.id}" rows="3" placeholder="漢文原文・句法を入力" oninput="syncIftyKanbunDraftText('${folder.id}',this.value)" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;resize:vertical;font-family:serif;">${escapeHtml(iftyKanbunTextDrafts[folder.id] || '')}</textarea>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <button type="button" onclick="openIftyKanbunInputHandwriting('iftyKanbunText_${folder.id}','${folder.id}')" style="border:none;background:#0f766e;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">✍️ 手書き</button>
+          <button type="button" onclick="openIftyKanbunDraftReturnMarkEditor('${folder.id}')" style="border:none;background:#b91c1c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">返点を付ける</button>
+          <span id="iftyKanbunDraftMarkCount_${folder.id}" style="font-size:.74em;color:#991b1b;font-weight:900;">${(() => { const d=iftyKanbunDraftReturnMarks[String(folder.id)]; return d && String(d.text||'')===String(iftyKanbunTextDrafts[folder.id]||'').trim() && Array.isArray(d.marks) && d.marks.some(Boolean) ? `返点 ${d.marks.filter(Boolean).length}個設定済み` : ''; })()}</span>
+          <button type="button" onclick="generateIftyKanbunItem('${folder.id}')" style="margin-left:auto;border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 13px;font-weight:900;cursor:pointer;min-height:42px;">ALLIA生成</button>
+        </div>
       </div>
       <div id="iftyKanbunTermSuggestion_${folder.id}">${renderIftyAcademicTermSuggestion('KANBUN', folder.id)}</div>
       <div id="iftyKanbunPending_${folder.id}" style="min-height:1.2em;color:#7c3aed;font-size:.76em;font-weight:800;">${pending ? `ALLIA生成中… ${pending}件` : ''}</div>
@@ -7747,7 +7992,7 @@ window.renderIftyKanbunPage = function(options = {}) {
       <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
     </div>
     ${renderIftySubjectHeaderActions('KANBUN')}
-    <div style="margin-top:8px;color:#64748b;font-size:.8em;line-height:1.5;">原文を入力するとALLIAが書き下し文・現代語訳・返点・句法を作成します。通常は入力した原文をそのまま使い、明確な誤入力候補がある場合だけ「もしかして」で確認します。返点はカードから手動編集できます。</div>
+    <div style="margin-top:8px;color:#64748b;font-size:.8em;line-height:1.5;">原文や句法はキーボード入力に加えて、手書き認識で漢字を入力できます。原文は生成前に「返点を付ける」からレ点・一二点・上下点などをボタンで設定できます。表示は漢文に合わせて縦方向・右から左の列順です。明確な誤入力候補がある場合だけ「もしかして」で確認します。</div>
 
     <div style="margin-top:14px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
       <input id="iftyKanbunNewFolderName" placeholder="新しいフォルダ名" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;" onkeydown="if(event.key==='Enter'){event.preventDefault();createIftyKanbunFolder();}">
@@ -7790,7 +8035,7 @@ window.deleteIftyKanbunFolder = function(folderId) {
   const folder = module.folders[index]; if (!confirm(`フォルダ「${folder.name}」を削除しますか？\n中の漢文 ${folder.items.length}題も削除されます。`)) return;
   recordUndoState('漢文フォルダ削除');
   (folder.items || []).forEach(item => iftyKanbunSelectedItemIds.delete(String(item.id)));
-  module.folders.splice(index, 1); delete iftyKanbunTextDrafts[folderId]; delete iftyKanbunGenerationPending[folderId]; delete iftyKanbunFolderSearchQueries[folderId];
+  module.folders.splice(index, 1); delete iftyKanbunTextDrafts[folderId]; delete iftyKanbunGenerationPending[folderId]; delete iftyKanbunFolderSearchQueries[folderId]; delete iftyKanbunDraftReturnMarks[String(folderId)];
   savePracticeData(); renderIftyKanbunPage();
 };
 
@@ -7815,6 +8060,11 @@ window.generateIftyKanbunItem = async function(folderId, options = {}) {
   }
   window.clearIftyAcademicTermSuggestion('KANBUN', folderId);
 
+  const draftMarkState = iftyKanbunDraftReturnMarks[String(folderId)];
+  const userReturnMarks = draftMarkState && String(draftMarkState.text || '').trim() === originalText
+    ? Array.from(draftMarkState.marks || []).map((mark,index) => normalizeIftyKanbunMark(mark) ? ({ index, mark: normalizeIftyKanbunMark(mark) }) : null).filter(Boolean)
+    : [];
+
   if (String(input.value || '').trim() === originalText) input.value = '';
   if (String(iftyKanbunTextDrafts[folderId] || '').trim() === originalText) iftyKanbunTextDrafts[folderId] = '';
   iftyKanbunGenerationPending[folderId] = Number(iftyKanbunGenerationPending[folderId] || 0) + 1;
@@ -7827,7 +8077,8 @@ window.generateIftyKanbunItem = async function(folderId, options = {}) {
     const latest = getIftyKanbunFolder(folderId); if(!latest)return;
     const item = normalizeIftyKanbunItem({...data,id:makeId('kanbunitem'),originalText,title:data.title||originalText.slice(0,36),source:'ALLIA',createdAt:Date.now(),updatedAt:Date.now()});
     if(!item) throw new Error('漢文データの生成に失敗しました。');
-    recordUndoState('漢文追加'); latest.items.push(item); savePracticeData();
+    if (userReturnMarks.length) item.returnMarks = normalizeIftyKanbunReturnMarks(userReturnMarks, originalText);
+    recordUndoState('漢文追加'); latest.items.push(item); delete iftyKanbunDraftReturnMarks[String(folderId)]; savePracticeData();
   } catch(error) { setStatus(String(error.message||error)); }
   finally { iftyKanbunGenerationPending[folderId]=Math.max(0,Number(iftyKanbunGenerationPending[folderId]||0)-1); refreshIftyKanbunFolderDynamic(folderId); setStatus(''); }
 };
@@ -7853,8 +8104,12 @@ window.openIftyKanbunItemEditor = function(folderId,itemId){
   const ref=getIftyKanbunItemById(itemId);if(!ref?.item||String(ref.folder.id)!==String(folderId))return;const item=ref.item;
   document.getElementById('iftyKanbunEditorModal')?.remove();
   const modal=document.createElement('div');modal.id='iftyKanbunEditorModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12140;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';
-  const field=(id,label,value,rows=1)=>rows>1?`<div><label style="font-size:.78em;font-weight:900;color:#334155;">${label}</label><textarea id="${id}" rows="${rows}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">${escapeHtml(value||'')}</textarea></div>`:`<div><label style="font-size:.78em;font-weight:900;color:#334155;">${label}</label><input id="${id}" value="${escapeHtml(value||'')}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></div>`;
-  modal.innerHTML=`<div style="width:min(720px,100%);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><h2 style="margin:0;font-size:1.2em;">漢文を編集</h2><button type="button" onclick="document.getElementById('iftyKanbunEditorModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="display:grid;gap:10px;margin-top:12px;">${field('iftyKanbunEditTitle','題名',item.title)}${field('iftyKanbunEditOriginal','原文',item.originalText,4)}${field('iftyKanbunEditKundoku','書き下し文',item.kundoku,4)}${field('iftyKanbunEditTranslation','現代語訳',item.translation,4)}${field('iftyKanbunEditGrammar','句法・文法（1行1つ）',(item.grammarPoints||[]).join('\n'),4)}${field('iftyKanbunEditPoints','重要ポイント（1行1つ）',(item.keyPoints||[]).join('\n'),4)}<div style="font-size:.78em;color:#64748b;">返点は「返点」ボタンの専用画面で編集します。</div></div><button type="button" onclick="saveIftyKanbunItemEditor('${folderId}','${itemId}')" style="width:100%;margin-top:14px;border:none;background:#0284c7;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">保存</button></div>`;
+  const field=(id,label,value,rows=1,assist=false)=>{
+    const control=rows>1?`<textarea id="${id}" rows="${rows}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;resize:vertical;${id==='iftyKanbunEditOriginal'?'font-family:serif;':''}">${escapeHtml(value||'')}</textarea>`:`<input id="${id}" value="${escapeHtml(value||'')}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">`;
+    const tools=assist?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;"><button type="button" onclick="openIftyKanbunInputHandwriting('${id}','${folderId}')" style="border:none;background:#0f766e;color:white;border-radius:6px;padding:6px 8px;font-size:.76em;font-weight:900;">✍️ 手書き</button><button type="button" onclick="openIftyKanbunReturnMarkInputPalette('${id}')" style="border:none;background:#b91c1c;color:white;border-radius:6px;padding:6px 8px;font-size:.76em;font-weight:900;">返点を入力</button></div>`:'';
+    return `<div><label style="font-size:.78em;font-weight:900;color:#334155;">${label}</label>${control}${tools}</div>`;
+  };
+  modal.innerHTML=`<div style="width:min(720px,100%);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><h2 style="margin:0;font-size:1.2em;">漢文を編集</h2><button type="button" onclick="document.getElementById('iftyKanbunEditorModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="display:grid;gap:10px;margin-top:12px;">${field('iftyKanbunEditTitle','題名',item.title)}${field('iftyKanbunEditOriginal','原文',item.originalText,4,true)}${field('iftyKanbunEditKundoku','書き下し文',item.kundoku,4,true)}${field('iftyKanbunEditTranslation','現代語訳',item.translation,4,true)}${field('iftyKanbunEditGrammar','句法・文法（1行1つ）',(item.grammarPoints||[]).join('\n'),4,true)}${field('iftyKanbunEditPoints','重要ポイント（1行1つ）',(item.keyPoints||[]).join('\n'),4,true)}<div style="font-size:.78em;color:#64748b;line-height:1.5;">実際の原文上の返点配置は、カードの「返点」ボタンで字ごとに編集できます。上の「返点を入力」は句法説明などへ記号を直接挿入するときに使います。</div></div><button type="button" onclick="saveIftyKanbunItemEditor('${folderId}','${itemId}')" style="width:100%;margin-top:14px;border:none;background:#0284c7;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">保存</button></div>`;
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});document.body.appendChild(modal);
 };
 
@@ -7866,7 +8121,7 @@ window.saveIftyKanbunItemEditor = function(folderId,itemId){
 function renderIftyKanbunReturnMarkEditor(){
   const st=iftyKanbunReturnMarkEditorState;if(!st)return;const ref=getIftyKanbunItemById(st.itemId);if(!ref?.item)return;const modal=document.getElementById('iftyKanbunReturnMarkModal');if(!modal)return;
   const palette=['レ','一','二','三','四','上','中','下','甲','乙','丙','丁','天','地','人','一レ','上レ','甲レ'];
-  modal.innerHTML=`<div style="width:min(760px,100%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><h2 style="margin:0;font-size:1.2em;">返点を打つ</h2><div style="font-size:.78em;color:#64748b;margin-top:3px;">字をタップ → 返点を選択。スマホ・タブレットでも折り返します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunReturnMarkModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="margin-top:14px;">${renderIftyKanbunMarkedText(ref.item,{interactive:true,selectedIndex:st.selectedIndex,marks:st.marks})}</div><div style="margin-top:14px;padding:11px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;"><div style="font-size:.76em;font-weight:900;color:#334155;margin-bottom:8px;">返点</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark=>`<button type="button" onclick="setIftyKanbunReturnMarkDraft('${mark}')" style="border:1px solid #cbd5e1;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${mark}</button>`).join('')}<button type="button" onclick="setIftyKanbunReturnMarkDraft('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">消す</button></div><div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;"><input id="iftyKanbunCustomMark" placeholder="その他の返点" maxlength="6" style="flex:1;min-width:140px;padding:8px;border:1px solid #cbd5e1;border-radius:7px;"><button type="button" onclick="setIftyKanbunReturnMarkDraft(document.getElementById('iftyKanbunCustomMark')?.value||'')" style="border:none;background:#64748b;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">設定</button></div></div><button type="button" onclick="saveIftyKanbunReturnMarks()" style="width:100%;margin-top:14px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">返点を保存</button></div>`;
+  modal.innerHTML=`<div style="width:min(760px,100%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><h2 style="margin:0;font-size:1.2em;">返点を打つ</h2><div style="font-size:.78em;color:#64748b;margin-top:3px;">縦書きの字をタップ → 返点を選択。列は右から左へ進みます。</div></div><button type="button" onclick="document.getElementById('iftyKanbunReturnMarkModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="margin-top:14px;">${renderIftyKanbunMarkedText(ref.item,{interactive:true,selectedIndex:st.selectedIndex,marks:st.marks})}</div><div style="margin-top:14px;padding:11px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;"><div style="font-size:.76em;font-weight:900;color:#334155;margin-bottom:8px;">返点</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark=>`<button type="button" onclick="setIftyKanbunReturnMarkDraft('${mark}')" style="border:1px solid #cbd5e1;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${mark}</button>`).join('')}<button type="button" onclick="setIftyKanbunReturnMarkDraft('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">消す</button></div><div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;"><input id="iftyKanbunCustomMark" placeholder="その他の返点" maxlength="6" style="flex:1;min-width:140px;padding:8px;border:1px solid #cbd5e1;border-radius:7px;"><button type="button" onclick="setIftyKanbunReturnMarkDraft(document.getElementById('iftyKanbunCustomMark')?.value||'')" style="border:none;background:#64748b;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">設定</button></div></div><button type="button" onclick="saveIftyKanbunReturnMarks()" style="width:100%;margin-top:14px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">返点を保存</button></div>`;
 }
 
 window.openIftyKanbunReturnMarkEditor=function(folderId,itemId){const ref=getIftyKanbunItemById(itemId);if(!ref?.item||String(ref.folder.id)!==String(folderId))return;document.getElementById('iftyKanbunReturnMarkModal')?.remove();iftyKanbunReturnMarkEditorState={folderId:String(folderId),itemId:String(itemId),selectedIndex:0,marks:getIftyKanbunMarkArray(ref.item)};const modal=document.createElement('div');modal.id='iftyKanbunReturnMarkModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12150;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});document.body.appendChild(modal);renderIftyKanbunReturnMarkEditor();};
