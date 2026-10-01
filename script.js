@@ -1,3 +1,4 @@
+// ★★★ IFTY Q3 STEP80 2026-10-01：LANGUAGES / BASIC SENTENCES 問題数設定統一 ★★★
 // ★★★ IFTY Q3 STEP79 2026-10-01：KANBUN訓点編集分離 + PRACTICE複数形式/フォルダ追加 + 同義字クイズ ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
@@ -13465,6 +13466,18 @@ window.addVisibleIftyExamplesToBasicSentences = function() {
 // ==========================================
 let iftyBasicPracticeState = null;
 
+function getIftyBasicPracticeQuestionCount() {
+  const count = Number(practiceData?.modules?.basicSentences?.practiceQuestionCount);
+  return count === 10 ? 10 : 5;
+}
+
+window.setIftyBasicPracticeQuestionCount = function(value) {
+  normalizePracticeData();
+  const count = Number(value);
+  practiceData.modules.basicSentences.practiceQuestionCount = count === 10 ? 10 : 5;
+  savePracticeData();
+};
+
 function getIftyBasicPracticeEligibleItems(folderIds = []) {
   const wanted = new Set((folderIds || []).map(String));
   return getIftyBasicSentenceItems().filter(item => {
@@ -13505,6 +13518,14 @@ function renderIftyBasicSentencePracticeHome(modal) {
     <div style="border:1px solid #ddd6fe;border-radius:11px;padding:14px;background:#faf5ff;">
       <div style="font-weight:900;color:#4c1d95;">出題フォルダ</div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;">${folders.map(f=>`<label style="display:flex;gap:5px;align-items:center;background:white;border:1px solid #ddd6fe;border-radius:999px;padding:7px 10px;"><input class="ifty-basic-practice-folder" type="checkbox" value="${escapeHtml(f.id)}" checked> ${escapeHtml(f.name)} <span style="color:#64748b;">(${getIftyBasicSentenceItemsForFolder(f.id).filter(x=>x.en&&x.ja).length})</span></label>`).join('')}</div>
+      <div style="margin-top:12px;padding:10px 11px;border:1px solid #ddd6fe;border-radius:9px;background:white;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+        <strong style="color:#4c1d95;">問題数</strong>
+        <select onchange="setIftyBasicPracticeQuestionCount(this.value)" style="padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
+          <option value="5" ${getIftyBasicPracticeQuestionCount() === 5 ? 'selected' : ''}>5問</option>
+          <option value="10" ${getIftyBasicPracticeQuestionCount() === 10 ? 'selected' : ''}>10問</option>
+        </select>
+        <span style="font-size:.76em;color:#64748b;">対象が少ない場合は、ある分だけ出題します。</span>
+      </div>
       <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
         <div style="background:white;border:1px solid #c4b5fd;border-radius:10px;padding:13px;"><div style="font-weight:900;color:#5b21b6;">✍️ 記述</div><div style="color:#64748b;font-size:.82em;margin:5px 0 10px;">日→英 / 英→日。回答内容をALLIAが採点。</div><select id="iftyBasicWrittenDirection" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:7px;background:white;"><option value="mixed">日英・英日 MIX</option><option value="ja_to_en">日 → 英</option><option value="en_to_ja">英 → 日</option></select><button type="button" onclick="startIftyBasicPractice('written')" style="width:100%;margin-top:9px;border:none;background:#7c3aed;color:white;border-radius:7px;padding:10px;font-weight:900;">開始</button></div>
         <div style="background:white;border:1px solid #bfdbfe;border-radius:10px;padding:13px;"><div style="font-weight:900;color:#1d4ed8;">🧩 穴埋め</div><div style="color:#64748b;font-size:.82em;margin:5px 0 10px;">英文の一語を穴埋め。通常採点は端末内、Challenge時だけALLIA。</div><button type="button" onclick="startIftyBasicPractice('cloze')" style="width:100%;margin-top:37px;border:none;background:#2563eb;color:white;border-radius:7px;padding:10px;font-weight:900;">開始</button></div>
@@ -13524,6 +13545,7 @@ window.startIftyBasicPractice = function(mode) {
   let items = shuffleArray(getIftyBasicPracticeEligibleItems(folderIds));
   if (mode === 'cloze') items = items.filter(item => getIftyBasicCloze(item));
   if (!items.length) { alert(mode === 'cloze' ? '穴埋めに使える英文がありません。' : '英文と和訳の両方がある文がありません。'); return; }
+  items = items.slice(0, Math.min(getIftyBasicPracticeQuestionCount(), items.length));
   const direction = String(document.getElementById('iftyBasicWrittenDirection')?.value || 'mixed');
   iftyBasicPracticeState = { mode, direction, queue:items.map(x=>String(x.id)), index:0, correct:0, wrong:0, answered:false, last:null };
   renderIftyBasicPracticeQuestion();
@@ -13609,6 +13631,7 @@ function ensureIftyReviewQuizSet() {
       directionMode: 'mixed',
       types: { simple: true, selection: false, written: false, example: false, knowledge: false, composition: false, translation: false, listening: false, usage_cloze: false, synonym_choice: false, inflection: false },
       random: true,
+      questionCount: 5,
       progress: null,
       reviewWordIds: [],
       mistakeCounts: {},
@@ -14007,6 +14030,7 @@ function normalizePracticeData() {
     });
     if (!Object.values(set.types).some(Boolean)) set.types.simple = true;
     if (typeof set.random !== 'boolean') set.random = true;
+    if (![5, 10].includes(Number(set.questionCount))) set.questionCount = 5;
     if (!set.progress || typeof set.progress !== 'object') set.progress = null;
     if (!Array.isArray(set.reviewWordIds)) set.reviewWordIds = [];
     if (!set.mistakeCounts || typeof set.mistakeCounts !== 'object') set.mistakeCounts = {};
@@ -14017,6 +14041,7 @@ function normalizePracticeData() {
   }
   if (!Array.isArray(practiceData.modules.basicSentences.items)) practiceData.modules.basicSentences.items = [];
   if (!Array.isArray(practiceData.modules.basicSentences.folders)) practiceData.modules.basicSentences.folders = [];
+  if (![5, 10].includes(Number(practiceData.modules.basicSentences.practiceQuestionCount))) practiceData.modules.basicSentences.practiceQuestionCount = 5;
   if (!practiceData.modules.basicSentences.folders.length) {
     practiceData.modules.basicSentences.folders.push(normalizeIftyCollectionFolder({ id: 'basic_sentence_default', name: '未分類', order: 0, collapsed: false }, 'basicsentencefolder', '未分類', 0));
   }
@@ -15673,7 +15698,7 @@ function renderPracticeHome() {
             <div style="background:white;border:1px solid #ddd6fe;border-radius:8px;padding:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
               <button onclick="openQuizSet('${set.id}')" style="background:none;border:none;padding:0;cursor:pointer;text-align:left;flex:1;min-width:170px;">
                 <div style="font-weight:bold;color:#4c1d95;">${escapeHtml(set.name)}</div>
-                <div style="font-size:.8em;color:#7c3aed;margin-top:2px;">${set.wordIds.length}語 ・ 復習${set.reviewWordIds.length}語${set.progress ? ' ・ 中断中' : ''}</div>
+                <div style="font-size:.8em;color:#7c3aed;margin-top:2px;">${set.wordIds.length}語 ・ ${set.questionCount}問 ・ 復習${set.reviewWordIds.length}語${set.progress ? ' ・ 中断中' : ''}</div>
               </button>
               <div style="display:flex;gap:4px;">
                 <button onclick="moveQuizSet('${set.id}',-1)" style="border:none;background:#ede9fe;border-radius:4px;padding:5px;cursor:pointer;">⬆️</button>
@@ -18187,6 +18212,7 @@ window.createQuizSet = function() {
       directionMode: 'mixed',
       types: { simple: true, selection: false, written: false, example: false, knowledge: false, composition: false, translation: false, listening: false, usage_cloze: false, synonym_choice: false, inflection: false },
       random: true,
+      questionCount: 5,
       progress: null,
       reviewWordIds: [],
       mistakeCounts: {}
@@ -18260,7 +18286,7 @@ window.openQuizSet = function(setId) {
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;">
-        <div><h2 style="margin:0;color:#4c1d95;font-size:1.25em;">❓ ${escapeHtml(set.name)}</h2><div style="font-size:.82em;color:#7c3aed;margin-top:3px;">${available.length}語 ・ 復習対象 ${set.reviewWordIds.length}語</div></div>
+        <div><h2 style="margin:0;color:#4c1d95;font-size:1.25em;">❓ ${escapeHtml(set.name)}</h2><div style="font-size:.82em;color:#7c3aed;margin-top:3px;">${available.length}語 ・ ${set.questionCount}問 ・ 復習対象 ${set.reviewWordIds.length}語</div></div>
         <button onclick="renameQuizSet('${set.id}')" style="border:none;background:#ede9fe;color:#5b21b6;border-radius:6px;padding:7px 10px;cursor:pointer;">名前変更</button>
       </div>
 
@@ -18282,8 +18308,17 @@ window.openQuizSet = function(setId) {
         </div>
       </div>
 
+      <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+        <b style="color:#334155;">3. 問題数</b>
+        <select onchange="setQuizQuestionCount('${set.id}',this.value)" style="padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
+          <option value="5" ${set.questionCount === 5 ? 'selected' : ''}>5問</option>
+          <option value="10" ${set.questionCount === 10 ? 'selected' : ''}>10問</option>
+        </select>
+        <span style="font-size:.76em;color:#64748b;">登録語数が少ない場合は、ある分だけ出題します。</span>
+      </div>
+
       <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
-        <b style="color:#334155;">3. 語彙を追加</b>
+        <b style="color:#334155;">4. 語彙を追加</b>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
           <button onclick="addSelectedWordsToQuizSet('${set.id}')" style="border:none;background:#7c3aed;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">チェックしたフォルダ・語彙から追加</button>
           <select id="quizFolderSource" style="padding:7px;border:1px solid #cbd5e1;border-radius:5px;">${folders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('')}</select>
@@ -18325,6 +18360,16 @@ window.setQuizType = function(setId, type, checked) {
 };
 
 window.setQuizRandom = function(setId, value) { const set=getQuizSet(setId); if(set){ recordUndoState('クイズ設定変更'); set.random=!!value; set.progress=null; savePracticeData(); } };
+window.setQuizQuestionCount = function(setId, value) {
+  const set = getQuizSet(setId);
+  if (!set) return;
+  const count = Number(value);
+  recordUndoState('クイズ問題数変更');
+  set.questionCount = count === 10 ? 10 : 5;
+  set.progress = null;
+  savePracticeData();
+  openQuizSet(setId);
+};
 
 function addIdsToQuizSet(set, ids) {
   recordUndoState('クイズへ単語追加');
@@ -18395,7 +18440,10 @@ window.startQuizSet = function(setId, restart=false, reviewOnly=false) {
   let validIds=uniqueExistingWordIds(reviewOnly ? (set.reviewWordIds||[]) : (set.wordIds||[]));
   if(!validIds.length){ alert(reviewOnly?'復習対象の単語がありません。':'このクイズフォルダに利用できる単語がありません。'); return; }
   if(restart || !set.progress || !!set.progress.reviewOnly!==!!reviewOnly){
-    set.progress={ queue:set.random?shuffleArray(validIds):[...validIds], index:0, reviewOnly:!!reviewOnly, currentQuestion:null, correctCount:0, wrongCount:0 };
+    let queue = set.random ? shuffleArray(validIds) : [...validIds];
+    const questionCount = set.systemReview ? queue.length : (Number(set.questionCount) === 10 ? 10 : 5);
+    queue = queue.slice(0, Math.min(questionCount, queue.length));
+    set.progress={ queue, index:0, reviewOnly:!!reviewOnly, currentQuestion:null, correctCount:0, wrongCount:0 };
   } else {
     set.progress.queue=uniqueExistingWordIds(set.progress.queue||[]);
     if(set.progress.index>=set.progress.queue.length) set.progress.index=0;
