@@ -1,4 +1,5 @@
-// ★★★ IFTY Q3 STEP83 2026-10-01：KANBUN訓点エディタ文字移動修正 ★★★
+// ★★★ IFTY Q3 STEP85 2026-10-01：アカウントPW検証表示 + Quiz ALLIA統合 + OTHERS追加 ★★★
+// ★★★ IFTY Q3 STEP84 2026-10-01：KANBUN訓点エディタ文字移動を完全修正 ★★★
 // ★★★ IFTY Q3 STEP82 2026-10-01：KANBUN 句法パーツボタン + 専用空所バー ★★★
 // ★★★ IFTY Q3 STEP80 2026-10-01：LANGUAGES / BASIC SENTENCES 問題数設定統一 ★★★
 // ★★★ IFTY Q3 STEP79 2026-10-01：KANBUN訓点編集分離 + PRACTICE複数形式/フォルダ追加 + 同義字クイズ ★★★
@@ -10,7 +11,7 @@ let currentView = "vocab"; // 'vocab' or 'chat'
 let iftyPortalPage = 'home'; // 'home' | 'subject' | 'settings' | 'vocab' | 'chat'
 
 // Q3 STEP17：教科ごとのORDER / ALLIAコンテキスト
-const IFTY_SUBJECT_KEYS = ['ENGLISH', 'ANCIENT', 'KANBUN', 'SCIENCE', 'SOCIAL STUDIES'];
+const IFTY_SUBJECT_KEYS = ['ENGLISH', 'ANCIENT', 'KANBUN', 'SCIENCE', 'SOCIAL STUDIES', 'OTHERS'];
 const IFTY_ORDER_STORAGE_PREFIX = 'ifty_subject_orders_';
 const IFTY_ORDER_META_STORAGE_PREFIX = 'ifty_subject_order_meta_';
 const IFTY_ORDER_MAX_CHARS = 12000;
@@ -20,14 +21,16 @@ let iftySubjectOrders = {
   ANCIENT: { activeId: null, orders: [] },
   KANBUN: { activeId: null, orders: [] },
   SCIENCE: { activeId: null, orders: [] },
-  'SOCIAL STUDIES': { activeId: null, orders: [] }
+  'SOCIAL STUDIES': { activeId: null, orders: [] },
+  OTHERS: { activeId: null, orders: [] }
 };
 let iftySubjectOrderUpdatedAt = {
   ENGLISH: 0,
   ANCIENT: 0,
   KANBUN: 0,
   SCIENCE: 0,
-  'SOCIAL STUDIES': 0
+  'SOCIAL STUDIES': 0,
+  OTHERS: 0
 };
 
 let folders = [];
@@ -216,6 +219,15 @@ let iftyKanbunInputHandwritingState = { targetId: '', folderId: '', strokes: [],
 let iftyKanbunDraftReturnMarks = {};
 let iftyKanbunDraftReturnMarkEditorState = null;
 let iftyKanbunHelpHistory = [];
+
+// Q3 STEP85：OTHERS / 未搭載教科（保健・情報など）
+let iftyOthersTopicDrafts = {};
+let iftyOthersGenerationPending = {};
+let iftyOthersSearchQuery = '';
+let iftyOthersFolderSearchQueries = {};
+let iftyOthersSelectedItemIds = new Set();
+let iftyOthersPracticeQuestionCount = 5;
+let iftyOthersPracticeState = null;
 
 let iftySubjectTermWriteState = null;
 
@@ -552,6 +564,7 @@ function restoreLearningState(snapshot) {
       else if (subject === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
       else if (subject === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
       else if (subject === 'KANBUN') renderIftyKanbunPage({ preserveScroll: true });
+      else if (subject === 'OTHERS') renderIftyOthersPage({ preserveScroll: true });
     }
     if (iftyPortalPage === 'years' && typeof window.openIftyYears === 'function') {
       window.openIftyYears();
@@ -894,6 +907,7 @@ function renderIftySideMenu() {
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('KANBUN')">KANBUN</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SCIENCE')">SCIENCE</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SOCIAL STUDIES')">SOCIAL STUDIES</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('OTHERS')">OTHERS</button>
 
       <div class="ifty-side-menu-separator"></div>
       <div class="ifty-side-menu-label">TOOLS</div>
@@ -1040,7 +1054,8 @@ function makeEmptyIftySubjectOrders() {
     ANCIENT: makeEmptyIftyOrderSubjectState(),
     KANBUN: makeEmptyIftyOrderSubjectState(),
     SCIENCE: makeEmptyIftyOrderSubjectState(),
-    'SOCIAL STUDIES': makeEmptyIftyOrderSubjectState()
+    'SOCIAL STUDIES': makeEmptyIftyOrderSubjectState(),
+    OTHERS: makeEmptyIftyOrderSubjectState()
   };
 }
 
@@ -1050,7 +1065,8 @@ function makeEmptyIftySubjectOrderMeta() {
     ANCIENT: 0,
     KANBUN: 0,
     SCIENCE: 0,
-    'SOCIAL STUDIES': 0
+    'SOCIAL STUDIES': 0,
+    OTHERS: 0
   };
 }
 
@@ -2180,6 +2196,11 @@ function getIftyHomeStats() {
     : [];
   const kanbunItems = kanbunFolders.reduce((sum, folder) => sum + (Array.isArray(folder.items) ? folder.items.length : 0), 0);
 
+  const othersFolders = practiceData && practiceData.modules && practiceData.modules.others && Array.isArray(practiceData.modules.others.folders)
+    ? practiceData.modules.others.folders
+    : [];
+  const othersItems = othersFolders.reduce((sum, folder) => sum + (Array.isArray(folder.items) ? folder.items.length : 0), 0);
+
   const learning = getIftyLearningStats();
   return {
     folders: Array.isArray(folders) ? folders.length : 0,
@@ -2206,6 +2227,10 @@ function getIftyHomeStats() {
     kanbunItems,
     kanbunWeak: getIftySubjectWeakEntries('KANBUN').length,
     kanbunDueReview: getIftySubjectReviewEntries('KANBUN', { dueOnly: true }).length,
+    othersFolders: othersFolders.length,
+    othersItems,
+    othersWeak: getIftySubjectWeakEntries('OTHERS').length,
+    othersDueReview: getIftySubjectReviewEntries('OTHERS', { dueOnly: true }).length,
     ...learning
   };
 }
@@ -2275,6 +2300,13 @@ window.openIftyHome = function() {
           <div class="ifty-home-card-meta">フォルダ ${stats.socialFolders} / 項目 ${stats.socialItems}${stats.socialDueReview ? ` / 🔁 今日 ${stats.socialDueReview}` : ''}${stats.socialWeak ? ` / 🎯 苦手 ${stats.socialWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">日本史・世界史・地理・公共 →</div>
+        </button>
+
+        <button class="ifty-home-card" type="button" onclick="openIftySubject('OTHERS')">
+          <div class="ifty-home-card-title">OTHERS</div>
+          <div class="ifty-home-card-meta">フォルダ ${stats.othersFolders} / 項目 ${stats.othersItems}${stats.othersDueReview ? ` / 🔁 今日 ${stats.othersDueReview}` : ''}${stats.othersWeak ? ` / 🎯 苦手 ${stats.othersWeak}` : ''}</div>
+          <div class="ifty-home-card-spacer"></div>
+          <div class="ifty-home-card-action">保健・情報など →</div>
         </button>
       </div>
 
@@ -7801,22 +7833,19 @@ function buildIftyKanbunSearchText(folder, item) {
 
 function getFirstIftyKanbunSelectableIndex(text) {
   const tokens = getIftyKanbunTokens(text || '');
-  for (let i = 0; i < tokens.length; i++) {
-    if (!isIftyKanbunPatternPlaceholderChar(tokens[i])) return i;
-  }
   return tokens.length ? 0 : -1;
 }
 
+// STEP84：訓点エディタの前後移動は「見えている文字」を1字ずつ進む。
+// ⓈⓄⒸⓋ━ も移動対象には含めるが、訓点自体は付けられない。
+// STEP83までの「句法プレースホルダーを移動時に飛ばす」方式だと、
+// 末尾側がプレースホルダーだけの場合に現在位置へ戻り、次へ進めないように見えていた。
 function getAdjacentIftyKanbunSelectableIndex(text, currentIndex, direction) {
   const tokens = getIftyKanbunTokens(text || '');
   if (!tokens.length) return -1;
   const dir = Number(direction) < 0 ? -1 : 1;
-  let i = Number.isInteger(Number(currentIndex)) ? Number(currentIndex) + dir : (dir > 0 ? 0 : tokens.length - 1);
-  while (i >= 0 && i < tokens.length) {
-    if (!isIftyKanbunPatternPlaceholderChar(tokens[i])) return i;
-    i += dir;
-  }
-  return Number.isInteger(Number(currentIndex)) ? Number(currentIndex) : getFirstIftyKanbunSelectableIndex(text);
+  const current = Number.isInteger(Number(currentIndex)) ? Number(currentIndex) : (dir > 0 ? -1 : tokens.length);
+  return Math.max(0, Math.min(tokens.length - 1, current + dir));
 }
 
 function renderIftyKanbunMarkedText(item, options = {}) {
@@ -7842,11 +7871,11 @@ function renderIftyKanbunMarkedText(item, options = {}) {
         const mark = String(marks[index] || '');
         const kana = convertIftyKanbunOkuriganaToKatakana(okurigana[index] || '');
         const patternPlaceholder = isIftyKanbunPatternPlaceholderChar(ch);
-        const selectable = interactive && !patternPlaceholder;
-        const selected = selectable && index === selectedIndex;
+        const selectable = interactive;
+        const selected = interactive && index === selectedIndex;
         const click = selectable ? `onclick="${selectFunction}(${index})"` : '';
         const rotateVerticalGlyph = /[ー―‐‑–—〜～━]/u.test(ch);
-        return `<button type="button" ${click} ${(interactive && selectable) ? '' : 'tabindex="-1"'} style="appearance:none;position:relative;overflow:visible;border:${selected ? '2px solid #7c3aed' : '1px solid transparent'};background:${selected ? '#f5f3ff' : 'transparent'};border-radius:8px;padding:0;width:72px;height:66px;cursor:${selectable ? 'pointer' : 'default'};box-sizing:border-box;flex:none;">
+        return `<button type="button" ${click} ${interactive ? '' : 'tabindex="-1"'} style="appearance:none;position:relative;overflow:visible;border:${selected ? '2px solid #7c3aed' : '1px solid transparent'};background:${selected ? '#f5f3ff' : 'transparent'};border-radius:8px;padding:0;width:72px;height:66px;cursor:${selectable ? 'pointer' : 'default'};box-sizing:border-box;flex:none;">
           ${mark ? `<span style="position:absolute;left:1px;bottom:1px;width:20px;min-height:16px;display:flex;align-items:flex-end;justify-content:center;color:#b91c1c;z-index:2;pointer-events:none;">${renderIftyKanbunReturnMarkGlyph(mark)}</span>` : ''}
           <span style="position:absolute;left:40%;top:50%;transform:translate(-50%,-50%)${rotateVerticalGlyph ? ' rotate(90deg)' : ''};font-size:30px;line-height:1;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:${patternPlaceholder ? '#6d28d9' : '#0f172a'};font-weight:${patternPlaceholder ? '900' : '400'};white-space:nowrap;pointer-events:none;">${escapeHtml(ch)}</span>
           ${kana ? `<span style="position:absolute;right:2px;top:36px;max-height:44px;writing-mode:vertical-rl;text-orientation:mixed;font-size:12px;line-height:1.05;font-weight:800;letter-spacing:-.02em;color:#075985;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;white-space:nowrap;z-index:2;pointer-events:none;">${escapeHtml(kana)}</span>` : ''}
@@ -8285,11 +8314,14 @@ function renderIftyKanbunDraftReturnMarkEditor() {
   if (!st || !modal) return;
   const item = { originalText: st.text, returnMarks: [], okurigana: [] };
   const palette = getIftyKanbunInputReturnMarkPalette();
+  const selectedToken = getIftyKanbunTokens(st.text)[st.selectedIndex] || '';
+  const selectedIsPlaceholder = isIftyKanbunPatternPlaceholderChar(selectedToken);
   const selectedKana = st.selectedIndex >= 0 ? String(st.okurigana?.[st.selectedIndex] || '') : '';
   modal.innerHTML = `<div style="width:min(780px,100%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:15px;box-sizing:border-box;">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>原文に訓点を付ける</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">縦書きの字をタップし、返点と送り仮名を設定します。送り仮名は字の右、返点は左下へ小さく表示します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunDraftReturnMarkModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
     <div style="margin-top:12px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;padding:6px;">${renderIftyKanbunMarkedText(item,{interactive:true,selectedIndex:st.selectedIndex,marks:st.marks,okurigana:st.okurigana,selectFunction:'selectIftyKanbunDraftReturnMarkIndex'})}</div>
-    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;"><button type="button" onclick="moveIftyKanbunDraftReturnMarkSelection(-1)" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;">← 前の字</button><span style="font-size:.78em;color:#475569;font-weight:900;">選択中：${escapeHtml(getIftyKanbunTokens(st.text)[st.selectedIndex] || '')}</span><button type="button" onclick="moveIftyKanbunDraftReturnMarkSelection(1)" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;">次の字 →</button></div>
+    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;"><button type="button" onclick="moveIftyKanbunDraftReturnMarkSelection(-1)" ${st.selectedIndex <= 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;opacity:${st.selectedIndex <= 0 ? '.45' : '1'};">← 前の字</button><span style="font-size:.78em;color:#475569;font-weight:900;">選択中：${escapeHtml(selectedToken)}</span><button type="button" onclick="moveIftyKanbunDraftReturnMarkSelection(1)" ${st.selectedIndex >= getIftyKanbunTokens(st.text).length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;opacity:${st.selectedIndex >= getIftyKanbunTokens(st.text).length - 1 ? '.45' : '1'};">次の字 →</button></div>
+    ${selectedIsPlaceholder ? '<div style="margin-top:7px;text-align:center;color:#6d28d9;font-size:.76em;font-weight:900;">この字は句法パーツなので訓点は設定しません。前後ボタンでそのまま移動できます。</div>' : ''}
     <div style="margin-top:12px;padding:10px;border:1px solid #fecaca;border-radius:10px;background:#fff7f7;"><div style="font-size:.76em;font-weight:900;color:#991b1b;margin-bottom:7px;">返点</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark => `<button type="button" onclick="setIftyKanbunDraftReturnMark('${mark}')" style="border:1px solid #fecaca;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;">${renderIftyKanbunReturnMarkGlyph(mark,{compact:true})}</button>`).join('')}<button type="button" onclick="setIftyKanbunDraftReturnMark('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;">消す</button></div></div>
     <div style="margin-top:10px;padding:10px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:7px;">送り仮名</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"><input id="iftyKanbunDraftOkurigana" value="${escapeHtml(selectedKana)}" placeholder="例：して → シテ" maxlength="12" oninput="normalizeIftyKanbunOkuriganaInput(this,event)" oncompositionend="normalizeIftyKanbunOkuriganaInput(this,event)" onblur="normalizeIftyKanbunOkuriganaInput(this,event)" style="flex:1;min-width:150px;padding:8px;border:1px solid #7dd3fc;border-radius:7px;font-family:serif;"><button type="button" onclick="setIftyKanbunDraftOkurigana(document.getElementById('iftyKanbunDraftOkurigana')?.value||'')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:8px 10px;font-weight:900;">設定</button><button type="button" onclick="setIftyKanbunDraftOkurigana('')" style="border:none;background:#e0f2fe;color:#0369a1;border-radius:7px;padding:8px 10px;font-weight:900;">消す</button></div>${renderIftyKanbunOkuriganaQuickButtons('appendIftyKanbunDraftOkuriganaQuick')}</div>
     <button type="button" onclick="saveIftyKanbunDraftReturnMarks()" style="width:100%;margin-top:13px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:10px;font-weight:900;">訓点を保存</button>
@@ -8301,6 +8333,7 @@ function captureIftyKanbunDraftOkuriganaInput() {
   if (!st || st.selectedIndex < 0 || st.selectedIndex >= st.okurigana.length) return;
   const input = document.getElementById('iftyKanbunDraftOkurigana');
   if (!input) return;
+  if (isIftyKanbunPatternPlaceholderChar(getIftyKanbunTokens(st.text)[st.selectedIndex])) return;
   st.okurigana[st.selectedIndex] = convertIftyKanbunOkuriganaToKatakana(input.value);
 }
 
@@ -8322,6 +8355,7 @@ window.moveIftyKanbunDraftReturnMarkSelection = function(direction) {
 window.setIftyKanbunDraftReturnMark = function(mark) {
   const st = iftyKanbunDraftReturnMarkEditorState;
   if (!st || st.selectedIndex < 0 || st.selectedIndex >= st.marks.length) return;
+  if (isIftyKanbunPatternPlaceholderChar(getIftyKanbunTokens(st.text)[st.selectedIndex])) return;
   captureIftyKanbunDraftOkuriganaInput();
   st.marks[st.selectedIndex] = normalizeIftyKanbunMark(mark);
   renderIftyKanbunDraftReturnMarkEditor();
@@ -8330,6 +8364,7 @@ window.setIftyKanbunDraftReturnMark = function(mark) {
 window.setIftyKanbunDraftOkurigana = function(value) {
   const st = iftyKanbunDraftReturnMarkEditorState;
   if (!st || st.selectedIndex < 0 || st.selectedIndex >= st.okurigana.length) return;
+  if (isIftyKanbunPatternPlaceholderChar(getIftyKanbunTokens(st.text)[st.selectedIndex])) return;
   st.okurigana[st.selectedIndex] = convertIftyKanbunOkuriganaToKatakana(value);
   renderIftyKanbunDraftReturnMarkEditor();
 };
@@ -8613,17 +8648,19 @@ window.openIftyKanbunItemEditorKunten=function(folderId,itemId){
 function renderIftyKanbunReturnMarkEditor(){
   const st=iftyKanbunReturnMarkEditorState;if(!st)return;const ref=getIftyKanbunItemById(st.itemId);if(!ref?.item)return;const modal=document.getElementById('iftyKanbunReturnMarkModal');if(!modal)return;
   const palette=getIftyKanbunInputReturnMarkPalette();
+  const selectedToken=getIftyKanbunTokens(st.text)[st.selectedIndex]||'';
+  const selectedIsPlaceholder=isIftyKanbunPatternPlaceholderChar(selectedToken);
   const selectedKana=st.selectedIndex>=0?String(st.okurigana?.[st.selectedIndex]||''):'';
   const renderItem=st.source==='editor'?{originalText:String(st.text||''),returnMarks:[],okurigana:[]}:ref.item;
-  modal.innerHTML=`<div style="width:min(780px,100%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><h2 style="margin:0;font-size:1.2em;">訓点を付ける</h2><div style="font-size:.78em;color:#64748b;margin-top:3px;">縦書きの字をタップ → 返点と送り仮名を設定。返点は原文の文字とは別データで保存します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunReturnMarkModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="margin-top:14px;border:1px solid #e2e8f0;border-radius:10px;padding:6px;">${renderIftyKanbunMarkedText(renderItem,{interactive:true,selectedIndex:st.selectedIndex,marks:st.marks,okurigana:st.okurigana})}</div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;"><button type="button" onclick="moveIftyKanbunReturnMarkSelection(-1)" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;">← 前の字</button><span style="font-size:.78em;color:#475569;font-weight:900;">選択中：${escapeHtml(getIftyKanbunTokens(st.text)[st.selectedIndex] || '')}</span><button type="button" onclick="moveIftyKanbunReturnMarkSelection(1)" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;">次の字 →</button></div><div style="margin-top:14px;padding:11px;border:1px solid #fecaca;border-radius:10px;background:#fff7f7;"><div style="font-size:.76em;font-weight:900;color:#991b1b;margin-bottom:8px;">返点</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark=>`<button type="button" onclick="setIftyKanbunReturnMarkDraft('${mark}')" style="border:1px solid #cbd5e1;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${renderIftyKanbunReturnMarkGlyph(mark,{compact:true})}</button>`).join('')}<button type="button" onclick="setIftyKanbunReturnMarkDraft('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">消す</button></div></div><div style="margin-top:10px;padding:11px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:8px;">送り仮名</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"><input id="iftyKanbunItemOkurigana" value="${escapeHtml(selectedKana)}" placeholder="例：して → シテ" maxlength="12" oninput="normalizeIftyKanbunOkuriganaInput(this,event)" oncompositionend="normalizeIftyKanbunOkuriganaInput(this,event)" onblur="normalizeIftyKanbunOkuriganaInput(this,event)" style="flex:1;min-width:150px;padding:8px;border:1px solid #7dd3fc;border-radius:7px;font-family:serif;"><button type="button" onclick="setIftyKanbunOkuriganaDraft(document.getElementById('iftyKanbunItemOkurigana')?.value||'')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:8px 10px;font-weight:900;">設定</button><button type="button" onclick="setIftyKanbunOkuriganaDraft('')" style="border:none;background:#e0f2fe;color:#0369a1;border-radius:7px;padding:8px 10px;font-weight:900;">消す</button></div>${renderIftyKanbunOkuriganaQuickButtons('appendIftyKanbunItemOkuriganaQuick')}</div><button type="button" onclick="saveIftyKanbunReturnMarks()" style="width:100%;margin-top:14px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">訓点を保存</button></div>`;
+  modal.innerHTML=`<div style="width:min(780px,100%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><h2 style="margin:0;font-size:1.2em;">訓点を付ける</h2><div style="font-size:.78em;color:#64748b;margin-top:3px;">縦書きの字をタップ → 返点と送り仮名を設定。返点は原文の文字とは別データで保存します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunReturnMarkModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="margin-top:14px;border:1px solid #e2e8f0;border-radius:10px;padding:6px;">${renderIftyKanbunMarkedText(renderItem,{interactive:true,selectedIndex:st.selectedIndex,marks:st.marks,okurigana:st.okurigana})}</div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;"><button type="button" onclick="moveIftyKanbunReturnMarkSelection(-1)" ${st.selectedIndex <= 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;opacity:${st.selectedIndex <= 0 ? '.45' : '1'};">← 前の字</button><span style="font-size:.78em;color:#475569;font-weight:900;">選択中：${escapeHtml(selectedToken)}</span><button type="button" onclick="moveIftyKanbunReturnMarkSelection(1)" ${st.selectedIndex >= getIftyKanbunTokens(st.text).length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;opacity:${st.selectedIndex >= getIftyKanbunTokens(st.text).length - 1 ? '.45' : '1'};">次の字 →</button></div>${selectedIsPlaceholder ? '<div style="margin-top:7px;text-align:center;color:#6d28d9;font-size:.76em;font-weight:900;">この字は句法パーツなので訓点は設定しません。前後ボタンでそのまま移動できます。</div>' : ''}<div style="margin-top:14px;padding:11px;border:1px solid #fecaca;border-radius:10px;background:#fff7f7;"><div style="font-size:.76em;font-weight:900;color:#991b1b;margin-bottom:8px;">返点</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark=>`<button type="button" onclick="setIftyKanbunReturnMarkDraft('${mark}')" style="border:1px solid #cbd5e1;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${renderIftyKanbunReturnMarkGlyph(mark,{compact:true})}</button>`).join('')}<button type="button" onclick="setIftyKanbunReturnMarkDraft('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">消す</button></div></div><div style="margin-top:10px;padding:11px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:8px;">送り仮名</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"><input id="iftyKanbunItemOkurigana" value="${escapeHtml(selectedKana)}" placeholder="例：して → シテ" maxlength="12" oninput="normalizeIftyKanbunOkuriganaInput(this,event)" oncompositionend="normalizeIftyKanbunOkuriganaInput(this,event)" onblur="normalizeIftyKanbunOkuriganaInput(this,event)" style="flex:1;min-width:150px;padding:8px;border:1px solid #7dd3fc;border-radius:7px;font-family:serif;"><button type="button" onclick="setIftyKanbunOkuriganaDraft(document.getElementById('iftyKanbunItemOkurigana')?.value||'')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:8px 10px;font-weight:900;">設定</button><button type="button" onclick="setIftyKanbunOkuriganaDraft('')" style="border:none;background:#e0f2fe;color:#0369a1;border-radius:7px;padding:8px 10px;font-weight:900;">消す</button></div>${renderIftyKanbunOkuriganaQuickButtons('appendIftyKanbunItemOkuriganaQuick')}</div><button type="button" onclick="saveIftyKanbunReturnMarks()" style="width:100%;margin-top:14px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">訓点を保存</button></div>`;
 }
 
 window.openIftyKanbunReturnMarkEditor=function(folderId,itemId){const ref=getIftyKanbunItemById(itemId);if(!ref?.item||String(ref.folder.id)!==String(folderId))return;document.getElementById('iftyKanbunReturnMarkModal')?.remove();iftyKanbunReturnMarkEditorState={source:'item',folderId:String(folderId),itemId:String(itemId),text:String(ref.item.originalText||''),selectedIndex:getFirstIftyKanbunSelectableIndex(String(ref.item.originalText||'')),marks:getIftyKanbunMarkArray(ref.item),okurigana:getIftyKanbunOkuriganaArray(ref.item)};const modal=document.createElement('div');modal.id='iftyKanbunReturnMarkModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12150;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});document.body.appendChild(modal);renderIftyKanbunReturnMarkEditor();};
-function captureIftyKanbunItemOkuriganaInput(){const st=iftyKanbunReturnMarkEditorState;if(!st||st.selectedIndex<0||st.selectedIndex>=st.okurigana.length)return;const input=document.getElementById('iftyKanbunItemOkurigana');if(!input)return;st.okurigana[st.selectedIndex]=convertIftyKanbunOkuriganaToKatakana(input.value);}
+function captureIftyKanbunItemOkuriganaInput(){const st=iftyKanbunReturnMarkEditorState;if(!st||st.selectedIndex<0||st.selectedIndex>=st.okurigana.length)return;const input=document.getElementById('iftyKanbunItemOkurigana');if(!input)return;if(isIftyKanbunPatternPlaceholderChar(getIftyKanbunTokens(st.text)[st.selectedIndex]))return;st.okurigana[st.selectedIndex]=convertIftyKanbunOkuriganaToKatakana(input.value);}
 window.selectIftyKanbunReturnMarkIndex=function(index){if(!iftyKanbunReturnMarkEditorState)return;captureIftyKanbunItemOkuriganaInput();iftyKanbunReturnMarkEditorState.selectedIndex=Number(index);renderIftyKanbunReturnMarkEditor();};
 window.moveIftyKanbunReturnMarkSelection=function(direction){const st=iftyKanbunReturnMarkEditorState;if(!st)return;captureIftyKanbunItemOkuriganaInput();st.selectedIndex=getAdjacentIftyKanbunSelectableIndex(st.text,st.selectedIndex,direction);renderIftyKanbunReturnMarkEditor();};
-window.setIftyKanbunReturnMarkDraft=function(mark){const st=iftyKanbunReturnMarkEditorState;if(!st||st.selectedIndex<0||st.selectedIndex>=st.marks.length)return;captureIftyKanbunItemOkuriganaInput();st.marks[st.selectedIndex]=normalizeIftyKanbunMark(mark);renderIftyKanbunReturnMarkEditor();};
-window.setIftyKanbunOkuriganaDraft=function(value){const st=iftyKanbunReturnMarkEditorState;if(!st||st.selectedIndex<0||st.selectedIndex>=st.okurigana.length)return;st.okurigana[st.selectedIndex]=convertIftyKanbunOkuriganaToKatakana(value);renderIftyKanbunReturnMarkEditor();};
+window.setIftyKanbunReturnMarkDraft=function(mark){const st=iftyKanbunReturnMarkEditorState;if(!st||st.selectedIndex<0||st.selectedIndex>=st.marks.length)return;if(isIftyKanbunPatternPlaceholderChar(getIftyKanbunTokens(st.text)[st.selectedIndex]))return;captureIftyKanbunItemOkuriganaInput();st.marks[st.selectedIndex]=normalizeIftyKanbunMark(mark);renderIftyKanbunReturnMarkEditor();};
+window.setIftyKanbunOkuriganaDraft=function(value){const st=iftyKanbunReturnMarkEditorState;if(!st||st.selectedIndex<0||st.selectedIndex>=st.okurigana.length)return;if(isIftyKanbunPatternPlaceholderChar(getIftyKanbunTokens(st.text)[st.selectedIndex]))return;st.okurigana[st.selectedIndex]=convertIftyKanbunOkuriganaToKatakana(value);renderIftyKanbunReturnMarkEditor();};
 window.saveIftyKanbunReturnMarks=function(){const st=iftyKanbunReturnMarkEditorState;if(!st)return;captureIftyKanbunItemOkuriganaInput();const ref=getIftyKanbunItemById(st.itemId);if(!ref?.item)return;if(st.source==='editor'){iftyKanbunItemEditorKuntenDraft={folderId:String(st.folderId),itemId:String(st.itemId),text:String(st.text||''),marks:Array.from(st.marks||[]),okurigana:Array.from(st.okurigana||[]),touched:true};document.getElementById('iftyKanbunReturnMarkModal')?.remove();iftyKanbunReturnMarkEditorState=null;return;}recordUndoState('漢文訓点編集');ref.item.returnMarks=st.marks.map((mark,index)=>mark?{index,mark}:null).filter(Boolean);ref.item.okurigana=st.okurigana.map((text,index)=>text?{index,text:convertIftyKanbunOkuriganaToKatakana(text)}:null).filter(Boolean);ref.item.kuntenEditedByUser=true;ref.item.updatedAt=Date.now();savePracticeData();document.getElementById('iftyKanbunReturnMarkModal')?.remove();refreshIftyKanbunFolderDynamic(st.folderId);iftyKanbunReturnMarkEditorState=null;};
 
 function getIftyKanbunPracticeModeMeta(mode){
@@ -9077,6 +9114,11 @@ window.openIftySubject = function(subject) {
 
   if (normalized === 'KANBUN') {
     renderIftyKanbunPage();
+    return;
+  }
+
+  if (normalized === 'OTHERS') {
+    renderIftyOthersPage();
     return;
   }
 
@@ -10752,17 +10794,21 @@ function renderIftyAccountLanding(message = '') {
     </div>`;
 
   const password = document.getElementById('iftyAccountPassword');
+  const confirmPassword = document.getElementById('iftyAccountPasswordConfirm');
+  const refreshPasswordValidity = () => updateIftyAccountPasswordValidityUi();
   if (password) {
+    password.addEventListener('input', refreshPasswordValidity);
     password.addEventListener('keydown', event => {
       if (event.key === 'Enter') window.loginIftyAccount();
     });
   }
-  const confirmPassword = document.getElementById('iftyAccountPasswordConfirm');
   if (confirmPassword) {
+    confirmPassword.addEventListener('input', refreshPasswordValidity);
     confirmPassword.addEventListener('keydown', event => {
       if (event.key === 'Enter') window.registerIftyAccount();
     });
   }
+  updateIftyAccountPasswordValidityUi();
 }
 
 function ensureIftyCloudStatusUi() {
@@ -11771,11 +11817,13 @@ window.registerIftyAccount = async function() {
     setIftyAccountFormStatus('IFTY IDは英数字・_ . - の3〜24文字で入力してください。', true);
     return;
   }
-  if (password.length < 10) {
-    setIftyAccountFormStatus('パスワードは10文字以上にしてください。', true);
+  if (password.length < 10 || password.length > 128) {
+    updateIftyAccountPasswordValidityUi({ forceInvalidPassword: true });
+    setIftyAccountFormStatus('パスワードは10〜128文字にしてください。', true);
     return;
   }
   if (password !== confirmPassword) {
+    updateIftyAccountPasswordValidityUi({ forceInvalidConfirm: true });
     setIftyAccountFormStatus('確認用パスワードが一致していません。', true);
     return;
   }
@@ -11784,6 +11832,7 @@ window.registerIftyAccount = async function() {
     return;
   }
 
+  updateIftyAccountPasswordValidityUi();
   setIftyAccountFormStatus('アカウント作成中…');
   try {
     const result = await iftyAccountApi('account_register', { username, password });
@@ -11793,6 +11842,139 @@ window.registerIftyAccount = async function() {
     setIftyAccountFormStatus(error.message || 'アカウントを作成できませんでした。', true);
   }
 };
+
+
+// ==========================================
+// Q3 STEP85：アカウント新規作成パスワード視覚検証
+// ==========================================
+function updateIftyAccountPasswordValidityUi(options = {}) {
+  const password = document.getElementById('iftyAccountPassword');
+  const confirm = document.getElementById('iftyAccountPasswordConfirm');
+  if (!password && !confirm) return;
+  const pw = String(password?.value || '');
+  const cpw = String(confirm?.value || '');
+  const badPw = options.forceInvalidPassword === true || (!!pw && (pw.length < 10 || pw.length > 128));
+  const badConfirm = options.forceInvalidConfirm === true || (!!cpw && cpw !== pw);
+  const apply = (el, bad) => {
+    if (!el) return;
+    el.style.borderColor = bad ? '#ef4444' : '#475569';
+    el.style.background = bad ? '#3f1519' : '#0f172a';
+    el.style.boxShadow = bad ? '0 0 0 2px rgba(239,68,68,.22)' : 'none';
+    el.setAttribute('aria-invalid', bad ? 'true' : 'false');
+  };
+  apply(password, badPw);
+  apply(confirm, badConfirm);
+}
+
+// ==========================================
+// Q3 STEP85：Quiz ALLIA（質問 + Challenge統合）
+// ==========================================
+window.openIftyQuizAllia = function(setId) {
+  renderIftyQuizAlliaHelpModal(setId, false);
+};
+window.openIftyQuizAlliaQuestion = window.openIftyQuizAllia;
+
+const _iftyStep85OriginalRenderQuizAlliaHelpModal = renderIftyQuizAlliaHelpModal;
+renderIftyQuizAlliaHelpModal = function(setId, loading = false) {
+  _iftyStep85OriginalRenderQuizAlliaHelpModal(setId, loading);
+  const context = getIftyQuizAlliaHelpContext(setId);
+  const modal = document.getElementById('iftyQuizAlliaHelpModal');
+  if (!context || !modal) return;
+  const { progress, question } = context;
+  const last = progress.lastGrade || null;
+  const afterAnswer = !!last && last.wordId === question.wordId;
+  const canChallenge = afterAnswer && last.correct !== true && last.localGrade !== true && last.challenged !== true;
+  const panel = modal.firstElementChild;
+  if (!panel) return;
+  const footer = panel.lastElementChild;
+  if (!footer) return;
+  const challenge = document.createElement('div');
+  challenge.style.cssText = 'padding:0 14px 14px;background:white;';
+  challenge.innerHTML = canChallenge ? `
+    <div style="border:1px solid #fde68a;background:#fffbeb;border-radius:9px;padding:10px;">
+      <div style="font-weight:900;color:#92400e;">⚖️ Challenge</div>
+      <div style="font-size:.76em;color:#a16207;margin-top:3px;">不正解判定に異議がある場合だけ使います。質問は上の欄からいつでも送れます。</div>
+      <textarea id="iftyQuizAlliaChallengeInput" rows="2" placeholder="例：この訳も文脈上成立する" style="width:100%;box-sizing:border-box;margin-top:7px;padding:9px;border:1px solid #f59e0b;border-radius:7px;resize:vertical;"></textarea>
+      <button type="button" onclick="submitQuizChallenge('${setId}')" style="width:100%;margin-top:7px;border:none;background:#d97706;color:white;border-radius:7px;padding:9px;font-weight:900;cursor:pointer;">Challengeを再審査</button>
+      <div id="iftyQuizAlliaChallengeStatus" style="min-height:1.1em;margin-top:5px;font-size:.72em;color:#92400e;"></div>
+    </div>` : `<div style="font-size:.74em;color:#94a3b8;text-align:center;">Challengeは不正解判定後に、この同じALLIA画面から利用できます。</div>`;
+  panel.insertBefore(challenge, footer);
+};
+
+// ==========================================
+// Q3 STEP85：OTHERS / 未搭載教科
+// ==========================================
+function normalizeIftyOthersTags(value) {
+  const raw = Array.isArray(value) ? value : String(value || '').split(/[、,／/|]+/);
+  return [...new Set(raw.map(v => String(v || '').trim()).filter(Boolean))].slice(0, 12);
+}
+function normalizeIftyOthersItem(value) {
+  if (!value || typeof value !== 'object') return null;
+  const title = String(value.title || value.topic || '').trim();
+  return {
+    id: String(value.id || makeId('othersitem')),
+    topic: String(value.topic || title).trim(),
+    title,
+    memoryText: String(value.memoryText || value.explanation || '').trim(),
+    keyPoints: Array.isArray(value.keyPoints) ? value.keyPoints.map(v=>String(v||'').trim()).filter(Boolean).slice(0,8) : [],
+    aliases: Array.isArray(value.aliases) ? value.aliases.map(v=>String(v||'').trim()).filter(Boolean).slice(0,8) : [],
+    tags: normalizeIftyOthersTags(value.tags),
+    mastery: value.mastery === 'fixed' ? 'fixed' : 'unfixed',
+    review: value.review && typeof value.review === 'object' ? deepClone(value.review) : undefined,
+    study: value.study && typeof value.study === 'object' ? deepClone(value.study) : undefined,
+    source: String(value.source || 'MANUAL'),
+    createdAt: Number(value.createdAt || 0) || Date.now(),
+    updatedAt: Number(value.updatedAt || 0) || Date.now()
+  };
+}
+function getIftyOthersModule(){ normalizePracticeData(); return practiceData.modules.others; }
+function getIftyOthersFolder(folderId){ return getIftyOthersModule().folders.find(f=>String(f.id)===String(folderId))||null; }
+function getIftyOthersItemById(itemId){ for(const folder of getIftyOthersModule().folders){const item=(folder.items||[]).find(x=>String(x.id)===String(itemId));if(item)return{folder,item};}return null; }
+function countIftyOthersItems(){ return getIftyOthersModule().folders.reduce((n,f)=>n+(f.items||[]).length,0); }
+function getIftyOthersPracticeModeMeta(mode){
+  const map={
+    simple:{title:'シンプル',description:'用語と説明を4択で確認。',color:'#0f766e'},
+    term_write:{title:'用語記述',description:'説明から用語を自分で入力。表記ゆれはALLIAでChallenge可能。',color:'#2563eb'},
+    explanation:{title:'説明記述',description:'用語を自分の言葉で説明し、ALLIAが内容を採点。',color:'#7c3aed'}
+  };
+  return map[mode]||map.simple;
+}
+function renderIftyOthersItemCard(folder,item){
+  const study=normalizeIftySubjectStudyState(item); const weak=isIftySubjectWeakItem(item);
+  return `<div style="margin-top:9px;border:1px solid #dbeafe;background:#fff;border-radius:10px;padding:11px;">
+    <div style="display:flex;gap:8px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;">
+      <label style="display:flex;gap:7px;align-items:flex-start;min-width:0;flex:1;"><input type="checkbox" ${iftyOthersSelectedItemIds.has(String(item.id))?'checked':''} onchange="toggleIftySubjectItemSelection('OTHERS','${item.id}',this.checked)" style="width:18px;height:18px;margin-top:2px;"><span style="min-width:0;"><b style="color:#0f172a;font-size:1.02em;">${escapeHtml(item.title||item.topic)}</b>${item.tags?.length?`<span style="display:block;margin-top:4px;">${item.tags.map(t=>`<span style="display:inline-block;margin-right:4px;padding:2px 6px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.7em;font-weight:900;">${escapeHtml(t)}</span>`).join('')}</span>`:''}</span></label>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;"><button type="button" onclick="toggleIftySubjectItemReview('OTHERS','${folder.id}','${item.id}')" style="border:none;background:#f59e0b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${isIftyReviewTagged(item)?'🔁 復習中':'🔁 復習'}</button><button type="button" onclick="editIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">編集</button><button type="button" onclick="deleteIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">削除</button></div>
+    </div>
+    ${item.memoryText?`<div style="margin-top:8px;line-height:1.6;color:#334155;white-space:pre-wrap;">${escapeHtml(item.memoryText)}</div>`:''}
+    ${item.keyPoints?.length?`<div style="margin-top:7px;color:#475569;font-size:.85em;">${item.keyPoints.map(x=>`• ${escapeHtml(x)}`).join('<br>')}</div>`:''}
+    ${study?.total?`<div style="margin-top:6px;color:#64748b;font-size:.72em;">学習 ${study.total}回 ・ 正解 ${study.correct} ・ 不正解 ${study.wrong}${weak?' ・ 🎯 苦手候補':''}</div>`:''}
+  </div>`;
+}
+function renderIftyOthersPage(options={}){
+  const y=options.preserveScroll?window.scrollY:0; currentIftySubject='OTHERS'; const module=getIftyOthersModule();
+  const rows=module.folders.map(folder=>`<section style="margin-top:14px;border:1px solid #cbd5e1;border-radius:11px;background:white;padding:13px;">
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start;"><div style="min-width:0;flex:1;"><button type="button" onclick="toggleIftyOthersFolder('${folder.id}')" style="border:none;background:transparent;padding:0;font-weight:900;color:#0f172a;font-size:1.02em;cursor:pointer;">${folder.collapsed?'▶':'▼'} 📁 ${escapeHtml(folder.name)} (${(folder.items||[]).length}件)</button><div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">${folder.tags.map(t=>`<span style="padding:3px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.72em;font-weight:900;">${escapeHtml(t)}</span>`).join('')||'<span style="font-size:.75em;color:#94a3b8;">教科タグ未設定</span>'}</div></div><div style="display:flex;gap:5px;flex-wrap:wrap;"><button onclick="editIftyOthersFolderTags('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">教科タグ変更</button><button onclick="deleteIftyOthersFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">フォルダ削除</button></div></div>
+    ${folder.collapsed?'':`<div style="margin-top:11px;"><div style="display:flex;gap:7px;flex-wrap:wrap;"><input id="iftyOthersTopic_${folder.id}" value="${escapeHtml(iftyOthersTopicDrafts[folder.id]||'')}" placeholder="用語・概念・人物など" oninput="iftyOthersTopicDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'){event.preventDefault();generateIftyOthersItem('${folder.id}')}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;"><button onclick="generateIftyOthersItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">ALLIA生成</button><button onclick="addBlankIftyOthersItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;">白紙</button></div><div style="margin-top:6px;color:#64748b;font-size:.76em;">${Number(iftyOthersGenerationPending[folder.id]||0)>0?'ALLIA生成中…':''}</div>${(folder.items||[]).map(item=>renderIftyOthersItemCard(folder,item)).join('')||'<div style="padding:18px;text-align:center;color:#94a3b8;">まだ項目がありません。</div>'}</div>`}
+  </section>`).join('');
+  showIftyHubContent(`<section class="ifty-portal-shell"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;"><div><h1 class="ifty-portal-title">OTHERS</h1><div class="ifty-portal-subtitle">保健・情報など、専用教科がない内容を自由な教科タグで管理。</div></div>${renderIftySubjectHeaderActions('OTHERS')}</div><div style="margin-top:14px;padding:13px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-weight:900;color:#0c4a6e;">新しいOTHERSフォルダ</div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;"><input id="iftyOthersFolderName" placeholder="例：保健 / 情報I" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><input id="iftyOthersFolderTags" placeholder="教科タグ（例：保健, 情報）" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><button onclick="createIftyOthersFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">作成</button></div><div style="font-size:.75em;color:#64748b;margin-top:6px;">タグ名は自由に変更できます。「世界史 / 日本史」のような固定候補にはしません。</div></div>${renderIftySubjectSelectionToolbar('OTHERS')}<div id="iftyOthersReviewPanelWrap">${renderIftySubjectReviewPanel('OTHERS')}</div>${rows||'<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">OTHERSフォルダを作成してください。</div>'}</section>`,'subject');
+  if(options.preserveScroll){requestAnimationFrame(()=>window.scrollTo({top:y,left:0,behavior:'auto'}));}
+}
+window.createIftyOthersFolder=function(){const n=String(document.getElementById('iftyOthersFolderName')?.value||'').trim();if(!n)return alert('フォルダ名を入力してください。');const tags=normalizeIftyOthersTags(document.getElementById('iftyOthersFolderTags')?.value||'');recordUndoState('OTHERSフォルダ作成');getIftyOthersModule().folders.push({id:makeId('othersfolder'),name:n,tags,collapsed:false,items:[]});savePracticeData();renderIftyOthersPage();};
+window.toggleIftyOthersFolder=function(id){const f=getIftyOthersFolder(id);if(!f)return;f.collapsed=!f.collapsed;savePracticeData();renderIftyOthersPage({preserveScroll:true});};
+window.editIftyOthersFolderTags=function(id){const f=getIftyOthersFolder(id);if(!f)return;const v=prompt('教科タグをカンマ区切りで入力',f.tags.join(', '));if(v===null)return;recordUndoState('OTHERS教科タグ変更');f.tags=normalizeIftyOthersTags(v);savePracticeData();renderIftyOthersPage({preserveScroll:true});};
+window.deleteIftyOthersFolder=function(id){const m=getIftyOthersModule(),f=getIftyOthersFolder(id);if(!f||!confirm(`「${f.name}」を削除しますか？`))return;recordUndoState('OTHERSフォルダ削除');m.folders=m.folders.filter(x=>x.id!==id);savePracticeData();renderIftyOthersPage();};
+window.addBlankIftyOthersItem=function(folderId){const f=getIftyOthersFolder(folderId);if(!f)return;const title=prompt('用語・項目名');if(title===null||!String(title).trim())return;const memoryText=prompt('説明', '')??'';recordUndoState('OTHERS項目追加');f.items.push(normalizeIftyOthersItem({title:String(title).trim(),memoryText,tags:f.tags,source:'MANUAL'}));savePracticeData();renderIftyOthersPage({preserveScroll:true});};
+window.editIftyOthersItem=function(folderId,itemId){const ref=getIftyOthersItemById(itemId);if(!ref)return;const t=prompt('用語・項目名',ref.item.title||'');if(t===null)return;const d=prompt('説明',ref.item.memoryText||'');if(d===null)return;const k=prompt('要点（改行区切り）',(ref.item.keyPoints||[]).join('\n'));if(k===null)return;recordUndoState('OTHERS項目編集');ref.item.title=String(t).trim();ref.item.topic=ref.item.title;ref.item.memoryText=String(d).trim();ref.item.keyPoints=String(k).split(/\n+/).map(x=>x.trim()).filter(Boolean).slice(0,8);ref.item.updatedAt=Date.now();savePracticeData();renderIftyOthersPage({preserveScroll:true});};
+window.deleteIftyOthersItem=function(folderId,itemId){const f=getIftyOthersFolder(folderId);if(!f)return;const i=f.items.findIndex(x=>String(x.id)===String(itemId));if(i<0)return;if(!confirm('この項目を削除しますか？'))return;recordUndoState('OTHERS項目削除');f.items.splice(i,1);iftyOthersSelectedItemIds.delete(String(itemId));savePracticeData();renderIftyOthersPage({preserveScroll:true});};
+window.generateIftyOthersItem=async function(folderId){const f=getIftyOthersFolder(folderId);if(!f)return;const input=document.getElementById(`iftyOthersTopic_${folderId}`);const topic=String(input?.value||iftyOthersTopicDrafts[folderId]||'').trim();if(!topic)return alert('用語・概念を入力してください。');if(!ensureIftyOnline('OTHERSのALLIA生成'))return;iftyOthersGenerationPending[folderId]=(iftyOthersGenerationPending[folderId]||0)+1;renderIftyOthersPage({preserveScroll:true});try{const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'others_generate',topic,tags:f.tags,subject:'OTHERS',order:getIftySubjectOrder('OTHERS')})});const data=await response.json().catch(()=>({}));if(!response.ok)throw alliaHttpError(response,data,'OTHERS生成に失敗しました。');const current=getIftyOthersFolder(folderId);if(current){current.items.push(normalizeIftyOthersItem({...data,topic,tags:current.tags,source:'ALLIA'}));iftyOthersTopicDrafts[folderId]='';savePracticeData();}}catch(e){alert(String(e.message||e));}finally{iftyOthersGenerationPending[folderId]=Math.max(0,(iftyOthersGenerationPending[folderId]||1)-1);renderIftyOthersPage({preserveScroll:true});}};
+
+function getIftyOthersPracticeRefs(){if(iftySubjectQuizRunOverride?.subject==='OTHERS'){const ids=new Set((iftySubjectQuizRunOverride.itemIds||[]).map(String));return getIftyOthersModule().folders.flatMap(folder=>(folder.items||[]).filter(item=>ids.has(String(item.id))).map(item=>({folder,item})));}return getIftyOthersModule().folders.flatMap(folder=>(folder.items||[]).map(item=>({folder,item})));}
+function buildIftyOthersPracticeQuestions(modes,count){const refs=shuffleArray(getIftyOthersPracticeRefs());const out=[];const usableModes=modes.length?modes:['simple'];for(let i=0;i<Math.min(count,refs.length);i++){const ref=refs[i];const mode=usableModes[i%usableModes.length];if(mode==='simple'){const distract=shuffleArray(refs.filter(x=>x.item.id!==ref.item.id)).slice(0,3).map(x=>x.item.title);const options=shuffleArray([ref.item.title,...distract]);if(options.length<2){out.push({mode:'term_write',targetItemId:ref.item.id,prompt:ref.item.memoryText||ref.item.title,answer:ref.item.title});}else out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この説明に当てはまる用語は？',options,answer:ref.item.title});}else if(mode==='term_write')out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この項目名を書いてください。',answer:ref.item.title,aliases:ref.item.aliases||[]});else out.push({mode:'explanation',targetItemId:ref.item.id,prompt:`「${ref.item.title}」を簡潔に説明してください。`,referenceAnswer:ref.item.memoryText,keyPoints:ref.item.keyPoints||[]});}return out;}
+window.startIftyOthersPractice=async function(modes){const refs=getIftyOthersPracticeRefs();if(!refs.length)return alert('出題できるOTHERS項目がありません。');const ms=[...new Set((Array.isArray(modes)?modes:[modes]).filter(Boolean))];iftyOthersPracticeState={modes:ms,questions:buildIftyOthersPracticeQuestions(ms,iftyOthersPracticeQuestionCount),index:0,correct:0,wrong:0,answered:false,feedback:'',modelAnswer:'',last:null};closePracticeModal();renderIftyOthersPracticePlayer();};
+function renderIftyOthersPracticePlayer(){const st=iftyOthersPracticeState;if(!st)return;let modal=document.getElementById('practiceModal');if(!modal){modal=document.createElement('div');modal.id='practiceModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;justify-content:center;align-items:center;padding:18px;box-sizing:border-box;z-index:10030;';document.body.appendChild(modal);}modal.style.display='flex';if(st.index>=st.questions.length){modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:22px;text-align:center;"><h2>OTHERS PRACTICE 完了</h2><div style="font-size:1.2em;font-weight:900;color:#0f766e;">正解 ${st.correct} / ${st.questions.length}</div><button onclick="openPracticeHome('OTHERS')" style="margin-top:14px;border:none;background:#334155;color:white;border-radius:8px;padding:10px 14px;font-weight:900;">PRACTICEへ戻る</button></div>`;return;}const q=st.questions[st.index],meta=getIftyOthersPracticeModeMeta(q.mode);const result=st.answered?`<div style="margin-top:12px;padding:10px;border-radius:8px;background:${st.last?.correct?'#f0fdf4':'#fef2f2'};color:${st.last?.correct?'#166534':'#991b1b'};"><b>${st.last?.correct?'⭕ 正解':'❌ 要復習'}</b>${st.feedback?`<div style="margin-top:5px;white-space:pre-wrap;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:6px;color:#475569;"><b>基準：</b>${escapeHtml(st.modelAnswer)}</div>`:''}<button onclick="nextIftyOthersPracticeQuestion()" style="width:100%;margin-top:10px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px;font-weight:900;">次へ</button></div>`:'';const answer=st.answered?'':(q.mode==='simple'?`<div style="display:grid;gap:8px;margin-top:12px;">${q.options.map(o=>`<button onclick="submitIftyOthersPracticeAnswer(${JSON.stringify(o).replace(/"/g,'&quot;')})" style="border:1px solid #cbd5e1;background:white;border-radius:8px;padding:10px;text-align:left;font-weight:800;">${escapeHtml(o)}</button>`).join('')}</div>`:`<textarea id="iftyOthersPracticeAnswer" rows="4" placeholder="回答を入力" style="width:100%;box-sizing:border-box;margin-top:12px;padding:10px;border:1px solid #c4b5fd;border-radius:8px;"></textarea><button onclick="submitIftyOthersPracticeAnswer()" style="width:100%;margin-top:8px;border:none;background:${meta.color};color:white;border-radius:8px;padding:10px;font-weight:900;">回答する</button>`);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(680px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><b style="color:${meta.color};">OTHERS ・ ${meta.title} ・ ${st.index+1}/${st.questions.length}</b><button onclick="openPracticeHome('OTHERS')" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;">終了</button></div><div style="margin-top:14px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:9px;line-height:1.65;white-space:pre-wrap;">${escapeHtml(q.prompt)}</div>${answer}${result}</div>`;}
+window.submitIftyOthersPracticeAnswer=async function(choice){const st=iftyOthersPracticeState;if(!st||st.answered)return;const q=st.questions[st.index];const ref=getIftyOthersItemById(q.targetItemId);if(!ref)return;const user=choice!==undefined?String(choice):String(document.getElementById('iftyOthersPracticeAnswer')?.value||'').trim();if(!user)return;let correct=false,feedback='',model=q.answer||q.referenceAnswer||'';if(q.mode==='simple'||q.mode==='term_write'){const accepted=[q.answer,...(q.aliases||[])].map(x=>String(x||'').trim().toLowerCase());correct=accepted.includes(user.trim().toLowerCase());feedback=correct?'登録内容と一致しました。':'登録内容とは一致しませんでした。';}else{if(!ensureIftyOnline('OTHERS記述採点'))return;try{const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_grade',quizType:'others_explanation',direction:'term_to_explanation',question:q.prompt,referenceAnswer:q.referenceAnswer||'',userAnswer:user,word:{word:ref.item.title,meanings:[ref.item.memoryText],details:(ref.item.keyPoints||[]).join(' / ')},subject:'OTHERS',order:getIftySubjectOrder('OTHERS')})});const data=await response.json().catch(()=>({}));if(!response.ok)throw alliaHttpError(response,data,'採点に失敗しました。');correct=data.correct===true;feedback=data.feedback||'';model=data.modelAnswer||model;}catch(e){return alert(String(e.message||e));}}st.answered=true;st.last={correct,userAnswer:user};st.feedback=feedback;st.modelAnswer=model;if(correct)st.correct++;else st.wrong++;recordIftySubjectStudyEvent('OTHERS',q.targetItemId,correct,`others_${q.mode}`);enrollIftyEntityReviewFromStudy(ref.item,correct);savePracticeData();renderIftyOthersPracticePlayer();};
+window.nextIftyOthersPracticeQuestion=function(){const st=iftyOthersPracticeState;if(!st||!st.answered)return;st.index++;st.answered=false;st.feedback='';st.modelAnswer='';st.last=null;renderIftyOthersPracticePlayer();};
 
 // ==========================================
 // ALLIA 表示統一
@@ -12091,6 +12273,7 @@ function getIftySubjectStudyItem(subject, itemId) {
   if (key === 'SCIENCE') return getIftyScienceItemById(itemId)?.item || null;
   if (key === 'ANCIENT') return getIftyAncientItemById(itemId)?.item || null;
   if (key === 'KANBUN') return getIftyKanbunItemById(itemId)?.item || null;
+  if (key === 'OTHERS') return getIftyOthersItemById(itemId)?.item || null;
   return null;
 }
 
@@ -12140,6 +12323,7 @@ function getIftySubjectWeakEntries(subject) {
   else if (key === 'SCIENCE') foldersToUse = getIftyScienceModule().folders || [];
   else if (key === 'ANCIENT') foldersToUse = getIftyAncientModule().folders || [];
   else if (key === 'KANBUN') foldersToUse = getIftyKanbunModule().folders || [];
+  else if (key === 'OTHERS') foldersToUse = getIftyOthersModule().folders || [];
   const entries = [];
   foldersToUse.forEach(folder => (folder.items || []).forEach(item => {
     if (!isIftySubjectWeakItem(item)) return;
@@ -12536,6 +12720,7 @@ function getIftySubjectReviewModuleKey(subject) {
   if (key === 'SCIENCE') return 'science';
   if (key === 'ANCIENT') return 'ancient';
   if (key === 'KANBUN') return 'kanbun';
+  if (key === 'OTHERS') return 'others';
   return '';
 }
 
@@ -12544,6 +12729,7 @@ function getIftySubjectReviewLabel(subject) {
   if (key === 'SCIENCE') return '理科';
   if (key === 'ANCIENT') return '古文単語';
   if (key === 'KANBUN') return '漢文';
+  if (key === 'OTHERS') return 'OTHERS';
   return '社会';
 }
 
@@ -12553,6 +12739,7 @@ function getIftySubjectReviewItemRef(subject, itemId) {
   if (key === 'SCIENCE') return getIftyScienceItemById(itemId);
   if (key === 'ANCIENT') return getIftyAncientItemById(itemId);
   if (key === 'KANBUN') return getIftyKanbunItemById(itemId);
+  if (key === 'OTHERS') return getIftyOthersItemById(itemId);
   return null;
 }
 
@@ -12716,11 +12903,12 @@ function toggleIftySubjectItemReview(subject, folderId, itemId) {
   if (key === 'SCIENCE') refreshIftyScienceFolderDynamic(ref.folder.id);
   else if (key === 'ANCIENT') refreshIftyAncientFolderDynamic(ref.folder.id);
   else if (key === 'KANBUN') refreshIftyKanbunFolderDynamic(ref.folder.id);
+  else if (key === 'OTHERS') renderIftyOthersPage({ preserveScroll: true });
   else refreshIftySocialFolderDynamic(ref.folder.id);
 
   const panelId = key === 'SCIENCE'
     ? 'iftyScienceReviewPanelWrap'
-    : (key === 'ANCIENT' ? 'iftyAncientReviewPanelWrap' : (key === 'KANBUN' ? 'iftyKanbunReviewPanelWrap' : 'iftySocialReviewPanelWrap'));
+    : (key === 'ANCIENT' ? 'iftyAncientReviewPanelWrap' : (key === 'KANBUN' ? 'iftyKanbunReviewPanelWrap' : (key === 'OTHERS' ? 'iftyOthersReviewPanelWrap' : 'iftySocialReviewPanelWrap')));
   const panel = document.getElementById(panelId);
   if (panel) panel.innerHTML = renderIftySubjectReviewPanel(key);
 }
@@ -12741,6 +12929,10 @@ window.toggleIftyKanbunItemReview = function(folderId, itemId) {
   toggleIftySubjectItemReview('KANBUN', folderId, itemId);
 };
 
+window.toggleIftyOthersItemReview = function(folderId, itemId) {
+  toggleIftySubjectItemReview('OTHERS', folderId, itemId);
+};
+
 function renderIftySubjectReviewPanel(subject) {
   const key = normalizeIftySubject(subject);
   const label = getIftySubjectReviewLabel(key);
@@ -12754,7 +12946,13 @@ function renderIftySubjectReviewPanel(subject) {
         const title = String(item.title || item.word || item.topic || '無題');
         const summary = String(item.memoryText || '').trim().replace(/\s+/g, ' ');
         const stage = review.level < 0 ? '今すぐ' : `${IFTY_REVIEW_INTERVAL_DAYS[Math.max(0, review.level)]}日段階`;
-        const toggleFn = key === 'SCIENCE' ? 'toggleIftyScienceItemReview' : (key === 'KANBUN' ? 'toggleIftyKanbunItemReview' : 'toggleIftySocialItemReview');
+        const toggleFn = key === 'SCIENCE'
+          ? 'toggleIftyScienceItemReview'
+          : (key === 'ANCIENT'
+              ? 'toggleIftyAncientItemReview'
+              : (key === 'KANBUN'
+                  ? 'toggleIftyKanbunItemReview'
+                  : (key === 'OTHERS' ? 'toggleIftyOthersItemReview' : 'toggleIftySocialItemReview')));
         return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #fed7aa;">
           <div style="min-width:0;flex:1;">
             <div style="font-weight:900;color:#7c2d12;overflow-wrap:anywhere;">${escapeHtml(title)}</div>
@@ -12788,7 +12986,11 @@ window.startIftySubjectDueReviewFlashcards = function(subject, direction = 'fron
 
   currentFlashcardMode = key === 'SCIENCE'
     ? 'science_review_due'
-    : (key === 'ANCIENT' ? 'ancient_review_due' : (key === 'KANBUN' ? 'kanbun_review_due' : 'social_review_due'));
+    : (key === 'ANCIENT'
+        ? 'ancient_review_due'
+        : (key === 'KANBUN'
+            ? 'kanbun_review_due'
+            : (key === 'OTHERS' ? 'others_review_due' : 'social_review_due')));
   cardMode = direction === 'back' ? 'back' : 'front';
   isRandomMode = false;
 
@@ -12808,7 +13010,9 @@ window.startIftySubjectDueReviewFlashcards = function(subject, direction = 'fron
           ? { __iftyAncientFlashcard: true, __iftyAncientItemId: String(item.id || '') }
           : (key === 'KANBUN'
               ? { __iftyKanbunFlashcard: true, __iftyKanbunItemId: String(item.id || '') }
-              : { __iftySocialFlashcard: true, __iftySocialItemId: String(item.id || '') })))
+              : (key === 'OTHERS'
+                  ? { __iftyOthersFlashcard: true, __iftyOthersItemId: String(item.id || '') }
+                  : { __iftySocialFlashcard: true, __iftySocialItemId: String(item.id || '') }))))
   }));
 
   currentFlashcardIndex = 0;
@@ -14072,10 +14276,12 @@ function normalizeIftySubjectQuizSet(value, index = 0, subject = '') {
         ? ['simple','term_write','formula','order','explanation','image']
         : (key === 'KANBUN'
             ? ['simple','translation','kundoku','cloze','kaeriten','same_meaning']
-            : ['choice','term_write','reading_write','meaning_write','example','grammar_conjugate','grammar_identify','grammar_table','grammar_explain']));
+            : (key === 'OTHERS'
+                ? ['simple','term_write','explanation']
+                : ['choice','term_write','reading_write','meaning_write','example','grammar_conjugate','grammar_identify','grammar_table','grammar_explain'])));
   const defaultMode = allowed[0];
   const fallbackMode = allowed.includes(source.mode) ? source.mode : defaultMode;
-  const modes = key === 'KANBUN'
+  const modes = (key === 'KANBUN' || key === 'OTHERS')
     ? [...new Set((Array.isArray(source.modes) ? source.modes : [fallbackMode]).map(String).filter(mode => allowed.includes(mode)))]
     : [fallbackMode];
   if (!modes.length) modes.push(defaultMode);
@@ -14276,6 +14482,23 @@ function normalizePracticeData() {
   practiceData.modules.kanbun.flashcardSets = practiceData.modules.kanbun.flashcardSets.map(normalizeIftySubjectFlashcardSet);
   if (!Array.isArray(practiceData.modules.kanbun.quizSets)) practiceData.modules.kanbun.quizSets = [];
   practiceData.modules.kanbun.quizSets = practiceData.modules.kanbun.quizSets.map((set, index) => normalizeIftySubjectQuizSet(set, index, 'KANBUN'));
+
+  if (!practiceData.modules.others || typeof practiceData.modules.others !== 'object') practiceData.modules.others = { folders: [] };
+  if (!Array.isArray(practiceData.modules.others.folders)) practiceData.modules.others.folders = [];
+  practiceData.modules.others.folders = practiceData.modules.others.folders.map(folder => {
+    const source = folder && typeof folder === 'object' ? folder : {};
+    return {
+      id: String(source.id || makeId('othersfolder')),
+      name: String(source.name || 'その他').trim() || 'その他',
+      tags: normalizeIftyOthersTags(source.tags),
+      collapsed: !!source.collapsed,
+      items: Array.isArray(source.items) ? source.items.map(normalizeIftyOthersItem).filter(Boolean) : []
+    };
+  });
+  if (!Array.isArray(practiceData.modules.others.flashcardSets)) practiceData.modules.others.flashcardSets = [];
+  practiceData.modules.others.flashcardSets = practiceData.modules.others.flashcardSets.map(normalizeIftySubjectFlashcardSet);
+  if (!Array.isArray(practiceData.modules.others.quizSets)) practiceData.modules.others.quizSets = [];
+  practiceData.modules.others.quizSets = practiceData.modules.others.quizSets.map((set,index)=>normalizeIftySubjectQuizSet(set,index,'OTHERS'));
 
 }
 function loadPracticeData(username) {
@@ -15677,6 +15900,7 @@ window.openPracticeHome = function(subject) {
   else if (requested === 'SCIENCE') iftyUnifiedPracticeSubject = 'SCIENCE';
   else if (requested === 'ANCIENT') iftyUnifiedPracticeSubject = 'ANCIENT';
   else if (requested === 'KANBUN') iftyUnifiedPracticeSubject = 'KANBUN';
+  else if (requested === 'OTHERS') iftyUnifiedPracticeSubject = 'OTHERS';
   else if (requested === 'BASIC SENTENCES') iftyUnifiedPracticeSubject = 'BASIC SENTENCES';
   else if (
     requested === 'ENGLISH' ||
@@ -15689,6 +15913,7 @@ window.openPracticeHome = function(subject) {
   else if (currentIftySubject === 'SCIENCE') iftyUnifiedPracticeSubject = 'SCIENCE';
   else if (currentIftySubject === 'ANCIENT') iftyUnifiedPracticeSubject = 'ANCIENT';
   else if (currentIftySubject === 'KANBUN') iftyUnifiedPracticeSubject = 'KANBUN';
+  else if (currentIftySubject === 'OTHERS') iftyUnifiedPracticeSubject = 'OTHERS';
   else iftyUnifiedPracticeSubject = 'ENGLISH';
   let modal = document.getElementById('practiceModal');
   if (!modal) {
@@ -15716,7 +15941,9 @@ window.setIftyUnifiedPracticeSubject = function(subject) {
             ? 'ANCIENT'
             : (value === 'KANBUN'
                 ? 'KANBUN'
-                : (value === 'BASIC SENTENCES' ? 'BASIC SENTENCES' : 'ENGLISH'))));
+                : (value === 'OTHERS'
+                    ? 'OTHERS'
+                    : (value === 'BASIC SENTENCES' ? 'BASIC SENTENCES' : 'ENGLISH')))));
   renderPracticeHome();
 };
 
@@ -15743,6 +15970,11 @@ function renderPracticeHome() {
     renderIftySubjectPracticeFolderHub(modal, 'KANBUN');
     return;
   }
+  if (iftyUnifiedPracticeSubject === 'OTHERS') {
+    iftySubjectQuizRunOverride = null;
+    renderIftySubjectPracticeFolderHub(modal, 'OTHERS');
+    return;
+  }
   if (iftyUnifiedPracticeSubject === 'BASIC SENTENCES') {
     renderIftyBasicSentencePracticeHome(modal);
     return;
@@ -15761,6 +15993,7 @@ function renderPracticeHome() {
         <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANBUN</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('OTHERS')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">OTHERS</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
       </div>
 
@@ -15819,6 +16052,7 @@ function getIftySubjectSelectionSet(subject) {
   if (key === 'SCIENCE') return iftyScienceSelectedItemIds;
   if (key === 'ANCIENT') return iftyAncientSelectedItemIds;
   if (key === 'KANBUN') return iftyKanbunSelectedItemIds;
+  if (key === 'OTHERS') return iftyOthersSelectedItemIds;
   return new Set();
 }
 
@@ -15828,6 +16062,7 @@ function getIftySubjectFoldersForBulk(subject) {
   if (key === 'SCIENCE') return getIftyScienceModule().folders || [];
   if (key === 'ANCIENT') return getIftyAncientModule().folders || [];
   if (key === 'KANBUN') return getIftyKanbunModule().folders || [];
+  if (key === 'OTHERS') return getIftyOthersModule().folders || [];
   return [];
 }
 
@@ -15837,6 +16072,7 @@ function getIftySubjectItemRefForBulk(subject, itemId) {
   if (key === 'SCIENCE') return getIftyScienceItemById(itemId);
   if (key === 'ANCIENT') return getIftyAncientItemById(itemId);
   if (key === 'KANBUN') return getIftyKanbunItemById(itemId);
+  if (key === 'OTHERS') return getIftyOthersItemById(itemId);
   return null;
 }
 
@@ -15924,6 +16160,7 @@ window.moveIftySubjectSelectedItemsTo = function(subject, destinationId) {
   else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
   else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
   else if (key === 'KANBUN') renderIftyKanbunPage({ preserveScroll: true });
+  else if (key === 'OTHERS') renderIftyOthersPage({ preserveScroll: true });
 };
 
 function renderIftySubjectSelectionToolbar(subject) {
@@ -15979,6 +16216,7 @@ window.toggleIftySubjectFolderItemsSelection = function(subject, folderId) {
   else if (key === 'SCIENCE') refreshIftyScienceFolderDynamic(folderId);
   else if (key === 'ANCIENT') refreshIftyAncientFolderDynamic(folderId);
   else if (key === 'KANBUN') refreshIftyKanbunFolderDynamic(folderId);
+  else if (key === 'OTHERS') renderIftyOthersPage({ preserveScroll: true });
 
   refreshIftySubjectSelectionToolbar(key);
 };
@@ -15994,6 +16232,7 @@ window.selectAllIftySubjectItems = function(subject) {
   else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
   else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
   else if (key === 'KANBUN') renderIftyKanbunPage({ preserveScroll: true });
+  else if (key === 'OTHERS') renderIftyOthersPage({ preserveScroll: true });
 };
 
 window.clearIftySubjectItemSelections = function(subject) {
@@ -16004,6 +16243,7 @@ window.clearIftySubjectItemSelections = function(subject) {
   else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
   else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
   else if (key === 'KANBUN') renderIftyKanbunPage({ preserveScroll: true });
+  else if (key === 'OTHERS') renderIftyOthersPage({ preserveScroll: true });
 };
 
 window.bulkDeleteIftySubjectSelectedItems = function(subject) {
@@ -16025,6 +16265,7 @@ window.bulkDeleteIftySubjectSelectedItems = function(subject) {
   else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
   else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
   else if (key === 'KANBUN') renderIftyKanbunPage({ preserveScroll: true });
+  else if (key === 'OTHERS') renderIftyOthersPage({ preserveScroll: true });
 };
 
 window.bulkMoveIftySubjectSelectedItems = function(subject) {
@@ -16067,6 +16308,7 @@ window.bulkMoveIftySubjectSelectedItems = function(subject) {
   else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll: true });
   else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll: true });
   else if (key === 'KANBUN') renderIftyKanbunPage({ preserveScroll: true });
+  else if (key === 'OTHERS') renderIftyOthersPage({ preserveScroll: true });
 };
 
 
@@ -16078,7 +16320,7 @@ function getIftySubjectQuizSets(subject) {
   const key = normalizeIftySubject(subject);
   const module = key === 'SOCIAL STUDIES'
     ? practiceData?.modules?.socialStudies
-    : (key === 'SCIENCE' ? practiceData?.modules?.science : (key === 'ANCIENT' ? practiceData?.modules?.ancient : (key === 'KANBUN' ? practiceData?.modules?.kanbun : null)));
+    : (key === 'SCIENCE' ? practiceData?.modules?.science : (key === 'ANCIENT' ? practiceData?.modules?.ancient : (key === 'KANBUN' ? practiceData?.modules?.kanbun : (key === 'OTHERS' ? practiceData?.modules?.others : null))));
   if (!module) return [];
   if (!Array.isArray(module.quizSets)) module.quizSets = [];
   return module.quizSets;
@@ -16096,11 +16338,11 @@ function getIftySubjectQuizModeOptions(subject) {
         ? ['simple','term_write','formula','order','explanation','image']
         : (key === 'KANBUN'
             ? ['simple','translation','kundoku','cloze','kaeriten','same_meaning']
-            : ['choice','term_write','reading_write','meaning_write','example','grammar_conjugate','grammar_identify','grammar_table','grammar_explain']));
+            : (key === 'OTHERS' ? ['simple','term_write','explanation'] : ['choice','term_write','reading_write','meaning_write','example','grammar_conjugate','grammar_identify','grammar_table','grammar_explain'])));
   return modes.map(mode => {
     const meta = key === 'SOCIAL STUDIES'
       ? getIftySocialPracticeModeMeta(mode)
-      : (key === 'SCIENCE' ? getIftySciencePracticeModeMeta(mode) : (key === 'KANBUN' ? getIftyKanbunPracticeModeMeta(mode) : getIftyAncientPracticeModeMeta(mode)));
+      : (key === 'SCIENCE' ? getIftySciencePracticeModeMeta(mode) : (key === 'KANBUN' ? getIftyKanbunPracticeModeMeta(mode) : (key === 'OTHERS' ? getIftyOthersPracticeModeMeta(mode) : getIftyAncientPracticeModeMeta(mode))));
     return { mode, title: meta.title, description: meta.description };
   });
 }
@@ -16109,7 +16351,7 @@ function getIftySubjectQuizModeOptions(subject) {
 function getIftySubjectQuizSetModes(subject,set){
   const key=normalizeIftySubject(subject);
   const allowed=getIftySubjectQuizModeOptions(key).map(row=>row.mode);
-  if(key!=='KANBUN')return [allowed.includes(set?.mode)?set.mode:allowed[0]].filter(Boolean);
+  if(key!=='KANBUN' && key!=='OTHERS')return [allowed.includes(set?.mode)?set.mode:allowed[0]].filter(Boolean);
   const modes=[...new Set((Array.isArray(set?.modes)?set.modes:[set?.mode]).map(String).filter(mode=>allowed.includes(mode)))];
   return modes.length?modes:[allowed[0]];
 }
@@ -16193,7 +16435,7 @@ window.openIftySubjectQuizSet = function(subject, setId) {
   const checkedCount = getIftySelectedSubjectFlashcardRefs(key).length;
   const modes = getIftySubjectQuizModeOptions(key);
   const selectedModes = new Set(getIftySubjectQuizSetModes(key,set));
-  const sourceFolders = key==='KANBUN' ? (getIftyKanbunModule().folders||[]) : [];
+  const sourceFolders = key==='KANBUN' ? (getIftyKanbunModule().folders||[]) : (key==='OTHERS' ? (getIftyOthersModule().folders||[]) : []);
 
   modal.innerHTML = `<div style="background:white;border-radius:14px;width:min(780px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -16205,7 +16447,7 @@ window.openIftySubjectQuizSet = function(subject, setId) {
     </div>
 
     <div style="margin-top:14px;padding:12px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-      ${key==='KANBUN'?`<div style="width:100%;"><div style="font-weight:900;color:#4c1d95;margin-bottom:7px;">問題形式（複数選択可）</div><div style="display:flex;gap:7px;flex-wrap:wrap;">${modes.map(row=>`<label style="display:flex;align-items:center;gap:5px;border:1px solid ${selectedModes.has(row.mode)?'#8b5cf6':'#ddd6fe'};background:${selectedModes.has(row.mode)?'#f5f3ff':'white'};border-radius:999px;padding:7px 10px;cursor:pointer;color:#4c1d95;font-weight:800;"><input type="checkbox" ${selectedModes.has(row.mode)?'checked':''} onchange="toggleIftySubjectQuizMode('${key}','${set.id}','${row.mode}',this.checked)">${escapeHtml(row.title)}</label>`).join('')}</div></div>`:`<label style="font-weight:900;color:#4c1d95;">形式<select onchange="setIftySubjectQuizMode('${key}','${set.id}',this.value)" style="margin-left:5px;padding:8px;border:1px solid #c4b5fd;border-radius:6px;background:white;">${modes.map(row => `<option value="${row.mode}" ${row.mode === set.mode ? 'selected' : ''}>${escapeHtml(row.title)}</option>`).join('')}</select></label>`}
+      ${(key==='KANBUN'||key==='OTHERS')?`<div style="width:100%;"><div style="font-weight:900;color:#4c1d95;margin-bottom:7px;">問題形式（複数選択可）</div><div style="display:flex;gap:7px;flex-wrap:wrap;">${modes.map(row=>`<label style="display:flex;align-items:center;gap:5px;border:1px solid ${selectedModes.has(row.mode)?'#8b5cf6':'#ddd6fe'};background:${selectedModes.has(row.mode)?'#f5f3ff':'white'};border-radius:999px;padding:7px 10px;cursor:pointer;color:#4c1d95;font-weight:800;"><input type="checkbox" ${selectedModes.has(row.mode)?'checked':''} onchange="toggleIftySubjectQuizMode('${key}','${set.id}','${row.mode}',this.checked)">${escapeHtml(row.title)}</label>`).join('')}</div></div>`:`<label style="font-weight:900;color:#4c1d95;">形式<select onchange="setIftySubjectQuizMode('${key}','${set.id}',this.value)" style="margin-left:5px;padding:8px;border:1px solid #c4b5fd;border-radius:6px;background:white;">${modes.map(row => `<option value="${row.mode}" ${row.mode === set.mode ? 'selected' : ''}>${escapeHtml(row.title)}</option>`).join('')}</select></label>`}
       <label style="font-weight:900;color:#4c1d95;">問題数
         <select onchange="setIftySubjectQuizQuestionCount('${key}','${set.id}',this.value)" style="margin-left:5px;padding:8px;border:1px solid #c4b5fd;border-radius:6px;background:white;">
           <option value="5" ${set.questionCount === 5 ? 'selected' : ''}>5問</option><option value="10" ${set.questionCount === 10 ? 'selected' : ''}>10問</option>
@@ -16220,7 +16462,7 @@ window.openIftySubjectQuizSet = function(subject, setId) {
         <button type="button" onclick="addCheckedToIftySubjectQuizSet('${key}','${set.id}')" ${checkedCount ? '' : 'disabled'} style="border:none;background:#0284c7;color:white;border-radius:6px;padding:7px 9px;font-weight:900;cursor:${checkedCount ? 'pointer' : 'default'};opacity:${checkedCount ? '1' : '.45'};">教科画面でチェック中を追加（${checkedCount}）</button>
         <button type="button" onclick="clearIftySubjectQuizSetItems('${key}','${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:6px;padding:7px 9px;font-weight:900;cursor:pointer;">空にする</button>
       </div>
-      ${key==='KANBUN'&&sourceFolders.length?`<div style="margin-top:9px;padding:9px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:8px;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:6px;">学習フォルダ単位で追加</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${sourceFolders.map(folder=>`<button type="button" onclick="addIftySubjectFolderToQuizSet('${key}','${set.id}','${folder.id}')" style="border:1px solid #7dd3fc;background:white;color:#075985;border-radius:999px;padding:7px 10px;font-weight:900;cursor:pointer;">＋ ${escapeHtml(folder.name)} (${(folder.items||[]).length})</button>`).join('')}</div></div>`:''}
+      ${(key==='KANBUN'||key==='OTHERS')&&sourceFolders.length?`<div style="margin-top:9px;padding:9px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:8px;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:6px;">学習フォルダ単位で追加</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${sourceFolders.map(folder=>`<button type="button" onclick="addIftySubjectFolderToQuizSet('${key}','${set.id}','${folder.id}')" style="border:1px solid #7dd3fc;background:white;color:#075985;border-radius:999px;padding:7px 10px;font-weight:900;cursor:pointer;">＋ ${escapeHtml(folder.name)} (${(folder.items||[]).length})</button>`).join('')}</div></div>`:''}
       <div style="max-height:330px;overflow:auto;margin-top:9px;border-top:1px solid #e2e8f0;">
         ${allRefs.length ? allRefs.map(ref => {
           const id=String(ref.item.id); const checked=selected.has(id);
@@ -16235,12 +16477,12 @@ window.openIftySubjectQuizSet = function(subject, setId) {
 };
 
 window.renameIftySubjectQuizSet = function(subject,setId){ const key=normalizeIftySubject(subject); const set=getIftySubjectQuizSet(key,setId); if(!set)return; openPracticeNamePrompt('クイズフォルダ名を変更',set.name,name=>{recordUndoState(`${getIftySubjectDisplayName(key)} クイズ名変更`);set.name=name;set.updatedAt=Date.now();savePracticeData();openIftySubjectQuizSet(key,setId);}); };
-window.setIftySubjectQuizMode = function(subject,setId,mode){ const key=normalizeIftySubject(subject); const set=getIftySubjectQuizSet(key,setId); if(!set)return; if(!getIftySubjectQuizModeOptions(key).some(row=>row.mode===mode))return; set.mode=mode;if(key==='KANBUN')set.modes=[mode];set.updatedAt=Date.now();savePracticeData(); };
-window.toggleIftySubjectQuizMode = function(subject,setId,mode,checked){ const key=normalizeIftySubject(subject);const set=getIftySubjectQuizSet(key,setId);if(!set||key!=='KANBUN')return;const allowed=getIftySubjectQuizModeOptions(key).map(row=>row.mode);if(!allowed.includes(mode))return;const modes=new Set(getIftySubjectQuizSetModes(key,set));if(checked)modes.add(mode);else modes.delete(mode);if(!modes.size){alert('問題形式を1つ以上選択してください。');openIftySubjectQuizSet(key,setId);return;}set.modes=[...modes];set.mode=set.modes[0];set.updatedAt=Date.now();savePracticeData();openIftySubjectQuizSet(key,setId); };
+window.setIftySubjectQuizMode = function(subject,setId,mode){ const key=normalizeIftySubject(subject); const set=getIftySubjectQuizSet(key,setId); if(!set)return; if(!getIftySubjectQuizModeOptions(key).some(row=>row.mode===mode))return; set.mode=mode;if(key==='KANBUN'||key==='OTHERS')set.modes=[mode];set.updatedAt=Date.now();savePracticeData(); };
+window.toggleIftySubjectQuizMode = function(subject,setId,mode,checked){ const key=normalizeIftySubject(subject);const set=getIftySubjectQuizSet(key,setId);if(!set||(key!=='KANBUN'&&key!=='OTHERS'))return;const allowed=getIftySubjectQuizModeOptions(key).map(row=>row.mode);if(!allowed.includes(mode))return;const modes=new Set(getIftySubjectQuizSetModes(key,set));if(checked)modes.add(mode);else modes.delete(mode);if(!modes.size){alert('問題形式を1つ以上選択してください。');openIftySubjectQuizSet(key,setId);return;}set.modes=[...modes];set.mode=set.modes[0];set.updatedAt=Date.now();savePracticeData();openIftySubjectQuizSet(key,setId); };
 window.setIftySubjectQuizQuestionCount = function(subject,setId,value){ const set=getIftySubjectQuizSet(subject,setId); if(!set)return;set.questionCount=Number(value)===10?10:5;set.updatedAt=Date.now();savePracticeData(); };
 window.toggleIftySubjectQuizSetItem = function(subject,setId,itemId,checked){ const key=normalizeIftySubject(subject);const set=getIftySubjectQuizSet(key,setId);if(!set)return;const ids=new Set((set.itemIds||[]).map(String));if(checked)ids.add(String(itemId));else ids.delete(String(itemId));set.itemIds=uniqueIftySubjectFlashcardIds(key,[...ids]);set.updatedAt=Date.now();savePracticeData();openIftySubjectQuizSet(key,setId); };
 window.addCheckedToIftySubjectQuizSet = function(subject,setId){ const key=normalizeIftySubject(subject);const set=getIftySubjectQuizSet(key,setId);if(!set)return;const refs=getIftySelectedSubjectFlashcardRefs(key);if(!refs.length){alert('教科画面で追加したい項目にチェックを入れてください。');return;}set.itemIds=uniqueIftySubjectFlashcardIds(key,[...(set.itemIds||[]),...refs.map(ref=>String(ref.item.id))]);set.updatedAt=Date.now();savePracticeData();openIftySubjectQuizSet(key,setId); };
-window.addIftySubjectFolderToQuizSet = function(subject,setId,folderId){ const key=normalizeIftySubject(subject);const set=getIftySubjectQuizSet(key,setId);if(!set||key!=='KANBUN')return;const folder=getIftyKanbunFolder(folderId);if(!folder)return;const ids=(folder.items||[]).map(item=>String(item.id));set.itemIds=uniqueIftySubjectFlashcardIds(key,[...(set.itemIds||[]),...ids]);set.updatedAt=Date.now();savePracticeData();openIftySubjectQuizSet(key,setId); };
+window.addIftySubjectFolderToQuizSet = function(subject,setId,folderId){ const key=normalizeIftySubject(subject);const set=getIftySubjectQuizSet(key,setId);if(!set||!['KANBUN','OTHERS'].includes(key))return;const folder=key==='KANBUN'?getIftyKanbunFolder(folderId):getIftyOthersFolder(folderId);if(!folder)return;const ids=(folder.items||[]).map(item=>String(item.id));set.itemIds=uniqueIftySubjectFlashcardIds(key,[...(set.itemIds||[]),...ids]);set.updatedAt=Date.now();savePracticeData();openIftySubjectQuizSet(key,setId); };
 window.clearIftySubjectQuizSetItems = function(subject,setId){ const key=normalizeIftySubject(subject);const set=getIftySubjectQuizSet(key,setId);if(!set||!confirm('このクイズフォルダの出題項目をすべて外しますか？'))return;set.itemIds=[];set.updatedAt=Date.now();savePracticeData();openIftySubjectQuizSet(key,setId); };
 
 window.startIftySubjectQuizSet = async function(subject,setId){
@@ -16251,6 +16493,7 @@ window.startIftySubjectQuizSet = async function(subject,setId){
   else if(key==='SCIENCE'){iftySciencePracticeQuestionCount=set.questionCount;await startIftySciencePractice(set.mode);}
   else if(key==='ANCIENT'){iftyAncientPracticeQuestionCount=set.questionCount;await startIftyAncientPractice(set.mode);}
   else if(key==='KANBUN'){iftyKanbunPracticeQuestionCount=set.questionCount;await startIftyKanbunPractice(getIftySubjectQuizSetModes(key,set));}
+  else if(key==='OTHERS'){iftyOthersPracticeQuestionCount=set.questionCount;await startIftyOthersPractice(getIftySubjectQuizSetModes(key,set));}
 };
 
 function renderIftySubjectPracticeFolderHub(modal, subject) {
@@ -16264,6 +16507,7 @@ function renderIftySubjectPracticeFolderHub(modal, subject) {
       <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="${active('KANBUN')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANBUN</button>
       <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="${active('SOCIAL STUDIES')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
       <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="${active('SCIENCE')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
+      <button type="button" onclick="setIftyUnifiedPracticeSubject('OTHERS')" style="${active('OTHERS')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">OTHERS</button>
       <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
     </div>
     ${renderIftySubjectFlashcardSetsSection(key)}
@@ -16278,6 +16522,7 @@ function getIftySubjectFlashcardModule(subject) {
   if (key === 'KANBUN') return modules.kanbun || null;
   if (key === 'SCIENCE') return modules.science || null;
   if (key === 'SOCIAL STUDIES') return modules.socialStudies || null;
+  if (key === 'OTHERS') return modules.others || null;
   return null;
 }
 
@@ -17135,6 +17380,7 @@ function renderIftyUnifiedAncientPracticeHome(modal) {
         <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANBUN</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('OTHERS')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">OTHERS</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
       </div>
 
@@ -17691,6 +17937,7 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
         <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANBUN</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('OTHERS')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">OTHERS</button>
         <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
       </div>
 
@@ -18602,7 +18849,7 @@ async function renderQuizPlayer(setId) {
       <div style="margin-top:15px;padding:18px;background:#faf5ff;border:2px solid #ddd6fe;border-radius:10px;color:#2e1065;line-height:1.65;font-size:1.08em;white-space:pre-wrap;">${escapeHtml(q.question||'')}</div>
       ${q.audioText?`<div style="margin-top:10px;display:flex;justify-content:center;gap:6px;align-items:center;flex-wrap:wrap;"><button onclick="speakQuizAudio('${set.id}')" style="background:#0ea5e9;color:white;border:none;border-radius:8px;padding:10px 16px;font-weight:bold;cursor:pointer;">🔊 音声を再生</button><span style="font-size:.72em;color:#64748b;font-weight:800;">速度</span>${[0.75,0.9,1].map(rate=>`<button type="button" onclick="setIftyListeningRate(${rate}); speakQuizAudio('${set.id}')" style="border:1px solid ${iftyListeningRate===rate?'#0284c7':'#cbd5e1'};background:${iftyListeningRate===rate?'#e0f2fe':'white'};color:#0369a1;border-radius:6px;padding:6px 8px;font-size:.76em;cursor:pointer;">${rate}×</button>`).join('')}</div>`:''}
       ${q.instruction?`<div style="margin-top:7px;color:#64748b;font-size:.82em;">${escapeHtml(q.instruction)}</div>`:''}
-      <div style="margin-top:9px;display:flex;justify-content:flex-end;"><button type="button" onclick="openIftyQuizAlliaQuestion('${set.id}')" style="border:1px solid #93c5fd;background:#eff6ff;color:#1d4ed8;border-radius:8px;padding:8px 11px;font-weight:900;cursor:pointer;">💬 問題についてALLIAに質問</button></div>
+      <div style="margin-top:9px;display:flex;justify-content:flex-end;"><button type="button" onclick="openIftyQuizAllia('${set.id}')" style="border:1px solid #c4b5fd;background:#faf5ff;color:#6d28d9;border-radius:8px;padding:8px 11px;font-weight:900;cursor:pointer;">🤖 ALLIA</button></div>
       ${Array.isArray(q.options)&&q.options.length?`<div id="quizChoiceArea" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;">${q.options.map((option,i)=>`<label style="display:flex;gap:8px;align-items:center;border:2px solid #ddd6fe;background:white;border-radius:8px;padding:10px;cursor:pointer;"><input type="radio" name="quizChoice" value="${escapeHtml(option)}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuizAnswer('${set.id}');}" style="accent-color:#7c3aed;"><span>${String.fromCharCode(65+i)}. ${escapeHtml(option)}</span></label>`).join('')}</div>`:(q.localAnswerMode==='spelling'?`<input id="quizAnswerInput" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="${q.quizType==='inflection'?'活用形を入力してEnter':'スペルを入力してEnter'}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1.05em;">`:`<textarea id="quizAnswerInput" rows="4" placeholder="答えを入力（Enterで確定 / Shift+Enterで改行）" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1em;resize:vertical;"></textarea>`)}
       <div style="display:flex;gap:8px;margin-top:10px;"><button onclick="submitQuizAnswer('${set.id}')" style="flex:1;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${q.localGrade?'端末内で判定':(Array.isArray(q.options)&&q.options.length?'回答する':'ALLIAに判定してもらう')}</button><button onclick="skipQuizQuestion('${set.id}')" style="background:#e2e8f0;color:#475569;border:none;border-radius:7px;padding:11px;cursor:pointer;">スキップ</button></div>
       <div style="margin-top:9px;color:#94a3b8;font-size:.78em;text-align:center;">「選択」「リスニング」「活用」は端末内で問題生成・採点するためALLIAを使いません。活用は語彙カードに保存済みの過去形・過去分詞・-ing・三単現から出題します。リスニングは各語彙の言語に合った音声で見出し語を再生し、語彙4択・意味4択・表記記述の3形式をランダム出題します。その他の記述回答はALLIAが表記ゆれ・複数の意味・自然さを含めて判定します。</div>
@@ -18848,12 +19095,9 @@ function renderQuizFeedback(setId, correct, feedback, modelAnswer, userAnswer) {
       ${modelAnswer?`<div style="padding:10px;background:#f5f3ff;border-radius:8px;color:#4c1d95;margin-top:8px;"><b>基準・模範：</b>${escapeHtml(modelAnswer)}</div>`:''}
       <div style="margin-top:10px;line-height:1.55;color:#475569;white-space:pre-wrap;">${escapeHtml(feedback)}</div>
       ${!correct?'<div style="margin-top:10px;color:#ea580c;font-size:.85em;font-weight:bold;">この単語は自動で「間違いだけ復習」に追加されました。</div>':''}
-      ${canChallenge?`
-        <div style="margin-top:14px;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;">
-          <div style="font-weight:bold;color:#92400e;">⚖️ ALLIAの判定に異議がある場合</div>
-          <textarea id="quizChallengeReason" rows="3" placeholder="Challengeの理由を入力（例：この訳も文脈上成立する、この用法も辞書的に正しい、など）" style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px;border:1px solid #f59e0b;border-radius:7px;font-size:.95em;resize:vertical;"></textarea>
-          <button onclick="submitQuizChallenge('${set.id}')" style="width:100%;margin-top:8px;background:#d97706;color:white;border:none;border-radius:7px;padding:10px;font-weight:bold;cursor:pointer;">⚖️ Challenge</button>
-        </div>`:''}
+      <div style="margin-top:13px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" onclick="openIftyQuizAllia('${set.id}')" style="flex:1;min-width:150px;border:1px solid #c4b5fd;background:#faf5ff;color:#6d28d9;border-radius:8px;padding:10px;font-weight:900;cursor:pointer;">🤖 ALLIA${canChallenge?'（質問・Challenge）':'に質問'}</button>
+      </div>
       <button onclick="nextQuizQuestion('${set.id}')" style="width:100%;margin-top:14px;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">次へ</button>
     </div>`;
 }
@@ -18863,12 +19107,12 @@ window.submitQuizChallenge = async function(setId) {
   const p=set.progress, q=p.currentQuestion, last=p.lastGrade;
   if(!last || last.wordId!==q.wordId || last.correct===true || last.localGrade===true || last.challenged===true)return;
   const ref=getWordById(q.wordId); if(!ref)return;
-  const reasonInput=document.getElementById('quizChallengeReason');
+  const reasonInput=document.getElementById('iftyQuizAlliaChallengeInput') || document.getElementById('quizChallengeReason');
   const challengeReason=reasonInput?String(reasonInput.value||'').trim():'';
   const modal=document.getElementById('practiceModal'); if(!modal)return;
   if (!ensureIftyOnline('Challenge再審査')) return;
 
-  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><h3 style="color:#92400e;">⚖️ ALLIAがChallengeを再審査中…</h3><div style="color:#64748b;margin-top:6px;">最初の採点とは別に、元の回答をもう一度検討します。</div></div>`;
+  const alliaStatus=document.getElementById('iftyQuizAlliaChallengeStatus'); if(alliaStatus) alliaStatus.textContent='ALLIAがChallengeを再審査中…'; else modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><h3 style="color:#92400e;">⚖️ ALLIAがChallengeを再審査中…</h3><div style="color:#64748b;margin-top:6px;">最初の採点とは別に、元の回答をもう一度検討します。</div></div>`;
   try{
     const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       type:'question_challenge',
@@ -18916,6 +19160,7 @@ window.submitQuizChallenge = async function(setId) {
     }
 
     savePracticeData();
+    document.getElementById('iftyQuizAlliaHelpModal')?.remove();
     renderQuizChallengeResult(setId, accepted, data.feedback||'', data.modelAnswer||last.firstModelAnswer||q.referenceAnswer||'', last.userAnswer||'', challengeReason);
   }catch(error){
     renderQuizFeedback(setId, false, last.firstFeedback||'', last.firstModelAnswer||q.referenceAnswer||'', last.userAnswer||'');
@@ -19619,14 +19864,15 @@ window.renderFlashcardModal = function() {
     const isAncientSession = currentFlashcardMode === 'ancient';
     const isAncientReviewSession = currentFlashcardMode === 'ancient_review_due';
     const isKanbunReviewSession = currentFlashcardMode === 'kanbun_review_due';
+    const isOthersReviewSession = currentFlashcardMode === 'others_review_due';
     if (isReviewSession || isWeakSession) renderFolders();
     modal.innerHTML = `
       <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
         <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 10px;">🎉 完了！</h3>
-        <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">${(isReviewSession || isSocialReviewSession || isScienceReviewSession || isAncientReviewSession || isKanbunReviewSession) ? '今日の復習を終了しました。' : (isWeakSession ? '苦手候補の学習を終了しました。' : 'すべてのカードを終了しました。')}</p>
+        <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">${(isReviewSession || isSocialReviewSession || isScienceReviewSession || isAncientReviewSession || isKanbunReviewSession || isOthersReviewSession) ? '今日の復習を終了しました。' : (isWeakSession ? '苦手候補の学習を終了しました。' : 'すべてのカードを終了しました。')}</p>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-          ${(isReviewSession || isWeakSession || isSocialSession || isScienceSession || isSocialReviewSession || isScienceReviewSession || isAncientSession || isAncientReviewSession || isKanbunReviewSession) ? '' : '<button onclick="closeFlashcardModal(); openPracticeHome(\'ENGLISH\');" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>'}
-          <button onclick="closeFlashcardModal();${isSocialReviewSession ? "renderIftySocialStudiesPage();" : (isScienceReviewSession ? "renderIftySciencePage();" : (isAncientReviewSession || isAncientSession ? "renderIftyAncientPage();" : (isKanbunReviewSession ? "renderIftyKanbunPage();" : (isSocialSession ? "openPracticeHome('SOCIAL STUDIES');" : (isScienceSession ? "openPracticeHome('SCIENCE');" : '')))))}" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">${isReviewSession ? '復習フォルダへ戻る' : (isWeakSession ? '語彙帳へ戻る' : (isSocialReviewSession ? '社会へ戻る' : (isScienceReviewSession ? '理科へ戻る' : (isAncientReviewSession || isAncientSession ? '古文単語へ戻る' : (isKanbunReviewSession ? '漢文へ戻る' : (isSocialSession ? '社会PRACTICEへ戻る' : (isScienceSession ? '理科PRACTICEへ戻る' : '閉じる')))))))}</button>
+          ${(isReviewSession || isWeakSession || isSocialSession || isScienceSession || isSocialReviewSession || isScienceReviewSession || isAncientSession || isAncientReviewSession || isKanbunReviewSession || isOthersReviewSession) ? '' : '<button onclick="closeFlashcardModal(); openPracticeHome(\'ENGLISH\');" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>'}
+          <button onclick="closeFlashcardModal();${isSocialReviewSession ? "renderIftySocialStudiesPage();" : (isScienceReviewSession ? "renderIftySciencePage();" : (isAncientReviewSession || isAncientSession ? "renderIftyAncientPage();" : (isKanbunReviewSession ? "renderIftyKanbunPage();" : (isOthersReviewSession ? "renderIftyOthersPage();" : (isSocialSession ? "openPracticeHome('SOCIAL STUDIES');" : (isScienceSession ? "openPracticeHome('SCIENCE');" : ''))))))}" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer;">${isReviewSession ? '復習フォルダへ戻る' : (isWeakSession ? '語彙帳へ戻る' : (isSocialReviewSession ? '社会へ戻る' : (isScienceReviewSession ? '理科へ戻る' : (isAncientReviewSession || isAncientSession ? '古文単語へ戻る' : (isKanbunReviewSession ? '漢文へ戻る' : (isOthersReviewSession ? 'OTHERSへ戻る' : (isSocialSession ? '社会PRACTICEへ戻る' : (isScienceSession ? '理科PRACTICEへ戻る' : '閉じる'))))))))}</button>
         </div>
       </div>
     `;
@@ -19694,6 +19940,14 @@ window.setMasteryAndNext = function(status) {
       savePracticeData();
     } else if (current.__iftyKanbunFlashcard) {
       const ref = getIftyKanbunItemById(current.__iftyKanbunItemId || current.id);
+      if (ref && ref.item) {
+        ref.item.mastery = status;
+        if (current.__iftySubjectReviewDue) applyIftyEntityReviewResult(ref.item, correct);
+        else enrollIftyEntityReviewFromStudy(ref.item, correct);
+      }
+      savePracticeData();
+    } else if (current.__iftyOthersFlashcard) {
+      const ref = getIftyOthersItemById(current.__iftyOthersItemId || current.id);
       if (ref && ref.item) {
         ref.item.mastery = status;
         if (current.__iftySubjectReviewDue) applyIftyEntityReviewResult(ref.item, correct);
