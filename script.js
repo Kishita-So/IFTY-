@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP77 2026-10-01：KANBUN PRACTICE 5形式（シンプル・和訳・書き下し・穴埋め・返点打ち） ★★★
+// ★★★ IFTY Q3 STEP78 2026-10-01：KANBUN生成安定化 + PRACTICE共通UI統一 ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -7638,6 +7638,19 @@ function convertIftyKanbunAnnotationsToReturnMarks(value, originalText = '') {
   return normalizeIftyKanbunReturnMarks(converted, originalText);
 }
 
+
+function detectIftyKanbunInputKind(value) {
+  const raw = String(value || '').trim();
+  const key = raw.replace(/[\s　]+/g, '').replace(/～/g, '〜');
+  if (!key) return 'sentence';
+  if (/[ABCXY〜ー]/u.test(key)) return 'pattern';
+  if (Array.from(key).length <= 2) return 'pattern';
+  if (/^不亦.*乎(?:哉)?$/u.test(key)) return 'pattern';
+  if (/^未(?:〜|[ABCXY])?$/u.test(key)) return 'pattern';
+  if (/^使(?:A|B|C|X|Y|〜|ー){1,4}$/u.test(key)) return 'pattern';
+  return 'sentence';
+}
+
 function normalizeIftyKanbunItem(value) {
   if (!value || typeof value !== 'object') return null;
   const originalText = String(value.originalText || value.original || value.text || value.title || '').trim();
@@ -7668,6 +7681,8 @@ function normalizeIftyKanbunItem(value) {
     id: value.id || makeId('kanbunitem'),
     title: String(value.title || originalText.slice(0, 36)).trim() || originalText.slice(0, 36),
     originalText,
+    inputKind: String(value.inputKind || detectIftyKanbunInputKind(originalText)).toLowerCase() === 'pattern' ? 'pattern' : 'sentence',
+    kuntenEditedByUser: value.kuntenEditedByUser === true || value.userKuntenApplied === true,
     kundoku,
     translation,
     returnMarks,
@@ -7766,6 +7781,7 @@ function renderIftyKanbunItemCard(folder, item) {
           <input type="checkbox" ${iftyKanbunSelectedItemIds.has(String(item.id)) ? 'checked' : ''} onchange="toggleIftySubjectItemSelection('KANBUN','${item.id}',this.checked)" title="この漢文を選択" style="width:18px;height:18px;flex:none;">
           <strong style="font-size:1.05em;color:#0f172a;font-family:serif;overflow-wrap:anywhere;">${escapeHtml(item.title || item.originalText || '無題')}</strong>
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
+          ${item.inputKind === 'pattern' ? '<span style="font-size:.68em;color:#92400e;font-weight:900;background:#fffbeb;border-radius:999px;padding:2px 6px;">句法・型</span>' : ''}
           ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
           ${isIftySubjectWeakItem(item) ? '<span style="font-size:.68em;color:#be123c;font-weight:900;background:#fff1f2;border-radius:999px;padding:2px 6px;">🎯 苦手</span>' : ''}
         </div>
@@ -8384,7 +8400,7 @@ window.generateIftyKanbunItem = async function(folderId, options = {}) {
   const setStatus = message => { const el=document.getElementById(`iftyKanbunPending_${folderId}`); if(el){el.textContent=message || (iftyKanbunGenerationPending[folderId] ? `ALLIA生成中… ${iftyKanbunGenerationPending[folderId]}件` : ''); el.style.color=message?'#dc2626':'#7c3aed';} };
   setStatus('');
   try {
-    const response = await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_generate',originalText,userReturnMarks,userOkurigana,order:getIftySubjectOrder('KANBUN')})});
+    const response = await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_generate',originalText,inputKind:detectIftyKanbunInputKind(originalText),userReturnMarks,userOkurigana,order:getIftySubjectOrder('KANBUN')})});
     const data = await response.json().catch(()=>({}));
     if(!response.ok||data.error) throw new Error(data.error||`HTTP ${response.status}`);
     const latest = getIftyKanbunFolder(folderId); if(!latest)return;
@@ -8392,6 +8408,7 @@ window.generateIftyKanbunItem = async function(folderId, options = {}) {
     if(!item) throw new Error('漢文データの生成に失敗しました。');
     if (userReturnMarks.length) item.returnMarks = normalizeIftyKanbunReturnMarks(userReturnMarks, originalText);
     if (userOkurigana.length) item.okurigana = normalizeIftyKanbunOkurigana(userOkurigana, originalText);
+    if (userReturnMarks.length || userOkurigana.length) item.kuntenEditedByUser = true;
     recordUndoState('漢文追加'); latest.items.push(item); delete iftyKanbunDraftReturnMarks[String(folderId)]; savePracticeData();
   } catch(error) { setStatus(String(error.message||error)); }
   finally { iftyKanbunGenerationPending[folderId]=Math.max(0,Number(iftyKanbunGenerationPending[folderId]||0)-1); refreshIftyKanbunFolderDynamic(folderId); setStatus(''); }
@@ -8407,6 +8424,7 @@ window.generateIftyKanbunExamples = async function(folderId,itemId) {
     const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       type:'kanbun_examples_generate',
       originalText:item.originalText,
+      inputKind:item.inputKind || detectIftyKanbunInputKind(item.originalText),
       kundoku:item.kundoku,
       translation:item.translation,
       phrases:item.phrases,
@@ -8429,7 +8447,8 @@ window.regenerateIftyKanbunItem = async function(folderId,itemId) {
   const item=ref.item; if(!confirmIftyCarefulRegeneration(item.title||item.originalText))return; if(!ensureIftyOnline('漢文の再生成'))return;
   setIftyRegenerateButtonState(`iftyRegenKanbun_${item.id}`,true);
   try {
-    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_generate',originalText:item.originalText,userReturnMarks:normalizeIftyKanbunReturnMarks(item.returnMarks,item.originalText),userOkurigana:normalizeIftyKanbunOkurigana(item.okurigana,item.originalText),order:getIftySubjectOrder('KANBUN'),carefulRegenerate:true,previousData:{kundoku:item.kundoku,translation:item.translation,returnMarks:item.returnMarks,okurigana:item.okurigana,grammarPoints:item.grammarPoints,examples:item.examples,keyPoints:item.keyPoints}})});
+    const preserveKunten=item.kuntenEditedByUser===true;
+    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_generate',originalText:item.originalText,inputKind:item.inputKind || detectIftyKanbunInputKind(item.originalText),userReturnMarks:preserveKunten?normalizeIftyKanbunReturnMarks(item.returnMarks,item.originalText):[],userOkurigana:preserveKunten?normalizeIftyKanbunOkurigana(item.okurigana,item.originalText):[],order:getIftySubjectOrder('KANBUN'),carefulRegenerate:true,previousData:{kundoku:item.kundoku,translation:item.translation,returnMarks:item.returnMarks,okurigana:item.okurigana,grammarPoints:item.grammarPoints,examples:item.examples,keyPoints:item.keyPoints}})});
     const data=await response.json().catch(()=>({})); if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);
     recordUndoState('漢文再生成');
     const next=normalizeIftyKanbunItem({...item,...data,originalText:item.originalText,id:item.id,source:'ALLIA',updatedAt:Date.now(),regeneratedAt:Date.now()});
@@ -8471,7 +8490,7 @@ function captureIftyKanbunItemOkuriganaInput(){const st=iftyKanbunReturnMarkEdit
 window.selectIftyKanbunReturnMarkIndex=function(index){if(!iftyKanbunReturnMarkEditorState)return;captureIftyKanbunItemOkuriganaInput();iftyKanbunReturnMarkEditorState.selectedIndex=Number(index);renderIftyKanbunReturnMarkEditor();};
 window.setIftyKanbunReturnMarkDraft=function(mark){const st=iftyKanbunReturnMarkEditorState;if(!st||st.selectedIndex<0||st.selectedIndex>=st.marks.length)return;captureIftyKanbunItemOkuriganaInput();st.marks[st.selectedIndex]=normalizeIftyKanbunMark(mark);renderIftyKanbunReturnMarkEditor();};
 window.setIftyKanbunOkuriganaDraft=function(value){const st=iftyKanbunReturnMarkEditorState;if(!st||st.selectedIndex<0||st.selectedIndex>=st.okurigana.length)return;st.okurigana[st.selectedIndex]=convertIftyKanbunOkuriganaToKatakana(value);renderIftyKanbunReturnMarkEditor();};
-window.saveIftyKanbunReturnMarks=function(){const st=iftyKanbunReturnMarkEditorState;if(!st)return;captureIftyKanbunItemOkuriganaInput();const ref=getIftyKanbunItemById(st.itemId);if(!ref?.item)return;recordUndoState('漢文訓点編集');ref.item.returnMarks=st.marks.map((mark,index)=>mark?{index,mark}:null).filter(Boolean);ref.item.okurigana=st.okurigana.map((text,index)=>text?{index,text:convertIftyKanbunOkuriganaToKatakana(text)}:null).filter(Boolean);ref.item.updatedAt=Date.now();savePracticeData();document.getElementById('iftyKanbunReturnMarkModal')?.remove();refreshIftyKanbunFolderDynamic(st.folderId);iftyKanbunReturnMarkEditorState=null;};
+window.saveIftyKanbunReturnMarks=function(){const st=iftyKanbunReturnMarkEditorState;if(!st)return;captureIftyKanbunItemOkuriganaInput();const ref=getIftyKanbunItemById(st.itemId);if(!ref?.item)return;recordUndoState('漢文訓点編集');ref.item.returnMarks=st.marks.map((mark,index)=>mark?{index,mark}:null).filter(Boolean);ref.item.okurigana=st.okurigana.map((text,index)=>text?{index,text:convertIftyKanbunOkuriganaToKatakana(text)}:null).filter(Boolean);ref.item.kuntenEditedByUser=true;ref.item.updatedAt=Date.now();savePracticeData();document.getElementById('iftyKanbunReturnMarkModal')?.remove();refreshIftyKanbunFolderDynamic(st.folderId);iftyKanbunReturnMarkEditorState=null;};
 
 function getIftyKanbunPracticeModeMeta(mode){
   const meta={
@@ -8635,53 +8654,78 @@ function getIftyKanbunHandwritingImage(){const canvas=document.getElementById('i
 function renderIftyKanbunPracticePlayer(){
   const st=iftyKanbunPracticeState;
   if(!st)return;
-  let modal=document.getElementById('iftyKanbunPracticeModal');
-  if(!modal){
-    modal=document.createElement('div');
-    modal.id='iftyKanbunPracticeModal';
-    modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.64);z-index:12130;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';
-    document.body.appendChild(modal);
-  }
-  modal.style.display='flex';
+  document.getElementById('iftyKanbunPracticeModal')?.remove();
   const q=getCurrentIftyKanbunPracticeQuestion();
+  const meta=getIftyKanbunPracticeModeMeta(st.mode);
   if(!q){
-    modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(520px,100%);padding:26px;text-align:center;"><h2 style="margin-top:0;color:#0f172a;">KANBUN PRACTICE 完了</h2><div style="font-size:1.2em;font-weight:900;color:#0f766e;">${st.correct}正解 / ${st.wrong}不正解</div><button type="button" onclick="document.getElementById('iftyKanbunPracticeModal').remove();setIftyUnifiedPracticeSubject('KANBUN')" style="margin-top:15px;border:none;background:#0f766e;color:white;border-radius:8px;padding:11px 16px;font-weight:900;cursor:pointer;">PRACTICEへ戻る</button></div>`;
+    showIftyHubContent(`
+      <section class="ifty-portal-shell">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+          <div><h1 class="ifty-portal-title" style="color:${meta.color};">KANBUN PRACTICE 完了</h1><div class="ifty-portal-subtitle">正解 ${st.correct}　要復習 ${st.wrong}</div></div>
+          <button class="ifty-portal-back" type="button" onclick="openIftyKanbunPractice()">PRACTICEへ戻る</button>
+        </div>
+        <div style="margin-top:15px;padding:22px;border:1px solid #cbd5e1;border-radius:12px;background:white;text-align:center;">
+          <div style="font-size:1.35em;font-weight:900;color:#0f766e;">${st.correct}正解 / ${st.wrong}要復習</div>
+          <div style="margin-top:7px;color:#64748b;font-size:.84em;">他教科と同じく、間違えた項目は学習履歴へ記録されます。</div>
+        </div>
+      </section>
+    `,'kanbun-practice');
     return;
   }
-  const meta=getIftyKanbunPracticeModeMeta(st.mode);
   const tokens=getIftyKanbunTokens(q.originalText);
   if(st.mode==='kaeriten'&&(!Array.isArray(st.answerMarks)||st.answerMarks.length!==tokens.length))st.answerMarks=Array(tokens.length).fill('');
   const answered=st.answered;
   const canChallenge=answered&&!st.correctLast&&['translation','kundoku','cloze'].includes(st.mode)&&st.lastSubmission&&!st.lastSubmission.challenged;
-  const challengeArea=canChallenge?`<div style="margin-top:12px;padding:11px;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;"><div style="font-weight:900;color:#92400e;">⚖️ 採点に異議がある場合</div><textarea id="iftyKanbunChallengeReason" rows="2" placeholder="Challenge理由（任意）" style="width:100%;box-sizing:border-box;margin-top:7px;padding:9px;border:1px solid #f59e0b;border-radius:7px;resize:vertical;"></textarea><button type="button" onclick="submitIftyKanbunPracticeChallenge()" ${st.challengePending?'disabled':''} style="width:100%;margin-top:7px;border:none;background:#d97706;color:white;border-radius:7px;padding:9px;font-weight:900;cursor:${st.challengePending?'wait':'pointer'};opacity:${st.challengePending?'.6':'1'};">${st.challengePending?'ALLIAが再審査中…':'⚖️ Challenge（ALLIA）'}</button><div id="iftyKanbunChallengeStatus" style="margin-top:5px;color:#92400e;font-size:.72em;"></div></div>`:'';
-  const result=answered?`<div style="margin-top:12px;padding:11px;border:1px solid ${st.correctLast?'#86efac':'#fecaca'};background:${st.correctLast?'#f0fdf4':'#fef2f2'};border-radius:9px;"><div style="font-weight:900;color:${st.correctLast?'#166534':'#b91c1c'};">${st.correctLast?'⭕ 正解':'❌ 不正解'}</div>${st.feedback?`<div style="margin-top:5px;color:#334155;line-height:1.5;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:7px;color:#475569;font-size:.84em;white-space:pre-wrap;"><strong>解答例：</strong>${escapeHtml(st.modelAnswer)}</div>`:''}${st.mode==='kaeriten'?`<div style="margin-top:9px;">${renderIftyKanbunMarkedText({originalText:q.originalText,returnMarks:q.returnMarks})}</div>`:''}${challengeArea}</div>`:'';
+  const challengeArea=canChallenge?`<div style="margin-top:12px;padding:11px;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;"><div style="font-weight:900;color:#92400e;">⚖️ Challenge</div><textarea id="iftyKanbunChallengeReason" rows="2" placeholder="採点に異議がある場合の理由（任意）" style="width:100%;box-sizing:border-box;margin-top:7px;padding:9px;border:1px solid #f59e0b;border-radius:7px;resize:vertical;"></textarea><button type="button" onclick="submitIftyKanbunPracticeChallenge()" ${st.challengePending?'disabled':''} style="width:100%;margin-top:7px;border:none;background:#d97706;color:white;border-radius:7px;padding:9px;font-weight:900;cursor:${st.challengePending?'wait':'pointer'};opacity:${st.challengePending?'.6':'1'};">${st.challengePending?'ALLIAが再審査中…':'Challenge（ALLIA）'}</button></div>`:'';
+  const result=answered?`<div style="margin-top:12px;padding:11px;border:1px solid ${st.correctLast?'#86efac':'#fecaca'};background:${st.correctLast?'#f0fdf4':'#fef2f2'};border-radius:9px;"><div style="font-weight:900;color:${st.correctLast?'#166534':'#b91c1c'};">${st.correctLast?'⭕ 正解':'❌ 要復習'}</div>${st.feedback?`<div style="margin-top:5px;color:#334155;line-height:1.5;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:7px;color:#475569;font-size:.84em;white-space:pre-wrap;"><strong>解答例：</strong>${escapeHtml(st.modelAnswer)}</div>`:''}${st.mode==='kaeriten'?`<div style="margin-top:9px;">${renderIftyKanbunMarkedText({originalText:q.originalText,returnMarks:q.returnMarks})}</div>`:''}${challengeArea}</div>`:'';
 
   let questionBlock='';
   if(st.mode==='simple'){
-    questionBlock=`<div style="margin-top:13px;padding:12px;border:1px solid #dbeafe;border-radius:10px;background:#eff6ff;"><div style="font-weight:900;color:#1d4ed8;line-height:1.6;">${escapeHtml(q.prompt||'')}</div>${q.sourceText?`<div style="margin-top:8px;font-size:1.03em;color:#0f172a;line-height:1.65;">${escapeHtml(q.sourceText)}</div>`:''}</div>`;
+    questionBlock=`<div style="font-weight:900;color:#1d4ed8;line-height:1.6;">${escapeHtml(q.prompt||'')}</div>${q.sourceText?`<div style="margin-top:8px;font-size:1.03em;color:#0f172a;line-height:1.65;">${escapeHtml(q.sourceText)}</div>`:''}`;
   }else{
-    questionBlock=`<div style="margin-top:13px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;"><div style="font-size:.72em;font-weight:900;color:#64748b;margin-bottom:6px;">原文</div><div style="font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.28em;line-height:1.7;color:#0f172a;overflow-wrap:anywhere;">${escapeHtml(q.originalText)}</div></div>${st.mode==='cloze'?`<div style="margin-top:10px;padding:12px;border:1px solid #ddd6fe;border-radius:10px;background:#faf5ff;"><div style="font-size:.72em;font-weight:900;color:#6d28d9;margin-bottom:6px;">${escapeHtml(q.clozeLabel||'穴埋め')}</div><div style="font-size:1.05em;line-height:1.7;color:#2e1065;">${escapeHtml(q.clozeText||'')}</div></div>`:''}`;
+    questionBlock=`<div style="font-size:.72em;font-weight:900;color:#64748b;margin-bottom:6px;">原文</div><div style="font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.28em;line-height:1.7;color:#0f172a;overflow-wrap:anywhere;">${escapeHtml(q.originalText)}</div>${st.mode==='cloze'?`<div style="margin-top:10px;padding:12px;border:1px solid #ddd6fe;border-radius:10px;background:#faf5ff;"><div style="font-size:.72em;font-weight:900;color:#6d28d9;margin-bottom:6px;">${escapeHtml(q.clozeLabel||'穴埋め')}</div><div style="font-size:1.05em;line-height:1.7;color:#2e1065;">${escapeHtml(q.clozeText||'')}</div></div>`:''}`;
   }
 
   let answerArea='';
   if(st.mode==='simple'){
-    answerArea=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:14px;">${(q.options||[]).map((opt,index)=>{
-      const isCorrect=answered&&String(opt.id)===String(q.correctOptionId);
-      const isSelected=answered&&String(opt.id)===String(st.selectedOptionId);
-      const border=answered?(isCorrect?'#22c55e':(isSelected?'#ef4444':'#cbd5e1')):'#93c5fd';
-      const bg=answered?(isCorrect?'#f0fdf4':(isSelected?'#fef2f2':'white')):'white';
-      return `<button type="button" onclick="answerIftyKanbunPracticeSimple('${escapeHtml(String(opt.id).replace(/'/g,"\\'"))}')" ${answered?'disabled':''} style="text-align:left;border:1px solid ${border};background:${bg};color:#0f172a;border-radius:9px;padding:11px;line-height:1.55;font-weight:800;cursor:${answered?'default':'pointer'};"><span style="color:#64748b;margin-right:6px;">${index+1}.</span>${escapeHtml(opt.label||'')}</button>`;
-    }).join('')}</div>`;
+    answerArea=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:14px;">${(q.options||[]).map((opt,index)=>{const isCorrect=answered&&String(opt.id)===String(q.correctOptionId);const isSelected=answered&&String(opt.id)===String(st.selectedOptionId);const border=answered?(isCorrect?'#22c55e':(isSelected?'#ef4444':'#cbd5e1')):'#93c5fd';const bg=answered?(isCorrect?'#f0fdf4':(isSelected?'#fef2f2':'white')):'white';return `<button type="button" onclick="answerIftyKanbunPracticeSimple('${escapeHtml(String(opt.id).replace(/'/g,"\\'"))}')" ${answered?'disabled':''} style="text-align:left;border:1px solid ${border};background:${bg};color:#0f172a;border-radius:9px;padding:11px;line-height:1.55;font-weight:800;cursor:${answered?'default':'pointer'};"><span style="color:#64748b;margin-right:6px;">${index+1}.</span>${escapeHtml(opt.label||'')}</button>`;}).join('')}</div>`;
   }else if(st.mode==='kaeriten'){
-    answerArea=`<div style="margin-top:14px;"><div style="font-size:.78em;color:#64748b;margin-bottom:7px;">字をタップして返点を選んでください。</div>${renderIftyKanbunPracticeMarks(q,st)}${answered?'':`<button type="button" onclick="submitIftyKanbunPracticeKaeriten()" style="width:100%;margin-top:12px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">採点</button>`}</div>`;
+    answerArea=`<div style="margin-top:14px;"><div style="font-size:.78em;color:#64748b;margin-bottom:7px;">字をタップして返点を選んでください。</div>${renderIftyKanbunPracticeMarks(q,st)}${answered?'':`<div style="text-align:right;margin-top:10px;"><button type="button" onclick="submitIftyKanbunPracticeKaeriten()" style="border:none;background:#b91c1c;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">回答する</button></div>`}</div>`;
   }else{
-    const placeholder=st.mode==='cloze'?'空欄に入る語句を答える':'文字入力で答える（手書きだけでも可）';
-    answerArea=`<div style="margin-top:14px;"><textarea id="iftyKanbunPracticeAnswer" rows="${st.mode==='cloze'?2:4}" placeholder="${placeholder}" ${answered?'disabled':''} style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:1em;resize:vertical;"></textarea><div style="margin-top:9px;padding:9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;"><b style="font-size:.82em;color:#334155;">✍️ 手書き</b><div style="display:flex;gap:6px;"><button type="button" onclick="undoIftyKanbunHandwriting()" ${answered?'disabled':''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;">1つ戻す</button><button type="button" onclick="clearIftyKanbunHandwriting()" ${answered?'disabled':''} style="border:none;background:#fee2e2;color:#991b1b;border-radius:6px;padding:6px 8px;font-weight:900;">消す</button></div></div><canvas id="iftyKanbunHandwritingCanvas" style="display:block;width:100%;height:${st.mode==='cloze'?'180':'250'}px;margin-top:8px;background:white;border:1px dashed #94a3b8;border-radius:8px;"></canvas><div style="margin-top:5px;color:#64748b;font-size:.7em;">指・Apple Pencil等で書けます。手書き画像は採点時だけALLIAへ送ります。</div></div>${answered?'':`<button type="button" onclick="submitIftyKanbunPracticeWritten()" style="width:100%;margin-top:12px;border:none;background:${meta.color};color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">採点</button>`}<div id="iftyKanbunPracticeGradeStatus" style="margin-top:6px;color:#64748b;font-size:.76em;"></div></div>`;
+    const placeholder=st.mode==='cloze'?'空欄に入る語句を答える':'ここに回答を書く（手書きだけでも可）';
+    answerArea=`<div style="margin-top:14px;"><textarea id="iftyKanbunPracticeAnswer" rows="${st.mode==='cloze'?2:4}" placeholder="${placeholder}" ${answered?'disabled':''} style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;resize:vertical;"></textarea><div style="margin-top:9px;padding:9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;"><b style="font-size:.82em;color:#334155;">✍️ 手書き</b><div style="display:flex;gap:6px;"><button type="button" onclick="undoIftyKanbunHandwriting()" ${answered?'disabled':''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;">1つ戻す</button><button type="button" onclick="clearIftyKanbunHandwriting()" ${answered?'disabled':''} style="border:none;background:#fee2e2;color:#991b1b;border-radius:6px;padding:6px 8px;font-weight:900;">消す</button></div></div><canvas id="iftyKanbunHandwritingCanvas" style="display:block;width:100%;height:${st.mode==='cloze'?'180':'250'}px;margin-top:8px;background:white;border:1px dashed #94a3b8;border-radius:8px;"></canvas><div style="margin-top:5px;color:#64748b;font-size:.7em;">指・Apple Pencil等で書けます。手書き画像は採点時だけALLIAへ送ります。</div></div>${answered?'':`<div style="text-align:right;margin-top:10px;"><button type="button" onclick="submitIftyKanbunPracticeWritten()" style="border:none;background:${meta.color};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">回答する</button></div>`}<div id="iftyKanbunPracticeGradeStatus" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.76em;"></div></div>`;
   }
 
-  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(760px,100%);max-height:94vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.3);"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><div style="font-size:.78em;font-weight:900;color:${meta.color};">${escapeHtml(meta.title)}　${st.index+1}/${st.questions.length}</div><div style="font-size:.72em;color:#64748b;margin-top:2px;">正解 ${st.correct} / 不正解 ${st.wrong}</div></div><button type="button" onclick="document.getElementById('iftyKanbunPracticeModal')?.remove();setIftyUnifiedPracticeSubject('KANBUN')" style="border:none;background:none;font-size:1.3em;color:#64748b;cursor:pointer;">✕</button></div>${questionBlock}<div style="margin-top:9px;color:#475569;font-size:.84em;">${escapeHtml(meta.description)}</div><button type="button" onclick="openIftyKanbunQuestionHelp()" style="margin-top:9px;border:1px solid #c4b5fd;background:#faf5ff;color:#6d28d9;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">🤖 ALLIAに質問</button>${answerArea}${result}${answered?`<button type="button" onclick="nextIftyKanbunPracticeQuestion()" style="width:100%;margin-top:12px;border:none;background:#0f766e;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">次へ</button>`:''}</div>`;
-  if(!['kaeriten','simple'].includes(st.mode)&&!answered)requestAnimationFrame(initIftyKanbunHandwritingCanvas);
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div><h1 class="ifty-portal-title" style="color:${meta.color};">${escapeHtml(meta.title)}</h1><div class="ifty-portal-subtitle">${st.index+1} / ${st.questions.length}　正解 ${st.correct}　要復習 ${st.wrong}</div></div>
+        <button class="ifty-portal-back" type="button" onclick="openIftyKanbunPractice()">終了</button>
+      </div>
+      <div style="margin-top:15px;padding:15px;border:1px solid #cbd5e1;border-radius:12px;background:white;">
+        ${questionBlock}
+        <div style="margin-top:9px;color:#475569;font-size:.84em;">${escapeHtml(meta.description)}</div>
+        <button type="button" onclick="openIftyKanbunQuestionHelp()" style="margin-top:9px;border:1px solid #c4b5fd;background:#faf5ff;color:#6d28d9;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">🤖 ALLIAに質問</button>
+        ${answerArea}${result}
+        ${answered?`<div style="text-align:right;margin-top:12px;"><button type="button" onclick="nextIftyKanbunPracticeQuestion()" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">次の問題</button></div>`:''}
+      </div>
+    </section>
+  `,'kanbun-practice');
+  if(!['kaeriten','simple'].includes(st.mode)&&!answered){
+    requestAnimationFrame(()=>{
+      initIftyKanbunHandwritingCanvas();
+      const textarea=document.getElementById('iftyKanbunPracticeAnswer');
+      if(textarea){textarea.addEventListener('keydown',event=>{if(event.isComposing)return;if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();window.submitIftyKanbunPracticeWritten();}});}
+    });
+  }
 }
+
+window.openIftyKanbunPractice=function(){
+  document.getElementById('iftyKanbunPracticeModal')?.remove();
+  currentIftySubject='KANBUN';
+  window.closeIftySideMenu?.();
+  window.openPracticeHome('KANBUN');
+};
 
 function renderIftyKanbunPracticeMarks(q,st){
   const palette=getIftyKanbunInputReturnMarkPalette();
