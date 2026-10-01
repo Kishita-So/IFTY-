@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP76 2026-09-30：KANBUN 例文生成保証 + 例文単独追加 ★★★
+// ★★★ IFTY Q3 STEP77 2026-10-01：KANBUN PRACTICE 5形式（シンプル・和訳・書き下し・穴埋め・返点打ち） ★★★
 // 完全版 スマート単語帳 & ALLIA（Cloudflare Workers連携）
 // ==========================================
 
@@ -8474,8 +8474,14 @@ window.setIftyKanbunOkuriganaDraft=function(value){const st=iftyKanbunReturnMark
 window.saveIftyKanbunReturnMarks=function(){const st=iftyKanbunReturnMarkEditorState;if(!st)return;captureIftyKanbunItemOkuriganaInput();const ref=getIftyKanbunItemById(st.itemId);if(!ref?.item)return;recordUndoState('漢文訓点編集');ref.item.returnMarks=st.marks.map((mark,index)=>mark?{index,mark}:null).filter(Boolean);ref.item.okurigana=st.okurigana.map((text,index)=>text?{index,text:convertIftyKanbunOkuriganaToKatakana(text)}:null).filter(Boolean);ref.item.updatedAt=Date.now();savePracticeData();document.getElementById('iftyKanbunReturnMarkModal')?.remove();refreshIftyKanbunFolderDynamic(st.folderId);iftyKanbunReturnMarkEditorState=null;};
 
 function getIftyKanbunPracticeModeMeta(mode){
-  const meta={kundoku:{title:'書き下し',description:'原文を見て書き下し文を答える。文字入力または手書きで回答。',color:'#0369a1'},translation:{title:'現代語訳',description:'原文を現代日本語へ訳す。文字入力または手書きで回答。',color:'#166534'},kaeriten:{title:'返点',description:'原文の各字をタップしてレ点・一二点・上下点などを配置する。',color:'#b91c1c'}};
-  return meta[mode]||meta.kundoku;
+  const meta={
+    simple:{title:'シンプル',description:'原文↔和訳を4択で素早く確認する。保存済みデータだけで出題。',color:'#2563eb'},
+    translation:{title:'和訳',description:'原文を現代日本語へ訳す。文字入力または手書きで回答。',color:'#166534'},
+    kundoku:{title:'書き下し',description:'原文を見て書き下し文を答える。文字入力または手書きで回答。',color:'#0369a1'},
+    cloze:{title:'穴埋め',description:'登録済みの書き下し文・和訳の一部を空欄にして答える。',color:'#7c3aed'},
+    kaeriten:{title:'返点打ち',description:'原文の各字をタップしてレ点・一二三点・甲乙点・上中下点などを配置する。',color:'#b91c1c'}
+  };
+  return meta[mode]||meta.simple;
 }
 
 function getIftyKanbunPracticeRefs(){
@@ -8483,15 +8489,128 @@ function getIftyKanbunPracticeRefs(){
   return (getIftyKanbunModule().folders||[]).flatMap(folder=>(folder.items||[]).map(item=>({folder,item})));
 }
 
-window.startIftyKanbunPractice=async function(mode='kundoku'){
-  const safe=['kundoku','translation','kaeriten'].includes(mode)?mode:'kundoku';
+
+function makeIftyKanbunPracticeSimpleQuestions(refs, requestedCount){
+  const usable=refs.filter(ref=>String(ref.item?.originalText||'').trim()&&(String(ref.item?.translation||'').trim()||String(ref.item?.kundoku||'').trim()));
+  if(usable.length<2)return[];
+  const targets=shuffleArray([...usable]).slice(0,Math.min(Number(requestedCount)||5,usable.length));
+  return targets.map((targetRef,index)=>{
+    const target=targetRef.item;
+    const canTranslation=String(target.translation||'').trim();
+    const direction=(index%2===0||!canTranslation)?'original_to_answer':'translation_to_original';
+    const answerField=canTranslation?'translation':'kundoku';
+    const correctLabel=direction==='translation_to_original'?String(target.originalText||'').trim():String(target[answerField]||'').trim();
+    const seen=new Set([correctLabel.toLowerCase()]);
+    const distractors=[];
+    for(const ref of shuffleArray(usable.filter(row=>String(row.item.id)!==String(target.id)))){
+      const label=direction==='translation_to_original'?String(ref.item.originalText||'').trim():String(ref.item[answerField]||'').trim();
+      const key=label.toLowerCase();
+      if(!label||seen.has(key))continue;
+      seen.add(key);
+      distractors.push({id:String(ref.item.id),label});
+      if(distractors.length>=3)break;
+    }
+    const options=shuffleArray([{id:String(target.id),label:correctLabel},...distractors]);
+    if(options.length<2)return null;
+    return{
+      targetItemId:String(target.id),
+      originalText:String(target.originalText||''),
+      kundoku:String(target.kundoku||''),
+      translation:String(target.translation||''),
+      returnMarks:normalizeIftyKanbunReturnMarks(target.returnMarks,target.originalText),
+      direction,
+      prompt:direction==='translation_to_original'?'次の和訳に対応する原文を選べ。':`「${String(target.originalText||'').trim()}」に最も適切な${answerField==='translation'?'和訳':'書き下し文'}を選べ。`,
+      sourceText:direction==='translation_to_original'?String(target.translation||'').trim():'',
+      options,
+      correctOptionId:String(target.id),
+      explanation:[target.kundoku?`書き下し：${target.kundoku}`:'',target.translation?`和訳：${target.translation}`:''].filter(Boolean).join('　')
+    };
+  }).filter(Boolean);
+}
+
+function getIftyKanbunClozeUnits(text){
+  const source=String(text||'');
+  const units=[];
+  const re=/[一-龯々〆ヵヶ][ぁ-ゖァ-ヺー]{0,5}|[A-Za-z0-9]{1,8}|[ぁ-ゖァ-ヺー]{2,8}/gu;
+  let match;
+  while((match=re.exec(source))){
+    const value=String(match[0]||'').trim();
+    if(!value)continue;
+    if(/^(?:これ|それ|あれ|この|その|あの|ため|もの|こと|よう|ので|から|まで|より)$/u.test(value))continue;
+    units.push({text:value,index:match.index});
+  }
+  return units;
+}
+
+function makeIftyKanbunPracticeClozeQuestions(refs, requestedCount){
+  const pool=[];
+  refs.forEach(ref=>{
+    const item=ref.item||{};
+    const sources=[];
+    if(String(item.kundoku||'').trim())sources.push({kind:'kundoku',label:'書き下し文',text:String(item.kundoku).trim()});
+    if(String(item.translation||'').trim())sources.push({kind:'translation',label:'和訳',text:String(item.translation).trim()});
+    sources.forEach(source=>{
+      const units=getIftyKanbunClozeUnits(source.text);
+      if(units.length)pool.push({ref,source,units});
+    });
+  });
+  if(!pool.length)return[];
+  return shuffleArray(pool).slice(0,Math.min(Number(requestedCount)||5,pool.length)).map((row,index)=>{
+    const preferred=row.units.filter(unit=>unit.text.length>=2&&unit.text.length<=6);
+    const units=preferred.length?preferred:row.units;
+    const unit=units[index%units.length];
+    const blank='【　　　　】';
+    const clozeText=row.source.text.slice(0,unit.index)+blank+row.source.text.slice(unit.index+unit.text.length);
+    const item=row.ref.item;
+    return{
+      targetItemId:String(item.id),
+      originalText:String(item.originalText||''),
+      kundoku:String(item.kundoku||''),
+      translation:String(item.translation||''),
+      returnMarks:normalizeIftyKanbunReturnMarks(item.returnMarks,item.originalText),
+      clozeKind:row.source.kind,
+      clozeLabel:row.source.label,
+      clozeText,
+      clozeAnswer:unit.text,
+      prompt:`${row.source.label}の空欄を埋めよ。`
+    };
+  });
+}
+
+window.answerIftyKanbunPracticeSimple=function(optionId){
+  const st=iftyKanbunPracticeState,q=getCurrentIftyKanbunPracticeQuestion();
+  if(!st||!q||st.mode!=='simple'||st.answered)return;
+  const selected=String(optionId||'');
+  const correct=selected===String(q.correctOptionId||'');
+  st.selectedOptionId=selected;st.answered=true;st.correctLast=correct;
+  st.feedback=correct?'正解です。':String(q.explanation||'').trim();
+  st.modelAnswer=String((q.options||[]).find(opt=>String(opt.id)===String(q.correctOptionId))?.label||'').trim();
+  st.lastSubmission=null;
+  if(correct)st.correct+=1;else st.wrong+=1;
+  recordIftySubjectStudyEvent('KANBUN',q.targetItemId,correct,'kanbun_simple');
+  renderIftyKanbunPracticePlayer();
+};
+
+window.startIftyKanbunPractice=async function(mode='simple'){
+  const safe=['simple','translation','kundoku','cloze','kaeriten'].includes(mode)?mode:'simple';
   let refs=getIftyKanbunPracticeRefs();
-  if(safe==='kundoku')refs=refs.filter(ref=>String(ref.item.kundoku||'').trim());
-  if(safe==='translation')refs=refs.filter(ref=>String(ref.item.translation||'').trim());
-  if(safe==='kaeriten')refs=refs.filter(ref=>normalizeIftyKanbunReturnMarks(ref.item.returnMarks,ref.item.originalText).length);
-  if(!refs.length){alert(safe==='kaeriten'?'返点が登録された漢文がありません。':'この形式で出題できる漢文がありません。');return;}
-  const picked=shuffleArray([...refs]).slice(0,Math.min(iftyKanbunPracticeQuestionCount,refs.length));
-  iftyKanbunPracticeState={mode:safe,questions:picked.map(ref=>({targetItemId:String(ref.item.id),originalText:ref.item.originalText,kundoku:ref.item.kundoku,translation:ref.item.translation,returnMarks:normalizeIftyKanbunReturnMarks(ref.item.returnMarks,ref.item.originalText)})),index:0,correct:0,wrong:0,answered:false,grading:false,challengePending:false,feedback:'',modelAnswer:'',correctLast:false,lastSubmission:null,answerMarks:[],selectedMarkIndex:0};
+  let questions=[];
+  if(safe==='simple'){
+    questions=makeIftyKanbunPracticeSimpleQuestions(refs,iftyKanbunPracticeQuestionCount);
+  }else if(safe==='cloze'){
+    questions=makeIftyKanbunPracticeClozeQuestions(refs,iftyKanbunPracticeQuestionCount);
+  }else{
+    if(safe==='kundoku')refs=refs.filter(ref=>String(ref.item.kundoku||'').trim());
+    if(safe==='translation')refs=refs.filter(ref=>String(ref.item.translation||'').trim());
+    if(safe==='kaeriten')refs=refs.filter(ref=>normalizeIftyKanbunReturnMarks(ref.item.returnMarks,ref.item.originalText).length);
+    const picked=shuffleArray([...refs]).slice(0,Math.min(iftyKanbunPracticeQuestionCount,refs.length));
+    questions=picked.map(ref=>({targetItemId:String(ref.item.id),originalText:ref.item.originalText,kundoku:ref.item.kundoku,translation:ref.item.translation,returnMarks:normalizeIftyKanbunReturnMarks(ref.item.returnMarks,ref.item.originalText)}));
+  }
+  if(!questions.length){
+    const message=safe==='kaeriten'?'返点が登録された漢文がありません。':(safe==='simple'?'シンプルは、原文と和訳または書き下しがある漢文を2題以上登録してください。':(safe==='cloze'?'穴埋めに使える書き下し文・和訳がありません。':'この形式で出題できる漢文がありません。'));
+    alert(message);return;
+  }
+  iftyKanbunPracticeState={mode:safe,questions,index:0,correct:0,wrong:0,answered:false,grading:false,challengePending:false,feedback:'',modelAnswer:'',correctLast:false,lastSubmission:null,answerMarks:[],selectedMarkIndex:0,selectedOptionId:''};
   iftyKanbunHandwritingState={strokes:[],currentStroke:null};iftyKanbunHelpHistory=[];closePracticeModal();renderIftyKanbunPracticePlayer();
 };
 
@@ -8533,14 +8652,35 @@ function renderIftyKanbunPracticePlayer(){
   const tokens=getIftyKanbunTokens(q.originalText);
   if(st.mode==='kaeriten'&&(!Array.isArray(st.answerMarks)||st.answerMarks.length!==tokens.length))st.answerMarks=Array(tokens.length).fill('');
   const answered=st.answered;
-  const canChallenge=answered&&!st.correctLast&&st.mode!=='kaeriten'&&st.lastSubmission&&!st.lastSubmission.challenged;
+  const canChallenge=answered&&!st.correctLast&&['translation','kundoku','cloze'].includes(st.mode)&&st.lastSubmission&&!st.lastSubmission.challenged;
   const challengeArea=canChallenge?`<div style="margin-top:12px;padding:11px;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;"><div style="font-weight:900;color:#92400e;">⚖️ 採点に異議がある場合</div><textarea id="iftyKanbunChallengeReason" rows="2" placeholder="Challenge理由（任意）" style="width:100%;box-sizing:border-box;margin-top:7px;padding:9px;border:1px solid #f59e0b;border-radius:7px;resize:vertical;"></textarea><button type="button" onclick="submitIftyKanbunPracticeChallenge()" ${st.challengePending?'disabled':''} style="width:100%;margin-top:7px;border:none;background:#d97706;color:white;border-radius:7px;padding:9px;font-weight:900;cursor:${st.challengePending?'wait':'pointer'};opacity:${st.challengePending?'.6':'1'};">${st.challengePending?'ALLIAが再審査中…':'⚖️ Challenge（ALLIA）'}</button><div id="iftyKanbunChallengeStatus" style="margin-top:5px;color:#92400e;font-size:.72em;"></div></div>`:'';
   const result=answered?`<div style="margin-top:12px;padding:11px;border:1px solid ${st.correctLast?'#86efac':'#fecaca'};background:${st.correctLast?'#f0fdf4':'#fef2f2'};border-radius:9px;"><div style="font-weight:900;color:${st.correctLast?'#166534':'#b91c1c'};">${st.correctLast?'⭕ 正解':'❌ 不正解'}</div>${st.feedback?`<div style="margin-top:5px;color:#334155;line-height:1.5;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:7px;color:#475569;font-size:.84em;white-space:pre-wrap;"><strong>解答例：</strong>${escapeHtml(st.modelAnswer)}</div>`:''}${st.mode==='kaeriten'?`<div style="margin-top:9px;">${renderIftyKanbunMarkedText({originalText:q.originalText,returnMarks:q.returnMarks})}</div>`:''}${challengeArea}</div>`:'';
-  const answerArea=st.mode==='kaeriten'
-    ? `<div style="margin-top:14px;"><div style="font-size:.78em;color:#64748b;margin-bottom:7px;">字をタップして返点を選んでください。</div>${renderIftyKanbunPracticeMarks(q,st)}${answered?'':`<button type="button" onclick="submitIftyKanbunPracticeKaeriten()" style="width:100%;margin-top:12px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">採点</button>`}</div>`
-    : `<div style="margin-top:14px;"><textarea id="iftyKanbunPracticeAnswer" rows="4" placeholder="文字入力で答える（手書きだけでも可）" ${answered?'disabled':''} style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:1em;resize:vertical;"></textarea><div style="margin-top:9px;padding:9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;"><b style="font-size:.82em;color:#334155;">✍️ 手書き</b><div style="display:flex;gap:6px;"><button type="button" onclick="undoIftyKanbunHandwriting()" ${answered?'disabled':''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;">1つ戻す</button><button type="button" onclick="clearIftyKanbunHandwriting()" ${answered?'disabled':''} style="border:none;background:#fee2e2;color:#991b1b;border-radius:6px;padding:6px 8px;font-weight:900;">消す</button></div></div><canvas id="iftyKanbunHandwritingCanvas" style="display:block;width:100%;height:250px;margin-top:8px;background:white;border:1px dashed #94a3b8;border-radius:8px;"></canvas><div style="margin-top:5px;color:#64748b;font-size:.7em;">指・Apple Pencil等で書けます。手書き画像は採点時だけALLIAへ送ります。</div></div>${answered?'':`<button type="button" onclick="submitIftyKanbunPracticeWritten()" style="width:100%;margin-top:12px;border:none;background:${meta.color};color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">採点</button>`}<div id="iftyKanbunPracticeGradeStatus" style="margin-top:6px;color:#64748b;font-size:.76em;"></div></div>`;
-  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(760px,100%);max-height:94vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.3);"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><div style="font-size:.78em;font-weight:900;color:${meta.color};">${escapeHtml(meta.title)}　${st.index+1}/${st.questions.length}</div><div style="font-size:.72em;color:#64748b;margin-top:2px;">正解 ${st.correct} / 不正解 ${st.wrong}</div></div><button type="button" onclick="document.getElementById('iftyKanbunPracticeModal')?.remove();setIftyUnifiedPracticeSubject('KANBUN')" style="border:none;background:none;font-size:1.3em;color:#64748b;cursor:pointer;">✕</button></div><div style="margin-top:13px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;"><div style="font-size:.72em;font-weight:900;color:#64748b;margin-bottom:6px;">原文</div><div style="font-family:serif;font-size:1.28em;line-height:1.7;color:#0f172a;overflow-wrap:anywhere;">${escapeHtml(q.originalText)}</div></div><div style="margin-top:9px;color:#475569;font-size:.84em;">${escapeHtml(meta.description)}</div><button type="button" onclick="openIftyKanbunQuestionHelp()" style="margin-top:9px;border:1px solid #c4b5fd;background:#faf5ff;color:#6d28d9;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">🤖 ALLIAに質問</button>${answerArea}${result}${answered?`<button type="button" onclick="nextIftyKanbunPracticeQuestion()" style="width:100%;margin-top:12px;border:none;background:#0f766e;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">次へ</button>`:''}</div>`;
-  if(st.mode!=='kaeriten'&&!answered)requestAnimationFrame(initIftyKanbunHandwritingCanvas);
+
+  let questionBlock='';
+  if(st.mode==='simple'){
+    questionBlock=`<div style="margin-top:13px;padding:12px;border:1px solid #dbeafe;border-radius:10px;background:#eff6ff;"><div style="font-weight:900;color:#1d4ed8;line-height:1.6;">${escapeHtml(q.prompt||'')}</div>${q.sourceText?`<div style="margin-top:8px;font-size:1.03em;color:#0f172a;line-height:1.65;">${escapeHtml(q.sourceText)}</div>`:''}</div>`;
+  }else{
+    questionBlock=`<div style="margin-top:13px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;"><div style="font-size:.72em;font-weight:900;color:#64748b;margin-bottom:6px;">原文</div><div style="font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.28em;line-height:1.7;color:#0f172a;overflow-wrap:anywhere;">${escapeHtml(q.originalText)}</div></div>${st.mode==='cloze'?`<div style="margin-top:10px;padding:12px;border:1px solid #ddd6fe;border-radius:10px;background:#faf5ff;"><div style="font-size:.72em;font-weight:900;color:#6d28d9;margin-bottom:6px;">${escapeHtml(q.clozeLabel||'穴埋め')}</div><div style="font-size:1.05em;line-height:1.7;color:#2e1065;">${escapeHtml(q.clozeText||'')}</div></div>`:''}`;
+  }
+
+  let answerArea='';
+  if(st.mode==='simple'){
+    answerArea=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:14px;">${(q.options||[]).map((opt,index)=>{
+      const isCorrect=answered&&String(opt.id)===String(q.correctOptionId);
+      const isSelected=answered&&String(opt.id)===String(st.selectedOptionId);
+      const border=answered?(isCorrect?'#22c55e':(isSelected?'#ef4444':'#cbd5e1')):'#93c5fd';
+      const bg=answered?(isCorrect?'#f0fdf4':(isSelected?'#fef2f2':'white')):'white';
+      return `<button type="button" onclick="answerIftyKanbunPracticeSimple('${escapeHtml(String(opt.id).replace(/'/g,"\\'"))}')" ${answered?'disabled':''} style="text-align:left;border:1px solid ${border};background:${bg};color:#0f172a;border-radius:9px;padding:11px;line-height:1.55;font-weight:800;cursor:${answered?'default':'pointer'};"><span style="color:#64748b;margin-right:6px;">${index+1}.</span>${escapeHtml(opt.label||'')}</button>`;
+    }).join('')}</div>`;
+  }else if(st.mode==='kaeriten'){
+    answerArea=`<div style="margin-top:14px;"><div style="font-size:.78em;color:#64748b;margin-bottom:7px;">字をタップして返点を選んでください。</div>${renderIftyKanbunPracticeMarks(q,st)}${answered?'':`<button type="button" onclick="submitIftyKanbunPracticeKaeriten()" style="width:100%;margin-top:12px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">採点</button>`}</div>`;
+  }else{
+    const placeholder=st.mode==='cloze'?'空欄に入る語句を答える':'文字入力で答える（手書きだけでも可）';
+    answerArea=`<div style="margin-top:14px;"><textarea id="iftyKanbunPracticeAnswer" rows="${st.mode==='cloze'?2:4}" placeholder="${placeholder}" ${answered?'disabled':''} style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:1em;resize:vertical;"></textarea><div style="margin-top:9px;padding:9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;"><b style="font-size:.82em;color:#334155;">✍️ 手書き</b><div style="display:flex;gap:6px;"><button type="button" onclick="undoIftyKanbunHandwriting()" ${answered?'disabled':''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;">1つ戻す</button><button type="button" onclick="clearIftyKanbunHandwriting()" ${answered?'disabled':''} style="border:none;background:#fee2e2;color:#991b1b;border-radius:6px;padding:6px 8px;font-weight:900;">消す</button></div></div><canvas id="iftyKanbunHandwritingCanvas" style="display:block;width:100%;height:${st.mode==='cloze'?'180':'250'}px;margin-top:8px;background:white;border:1px dashed #94a3b8;border-radius:8px;"></canvas><div style="margin-top:5px;color:#64748b;font-size:.7em;">指・Apple Pencil等で書けます。手書き画像は採点時だけALLIAへ送ります。</div></div>${answered?'':`<button type="button" onclick="submitIftyKanbunPracticeWritten()" style="width:100%;margin-top:12px;border:none;background:${meta.color};color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">採点</button>`}<div id="iftyKanbunPracticeGradeStatus" style="margin-top:6px;color:#64748b;font-size:.76em;"></div></div>`;
+  }
+
+  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(760px,100%);max-height:94vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.3);"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><div style="font-size:.78em;font-weight:900;color:${meta.color};">${escapeHtml(meta.title)}　${st.index+1}/${st.questions.length}</div><div style="font-size:.72em;color:#64748b;margin-top:2px;">正解 ${st.correct} / 不正解 ${st.wrong}</div></div><button type="button" onclick="document.getElementById('iftyKanbunPracticeModal')?.remove();setIftyUnifiedPracticeSubject('KANBUN')" style="border:none;background:none;font-size:1.3em;color:#64748b;cursor:pointer;">✕</button></div>${questionBlock}<div style="margin-top:9px;color:#475569;font-size:.84em;">${escapeHtml(meta.description)}</div><button type="button" onclick="openIftyKanbunQuestionHelp()" style="margin-top:9px;border:1px solid #c4b5fd;background:#faf5ff;color:#6d28d9;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">🤖 ALLIAに質問</button>${answerArea}${result}${answered?`<button type="button" onclick="nextIftyKanbunPracticeQuestion()" style="width:100%;margin-top:12px;border:none;background:#0f766e;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">次へ</button>`:''}</div>`;
+  if(!['kaeriten','simple'].includes(st.mode)&&!answered)requestAnimationFrame(initIftyKanbunHandwritingCanvas);
 }
 
 function renderIftyKanbunPracticeMarks(q,st){
@@ -8565,7 +8705,7 @@ window.submitIftyKanbunPracticeKaeriten=function(){
 
 window.submitIftyKanbunPracticeWritten=async function(){
   const st=iftyKanbunPracticeState,q=getCurrentIftyKanbunPracticeQuestion();
-  if(!st||!q||st.answered||st.grading)return;
+  if(!st||!q||st.answered||st.grading||st.mode==='simple'||st.mode==='kaeriten')return;
   const answer=String(document.getElementById('iftyKanbunPracticeAnswer')?.value||'').trim();
   const handwriting=getIftyKanbunHandwritingImage();
   if(!answer&&!handwriting){const el=document.getElementById('iftyKanbunPracticeGradeStatus');if(el)el.textContent='文字入力または手書きで回答してください。';return;}
@@ -8573,11 +8713,12 @@ window.submitIftyKanbunPracticeWritten=async function(){
   st.grading=true;
   const status=document.getElementById('iftyKanbunPracticeGradeStatus');if(status)status.textContent='ALLIAが採点中…';
   try{
-    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_practice_grade',mode:st.mode,originalText:q.originalText,kundoku:q.kundoku,translation:q.translation,userAnswer:answer,handwritingImage:handwriting,subject:'KANBUN',order:getIftySubjectOrder('KANBUN')})});
+    const referenceAnswer=st.mode==='cloze'?String(q.clozeAnswer||'').trim():(st.mode==='kundoku'?String(q.kundoku||'').trim():String(q.translation||'').trim());
+    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_practice_grade',mode:st.mode,originalText:q.originalText,kundoku:q.kundoku,translation:q.translation,referenceAnswer,clozeText:q.clozeText||'',clozeLabel:q.clozeLabel||'',userAnswer:answer,handwritingImage:handwriting,subject:'KANBUN',order:getIftySubjectOrder('KANBUN')})});
     const data=await response.json().catch(()=>({}));
     if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);
-    st.grading=false;st.answered=true;st.correctLast=data.correct===true;st.feedback=String(data.feedback||'').trim();st.modelAnswer=String(data.modelAnswer||(st.mode==='kundoku'?q.kundoku:q.translation)||'').trim();
-    st.lastSubmission={typedAnswer:answer,handwritingImage:handwriting,firstFeedback:st.feedback,firstModelAnswer:st.modelAnswer,challenged:false};
+    st.grading=false;st.answered=true;st.correctLast=data.correct===true;st.feedback=String(data.feedback||'').trim();st.modelAnswer=String(data.modelAnswer||referenceAnswer||'').trim();
+    st.lastSubmission={typedAnswer:answer,handwritingImage:handwriting,firstFeedback:st.feedback,firstModelAnswer:st.modelAnswer,referenceAnswer,challenged:false};
     if(st.correctLast)st.correct+=1;else st.wrong+=1;
     recordIftySubjectStudyEvent('KANBUN',q.targetItemId,st.correctLast,`kanbun_${st.mode}`);
     renderIftyKanbunPracticePlayer();
@@ -8586,13 +8727,13 @@ window.submitIftyKanbunPracticeWritten=async function(){
 
 window.submitIftyKanbunPracticeChallenge=async function(){
   const st=iftyKanbunPracticeState,q=getCurrentIftyKanbunPracticeQuestion(),last=st?.lastSubmission;
-  if(!st||!q||!last||st.correctLast||last.challenged||st.challengePending||st.mode==='kaeriten')return;
+  if(!st||!q||!last||st.correctLast||last.challenged||st.challengePending||!['translation','kundoku','cloze'].includes(st.mode))return;
   if(!ensureIftyOnline('漢文Challenge再審査'))return;
   const reason=String(document.getElementById('iftyKanbunChallengeReason')?.value||'').trim();
   st.challengePending=true;
   renderIftyKanbunPracticePlayer();
   try{
-    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_practice_challenge',mode:st.mode,originalText:q.originalText,kundoku:q.kundoku,translation:q.translation,userAnswer:last.typedAnswer||'',handwritingImage:last.handwritingImage||'',firstFeedback:last.firstFeedback||'',firstModelAnswer:last.firstModelAnswer||'',challengeReason:reason,subject:'KANBUN',order:getIftySubjectOrder('KANBUN')})});
+    const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_practice_challenge',mode:st.mode,originalText:q.originalText,kundoku:q.kundoku,translation:q.translation,referenceAnswer:last.referenceAnswer||q.clozeAnswer||'',clozeText:q.clozeText||'',clozeLabel:q.clozeLabel||'',userAnswer:last.typedAnswer||'',handwritingImage:last.handwritingImage||'',firstFeedback:last.firstFeedback||'',firstModelAnswer:last.firstModelAnswer||'',challengeReason:reason,subject:'KANBUN',order:getIftySubjectOrder('KANBUN')})});
     const data=await response.json().catch(()=>({}));
     if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);
     st.challengePending=false;last.challenged=true;
@@ -8609,13 +8750,13 @@ window.submitIftyKanbunPracticeChallenge=async function(){
 
 window.nextIftyKanbunPracticeQuestion=function(){
   const st=iftyKanbunPracticeState;if(!st||!st.answered)return;
-  st.index+=1;st.answered=false;st.grading=false;st.challengePending=false;st.feedback='';st.modelAnswer='';st.correctLast=false;st.lastSubmission=null;st.answerMarks=[];st.selectedMarkIndex=0;
+  st.index+=1;st.answered=false;st.grading=false;st.challengePending=false;st.feedback='';st.modelAnswer='';st.correctLast=false;st.lastSubmission=null;st.answerMarks=[];st.selectedMarkIndex=0;st.selectedOptionId='';
   resetIftyKanbunHandwriting();iftyKanbunHelpHistory=[];renderIftyKanbunPracticePlayer();
 };
 
 window.openIftyKanbunQuestionHelp=function(){const q=getCurrentIftyKanbunPracticeQuestion();if(!q)return;document.getElementById('iftyKanbunHelpModal')?.remove();const modal=document.createElement('div');modal.id='iftyKanbunHelpModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:12170;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';modal.innerHTML=`<div style="width:min(620px,100%);max-height:88vh;overflow:auto;background:white;border-radius:14px;padding:16px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b style="color:#6d28d9;">🤖 ALLIAに質問</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">今の漢文問題を開いたまま質問できます。</div></div><button type="button" onclick="document.getElementById('iftyKanbunHelpModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div><div id="iftyKanbunHelpHistory" style="margin-top:10px;display:grid;gap:7px;"></div><div style="display:flex;gap:7px;margin-top:10px;align-items:flex-end;"><textarea id="iftyKanbunHelpInput" rows="2" placeholder="例：この『未』はどう読む？／答えは言わずヒントだけ" style="flex:1;min-width:0;padding:9px;border:1px solid #c4b5fd;border-radius:8px;resize:vertical;"></textarea><button type="button" onclick="askIftyKanbunQuestionHelp()" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px 12px;font-weight:900;cursor:pointer;">送信</button></div><div id="iftyKanbunHelpStatus" style="margin-top:5px;font-size:.72em;color:#64748b;"></div></div>`;document.body.appendChild(modal);renderIftyKanbunHelpHistory();document.getElementById('iftyKanbunHelpInput')?.focus();};
 function renderIftyKanbunHelpHistory(){const wrap=document.getElementById('iftyKanbunHelpHistory');if(!wrap)return;wrap.innerHTML=iftyKanbunHelpHistory.map(row=>`<div style="padding:8px 10px;border-radius:8px;background:${row.role==='user'?'#f1f5f9':'#faf5ff'};color:#334155;white-space:pre-wrap;line-height:1.5;"><b style="font-size:.72em;color:${row.role==='user'?'#475569':'#6d28d9'};">${row.role==='user'?'自分':'ALLIA'}</b><div style="margin-top:3px;">${escapeHtml(row.text)}</div></div>`).join('');wrap.scrollTop=wrap.scrollHeight;}
-window.askIftyKanbunQuestionHelp=async function(){const q=getCurrentIftyKanbunPracticeQuestion();const input=document.getElementById('iftyKanbunHelpInput');const userQuestion=String(input?.value||'').trim();if(!q||!userQuestion)return;if(!ensureIftyOnline('ALLIA質問'))return;const history=iftyKanbunHelpHistory.slice(-8);iftyKanbunHelpHistory.push({role:'user',text:userQuestion});if(input)input.value='';renderIftyKanbunHelpHistory();const status=document.getElementById('iftyKanbunHelpStatus');if(status)status.textContent='ALLIAが考えています…';try{const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_help',quizType:`kanbun_${iftyKanbunPracticeState?.mode||''}`,direction:'',question:`原文：${q.originalText}`,instruction:getIftyKanbunPracticeModeMeta(iftyKanbunPracticeState?.mode).description,userQuestion,options:[],history,subject:'KANBUN',order:getIftySubjectOrder('KANBUN')})});const data=await response.json().catch(()=>({}));if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);iftyKanbunHelpHistory.push({role:'assistant',text:String(data.answer||'説明を生成できませんでした。')});renderIftyKanbunHelpHistory();if(status)status.textContent='';}catch(error){if(status)status.textContent=String(error.message||error);}};
+window.askIftyKanbunQuestionHelp=async function(){const q=getCurrentIftyKanbunPracticeQuestion();const input=document.getElementById('iftyKanbunHelpInput');const userQuestion=String(input?.value||'').trim();if(!q||!userQuestion)return;if(!ensureIftyOnline('ALLIA質問'))return;const history=iftyKanbunHelpHistory.slice(-8);iftyKanbunHelpHistory.push({role:'user',text:userQuestion});if(input)input.value='';renderIftyKanbunHelpHistory();const status=document.getElementById('iftyKanbunHelpStatus');if(status)status.textContent='ALLIAが考えています…';try{const response=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_help',quizType:`kanbun_${iftyKanbunPracticeState?.mode||''}`,direction:'',question:[q.prompt?`問題：${q.prompt}`:'',`原文：${q.originalText}`,q.clozeText?`${q.clozeLabel||'穴埋め'}：${q.clozeText}`:'',q.sourceText?`提示文：${q.sourceText}`:''].filter(Boolean).join('\n'),instruction:getIftyKanbunPracticeModeMeta(iftyKanbunPracticeState?.mode).description,userQuestion,options:[],history,subject:'KANBUN',order:getIftySubjectOrder('KANBUN')})});const data=await response.json().catch(()=>({}));if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);iftyKanbunHelpHistory.push({role:'assistant',text:String(data.answer||'説明を生成できませんでした。')});renderIftyKanbunHelpHistory();if(status)status.textContent='';}catch(error){if(status)status.textContent=String(error.message||error);}};
 
 window.openIftySubject = function(subject) {
   const normalized = normalizeIftySubject(subject);
@@ -13617,7 +13758,7 @@ function normalizeIftySubjectQuizSet(value, index = 0, subject = '') {
     : (key === 'SCIENCE'
         ? ['simple','term_write','formula','order','explanation','image']
         : (key === 'KANBUN'
-            ? ['kundoku','translation','kaeriten']
+            ? ['simple','translation','kundoku','cloze','kaeriten']
             : ['choice','term_write','reading_write','meaning_write','example','grammar_conjugate','grammar_identify','grammar_table','grammar_explain']));
   const defaultMode = allowed[0];
   return {
@@ -15633,7 +15774,7 @@ function getIftySubjectQuizModeOptions(subject) {
     : (key === 'SCIENCE'
         ? ['simple','term_write','formula','order','explanation','image']
         : (key === 'KANBUN'
-            ? ['kundoku','translation','kaeriten']
+            ? ['simple','translation','kundoku','cloze','kaeriten']
             : ['choice','term_write','reading_write','meaning_write','example','grammar_conjugate','grammar_identify','grammar_table','grammar_explain']));
   return modes.map(mode => {
     const meta = key === 'SOCIAL STUDIES'
