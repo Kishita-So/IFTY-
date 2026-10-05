@@ -1,3 +1,4 @@
+// ★★★ IFTY Q3 STEP99 2026-10-05：KANJI ENTER DRAFT / MANUAL OPEN FIX ★★★
 // ★★★ IFTY Q3 STEP98 2026-10-05：PRACTICE 出題上限30問 ★★★
 // ★★★ IFTY Q3 STEP97 2026-10-05：PRACTICE UI UNIFICATION ★★★
 // ★★★ IFTY Q3 STEP96 2026-10-05：DARK MODE / KANJI FOLDERS / PRONUNCIATION GUIDE / MANUAL FIX ★★★
@@ -13641,17 +13642,34 @@ window.generateIftyKanjiItem=async function(folderId,itemId=''){
   const term=String(existing?.term||input?.value||iftyKanjiTermDrafts[folderId]||'').trim();
   if(!term)return alert('漢字・熟語を入力してください。');
   if(!ensureIftyOnline('KANJIのALLIA生成'))return;
-  iftyKanjiGenerationPending[folderId]=(iftyKanjiGenerationPending[folderId]||0)+1;renderIftyKanjiPage({preserveScroll:true});
+
+  // STEP99: 新規生成は送信した文字列だけを確定して、入力欄を即座に空にする。
+  // 生成待ちの間に次の文字を入力した場合、その新しい下書きには触れない。
+  if(!itemId){
+    iftyKanjiTermDrafts[folderId]='';
+    if(input)input.value='';
+  }
+
+  iftyKanjiGenerationPending[folderId]=(iftyKanjiGenerationPending[folderId]||0)+1;
+  renderIftyKanjiPage({preserveScroll:true});
   try{
     const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanji_generate',term,subject:'KANJI',order:getIftySubjectOrder('KANJI')})});
     const data=await response.json().catch(()=>({}));if(!response.ok)throw alliaHttpError(response,data,'KANJI生成に失敗しました。');
     const current=getIftyKanjiFolder(folderId);if(!current)return;
     const generated=normalizeIftyKanjiItem({...data,term,source:'ALLIA'});
     if(existing){const idx=current.items.findIndex(x=>String(x.id)===String(itemId));if(idx>=0)current.items[idx]=normalizeIftyKanjiItem({...generated,id:itemId,review:existing.review,study:existing.study,mastery:existing.mastery,createdAt:existing.createdAt});}
-    else{current.items.push(generated);iftyKanjiTermDrafts[folderId]='';}
+    else{current.items.push(generated);}
     savePracticeData();
-  }catch(e){alert(String(e.message||e));}
-  finally{iftyKanjiGenerationPending[folderId]=Math.max(0,(iftyKanjiGenerationPending[folderId]||1)-1);renderIftyKanjiPage({preserveScroll:true});if(!itemId)setTimeout(()=>document.getElementById(`iftyKanjiTerm_${folderId}`)?.focus(),0);}
+  }catch(e){
+    // 失敗時、ユーザーが次の文字をまだ入力していない場合だけ送信語を戻す。
+    if(!itemId&&!String(iftyKanjiTermDrafts[folderId]||'').trim())iftyKanjiTermDrafts[folderId]=term;
+    alert(String(e.message||e));
+  }
+  finally{
+    iftyKanjiGenerationPending[folderId]=Math.max(0,(iftyKanjiGenerationPending[folderId]||1)-1);
+    renderIftyKanjiPage({preserveScroll:true});
+    if(!itemId)setTimeout(()=>document.getElementById(`iftyKanjiTerm_${folderId}`)?.focus(),0);
+  }
 };
 window.regenerateIftyKanjiItem=function(folderId,itemId){return generateIftyKanjiItem(folderId,itemId);};
 
@@ -22201,7 +22219,11 @@ window.logout = async function() {
   }
 
   function loadState() {
-    return safeParse(localStorage.getItem(STATE_KEY), { open: false, minimized: false, section: null });
+    try {
+      return safeParse(localStorage.getItem(STATE_KEY), { open: false, minimized: false, section: null });
+    } catch (_) {
+      return { open: false, minimized: false, section: null };
+    }
   }
 
   function saveState(next) {
@@ -22209,7 +22231,11 @@ window.logout = async function() {
   }
 
   function loadPosition() {
-    return safeParse(localStorage.getItem(POS_KEY), null);
+    try {
+      return safeParse(localStorage.getItem(POS_KEY), null);
+    } catch (_) {
+      return null;
+    }
   }
 
   function savePosition(left, top) {
@@ -22963,7 +22989,8 @@ window.logout = async function() {
   }
 
   function buildManual() {
-    if (document.getElementById(ROOT_ID)) return;
+    const staleRoot = document.getElementById(ROOT_ID);
+    if (staleRoot) staleRoot.remove();
     injectStyles();
 
     const root = document.createElement('div');
@@ -23028,14 +23055,32 @@ window.logout = async function() {
     function openManual() {
       state.open = true;
       state.minimized = false;
-      panel.style.display = 'flex';
+      panel.classList.add('is-open');
+      panel.classList.remove('is-minimized');
+      panel.style.setProperty('display', 'flex', 'important');
+      panel.style.setProperty('visibility', 'visible', 'important');
+      panel.style.setProperty('opacity', '1', 'important');
       panel.style.pointerEvents = 'auto';
       render();
-      requestAnimationFrame(() => restorePosition(panel));
+      requestAnimationFrame(() => {
+        restorePosition(panel);
+        const rect = panel.getBoundingClientRect();
+        const visible = rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 && rect.left < window.innerWidth && rect.top < window.innerHeight;
+        if (!visible) setDefaultPosition(panel);
+      });
     }
 
     window.openIftyManual = openManual;
     window.closeIftyManual = function(){ state.open=false; state.minimized=false; render(); };
+
+    // STEP99: iPad/Safariで通常clickが他UIに奪われてもMANUALを確実に開く。
+    const forceManualLauncherOpen = (event) => {
+      const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+      const hit = path.includes(launcher) || event.target === launcher || launcher.contains(event.target);
+      if (!hit) return;
+      openManual();
+    };
+    window.addEventListener('pointerdown', forceManualLauncherOpen, true);
 
     launcher.addEventListener('click', () => {
       if (!state.open) openManual();
