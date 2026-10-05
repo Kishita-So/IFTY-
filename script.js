@@ -1,3 +1,5 @@
+// ★★★ IFTY Q3 STEP102 2026-10-05：MANUAL PREPOSITIONS / PRONUNCIATION & ACCENT RULES ★★★
+// ★★★ IFTY Q3 STEP101 2026-10-05：MANUAL NAV / OUTSIDE MINIMIZE / TOOLS GUIDE ★★★
 // ★★★ IFTY Q3 STEP100 2026-10-05：CONTINUOUS ENTER / MANUAL RELIABILITY FIX ★★★
 // ★★★ IFTY Q3 STEP99 2026-10-05：KANJI ENTER DRAFT / MANUAL OPEN FIX ★★★
 // ★★★ IFTY Q3 STEP98 2026-10-05：PRACTICE 出題上限30問 ★★★
@@ -22256,6 +22258,7 @@ window.logout = async function() {
 // 右下のMANUALボタンから開く、移動可能・最小化可能な小型マニュアル。
 // STEP94：『IFTYの使い方』本文を追加。
 // STEP95：『発音記号一覧』本文を追加（口・舌の使い方、例語、よくある誤り）。
+// STEP102：『前置詞の意味イメージ』『発音・アクセントルール』本文を追加（ユーザー資料＋英米・地域差を補正）。
 // ==========================================
 (function initIftyFloatingManualShell() {
   const ROOT_ID = 'iftyFloatingManualRoot';
@@ -22428,6 +22431,13 @@ window.logout = async function() {
         border:0; background:#f1f5f9; color:#334155; border-radius:10px; padding:8px 10px; cursor:pointer;
         font-size:12px; font-weight:800; -webkit-tap-highlight-color:transparent;
       }
+      .ifty-manual-bottom-back {
+        width:100%; margin-top:14px; border:1px solid #cbd5e1; background:#f8fafc; color:#334155;
+        border-radius:12px; padding:11px 12px; cursor:pointer; font-size:12.5px; font-weight:900;
+        -webkit-tap-highlight-color:transparent;
+      }
+      .ifty-manual-bottom-back:hover { background:#f1f5f9; border-color:#94a3b8; }
+      .ifty-manual-bottom-back:focus-visible { outline:3px solid rgba(14,165,233,.28); outline-offset:2px; }
       .ifty-manual-sectionname { min-width:0; font-size:15px; font-weight:900; line-height:1.25; }
       .ifty-manual-placeholder {
         border:1.5px dashed #cbd5e1; border-radius:16px; padding:22px 16px; text-align:center;
@@ -22562,6 +22572,129 @@ window.logout = async function() {
       }
       .ifty-manual-ipa-contrastrow b { color:#0f172a; }
       .ifty-manual-ipa-pair { color:#6d28d9; font-weight:950; }
+
+
+      /* STEP102：前置詞 / 発音・アクセントルール */
+      .ifty-manual-ref { display:grid; gap:12px; padding-bottom:2px; }
+      .ifty-manual-ref-hero {
+        border:1px solid #bae6fd; border-radius:16px; padding:14px;
+        background:linear-gradient(145deg,#f0f9ff,#f8fafc);
+      }
+      .ifty-manual-ref-hero.purple { border-color:#c4b5fd; background:linear-gradient(145deg,#faf5ff,#f8fafc); }
+      .ifty-manual-ref-title { color:#0f172a; font-size:16px; font-weight:950; line-height:1.35; }
+      .ifty-manual-ref-text { margin-top:6px; color:#475569; font-size:12px; line-height:1.68; }
+      .ifty-manual-ref-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+      .ifty-manual-ref-chip {
+        display:inline-flex; align-items:center; gap:4px; padding:5px 8px; border-radius:999px;
+        background:#fff; border:1px solid #dbeafe; color:#334155; font-size:10.5px; font-weight:850;
+      }
+      .ifty-manual-ref-note {
+        border-radius:12px; padding:10px 11px; background:#fffbeb; border:1px solid #fde68a;
+        color:#713f12; font-size:11.3px; line-height:1.65;
+      }
+      .ifty-manual-ref-note strong { color:#92400e; }
+      .ifty-manual-ref-group { display:grid; gap:8px; }
+      .ifty-manual-ref-heading {
+        margin:2px 2px 0; color:#475569; font-size:10.5px; line-height:1.3; font-weight:950;
+        letter-spacing:.08em; text-transform:uppercase;
+      }
+      .ifty-manual-ref details {
+        overflow:hidden; border:1px solid #e2e8f0; border-radius:14px; background:#fff;
+      }
+      .ifty-manual-ref details[open] { border-color:#7dd3fc; box-shadow:0 5px 18px rgba(15,23,42,.06); }
+      .ifty-manual-ref summary {
+        list-style:none; cursor:pointer; padding:12px 39px 12px 12px; position:relative;
+        color:#0f172a; font-size:12.8px; line-height:1.4; font-weight:900;
+        -webkit-tap-highlight-color:transparent; user-select:none;
+      }
+      .ifty-manual-ref summary::-webkit-details-marker { display:none; }
+      .ifty-manual-ref summary::after {
+        content:'＋'; position:absolute; right:12px; top:50%; transform:translateY(-50%);
+        width:22px; height:22px; border-radius:8px; display:grid; place-items:center;
+        background:#e0f2fe; color:#0369a1; font-size:14px; line-height:1;
+      }
+      .ifty-manual-ref details[open] summary::after { content:'−'; background:#bae6fd; color:#075985; }
+      .ifty-manual-ref-content { padding:0 11px 12px; color:#475569; font-size:11.5px; line-height:1.65; }
+      .ifty-manual-ref-content p { margin:6px 0; }
+      .ifty-manual-ref-content ul, .ifty-manual-ref-content ol { margin:7px 0 0; padding-left:18px; }
+      .ifty-manual-ref-content li { margin:4px 0; }
+      .ifty-manual-ref-content strong { color:#0f172a; }
+      .ifty-manual-ref-content code {
+        font:800 10.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; padding:2px 5px; border-radius:6px;
+        background:#f1f5f9; color:#0f172a;
+      }
+      .ifty-manual-core {
+        display:flex; gap:8px; align-items:flex-start; margin:2px 0 8px; padding:9px 10px;
+        border-radius:11px; background:#f8fafc; border:1px solid #e2e8f0;
+      }
+      .ifty-manual-core-word {
+        flex:0 0 auto; min-width:58px; padding:5px 7px; border-radius:9px; text-align:center;
+        background:#e0f2fe; color:#075985; font-size:15px; font-weight:950;
+      }
+      .ifty-manual-core-text { min-width:0; color:#334155; font-size:11.4px; line-height:1.55; }
+      .ifty-manual-example-list { display:grid; gap:6px; margin-top:8px; }
+      .ifty-manual-example {
+        padding:8px 9px; border-radius:10px; background:#f8fafc; border:1px solid #e2e8f0;
+        color:#475569; font-size:11.2px; line-height:1.55;
+      }
+      .ifty-manual-example b { color:#0f172a; }
+      .ifty-manual-rule-box {
+        margin-top:8px; padding:9px 10px; border-left:3px solid #8b5cf6; border-radius:8px;
+        background:#faf5ff; color:#5b21b6; font-size:11.2px; line-height:1.6;
+      }
+      .ifty-manual-rule-box strong { color:#4c1d95; }
+      .ifty-manual-warning-box {
+        margin-top:8px; padding:9px 10px; border-left:3px solid #f59e0b; border-radius:8px;
+        background:#fffbeb; color:#92400e; font-size:11.2px; line-height:1.6;
+      }
+      .ifty-manual-region-grid { display:grid; grid-template-columns:1fr; gap:7px; margin-top:8px; }
+      .ifty-manual-region-card {
+        border:1px solid #e2e8f0; border-radius:11px; padding:9px 10px; background:#f8fafc;
+        color:#475569; font-size:11.1px; line-height:1.58;
+      }
+      .ifty-manual-region-card b { display:block; margin-bottom:3px; color:#0f172a; font-size:11.5px; }
+      .ifty-manual-mini-table { display:grid; gap:5px; margin-top:8px; }
+      .ifty-manual-mini-row {
+        display:grid; grid-template-columns:minmax(78px,.7fr) minmax(0,1.6fr); gap:8px;
+        padding:7px 8px; border-radius:9px; background:#f8fafc; border:1px solid #e2e8f0;
+        color:#475569; font-size:10.9px; line-height:1.5;
+      }
+      .ifty-manual-mini-row b { color:#0f172a; }
+
+      body[data-ifty-theme="dark"] .ifty-manual-ref-hero { background:linear-gradient(145deg,#0c2536,#172033); border-color:#0ea5e9; }
+      body[data-ifty-theme="dark"] .ifty-manual-ref-hero.purple { background:linear-gradient(145deg,#24143d,#172033); border-color:#8b5cf6; }
+      body[data-ifty-theme="dark"] .ifty-manual-ref-title { color:#f8fafc; }
+      body[data-ifty-theme="dark"] .ifty-manual-ref-text { color:#dbe4ef; }
+      body[data-ifty-theme="dark"] .ifty-manual-ref-chip { background:#111827; border-color:#475569; color:#e2e8f0; }
+      body[data-ifty-theme="dark"] .ifty-manual-ref-note { background:#2b2110; border-color:#a16207; color:#fde68a; }
+      body[data-ifty-theme="dark"] .ifty-manual-ref-note strong { color:#fef3c7; }
+      body[data-ifty-theme="dark"] .ifty-manual-ref-heading { color:#cbd5e1; }
+      body[data-ifty-theme="dark"] .ifty-manual-ref details { background:#172033; border-color:#64748b; }
+      body[data-ifty-theme="dark"] .ifty-manual-ref details[open] { border-color:#38bdf8; box-shadow:0 7px 22px rgba(0,0,0,.24); }
+      body[data-ifty-theme="dark"] .ifty-manual-ref summary { color:#f8fafc; }
+      body[data-ifty-theme="dark"] .ifty-manual-ref summary::after { background:#164e63; color:#bae6fd; }
+      body[data-ifty-theme="dark"] .ifty-manual-ref details[open] summary::after { background:#075985; color:#e0f2fe; }
+      body[data-ifty-theme="dark"] .ifty-manual-ref-content { color:#dbe4ef; }
+      body[data-ifty-theme="dark"] .ifty-manual-ref-content strong { color:#fff; }
+      body[data-ifty-theme="dark"] .ifty-manual-ref-content code { background:#0b1120; color:#e2e8f0; }
+      body[data-ifty-theme="dark"] .ifty-manual-core,
+      body[data-ifty-theme="dark"] .ifty-manual-example,
+      body[data-ifty-theme="dark"] .ifty-manual-region-card,
+      body[data-ifty-theme="dark"] .ifty-manual-mini-row { background:#111827; border-color:#475569; color:#dbe4ef; }
+      body[data-ifty-theme="dark"] .ifty-manual-core-word { background:#164e63; color:#bae6fd; }
+      body[data-ifty-theme="dark"] .ifty-manual-core-text,
+      body[data-ifty-theme="dark"] .ifty-manual-example { color:#dbe4ef; }
+      body[data-ifty-theme="dark"] .ifty-manual-core-text strong,
+      body[data-ifty-theme="dark"] .ifty-manual-example b,
+      body[data-ifty-theme="dark"] .ifty-manual-region-card b,
+      body[data-ifty-theme="dark"] .ifty-manual-mini-row b { color:#fff; }
+      body[data-ifty-theme="dark"] .ifty-manual-rule-box { background:#2c2140; border-left-color:#a78bfa; color:#ddd6fe; }
+      body[data-ifty-theme="dark"] .ifty-manual-rule-box strong { color:#f5f3ff; }
+      body[data-ifty-theme="dark"] .ifty-manual-warning-box { background:#2b2110; border-left-color:#f59e0b; color:#fde68a; }
+
+      @media (min-width:700px) {
+        .ifty-manual-region-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      }
 
       .ifty-manual-footer {
         flex:0 0 auto; padding:9px 14px 11px; border-top:1px solid #e2e8f0; background:#f8fafc;
@@ -22717,7 +22850,7 @@ window.logout = async function() {
         </div>
 
         <div class="ifty-manual-guide-note">
-          <strong>画面右下のMANUALはいつでも開けます。</strong> ヘッダーをドラッグして移動、<b>−</b>で最小化、<b>×</b>で閉じられます。
+          <strong>画面右下のMANUALはいつでも開けます。</strong> ヘッダーをドラッグして移動、<b>−</b>またはMANUALの欄外を押すと最小化、<b>×</b>で閉じられます。各ページの上部・下部にある「戻る」から一覧へ戻れます。
         </div>
 
         <div class="ifty-manual-guide-group">
@@ -22824,6 +22957,56 @@ window.logout = async function() {
                 <li>必要な部分を再練習し、履歴で前回との変化を見ます。</li>
               </ol>
               <div class="ifty-manual-guide-tip"><strong>録音について</strong>　録音音声そのものは保存せず、練習用データと採点履歴を保存します。</div>
+            </div>
+          </details>
+
+          <details>
+            <summary>📚 TOOLS → EXAMPLES</summary>
+            <div class="ifty-manual-guide-content">
+              <p><strong>EXAMPLES</strong>は、LANGUAGESなどで一度作成・保存した例文をまとめて確認し、再利用するための例文資産です。</p>
+              <ul>
+                <li>同じ単語で毎回ALLIAに新しい例文を作らせず、保存済みの例文を再利用できます。</li>
+                <li>例文を見直したいときや、BASIC SENTENCESへ使いたい文を探すときに便利です。</li>
+                <li>例文が増えたら検索や分類を使って必要な文を絞り込みます。</li>
+              </ul>
+              <div class="ifty-manual-guide-tip"><strong>TIP</strong>　「覚えやすい」「実際に使えそう」な例文を残しておくと、単語・文法・発音練習をつなげやすくなります。</div>
+            </div>
+          </details>
+
+          <details>
+            <summary>📝 TOOLS → BASIC SENTENCES</summary>
+            <div class="ifty-manual-guide-content">
+              <p><strong>BASIC SENTENCES</strong>は、短い英文や基本例文を「文ごと」覚えるためのツールです。</p>
+              <ul>
+                <li>単語単体ではなく、語順・前置詞・構文を文の形で定着させたいときに使います。</li>
+                <li>EXAMPLESに保存した例文を学習素材として活用できます。</li>
+                <li>PRACTICEでは対象フォルダ・問題形式・問題数を選んで反復します。</li>
+              </ul>
+            </div>
+          </details>
+
+          <details>
+            <summary>📅 TOOLS → YEARS</summary>
+            <div class="ifty-manual-guide-content">
+              <p><strong>YEARS</strong>は、歴史・社会などの<strong>年号と出来事</strong>を専用フォルダで覚えるためのツールです。</p>
+              <ul>
+                <li>「日本史」「世界史」「近代史」など、範囲ごとにフォルダを分けて整理できます。</li>
+                <li>年号から出来事、出来事から年号のように、対応関係を素早く確認する用途に向いています。</li>
+                <li>ALLIA生成を使う場合も、生成内容は教科書や資料と照合してください。</li>
+              </ul>
+              <div class="ifty-manual-guide-tip"><strong>TIP</strong>　単独の年号だけでなく「前後の出来事」とセットで覚えると時代の流れをつかみやすくなります。</div>
+            </div>
+          </details>
+
+          <details>
+            <summary>🎯 TOOLS → PRACTICE</summary>
+            <div class="ifty-manual-guide-content">
+              <p><strong>PRACTICE</strong>は、現在選んでいる科目の学習セットをまとめて開く入口です。</p>
+              <ul>
+                <li>問題形式・出題順・問題数などを設定して開始します。</li>
+                <li>必要な項目だけ選ぶ、フォルダ単位で追加する、全項目から出す、といった使い分けができます。</li>
+                <li>短いセットを何度も回す場合と、最大30問でまとめて確認する場合を使い分けます。</li>
+              </ul>
             </div>
           </details>
         </div>
@@ -23032,24 +23215,199 @@ window.logout = async function() {
       </div>`;
   }
 
+
+  function renderIftyPrepositionsSection() {
+    const items = [{"w":"at","core":"点","image":"場所・時・対象を『一点』として指す。","examples":[["at the station","駅という地点で"],["at 7:00","7時という一点で"],["good at math","数学という対象点に強い"]],"note":"in は内部、on は面への接触。at は広さを意識せず『点』として見る。"},{"w":"in","core":"内部・包囲","image":"境界のある空間・期間・状態の中に入っている。","examples":[["in the box","箱の中に"],["in 2026","2026年という期間の中で"],["in trouble","困った状態の中に"]],"note":"場所だけでなく、時間・状態も『中に包まれる』と考える。"},{"w":"on","core":"接触・支持 → 継続","image":"表面に触れて支えられている。そこから『作動中・継続中』へ広がる。","examples":[["on the table","机の面に接して"],["on TV","テレビという媒体上で"],["keep on working","働き続ける"],["turn on the light","接続して作動状態にする"]],"note":"on/off は『接続/離脱』の対として句動詞でも非常に重要。"},{"w":"off","core":"離脱・分離","image":"接触・接続していた所から離れる。そこから停止・減少・除去へ。","examples":[["fall off the chair","椅子から離れて落ちる"],["take off","身についた物を外す／離陸する"],["turn off","接続を切って停止する"],["cut off","切り離す"]],"note":"必ずしも『完全停止』だけではなく、中心は『離れる』。"},{"w":"to","core":"方向 → 到達点","image":"矢印が終点へ向かい、そこに届く。","examples":[["go to school","学校へ行く"],["from A to B","AからBまで"],["give it to me","物が私という到達点へ移る"]],"note":"for は『向かう目的・利益』を意識しやすいが、to は終点・到達先をはっきり示す。"},{"w":"for","core":"目標・目的・利益・交換","image":"意識・行為が対象の方へ向けられている。","examples":[["a gift for you","あなたのための贈り物"],["leave for Tokyo","東京を目標に出発する"],["for three days","3日間にわたって"],["buy it for 10 dollars","10ドルと交換して買う"]],"note":"to と違い、必ずしも対象へ到達するとは限らない。"},{"w":"from","core":"起点・分離・由来","image":"出発点から外へ離れていく。","examples":[["from Japan","日本を起点として"],["from 9 to 5","9時を起点に5時まで"],["suffer from stress","ストレスを原因・源として苦しむ"],["protect A from B","AをBから離して守る"]],"note":"場所・時間だけでなく、原因・材料・由来にも広がる。"},{"w":"up","core":"上昇 → 増加・活性化・完成","image":"上方向への変化。そこから量の増加、活動の開始、最後までやり切る感覚へ。","examples":[["stand up","立ち上がる"],["speed up","速度を上げる"],["cheer up","元気を上げる"],["use up the water","水を使い切る"],["set up a team","要素を集めて組み上げる"]],"note":"up/down/away などは前置詞ではなく、副詞・句動詞の particle として使われる場合も多い。"},{"w":"down","core":"下降 → 減少・抑制・固定","image":"下方向へ動く。そこから勢い・量を下げる、落ち着かせる、固定する感覚へ。","examples":[["sit down","座る"],["slow down","速度を落とす"],["calm down","落ち着く"],["write it down","紙面に固定して書き留める"],["knock down","倒す"]],"note":"『下』から抽象的な減少・鎮静へ意味が伸びる。"},{"w":"away","core":"分離・距離化","image":"基準点から離れて距離を作る。","examples":[["go away","立ち去る"],["throw it away","手元から離して捨てる"],["five kilometers away","5km離れて"]],"note":"句動詞では『取り除く・消えていく』にも広がる。"},{"w":"forward","core":"前方・進行","image":"基準点から前へ進む。物理的な前進から、計画・時間・期待の進行へ広がる。","examples":[["move forward","前進する"],["from this point forward","この時点から先へ"],["look forward to seeing you","会うことを先に見据えて楽しみにする"]],"note":"forward は通常は前置詞ではなく副詞・形容詞。look forward to の to は前置詞なので、後ろは名詞または -ing。"},{"w":"by","core":"近接 → 手段・媒介","image":"すぐそばにあるものが、行為を支える媒介になる。","examples":[["by the door","ドアのそばに"],["by train","列車という手段で"],["written by Orwell","Orwellを行為者として"],["by Friday","金曜という期限点までに"]],"note":"with も手段を表せるが、by は方法・経路、with は具体的な道具・伴うものを示しやすい。"},{"w":"with","core":"付帯・同行・結びつき","image":"AにBがくっついて一緒にある。","examples":[["with my friend","友人と一緒に"],["a girl with blue eyes","青い目を伴う女の子"],["cut it with a knife","ナイフを伴って切る"],["filled with water","水が付帯して満たされる"]],"note":"『一緒』を核に、所有・道具・状態へ広がる。"},{"w":"of","core":"所属・構成・性質","image":"全体と部分、所属するもの同士を結びつける。","examples":[["the roof of the house","家に属する屋根"],["a cup of tea","カップを満たす構成内容"],["a man of courage","勇気という性質をもつ人"]],"note":"日本語の『の』に近いことは多いが、中心は関係づけ。"},{"w":"over","core":"上方・覆い → 越える","image":"対象の上を覆う／上を通過して境界を越える。","examples":[["a bridge over the river","川の上をまたぐ橋"],["fly over the city","都市の上空を越える"],["over 100 people","100という境界を越えて"],["all over the world","世界全体を覆って"]],"note":"above は単に位置が上、over は覆う・横切る・越える動きまで含みやすい。"},{"w":"under","core":"下方 → 支配・圧力","image":"上にあるものの下へ入る。そこから支配・条件・圧力の下へ。","examples":[["under the table","机の下に"],["under pressure","圧力の下で"],["under 18","18という基準より下"],["under control","支配・管理下で"]],"note":"below は単純な位置・数値の下を示しやすく、under は覆われる関係を感じやすい。"},{"w":"through","core":"内部を貫通 → 過程を完遂","image":"入口から内部を通り、反対側まで抜ける。","examples":[["through the tunnel","トンネル内部を通り抜ける"],["through the night","夜という時間を通り抜けて"],["learn through practice","練習という過程を通じて学ぶ"]],"note":"across は表面・領域を横切る、through は内部を通り抜ける。"},{"w":"across","core":"横断","image":"一方の側から反対側へ、面・領域を横切る。","examples":[["across the street","通りの反対側へ横切って"],["across the country","国土を横断して"],["come across a word","進む途中で語に出会う"]],"note":"through と違い、内部より『面を横切る』感覚。"},{"w":"along","core":"線に沿う・同行","image":"道・川・線の形に沿って進む。","examples":[["walk along the river","川沿いを歩く"],["along the road","道路に沿って"],["get along with him","彼と同じ流れに乗ってうまくやる"]],"note":"with と結びつく get along with は抽象的な『同調』。"},{"w":"into","core":"外 → 内部への移動","image":"in（内部）に to（到達）の動きが加わる。","examples":[["go into the room","部屋の内部へ入る"],["put it into the box","箱の中へ入れる"],["turn water into ice","水が氷という別状態へ移る"]],"note":"in は位置、into は内部へ向かう変化・移動。"},{"w":"onto","core":"接触面への移動","image":"on（接触面）に to（到達）の動きが加わる。","examples":[["jump onto the table","机の面へ飛び乗る"],["climb onto the roof","屋根の上へ登る"]],"note":"on は接触状態、onto はその接触面へ移動する過程。"},{"w":"beyond","core":"境界を越えた向こう","image":"ある限界・範囲の外側へ越えている。","examples":[["beyond the river","川の向こうに"],["beyond repair","修理できる限界を越えて"],["beyond my understanding","理解可能な範囲を越えて"]],"note":"物理的境界だけでなく能力・限界にも使う。"},{"w":"before / after","core":"前 / 後","image":"時間・順序の基準点より前か後か。","examples":[["before noon","正午より前に"],["after lunch","昼食の後に"],["run after him","彼の後を追う"]],"note":"after は『後に続く』イメージから『追う』へも広がる。"},{"w":"against","core":"接触して対抗","image":"対象へ押し当たる。そこから反対・防御の意味へ。","examples":[["lean against the wall","壁に押し当ててもたれる"],["fight against discrimination","差別に対抗する"],["protection against disease","病気に対する防御"]],"note":"単なる『反対』だけでなく、物理的な接触が核。"},{"w":"about","core":"周囲 → 関連","image":"対象の周りを取り囲む。そこから『その話題に関して』へ。","examples":[["walk about the town","町のあちこちを歩く"],["talk about school","学校を中心話題として話す"],["about 100 people","100の周辺 ≒ 約100人"]],"note":"『周り』から、話題・概数の意味がつながる。"},{"w":"between / among","core":"間の関係","image":"between は個々の対象の間、among は集団の中に散らばる感覚。","examples":[["between A and B","AとBの間"],["between the three countries","3国それぞれの関係の間"],["among friends","友人たちの集団の中で"]],"note":"between は2つだけとは限らず、個々がはっきり区別される複数にも使える。"},{"w":"out of","core":"内部から外へ","image":"in の反対方向。内部・所有・材料の範囲から外へ出る。","examples":[["get out of the car","車の中から外へ出る"],["out of money","持っていた金の範囲から外れる＝金がない"],["made out of recycled plastic","材料を変形して作る"]],"note":"from と似るが、out of は『中にあったものが外へ』を強く意識する。"}];
+    const renderItem = (item, index) => `
+      <details ${index < 3 ? 'open' : ''}>
+        <summary>${item.w} — ${item.core}</summary>
+        <div class="ifty-manual-ref-content">
+          <div class="ifty-manual-core">
+            <div class="ifty-manual-core-word">${item.w}</div>
+            <div class="ifty-manual-core-text"><strong>核イメージ：</strong>${item.image}</div>
+          </div>
+          <div class="ifty-manual-example-list">
+            ${item.examples.map(ex => `<div class="ifty-manual-example"><b>${ex[0]}</b><br>${ex[1]}</div>`).join('')}
+          </div>
+          ${item.note ? `<div class="ifty-manual-rule-box"><strong>つながり：</strong>${item.note}</div>` : ''}
+        </div>
+      </details>`;
+
+    return `
+      <div class="ifty-manual-ref">
+        <div class="ifty-manual-ref-hero">
+          <div class="ifty-manual-ref-title">前置詞・particleを「核イメージ」で覚える</div>
+          <div class="ifty-manual-ref-text">
+            日本語訳を1対1で暗記するのではなく、<b>空間イメージ → 時間・状態 → 抽象用法 → 句動詞</b>の順に意味を伸ばします。
+            up / down / away / forward などは、文によって前置詞ではなく副詞・句動詞の particle になる点にも注意してください。
+          </div>
+          <div class="ifty-manual-ref-chips">
+            <span class="ifty-manual-ref-chip">at＝点</span><span class="ifty-manual-ref-chip">in＝内部</span>
+            <span class="ifty-manual-ref-chip">on＝接触</span><span class="ifty-manual-ref-chip">off＝離脱</span>
+            <span class="ifty-manual-ref-chip">to＝到達</span><span class="ifty-manual-ref-chip">from＝起点</span>
+          </div>
+        </div>
+
+        <div class="ifty-manual-ref-note">
+          <strong>重要：</strong>「この前置詞＝この日本語」ではありません。たとえば on は「上に」ではなく<b>接触</b>が核なので、on the wall / on TV / keep on working のように意味が広がります。
+        </div>
+
+        <div class="ifty-manual-ref-group">
+          <div class="ifty-manual-ref-heading">CORE IMAGES</div>
+          ${items.map(renderItem).join('')}
+        </div>
+
+        <div class="ifty-manual-ref-group">
+          <div class="ifty-manual-ref-heading">CONFUSING PAIRS</div>
+          <details>
+            <summary>in / into・on / onto</summary>
+            <div class="ifty-manual-ref-content">
+              <div class="ifty-manual-mini-table">
+                <div class="ifty-manual-mini-row"><b>in / on</b><span>すでにその位置・状態にある。</span></div>
+                <div class="ifty-manual-mini-row"><b>into / onto</b><span>その内部・接触面へ<b>移動して到達する</b>。</span></div>
+              </div>
+              <p><code>The cat is in the box.</code> は箱の中にいる状態、<code>The cat jumped into the box.</code> は外から中へ入る動き。</p>
+            </div>
+          </details>
+          <details>
+            <summary>to / for</summary>
+            <div class="ifty-manual-ref-content"><p><strong>to</strong> は到達点、<strong>for</strong> は目的・利益・向かう目標。<code>I gave it to her.</code> は物が彼女へ到達、<code>I bought it for her.</code> は彼女の利益・目的のため。</p></div>
+          </details>
+          <details>
+            <summary>by / with</summary>
+            <div class="ifty-manual-ref-content"><p><strong>by</strong> は方法・経路・行為者、<strong>with</strong> は具体的に伴う道具・もの。<code>travel by train</code> / <code>cut it with a knife</code>。</p></div>
+          </details>
+          <details>
+            <summary>through / across / along</summary>
+            <div class="ifty-manual-ref-content"><p><strong>through</strong> は内部を貫通、<strong>across</strong> は面・領域を横断、<strong>along</strong> は線に沿って進む。トンネルなら through、道路を横切るなら across、川沿いなら along。</p></div>
+          </details>
+          <details>
+            <summary>over / above・under / below</summary>
+            <div class="ifty-manual-ref-content"><p><strong>above / below</strong> は比較的「位置関係」中心。<strong>over / under</strong> は覆う・越える／覆われる・支配される関係まで広がりやすい。</p></div>
+          </details>
+        </div>
+      </div>`;
+  }
+
+  function renderIftyPronunciationRulesSection() {
+    const stressRules = [{"title":"① -ic / -ics / -ical / -ically とアクセント","body":"これらを語尾にもつ語では、原則として接尾辞の直前側に主強勢が来ることが多い。","examples":["terRIFic /təˈrɪfɪk/","matheMATics /ˌmæθəˈmætɪks/","ecoNOMical /ˌiːkəˈnɒmɪkəl/","TYPically /ˈtɪpɪkli/"],"warn":"万能ルールではない。代表的な例外として POLitics, CATHolic, ARabic, LUNatic があり、arithmetic は品詞・地域でも強勢が変わる。"},{"title":"② 『もらいっ子ルール』— 分かち書き用の覚え方","body":"教材で音節・パートが点などで区切られている場合、中ほどに『母音字だけのパート』があれば、その1つ前のパートに強勢が来るものをまとめて覚えるための語呂。英語全体の普遍法則ではなく、試験用の補助ルールとして使う。","examples":["MECH·a·nism","de·SIR·a·ble","DEL·i·cate","DEF·i·nite","ha·BIT·u·al","REP·u·ta·ble","di·AM·e·ter","speed·OM·e·ter","HER·o·ine","as·TRON·o·my","a·NAL·y·sis","EX·er·cise"],"warn":"区切り方・語源・発音変化によって当てはまらない語もある。辞書の ˈ を最終確認に使う。"},{"title":"③ 名詞前・動詞後ろ（名詞⇄動詞で強勢が変わる語）","body":"2音節語の一部では、名詞・形容詞は前、動詞は後ろに強勢が移る傾向がある。","examples":["CONtest（名） / conTEST（動）","DEsert（名） / deSERT（動）","INcrease（名） / inCREASE（動）","PROduce（名） / proDUCE（動）","REcord（名） / reCORD（動）","PREsent（名・形） / preSENT（動）","OBject（名） / obJECT（動）"],"warn":"すべての名詞・動詞に使える規則ではない。desert と dessert は綴りも意味も別語。"},{"title":"④ 複合名詞は前要素が強くなりやすい","body":"2語が一体化して1つの種類・名称を作る複合名詞では、第1要素に主強勢が置かれることが多い。","examples":["SCHOOLwork","VIEWpoint","COWboy","FROSTbite","TAPEworm","SKYscraper","BLACKbird（鳥の種類） ↔ black BIRD（黒い鳥）"],"warn":"自由な形容詞＋名詞まで全部『前強勢』にしない。意味が1つの名称として固まっているかも確認する。"}];
+    const connected = [{"title":"子音＋母音の密着（linking）","body":"語末が子音、次の語頭が母音なら、単語境界で切らずにつなげる。","examples":["check it out → check‿it‿out","pick it up → pick‿it‿up","turn it on → turn‿it‿on","an apple → an‿apple"],"warn":"新しい音を足すのではなく、前の子音を次の母音へ渡す感覚。"},{"title":"『ラ変』：/t, d/ の flap / tap","body":"北米英語では、/t/ や /d/ が母音にはさまれ、後ろが弱勢になると [ɾ] という短い弾き音になりやすい。日本語話者にはラ行に近く聞こえる。","examples":["water","better","city","get it","did it"],"warn":"これは日本語のラ行そのものではない。主に米・加で顕著。英では [t] や声門化 [ʔ] が目立つ場合がある。"},{"title":"『吞み込み変』：破裂音を完全に開放しない","body":"/p t k b d g/ の後ろに別の子音が続くと、最初の破裂音を強く破裂させず、閉鎖だけ残す（unreleased stop / glottal reinforcement など）ことが多い。","examples":["big dog","good boy","black cat","kitten","bitten","submarine","wooden","forbidden","object","carton","hidden","hardship"],"warn":"『必ず音が消える』ではない。語・地域・速さによって、未開放、声門化、弱化など実現が違う。"},{"title":"『ユ変』：/j/ と前の子音が融合","body":"/t d s z/ の後ろに /j/（y音）が来ると、速い会話で /tʃ dʒ ʃ ʒ/ に近づくことがある（yod coalescence）。","examples":["did you → /dɪdʒu/ に近い","would you → /wʊdʒu/ に近い","miss you → /mɪʃu/ に近い","as you → /æʒu/ に近い","last year / this year / next year でも境界で融合しやすい"],"warn":"丁寧発音では分離して発音することもある。語・地域・話速による。"},{"title":"『吸い込み』：/s, z/ ＋ /ʃ/ の同化","body":"語末 /s, z/ の直後に /ʃ/ が来ると、境界が弱まり、/s, z/ が後続の /ʃ/ 側へ同化して長い /ʃ/ のように聞こえる場合がある。","examples":["this shop","these shoes","bus shelter"],"warn":"『必ず s/z が完全消失』と固定しない。実際には同化の程度に個人差・地域差がある。"},{"title":"dark L・音節主音 /l̩/（教材の『エルがオ変』）","body":"語末や子音前の /l/ は舌の奥が上がる dark L [ɫ] になりやすく、子音＋/l/ では /l/ 自体が1音節の中心になることもある。日本語話者には『オ』に近い響きが混じって聞こえる。","examples":["couple / people / pupils / Naples / principals","stable / humble / noble / available / verbal","noodle / needle / kindle","tackle / buckle / ankles / uncles / physical","jungle / angles / frugal / legal"],"warn":"実際に /o/ を足すわけではない。舌先は歯茎付近、舌の奥の共鳴が強まる。"},{"title":"/t,d/ ＋ syllabic L（教材の『エルがオ変＋ラ変＝ロ変』）","body":"北米英語では little, middle などで /t,d/ が弱化し、その後ろの /l̩/ と密着する。","examples":["little / subtle / kettles / beetles / cattle / turtles","startle / battles / bottles / capital / total","candles / handle / models / middle / needles / noodles / puddle / riddles / sandals"],"warn":"little の /t/ は話者により [ɾ], [ʔ] など実現が違う。『ロ』という日本語1音に置換しない。"},{"title":"『ナ変』：/nt/ の弱化・/t/ 脱落","body":"北米の速い会話では、/n+t/ が弱勢母音の前に来ると /t/ が非常に弱くなったり、鼻音化した tap のようになったり、話者によってはほぼ聞こえなくなることがある。","examples":["twenty","center","winter","internet","教材例：dental / accidental / incidental / mental / fundamental / sentimental / interesting / international / interval / interview"],"warn":"教材例すべてで t が必ず消えるわけではない。丁寧発音では /t/ が残ることも多い。"}];
+    const weakForms = [{"title":"going to / got to / want to の会話縮約","body":"非常に日常的な会話では going to → gonna, got to → gotta, want to → wanna のような縮約が現れる。","examples":["I'm going to study. → I'm gonna study.","I've got to go. → I've gotta go.","Do you want to come? → Do you wanna come?"],"warn":"標準的なフォーマル作文では gonna / gotta / wanna を避ける。going to が文字通り『場所へ行く』意味のときは縮約しにくい。"},{"title":"助動詞＋have の /h/ 脱落・弱化","body":"would have / should have / could have などでは have が弱勢になり、/h/ が落ちて /əv/、さらに速い発音では /ə/ に近づくことがある。","examples":["would have done → would've done /ˈwʊdəv/ に近い","should've / could've","must have → must've"],"warn":"綴りは would of ではない。書くときは would have / would've。"},{"title":"助動詞・be/have の短縮","body":"会話では主語と助動詞・be/have が密着する。形だけでは意味を決められないものもある。","examples":["'ll = will（文脈により shall の歴史的用法も）","'ve = have","'s = is または has","'d = would または had","d'you = do you / did you が連結・弱化した形として聞こえることがある"],"warn":"'s / 'd は後ろの語形と文法で判定する。"},{"title":"and / to / for / of / can などの弱形","body":"機能語は文のアクセントを受けないと母音が /ə/ などへ弱化する。英語のリズムに重要。","examples":["and /ænd/ → /ən/・/n/","to /tuː/ → /tə/","for /fɔːr/ → /fər/（r音性では r を伴う）","of /ʌv/ → /əv/","can /kæn/ → /kən/"],"warn":"対比・強調するときは強形に戻る。すべての語を辞書形のまま強く読まない。"},{"title":"him / her / have などの /h/ 弱化","body":"非強勢位置では h で始まる機能語の /h/ が弱くなったり脱落したりする発音がある。","examples":["tell him → tell 'im のように聞こえることがある","give her → give 'er のように聞こえることがある","could have → could've"],"warn":"地域・話者・フォーマル度で差が大きい。強調時には /h/ が戻る。"}];
+    const regions = [{"name":"General American / Canadian English","text":"多くの話者が rhotic（car の r を発音）。母音間の /t,d/ の flap が非常に一般的。tune / news などで /j/ を落とす yod-dropping が多い。米加の多くで cot–caught が同じまたは近いが、地域差あり。カナダには Canadian raising など独自特徴もある。"},{"name":"Southern British / RP系","text":"一般に non-rhotic（car 単独では語末 r を発音しない）。lot に /ɒ/、bath / dance / can't などで /ɑː/ を使う BATH split が代表的。日常会話では /t/ の glottalisation [ʔ] が広く聞かれる。母音で始まる次語の前では linking r が現れる。"},{"name":"Northern England","text":"bath / dance などで /æ/ を保つ地域が多く、南部標準とは母音が異なる。地域アクセント差が非常に大きいので『British = 1種類』ではない。rhoticity も地域・世代差がある。"},{"name":"Australian English","text":"一般に non-rhotic。linking/intrusive r が見られ、母音体系は英米とかなり異なる。BATH 系で長い /aː/ を使う語が多い。/t/ の tap や glottalisation も話者・環境により起こる。"},{"name":"New Zealand English","text":"一般に non-rhotic（南島の一部など例外あり）。母音、とくに KIT/DRESS/TRAP 系の質が豪州・英国・米国と異なる。linking r も使われる。"},{"name":"Scottish / Irish English","text":"多くの地域で rhotic。r の実現、母音長、/t/ などの子音実現に独自性がある。Scottish English では母音長が環境により変化する Scottish Vowel Length Rule が知られる。Irish English も地域差が非常に大きい。"},{"name":"Indian English","text":"多くの話者で rhotic。/t,d/ が英米標準とは異なる歯音・そり舌系で実現されることがあり、リズムも比較的 syllable-timed に聞こえる場合がある。インド英語は独立した標準的変種群であり『間違い発音』ではない。"},{"name":"Singapore / other World Englishes","text":"Singapore English など世界各地の英語には、母音・子音・リズム・語末子音処理に独自の規則性がある。国際英語では『1つの正解アクセント』より、聞き手に明瞭に通じることと、学習目的に合わせてモデル（米・英など）を一貫させることが重要。"}];
+
+    const renderRule = (item, open = false) => `
+      <details ${open ? 'open' : ''}>
+        <summary>${item.title}</summary>
+        <div class="ifty-manual-ref-content">
+          <p>${item.body}</p>
+          <div class="ifty-manual-example-list">${item.examples.map(ex => `<div class="ifty-manual-example"><b>${ex}</b></div>`).join('')}</div>
+          ${item.warn ? `<div class="ifty-manual-warning-box"><strong>注意：</strong>${item.warn}</div>` : ''}
+        </div>
+      </details>`;
+
+    return `
+      <div class="ifty-manual-ref">
+        <div class="ifty-manual-ref-hero purple">
+          <div class="ifty-manual-ref-title">アクセント・音の連結・脱落・弱化</div>
+          <div class="ifty-manual-ref-text">
+            教材にある「イクイックルール」「もらいっ子」「名詞動詞」「複合名詞」「子母密着」「ラ変」「ユ変」「吸い込み」「ナ変」などを、
+            実際の英語音声学に合わせて補正して整理しています。<b>学習用の呼び名と、実際の音声現象をセット</b>で覚えてください。
+          </div>
+          <div class="ifty-manual-ref-chips">
+            <span class="ifty-manual-ref-chip">ˈ = 主強勢</span><span class="ifty-manual-ref-chip">ə = 弱化</span>
+            <span class="ifty-manual-ref-chip">linking</span><span class="ifty-manual-ref-chip">assimilation</span>
+            <span class="ifty-manual-ref-chip">flap [ɾ]</span><span class="ifty-manual-ref-chip">regional variation</span>
+          </div>
+        </div>
+
+        <div class="ifty-manual-ref-note">
+          <strong>原則：</strong>ルールは発音を予想するための近道で、例外があります。単語単体は辞書の IPA と音声を最終確認し、文では「強勢のある語を残し、機能語を弱くする」ことを優先してください。
+        </div>
+
+        <div class="ifty-manual-ref-group">
+          <div class="ifty-manual-ref-heading">WORD STRESS</div>
+          ${stressRules.map((x,i) => renderRule(x, i === 0)).join('')}
+        </div>
+
+        <div class="ifty-manual-ref-group">
+          <div class="ifty-manual-ref-heading">CONNECTED SPEECH</div>
+          ${connected.map((x,i) => renderRule(x, i === 0)).join('')}
+        </div>
+
+        <div class="ifty-manual-ref-group">
+          <div class="ifty-manual-ref-heading">WEAK FORMS & CONTRACTIONS</div>
+          ${weakForms.map((x,i) => renderRule(x, i === 0)).join('')}
+        </div>
+
+        <div class="ifty-manual-ref-group">
+          <div class="ifty-manual-ref-heading">BRITISH / AMERICAN / OTHER REGIONS</div>
+          <details open>
+            <summary>地域差の見方</summary>
+            <div class="ifty-manual-ref-content">
+              <p>英語には単一の「正しい発音」はありません。IFTYでは米・英を基本の比較軸にしつつ、豪・NZ・スコットランド・アイルランド・インドなども<b>体系的な英語変種</b>として扱います。</p>
+              <div class="ifty-manual-region-grid">
+                ${regions.map(r => `<div class="ifty-manual-region-card"><b>${r.name}</b>${r.text}</div>`).join('')}
+              </div>
+              <div class="ifty-manual-rule-box"><strong>学習方針：</strong>聞き取りでは複数地域の差を知り、発話ではまず自分が選んだモデル（例：General American / Southern British）を一貫させると安定します。</div>
+            </div>
+          </details>
+
+          <details>
+            <summary>特に覚える英米差</summary>
+            <div class="ifty-manual-ref-content">
+              <div class="ifty-manual-mini-table">
+                <div class="ifty-manual-mini-row"><b>語末 r</b><span>米・加・多くの蘇/愛：発音しやすい。南部英・豪・NZ：通常は母音の後の r を発音しない。</span></div>
+                <div class="ifty-manual-mini-row"><b>water の t</b><span>米・加：flap [ɾ] が一般的。英国：明確な [t] や [ʔ] が多い。豪/NZでも tap は起こりうる。</span></div>
+                <div class="ifty-manual-mini-row"><b>hot / lot</b><span>英国標準系は /ɒ/、一般米語は /ɑ/ 系。</span></div>
+                <div class="ifty-manual-mini-row"><b>bath / dance</b><span>南部英・豪/NZは長い /ɑː/・/aː/ 系が多く、米・加・北部英では /æ/ 系が多い。</span></div>
+                <div class="ifty-manual-mini-row"><b>tune / news</b><span>英国・豪などは /j/ を保つ傾向、一般米語では /j/ を落とすことが多い。</span></div>
+                <div class="ifty-manual-mini-row"><b>linking r</b><span>non-rhotic の英・豪・NZなどでは、母音が続くと本来綴られた r が再び聞こえる。</span></div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div class="ifty-manual-ref-group">
+          <div class="ifty-manual-ref-heading">PRACTICE ORDER</div>
+          <details>
+            <summary>発音練習はこの順番</summary>
+            <div class="ifty-manual-ref-content">
+              <ol>
+                <li>単語の <strong>IPA・主強勢</strong>を確認する。</li>
+                <li>口・舌の形を作り、単語単体を正確に言う。</li>
+                <li>短い句で <strong>linking / weak forms</strong> を入れる。</li>
+                <li>文全体では内容語を強く、機能語を弱くしてリズムを作る。</li>
+                <li>TOOLS → 発音添削で標準音声 → 録音 → 改善点を確認する。</li>
+              </ol>
+            </div>
+          </details>
+        </div>
+      </div>`;
+  }
+
   function renderSection(body, sectionId) {
     const s = SECTIONS.find(x => x.id === sectionId) || SECTIONS[0];
     const content = s.id === 'guide'
       ? renderIftyGuideSection()
       : s.id === 'ipa'
         ? renderIftyIpaSection()
-        : `
-          <div class="ifty-manual-placeholder">
-            <strong>${s.title}</strong>
-            この項目の本文は次のSTEPで追加します。
-          </div>
-        `;
+        : s.id === 'prepositions'
+          ? renderIftyPrepositionsSection()
+          : s.id === 'pronunciation-rules'
+            ? renderIftyPronunciationRulesSection()
+            : `
+              <div class="ifty-manual-placeholder">
+                <strong>${s.title}</strong>
+                この項目は準備中です。
+              </div>
+            `;
     body.innerHTML = `
       <div class="ifty-manual-sectionbar">
         <button type="button" class="ifty-manual-back" data-ifty-manual-back>← 一覧</button>
         <div class="ifty-manual-sectionname">${s.icon} ${s.title}</div>
       </div>
       ${content}
+      <button type="button" class="ifty-manual-bottom-back" data-ifty-manual-back>← マニュアル一覧に戻る</button>
     `;
   }
 
@@ -23151,6 +23509,29 @@ window.logout = async function() {
       if (!state.open) openManual();
       else { state.minimized=false; render(); restorePosition(panel); }
     });
+
+    // STEP101：MANUALの欄外を押したら閉じずに最小化する。
+    // launcher / panel内部 / ドラッグ中は対象外。最小化済みの場合は何もしない。
+    document.addEventListener('pointerdown', (e) => {
+      if (!state.open || state.minimized || dragging) return;
+      const target = e.target;
+      if (!(target instanceof Node)) return;
+      if (panel.contains(target) || launcher.contains(target)) return;
+      state.minimized = true;
+      panel.classList.add('is-minimized');
+      minimize.textContent = '□';
+      minimize.setAttribute('aria-label', '元の大きさに戻す');
+      minimize.title = '元の大きさに戻す';
+      saveState(state);
+      requestAnimationFrame(() => {
+        const left = parseFloat(panel.style.left);
+        const top = parseFloat(panel.style.top);
+        const p = clampPanel(panel, left, top);
+        panel.style.left = `${p.left}px`;
+        panel.style.top = `${p.top}px`;
+        savePosition(p.left, p.top);
+      });
+    }, true);
 
     close.addEventListener('click', (e) => {
       e.stopPropagation();
