@@ -1,4 +1,4 @@
-// ★★★ IFTY Q3 STEP108 2026-10-06：DARK MODE READABILITY FIX ★★★
+// ★★★ IFTY Q3 STEP109 2026-10-06：DARK SURFACES + RELIABLE FOLDER COLLAPSE ★★★
 // ★★★ IFTY Q3 STEP107 2026-10-06：ALL SUBJECTS LEVEL BADGES ★★★
 // ★★★ IFTY Q3 STEP106 2026-10-06：Cloudflare Pages移行 + HOME ALLIA使用ゲージ常設 ★★★
 // ★★★ IFTY Q3 STEP105 2026-10-06：PRACTICE設定保持 / 解答中の欄外タップ無効化 ★★★
@@ -13595,7 +13595,7 @@ function renderIftyKanjiPage(options={}){
   }).filter(row=>!globalSearchActive||row.visible.length>0);
   const rows=folderRows.map(({folder,folderIndex,fq,visible})=>{
     const allSelected=(folder.items||[]).length>0&&(folder.items||[]).every(item=>iftyKanjiSelectedItemIds.has(String(item.id)));
-    const visuallyCollapsed=folder.collapsed&&!globalSearchActive;
+    const visuallyCollapsed=!!folder.collapsed;
     return `<section class="ifty-kanji-folder-card" style="margin-top:14px;border:1px solid #cbd5e1;border-radius:10px;background:white;padding:16px;box-shadow:0 2px 4px rgba(0,0,0,.05);">
       <div class="ifty-folder-header" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;">
         <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1;">
@@ -13665,7 +13665,7 @@ function refreshIftyKanjiFolderDynamic(folderId){
   const list=document.getElementById(`iftyKanjiItems_${folder.id}`);
   if(list)list.innerHTML=visible.length?visible.map(x=>renderIftyKanjiItemCard(folder,x.item,x.index)).join(''):'<div style="padding:18px;text-align:center;color:#94a3b8;border:1px dashed #cbd5e1;border-radius:8px;margin-top:9px;">表示できる漢字・熟語がありません。</div>';
   const count=document.getElementById(`iftyKanjiVisibleCount_${folder.id}`);if(count)count.textContent=`${visible.length}/${(folder.items||[]).length}件`;
-  const toggle=document.getElementById(`iftyKanjiFolderToggle_${folder.id}`);if(toggle)toggle.textContent=`${folder.collapsed&&!globalQ?'▶':'▼'} 📁 ${folder.name} (${(folder.items||[]).length}件)`;
+  const toggle=document.getElementById(`iftyKanjiFolderToggle_${folder.id}`);if(toggle)toggle.textContent=`${folder.collapsed?'▶':'▼'} 📁 ${folder.name} (${(folder.items||[]).length}件)`;
   const total=document.getElementById('iftyKanjiGlobalCount');if(total)total.textContent=`全 ${countIftyKanjiItems()}件`;
 }
 function updateIftyKanjiPendingStatus(folderId,message=''){
@@ -24511,3 +24511,136 @@ window.logout = async function() {
   document.head.appendChild(style);
 })();
 
+
+
+// ==========================================
+// ★★★ STEP109：DARK SURFACES + RELIABLE FOLDER COLLAPSE ★★★
+// ダークモードでは「面」に明色を使わない。既存の意味色は文字・枠線へ残す。
+// フォルダ折りたたみは検索中を含め常に collapsed を最優先する。
+// ==========================================
+(function ensureIftyStep109DarkSurfaceStyles(){
+  if(document.getElementById('iftyStep109DarkSurfaceStyles')) return;
+  const style=document.createElement('style');
+  style.id='iftyStep109DarkSurfaceStyles';
+  style.textContent=`
+    body[data-ifty-theme="dark"]{
+      --ifty-s109-base:#101827;
+      --ifty-s109-surface:#182337;
+      --ifty-s109-surface2:#223149;
+      --ifty-s109-surface3:#2b3d57;
+      --ifty-s109-border:#6f829b;
+    }
+
+    /* 明るいカード/パネル背景を禁止。ボタンのアクション色は維持する。 */
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:white"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background: white"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#fff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#ffffff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#f8fbff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#f8fafc"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#f1f5f9"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#fafaff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#faf5ff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#f5f3ff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#f3e8ff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#ede9fe"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#eef2ff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#eff6ff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#f0f9ff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#e0f2fe"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#ecfeff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#ecfdf5"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#f0fdf4"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#dcfce7"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#fffbeb"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#fff7ed"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#fef3c7"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#fef2f2"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#fee2e2"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#fff1f2"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#ffe4e6"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#e2e8f0"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span)[style*="background:#dbeafe"]{
+      background:var(--ifty-s109-surface2) !important;
+    }
+
+    /* 画像クイズ・暗記説明・活用欄など、スクショで白く残っていた面を個別に固定。 */
+    body[data-ifty-theme="dark"] [id*="VisualQuizBar"],
+    body[data-ifty-theme="dark"] [id*="ImagePreview"],
+    body[data-ifty-theme="dark"] .ifty-social-item-card,
+    body[data-ifty-theme="dark"] .ifty-science-item-card,
+    body[data-ifty-theme="dark"] .ifty-ancient-item-card,
+    body[data-ifty-theme="dark"] .ifty-kanbun-item-card,
+    body[data-ifty-theme="dark"] .ifty-kanji-folder-card,
+    body[data-ifty-theme="dark"] .ifty-kanji-item-card,
+    body[data-ifty-theme="dark"] .ifty-others-item-card{
+      background:var(--ifty-s109-surface) !important;
+      border-color:var(--ifty-s109-border) !important;
+    }
+
+    body[data-ifty-theme="dark"] [style*="border:1px solid #ede9fe"],
+    body[data-ifty-theme="dark"] [style*="border:1px solid #e2e8f0"],
+    body[data-ifty-theme="dark"] [style*="border:1px solid #cbd5e1"]{
+      border-color:var(--ifty-s109-border) !important;
+    }
+
+    body[data-ifty-theme="dark"] hr{border-color:#60738b !important;}
+  `;
+  document.head.appendChild(style);
+})();
+
+(function installIftyStep109ReliableFolderCollapse(){
+  function saveAndRender(folder, render){
+    if(!folder) return;
+    folder.collapsed = !Boolean(folder.collapsed);
+    try{ savePracticeData(); }catch(_){ }
+    const y=window.scrollY;
+    try{ render(); }catch(error){ console.error('IFTY folder collapse render error:',error); }
+    requestAnimationFrame(()=>window.scrollTo({top:y,left:0,behavior:'auto'}));
+  }
+
+  // 社会
+  window.toggleIftySocialFolderCollapse=function(folderId){
+    saveAndRender(getIftySocialFolder(folderId), ()=>renderIftySocialStudiesPage({preserveScroll:true}));
+  };
+  // 理科
+  window.toggleIftyScienceFolderCollapse=function(folderId){
+    saveAndRender(getIftyScienceFolder(folderId), ()=>renderIftySciencePage({preserveScroll:true}));
+  };
+  // 古文
+  window.toggleIftyAncientFolderCollapse=function(folderId){
+    saveAndRender(getIftyAncientFolder(folderId), ()=>window.renderIftyAncientPage({preserveScroll:true}));
+  };
+  // 漢文
+  window.toggleIftyKanbunFolderCollapse=function(folderId){
+    saveAndRender(getIftyKanbunFolder(folderId), ()=>window.renderIftyKanbunPage({preserveScroll:true}));
+  };
+  // 漢字
+  window.toggleIftyKanjiFolder=function(folderId){
+    saveAndRender(getIftyKanjiFolder(folderId), ()=>renderIftyKanjiPage({preserveScroll:true}));
+  };
+  // その他
+  window.toggleIftyOthersFolder=function(folderId){
+    saveAndRender(getIftyOthersFolder(folderId), ()=>renderIftyOthersPage({preserveScroll:true}));
+  };
+})();
+
+(function extendIftyStep109FolderCollapseFix(){
+  function saveAndRun(folder, render){
+    if(!folder) return;
+    folder.collapsed=!Boolean(folder.collapsed);
+    try{savePracticeData();}catch(_){ }
+    const y=window.scrollY;
+    try{render();}catch(error){console.error('IFTY folder collapse render error:',error);}
+    requestAnimationFrame(()=>window.scrollTo({top:y,left:0,behavior:'auto'}));
+  }
+  window.toggleIftyPronunciationFolder=function(folderId){
+    saveAndRun(getIftyPronunciationFolder(folderId),()=>window.openIftyPronunciation({preserveScroll:true}));
+  };
+  window.toggleIftyYearFolder=function(folderId){
+    saveAndRun(getIftyYearFolderById(folderId),()=>renderIftyYearEntries());
+  };
+  window.toggleIftyBasicSentenceFolder=function(folderId){
+    saveAndRun(getIftyBasicSentenceFolderById(folderId),()=>renderIftyBasicSentenceList());
+  };
+})();
