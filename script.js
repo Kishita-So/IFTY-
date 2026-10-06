@@ -1,3 +1,4 @@
+// ★★★ IFTY Q3 STEP110 2026-10-06：FOLDER COLLAPSE VIEWPORT LOCK ★★★
 // ★★★ IFTY Q3 STEP109 2026-10-06：DARK SURFACES + RELIABLE FOLDER COLLAPSE ★★★
 // ★★★ IFTY Q3 STEP107 2026-10-06：ALL SUBJECTS LEVEL BADGES ★★★
 // ★★★ IFTY Q3 STEP106 2026-10-06：Cloudflare Pages移行 + HOME ALLIA使用ゲージ常設 ★★★
@@ -2999,9 +3000,35 @@ function showIftyHubContent(html, pageName) {
   if (aiChatPage) aiChatPage.style.display = 'none';
   if (btn) btn.textContent = '💬';
 
+  const preserveHubViewport = !!window.__iftyPreserveHubViewport;
+  const preservedHubY = Number.isFinite(Number(window.__iftyPreserveHubViewportY))
+    ? Number(window.__iftyPreserveHubViewportY)
+    : Number(window.scrollY || document.scrollingElement?.scrollTop || 0);
+
   page.innerHTML = html;
   page.style.display = 'block';
-  window.scrollTo({ top: 0, behavior: 'auto' });
+
+  if (preserveHubViewport) {
+    const restoreHubViewport = () => {
+      const y = Math.max(0, preservedHubY);
+      try {
+        window.scrollTo({ top: y, left: 0, behavior: 'auto' });
+      } catch (_) {
+        window.scrollTo(0, y);
+      }
+      const scroller = document.scrollingElement;
+      if (scroller && Math.abs(Number(scroller.scrollTop || 0) - y) > 1) scroller.scrollTop = y;
+    };
+    restoreHubViewport();
+    requestAnimationFrame(restoreHubViewport);
+    requestAnimationFrame(() => requestAnimationFrame(restoreHubViewport));
+    setTimeout(restoreHubViewport, 0);
+    setTimeout(restoreHubViewport, 60);
+    window.__iftyPreserveHubViewport = false;
+    window.__iftyPreserveHubViewportY = null;
+  } else {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
 }
 
 window.openIftyHome = function() {
@@ -24642,5 +24669,143 @@ window.logout = async function() {
   };
   window.toggleIftyBasicSentenceFolder=function(folderId){
     saveAndRun(getIftyBasicSentenceFolderById(folderId),()=>renderIftyBasicSentenceList());
+  };
+})();
+
+
+// ★★★ STEP110：フォルダ折りたたみ時の閲覧位置固定 ★★★
+(function installIftyStep110FolderViewportLock(){
+  function currentScrollY(){
+    return Number(window.scrollY || document.scrollingElement?.scrollTop || 0);
+  }
+
+  function findToggleButton(fnName, folderId){
+    const needle = `${fnName}('${String(folderId)}')`;
+    return Array.from(document.querySelectorAll('[onclick]')).find(el => String(el.getAttribute('onclick') || '').includes(needle)) || null;
+  }
+
+  function runStableCollapse(folder, render, options = {}){
+    if(!folder || typeof render !== 'function') return;
+
+    const y = currentScrollY();
+    const anchor = typeof options.anchor === 'function' ? options.anchor() : null;
+    const anchorTop = anchor ? anchor.getBoundingClientRect().top : null;
+
+    // iPad/Safariでは、再描画でフォーカス中の折りたたみボタンが消えると
+    // document先頭へスクロールされることがあるため、先にフォーカスを外す。
+    try{
+      if(document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
+    }catch(_){ }
+
+    folder.collapsed = !Boolean(folder.collapsed);
+    try{
+      if(options.saveUser && typeof saveUserData === 'function') saveUserData();
+      else if(typeof savePracticeData === 'function') savePracticeData();
+    }catch(_){ }
+
+    // showIftyHubContent() が通常行う scrollTo(0) を、この再描画だけ無効化する。
+    window.__iftyPreserveHubViewport = true;
+    window.__iftyPreserveHubViewportY = y;
+
+    try{ render(); }
+    catch(error){
+      console.error('IFTY folder collapse render error:', error);
+      window.__iftyPreserveHubViewport = false;
+      window.__iftyPreserveHubViewportY = null;
+    }
+
+    const restore = () => {
+      const nextAnchor = typeof options.anchor === 'function' ? options.anchor() : null;
+      if(nextAnchor && Number.isFinite(anchorTop)){
+        const delta = nextAnchor.getBoundingClientRect().top - anchorTop;
+        if(Math.abs(delta) > 1){
+          try{ window.scrollBy({top:delta,left:0,behavior:'auto'}); }
+          catch(_){ window.scrollBy(0,delta); }
+        }
+      } else {
+        try{ window.scrollTo({top:y,left:0,behavior:'auto'}); }
+        catch(_){ window.scrollTo(0,y); }
+      }
+    };
+
+    // レイアウト確定・Safariの遅延スクロールの両方を上書きする。
+    restore();
+    requestAnimationFrame(restore);
+    requestAnimationFrame(() => requestAnimationFrame(restore));
+    setTimeout(restore, 0);
+    setTimeout(restore, 80);
+    setTimeout(restore, 180);
+  }
+
+  // LANGUAGES
+  window.toggleFolderCollapse = function(folderId){
+    const folder = Array.isArray(folders) ? folders.find(f => String(f.id) === String(folderId)) : null;
+    runStableCollapse(folder, () => renderFolders(), {
+      saveUser:true,
+      anchor:() => findToggleButton('toggleFolderCollapse', folderId)
+    });
+  };
+
+  // SOCIAL STUDIES
+  window.toggleIftySocialFolderCollapse = function(folderId){
+    runStableCollapse(getIftySocialFolder(folderId), () => renderIftySocialStudiesPage({preserveScroll:true}), {
+      anchor:() => document.getElementById(`iftySocialFolderTitle_${folderId}`) || findToggleButton('toggleIftySocialFolderCollapse', folderId)
+    });
+  };
+
+  // SCIENCE
+  window.toggleIftyScienceFolderCollapse = function(folderId){
+    runStableCollapse(getIftyScienceFolder(folderId), () => renderIftySciencePage({preserveScroll:true}), {
+      anchor:() => document.getElementById(`iftyScienceFolderTitle_${folderId}`) || findToggleButton('toggleIftyScienceFolderCollapse', folderId)
+    });
+  };
+
+  // ANCIENT
+  window.toggleIftyAncientFolderCollapse = function(folderId){
+    runStableCollapse(getIftyAncientFolder(folderId), () => window.renderIftyAncientPage({preserveScroll:true}), {
+      anchor:() => document.getElementById(`iftyAncientFolderTitle_${folderId}`) || findToggleButton('toggleIftyAncientFolderCollapse', folderId)
+    });
+  };
+
+  // KANBUN
+  window.toggleIftyKanbunFolderCollapse = function(folderId){
+    runStableCollapse(getIftyKanbunFolder(folderId), () => window.renderIftyKanbunPage({preserveScroll:true}), {
+      anchor:() => findToggleButton('toggleIftyKanbunFolderCollapse', folderId)
+    });
+  };
+
+  // KANJI
+  window.toggleIftyKanjiFolder = function(folderId){
+    runStableCollapse(getIftyKanjiFolder(folderId), () => renderIftyKanjiPage({preserveScroll:true}), {
+      anchor:() => document.getElementById(`iftyKanjiFolderToggle_${folderId}`) || findToggleButton('toggleIftyKanjiFolder', folderId)
+    });
+  };
+
+  // OTHERS
+  window.toggleIftyOthersFolder = function(folderId){
+    runStableCollapse(getIftyOthersFolder(folderId), () => renderIftyOthersPage({preserveScroll:true}), {
+      anchor:() => findToggleButton('toggleIftyOthersFolder', folderId)
+    });
+  };
+
+  // PRONUNCIATION
+  window.toggleIftyPronunciationFolder = function(folderId){
+    runStableCollapse(getIftyPronunciationFolder(folderId), () => window.openIftyPronunciation({preserveScroll:true}), {
+      anchor:() => findToggleButton('toggleIftyPronunciationFolder', folderId)
+    });
+  };
+
+  // YEARS
+  window.toggleIftyYearFolder = function(folderId){
+    runStableCollapse(getIftyYearFolderById(folderId), () => renderIftyYearEntries(), {
+      anchor:() => findToggleButton('toggleIftyYearFolder', folderId)
+    });
+  };
+
+  // BASIC SENTENCES
+  window.toggleIftyBasicSentenceFolder = function(folderId){
+    runStableCollapse(getIftyBasicSentenceFolderById(folderId), () => renderIftyBasicSentenceList(), {
+      anchor:() => findToggleButton('toggleIftyBasicSentenceFolder', folderId)
+    });
   };
 })();
