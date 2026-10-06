@@ -1,3 +1,4 @@
+// ★★★ IFTY Q3 STEP106 2026-10-06：Cloudflare Pages移行 + HOME ALLIA使用ゲージ常設 ★★★
 // ★★★ IFTY Q3 STEP105 2026-10-06：PRACTICE設定保持 / 解答中の欄外タップ無効化 ★★★
 // ★★★ IFTY Q3 STEP103 2026-10-06：MANUAL RULE LOOKUP + HEADER BACK ★★★
 // ★★★ IFTY Q3 STEP102 2026-10-05：MANUAL PREPOSITIONS / PRONUNCIATION & ACCENT RULES ★★★
@@ -2991,6 +2992,10 @@ window.openIftyHome = function() {
     <section class="ifty-portal-shell">
       <h1 class="ifty-portal-title">HOME</h1>
       <div class="ifty-portal-subtitle">IFTYの学習メニュー。科目を選ぶか、ALLIA・実践へ進めます。</div>
+
+      <div style="margin:14px 0 16px;">
+        ${renderIftyAlliaUsageBarHtml(false)}
+      </div>
 
       <div class="ifty-home-grid">
         <button class="ifty-home-card" type="button" onclick="openIftySubject('ENGLISH')">
