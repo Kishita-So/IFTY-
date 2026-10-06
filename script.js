@@ -1,3 +1,5 @@
+// ★★★ IFTY Q3 STEP108 2026-10-06：DARK MODE READABILITY FIX ★★★
+// ★★★ IFTY Q3 STEP107 2026-10-06：ALL SUBJECTS LEVEL BADGES ★★★
 // ★★★ IFTY Q3 STEP106 2026-10-06：Cloudflare Pages移行 + HOME ALLIA使用ゲージ常設 ★★★
 // ★★★ IFTY Q3 STEP105 2026-10-06：PRACTICE設定保持 / 解答中の欄外タップ無効化 ★★★
 // ★★★ IFTY Q3 STEP103 2026-10-06：MANUAL RULE LOOKUP + HEADER BACK ★★★
@@ -749,6 +751,8 @@ function ensureIftyThemeStyles() {
       background:var(--ifty-dark-surface) !important;
       color:var(--ifty-dark-text-soft) !important;
     }
+    body[data-ifty-theme="dark"] [style*="background:#f8fbff"],
+    body[data-ifty-theme="dark"] [style*="background: #f8fbff"],
     body[data-ifty-theme="dark"] [style*="background:#f8fafc"],
     body[data-ifty-theme="dark"] [style*="background: #f8fafc"],
     body[data-ifty-theme="dark"] [style*="background:#f1f5f9"],
@@ -881,6 +885,21 @@ function ensureIftyThemeStyles() {
     body[data-ifty-theme="dark"] select:focus { outline:2px solid #38bdf8 !important; outline-offset:1px; }
     body[data-ifty-theme="dark"] option { background:#0f172a; color:var(--ifty-dark-text); }
     body[data-ifty-theme="dark"] button:disabled { opacity:.58 !important; }
+
+    /* STEP108: subject explanation panels must never become light-on-light in dark mode. */
+    body[data-ifty-theme="dark"] .ifty-social-item-card [style*="background:#f8fbff"],
+    body[data-ifty-theme="dark"] .ifty-science-item-card [style*="background:#f8fbff"],
+    body[data-ifty-theme="dark"] .ifty-ancient-item-card [style*="background:#f8fbff"] {
+      background:#172033 !important;
+      border-color:#475569 !important;
+      color:#f8fafc !important;
+    }
+    body[data-ifty-theme="dark"] .ifty-social-item-card,
+    body[data-ifty-theme="dark"] .ifty-science-item-card,
+    body[data-ifty-theme="dark"] .ifty-ancient-item-card {
+      background:#111827 !important;
+      border-color:#64748b !important;
+    }
 
     /* Scrollbars are visible without being bright. */
     body[data-ifty-theme="dark"] * { scrollbar-color:#475569 #111827; }
@@ -4357,6 +4376,7 @@ function normalizeIftySocialItem(value) {
     imageKind: normalizeIftySocialImageKind(value.imageKind),
     imageFocus: text('imageFocus'),
     workTitle: text('workTitle'),
+    level: normalizeIftyLearningLevel(value.level),
     mastery: value.mastery === 'fixed' ? 'fixed' : 'unfixed',
     review: value.review && typeof value.review === 'object' ? deepClone(value.review) : undefined,
     study: value.study && typeof value.study === 'object' ? deepClone(value.study) : undefined,
@@ -4452,6 +4472,7 @@ function renderIftySocialItemCard(folder, item) {
           <input type="checkbox" ${iftySocialSelectedItemIds.has(String(item.id)) ? 'checked' : ''} onchange="toggleIftySubjectItemSelection('SOCIAL STUDIES','${item.id}',this.checked)" title="この項目を選択" style="width:18px;height:18px;flex:none;">
           <strong style="font-size:1.08em;color:#0f172a;">${escapeHtml(item.title || item.topic || '無題')}</strong>
           ${renderIftySocialSubjectBadges(item.subjects.length ? item.subjects : folder.subjects)}
+          ${renderIftyLearningLevelInline('SOCIAL STUDIES', item.id, item.level)}
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
           ${item.imageData ? '<span style="font-size:.68em;color:#7e22ce;font-weight:900;">IMAGE</span>' : ''}
           ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
@@ -6322,6 +6343,7 @@ function normalizeIftyScienceItem(value) {
     imageKind: normalizeIftyScienceImageKind(value.imageKind),
     imageFocus: text('imageFocus'),
     workTitle: text('workTitle'),
+    level: normalizeIftyLearningLevel(value.level),
     mastery: value.mastery === 'fixed' ? 'fixed' : 'unfixed',
     review: value.review && typeof value.review === 'object' ? deepClone(value.review) : undefined,
     study: value.study && typeof value.study === 'object' ? deepClone(value.study) : undefined,
@@ -6533,6 +6555,7 @@ function renderIftyScienceItemCard(folder, item) {
           <input type="checkbox" ${iftyScienceSelectedItemIds.has(String(item.id)) ? 'checked' : ''} onchange="toggleIftySubjectItemSelection('SCIENCE','${item.id}',this.checked)" title="この項目を選択" style="width:18px;height:18px;flex:none;">
           <strong style="font-size:1.08em;color:#0f172a;">${escapeHtml(item.title || item.topic || '無題')}</strong>
           ${renderIftyScienceSubjectBadges(item.subjects.length ? item.subjects : folder.subjects)}
+          ${renderIftyLearningLevelInline('SCIENCE', item.id, item.level)}
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
           ${item.imageData ? '<span style="font-size:.68em;color:#7e22ce;font-weight:900;">IMAGE</span>' : ''}
           ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
@@ -8363,6 +8386,7 @@ function renderIftyAncientItemCard(folder, item) {
           <strong style="font-size:1.16em;color:#0f172a;">${escapeHtml(item.word || item.title || '無題')}</strong>
           ${item.reading ? `<span style="font-size:.78em;color:#475569;background:#f1f5f9;border-radius:999px;padding:2px 7px;">${escapeHtml(item.reading)}</span>` : ''}
           ${item.partOfSpeech ? `<span style="font-size:.72em;color:#075985;background:#e0f2fe;border-radius:999px;padding:2px 7px;font-weight:900;">${escapeHtml(item.partOfSpeech)}</span>` : ''}
+          ${renderIftyLearningLevelInline('ANCIENT', item.id, item.level)}
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
           ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
         </div>
@@ -9198,6 +9222,7 @@ function normalizeIftyKanbunItem(value) {
     examples,
     keyPoints,
     memoryText: String(value.memoryText || [kundoku, translation].filter(Boolean).join('／')).trim(),
+    level: normalizeIftyLearningLevel(value.level),
     mastery: value.mastery === 'fixed' ? 'fixed' : 'unfixed',
     review: value.review && typeof value.review === 'object' ? deepClone(value.review) : undefined,
     study: value.study && typeof value.study === 'object' ? deepClone(value.study) : undefined,
@@ -9306,6 +9331,7 @@ function renderIftyKanbunItemCard(folder, item) {
           <strong style="font-size:1.05em;color:#0f172a;font-family:serif;overflow-wrap:anywhere;">${escapeHtml(item.title || item.originalText || '無題')}</strong>
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
           ${item.inputKind === 'pattern' ? '<span style="font-size:.68em;color:#92400e;font-weight:900;background:#fffbeb;border-radius:999px;padding:2px 6px;">句法・型</span>' : ''}
+          ${renderIftyLearningLevelInline('KANBUN', item.id, item.level)}
           ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
           ${isIftySubjectWeakItem(item) ? '<span style="font-size:.68em;color:#be123c;font-weight:900;background:#fff1f2;border-radius:999px;padding:2px 6px;">🎯 苦手</span>' : ''}
         </div>
@@ -13487,6 +13513,7 @@ function normalizeIftyKanjiItem(value) {
     antonyms:normalizeIftyKanjiStringArray(value.antonyms, 12),
     examples:normalizeIftyKanjiExamples(value.examples),
     notes:String(value.notes || value.details || '').trim(),
+    level:normalizeIftyLearningLevel(value.level),
     mastery:value.mastery === 'fixed' ? 'fixed' : 'unfixed',
     review:value.review && typeof value.review === 'object' ? deepClone(value.review) : undefined,
     study:value.study && typeof value.study === 'object' ? deepClone(value.study) : undefined,
@@ -13534,6 +13561,7 @@ function renderIftyKanjiItemCard(folder,item,index){
         <span style="min-width:0;">
           <span style="font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.5em;font-weight:900;color:#3b0764;">${escapeHtml(item.term)}</span>
           <span style="margin-left:6px;display:inline-block;padding:2px 6px;border-radius:999px;background:#f3e8ff;color:#7e22ce;font-size:.67em;font-weight:900;">${item.kind==='KANJI'?'漢字':'熟語'}</span>
+          ${renderIftyLearningLevelInline('KANJI', item.id, item.level)}
           ${item.readings?.length?`<span style="display:block;margin-top:3px;color:#0369a1;font-size:.82em;font-weight:800;">${escapeHtml(item.readings.join('・'))}</span>`:''}
         </span>
       </label>
@@ -13878,6 +13906,7 @@ function normalizeIftyOthersItem(value) {
     keyPoints: Array.isArray(value.keyPoints) ? value.keyPoints.map(v=>String(v||'').trim()).filter(Boolean).slice(0,8) : [],
     aliases: Array.isArray(value.aliases) ? value.aliases.map(v=>String(v||'').trim()).filter(Boolean).slice(0,8) : [],
     tags: normalizeIftyOthersTags(value.tags),
+    level: normalizeIftyLearningLevel(value.level),
     mastery: value.mastery === 'fixed' ? 'fixed' : 'unfixed',
     review: value.review && typeof value.review === 'object' ? deepClone(value.review) : undefined,
     study: value.study && typeof value.study === 'object' ? deepClone(value.study) : undefined,
@@ -13902,7 +13931,7 @@ function renderIftyOthersItemCard(folder,item){
   const study=normalizeIftySubjectStudyState(item); const weak=isIftySubjectWeakItem(item);
   return `<div style="margin-top:9px;border:1px solid #dbeafe;background:#fff;border-radius:10px;padding:11px;">
     <div style="display:flex;gap:8px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;">
-      <label style="display:flex;gap:7px;align-items:flex-start;min-width:0;flex:1;"><input type="checkbox" ${iftyOthersSelectedItemIds.has(String(item.id))?'checked':''} onchange="toggleIftySubjectItemSelection('OTHERS','${item.id}',this.checked)" style="width:18px;height:18px;margin-top:2px;"><span style="min-width:0;"><b style="color:#0f172a;font-size:1.02em;">${escapeHtml(item.title||item.topic)}</b>${item.tags?.length?`<span style="display:block;margin-top:4px;">${item.tags.map(t=>`<span style="display:inline-block;margin-right:4px;padding:2px 6px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.7em;font-weight:900;">${escapeHtml(t)}</span>`).join('')}</span>`:''}</span></label>
+      <label style="display:flex;gap:7px;align-items:flex-start;min-width:0;flex:1;"><input type="checkbox" ${iftyOthersSelectedItemIds.has(String(item.id))?'checked':''} onchange="toggleIftySubjectItemSelection('OTHERS','${item.id}',this.checked)" style="width:18px;height:18px;margin-top:2px;"><span style="min-width:0;"><b style="color:#0f172a;font-size:1.02em;">${escapeHtml(item.title||item.topic)}</b><span style="margin-left:6px;">${renderIftyLearningLevelInline('OTHERS', item.id, item.level)}</span>${item.tags?.length?`<span style="display:block;margin-top:4px;">${item.tags.map(t=>`<span style="display:inline-block;margin-right:4px;padding:2px 6px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.7em;font-weight:900;">${escapeHtml(t)}</span>`).join('')}</span>`:''}</span></label>
       <div style="display:flex;gap:5px;flex-wrap:wrap;"><button type="button" onclick="toggleIftySubjectItemReview('OTHERS','${folder.id}','${item.id}')" style="border:none;background:#f59e0b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${isIftyReviewTagged(item)?'🔁 復習中':'🔁 復習'}</button><button type="button" onclick="editIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">編集</button><button type="button" onclick="deleteIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">削除</button></div>
     </div>
     ${item.memoryText?`<div style="margin-top:8px;line-height:1.6;color:#334155;white-space:pre-wrap;">${escapeHtml(item.memoryText)}</div>`:''}
@@ -14247,6 +14276,134 @@ function normalizeIftySubjectStudyState(item) {
   if (!study.sources || typeof study.sources !== 'object' || Array.isArray(study.sources)) study.sources = {};
   return study;
 }
+
+
+function normalizeIftyLearningLevel(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    const primary = String(value || '').trim();
+    return primary ? { primary, secondary:'', rank:0, reason:'' } : null;
+  }
+  if (typeof value !== 'object') return null;
+  const primary = String(value.primary || value.label || '').trim();
+  const secondary = String(value.secondary || value.subLabel || value.sublabel || '').trim();
+  const reason = String(value.reason || value.note || '').trim().slice(0, 220);
+  let rank = Math.trunc(Number(value.rank) || 0);
+  if (rank < 1 || rank > 8) rank = 0;
+  if (!primary && !secondary) return null;
+  return { primary, secondary, rank, reason };
+}
+
+const iftyLevelCheckPending = new Set();
+
+function getIftyLearningLevelColors(rank) {
+  const n = Number(rank || 0);
+  if (n >= 7) return { bg:'#fee2e2', color:'#991b1b', border:'#fca5a5' };
+  if (n >= 5) return { bg:'#ede9fe', color:'#5b21b6', border:'#c4b5fd' };
+  if (n >= 3) return { bg:'#dbeafe', color:'#1e40af', border:'#93c5fd' };
+  return { bg:'#dcfce7', color:'#166534', border:'#86efac' };
+}
+
+function renderIftyLearningLevelInline(subject, itemId, value) {
+  const level = normalizeIftyLearningLevel(value);
+  const safeSubject = String(subject || '').replace(/'/g, "\\'");
+  const safeId = String(itemId || '').replace(/'/g, "\\'");
+  const pendingKey = `${String(subject || '').toUpperCase()}::${String(itemId || '')}`;
+  if (!level) {
+    return `<button type="button" onclick="checkIftyItemLevel('${safeSubject}','${safeId}',this)" ${iftyLevelCheckPending.has(pendingKey) ? 'disabled' : ''} title="ALLIAでこの項目の学習難度を目安判定" style="border:1px solid #94a3b8;background:#f8fafc;color:#475569;border-radius:999px;padding:2px 7px;font-size:.68em;font-weight:900;cursor:pointer;">${iftyLevelCheckPending.has(pendingKey) ? '判定中…' : '📊 レベル判定'}</button>`;
+  }
+  const colors = getIftyLearningLevelColors(level.rank);
+  const title = ['AIによる目安', level.reason].filter(Boolean).join('：');
+  return `<span title="${escapeHtml(title)}" style="display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">
+    ${level.primary ? `<span style="display:inline-block;padding:2px 7px;border:1px solid ${colors.border};border-radius:999px;background:${colors.bg};color:${colors.color};font-size:.68em;font-weight:950;">📊 ${escapeHtml(level.primary)}</span>` : ''}
+    ${level.secondary ? `<span style="display:inline-block;padding:2px 7px;border:1px solid #fde68a;border-radius:999px;background:#fffbeb;color:#92400e;font-size:.66em;font-weight:900;">${escapeHtml(level.secondary)}</span>` : ''}
+    <button type="button" onclick="checkIftyItemLevel('${safeSubject}','${safeId}',this)" title="レベルを再判定" style="border:none;background:transparent;color:#64748b;padding:1px 3px;font-size:.72em;cursor:pointer;">↻</button>
+  </span>`;
+}
+
+function getIftyLevelTargetRef(subject, itemId) {
+  const raw = String(subject || '').trim().toUpperCase();
+  if (raw === 'BASIC SENTENCES') {
+    const item = findIftyBasicSentenceById(itemId);
+    return item ? { item, folder:null } : null;
+  }
+  const key = normalizeIftySubject(raw);
+  if (key === 'ENGLISH') {
+    const ref = getWordById(String(itemId));
+    return ref ? { item:ref.word, folder:ref.folder } : null;
+  }
+  return getIftySubjectReviewItemRef(key, itemId);
+}
+
+function buildIftyLevelCheckItem(subject, item) {
+  const raw = String(subject || '').trim().toUpperCase();
+  if (raw === 'BASIC SENTENCES') return { en:item.en, ja:item.ja, note:item.note };
+  const key = normalizeIftySubject(raw);
+  if (key === 'ENGLISH') return {
+    word:item.word, language:item.language, languageCode:item.languageCode, pronunciation:item.pronunciation,
+    partOfSpeech:item.partOfSpeech, meanings:(item.meanings||[]).slice(0,8), details:item.details,
+    examples:(item.examples||[]).slice(0,2)
+  };
+  if (key === 'KANJI') return { term:item.term, readings:item.readings, meanings:item.meanings, explanation:item.explanation, notes:item.notes };
+  if (key === 'ANCIENT') return { word:item.word, reading:item.reading, partOfSpeech:item.partOfSpeech, meanings:item.meanings, usage:item.usage, keyPoints:item.keyPoints };
+  if (key === 'KANBUN') return { title:item.title, originalText:item.originalText, inputKind:item.inputKind, kundoku:item.kundoku, translation:item.translation, grammarPoints:item.grammarPoints, keyPoints:item.keyPoints };
+  return {
+    title:item.title || item.topic,
+    memoryText:item.memoryText,
+    keyPoints:item.keyPoints,
+    subjects:item.subjects,
+    tags:item.tags,
+    formula:item.formula,
+    unit:item.unit,
+    conditions:item.conditions
+  };
+}
+
+function refreshIftyLevelTarget(subject, ref) {
+  const raw = String(subject || '').trim().toUpperCase();
+  if (raw === 'BASIC SENTENCES') { renderIftyBasicSentenceList(); return; }
+  const key = normalizeIftySubject(raw);
+  if (key === 'ENGLISH') { if (ref?.folder?.id) refreshFolderWordArea(ref.folder.id); return; }
+  if (key === 'SOCIAL STUDIES') renderIftySocialStudiesPage({ preserveScroll:true });
+  else if (key === 'SCIENCE') renderIftySciencePage({ preserveScroll:true });
+  else if (key === 'ANCIENT') renderIftyAncientPage({ preserveScroll:true });
+  else if (key === 'KANBUN') renderIftyKanbunPage({ preserveScroll:true });
+  else if (key === 'KANJI') renderIftyKanjiPage({ preserveScroll:true });
+  else if (key === 'OTHERS') renderIftyOthersPage({ preserveScroll:true });
+}
+
+window.checkIftyItemLevel = async function(subject, itemId, button = null) {
+  const raw = String(subject || '').trim().toUpperCase();
+  const pendingKey = `${raw}::${String(itemId || '')}`;
+  if (iftyLevelCheckPending.has(pendingKey)) return;
+  const ref = getIftyLevelTargetRef(raw, itemId);
+  if (!ref?.item) return;
+  if (!ensureIftyOnline('レベル判定')) return;
+  iftyLevelCheckPending.add(pendingKey);
+  if (button) { button.disabled = true; button.textContent = '判定中…'; }
+  try {
+    const response = await iftyAlliaFetch(WORKER_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ type:'level_check', subject:raw, item:buildIftyLevelCheckItem(raw, ref.item) })
+    });
+    const data = await response.json().catch(()=>({}));
+    if (!response.ok) throw alliaHttpError(response, data, 'レベル判定に失敗しました。');
+    const level = normalizeIftyLearningLevel(data);
+    if (!level) throw new Error('レベルを判定できませんでした。');
+    ref.item.level = level;
+    ref.item.updatedAt = Date.now();
+    if (raw === 'ENGLISH' || normalizeIftySubject(raw) === 'ENGLISH' && raw !== 'BASIC SENTENCES') saveUserData();
+    else savePracticeData();
+    refreshIftyLevelTarget(raw, ref);
+  } catch (error) {
+    console.error('レベル判定エラー:', error);
+    alert(String(error.message || error));
+  } finally {
+    iftyLevelCheckPending.delete(pendingKey);
+    if (button && document.body.contains(button)) { button.disabled = false; button.textContent = '📊 レベル判定'; }
+  }
+};
 
 function getIftySubjectStudyItem(subject, itemId) {
   const key = normalizeIftySubject(subject);
@@ -15319,6 +15476,7 @@ function normalizeIftyBasicSentenceItem(item) {
     ja,
     note,
     source: item.source && typeof item.source === 'object' ? { ...item.source } : { type: 'manual' },
+    level: normalizeIftyLearningLevel(item.level),
     createdAt,
     updatedAt,
     study: normalizeIftyBasicSentenceStudy(item.study)
@@ -15648,6 +15806,7 @@ function renderIftyBasicSentenceCard(item, index, total) {
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
       <div style="min-width:0;flex:1;">
         <div style="font-size:1em;font-weight:900;line-height:1.6;color:#064e3b;">${escapeHtml(item.en)}</div>
+        <div style="margin-top:4px;">${renderIftyLearningLevelInline('BASIC SENTENCES', item.id, item.level)}</div>
         ${item.ja ? `<div style="margin-top:5px;color:#475569;line-height:1.55;">${escapeHtml(item.ja)}</div>` : '<div style="margin-top:5px;color:#94a3b8;font-size:.82em;">和訳なし</div>'}
         ${item.note ? `<div style="margin-top:7px;padding:7px 9px;border-radius:7px;background:#f8fafc;color:#475569;font-size:.82em;line-height:1.5;">${escapeHtml(item.note)}</div>` : ''}
         <div style="margin-top:7px;font-size:.72em;color:#64748b;">${sourceLabel}${study.total ? ` ・ 学習 ${study.total}回 / 正答率 ${accuracy}%` : ''}</div>
@@ -16532,6 +16691,7 @@ function normalizeIftyAncientItem(value) {
     relatedWords,
     keyPoints,
     memoryText: meanings.join('／') || text('memoryText'),
+    level: normalizeIftyLearningLevel(value.level),
     mastery: value.mastery === 'fixed' ? 'fixed' : 'unfixed',
     review: value.review && typeof value.review === 'object' ? deepClone(value.review) : undefined,
     study: value.study && typeof value.study === 'object' ? deepClone(value.study) : undefined,
@@ -17430,6 +17590,7 @@ function renderWordItem(w, folderId, wIndex) {
           <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
             <div style="font-size: 1.25em; font-weight: bold; color: #0f172a;">${escapeHtml(w.word || '')}</div>
             ${(() => { const lang = getIftyWordLanguageInfo(w); return `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.68em;font-weight:900;">🌐 ${escapeHtml(lang.label)}</span>`; })()}
+            ${renderIftyLearningLevelInline('ENGLISH', w.id, w.level)}
             ${isIftyReviewTagged(w) ? `<span style="display:inline-block;padding:2px 6px;border-radius:999px;background:${isIftyReviewDue(w) ? '#ffedd5' : '#fef3c7'};color:${isIftyReviewDue(w) ? '#c2410c' : '#a16207'};font-size:.68em;font-weight:900;">${isIftyReviewDue(w) ? '🔁 復習：今日' : `🔁 次回 ${escapeHtml(formatIftyReviewDate(w.review.nextReview))}`}</span>` : (w.review && Number(w.review.graduatedAt) > 0 ? '<span style="display:inline-block;padding:2px 6px;border-radius:999px;background:#dcfce7;color:#047857;font-size:.68em;font-weight:900;">✅ 復習卒業</span>' : '')}
             ${isIftyWeakWord(w) ? '<span style="display:inline-block;padding:2px 6px;border-radius:999px;background:#ffe4e6;color:#be123c;font-size:.68em;font-weight:900;">🎯 苦手候補</span>' : ''}
           </div>
@@ -17850,6 +18011,7 @@ function applyWordData(wordObj, data) {
   if (data.transitivity) wordObj.transitivity = data.transitivity;
   if (data.countability) wordObj.countability = data.countability;
   if (data.details) wordObj.details = data.details;
+  if (data.level) wordObj.level = normalizeIftyLearningLevel(data.level);
   if (Array.isArray(data.derivatives)) wordObj.derivatives = data.derivatives;
   if (data.forms && typeof data.forms === 'object') wordObj.forms = data.forms;
   if (data.quizAnswers && typeof data.quizAnswers === 'object') {
