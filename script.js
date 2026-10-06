@@ -1,23 +1,26 @@
-// ★★★ IFTY Q3 STEP111 2026-10-06：CLASS DISTRIBUTION / UPDATE / BUG REPORT / PRIVACY HARDENING ★★★
+// ★★★ IFTY Q3 STEP112 2026-10-06：FIRST RUN GUIDE / NEVER SHOW AGAIN ★★★
 
 // ==========================================
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 111;
+const IFTY_APP_STEP = 112;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
 let iftyLastClientError = '';
+let iftyFirstRunDismissedThisSession = false;
 
 function getIftyFirstRunGuideKey() {
   return `ifty_first_run_guide_v${IFTY_FIRST_RUN_GUIDE_VERSION}_${String(currentUser || 'default_user')}`;
 }
 
-function closeIftyFirstRunGuide(markSeen = true) {
+function closeIftyFirstRunGuide(forceNeverShow = false) {
   const modal = document.getElementById('iftyFirstRunGuideModal');
+  const neverAgain = !!document.getElementById('iftyFirstRunNeverAgain')?.checked || forceNeverShow === true;
   if (modal) modal.remove();
-  if (markSeen) {
+  iftyFirstRunDismissedThisSession = true;
+  if (neverAgain) {
     try { localStorage.setItem(getIftyFirstRunGuideKey(), '1'); } catch (_) {}
   }
 }
@@ -82,19 +85,20 @@ window.moveIftyFirstRunGuide = function(delta) {
   const current = Number(body.dataset.index || 0);
   const next = current + Number(delta || 0);
   if (next >= 5) {
-    closeIftyFirstRunGuide(true);
+    closeIftyFirstRunGuide();
     return;
   }
   renderIftyFirstRunGuideStep(next);
 };
 
 window.openIftyManualFromFirstRun = function() {
-  closeIftyFirstRunGuide(true);
+  closeIftyFirstRunGuide();
   if (typeof window.openIftyManual === 'function') window.openIftyManual();
 };
 
 function maybeShowIftyFirstRunGuide(options = {}) {
   if (options.force !== true) {
+    if (iftyFirstRunDismissedThisSession) return;
     try {
       if (localStorage.getItem(getIftyFirstRunGuideKey()) === '1') return;
     } catch (_) {}
@@ -115,7 +119,7 @@ function maybeShowIftyFirstRunGuide(options = {}) {
           <div style="color:#38bdf8;font-size:.72em;font-weight:950;letter-spacing:.12em;">WELCOME TO IFTY</div>
           <div id="iftyFirstRunGuideTitle" style="font-size:1.25em;font-weight:950;margin-top:3px;">最初の5ステップ</div>
         </div>
-        <button type="button" onclick="closeIftyFirstRunGuide(true)" style="border:1px solid #475569;background:#1e293b;color:#e2e8f0;border-radius:9px;padding:8px 10px;font-weight:900;cursor:pointer;">スキップ</button>
+        <button type="button" onclick="closeIftyFirstRunGuide()" style="border:1px solid #475569;background:#1e293b;color:#e2e8f0;border-radius:9px;padding:8px 10px;font-weight:900;cursor:pointer;">スキップ</button>
       </div>
       <div id="iftyFirstRunGuideBody" style="padding:20px 18px 15px;"></div>
       <div style="padding:12px 16px 16px;border-top:1px solid #334155;">
@@ -126,6 +130,11 @@ function maybeShowIftyFirstRunGuide(options = {}) {
             <button id="iftyFirstRunNext" type="button" onclick="moveIftyFirstRunGuide(1)" style="border:none;background:#0284c7;color:white;border-radius:9px;padding:9px 14px;font-weight:950;cursor:pointer;">次へ</button>
           </div>
         </div>
+        <label for="iftyFirstRunNeverAgain" style="margin-top:12px;display:flex;align-items:center;gap:9px;padding:10px 11px;border:1px solid #475569;border-radius:10px;background:#0b1220;color:#e2e8f0;font-size:.84em;font-weight:850;cursor:pointer;user-select:none;">
+          <input id="iftyFirstRunNeverAgain" type="checkbox" style="width:20px;height:20px;accent-color:#0ea5e9;flex:0 0 auto;">
+          <span>二度と表示しない</span>
+        </label>
+        <div style="margin-top:5px;color:#94a3b8;font-size:.72em;line-height:1.45;">チェックしない場合は、このタブを閉じるまで再表示しません。次回アクセス時には再び表示されます。</div>
         <button type="button" onclick="openIftyManualFromFirstRun()" style="width:100%;margin-top:10px;border:1px solid #475569;background:#0f172a;color:#cbd5e1;border-radius:9px;padding:9px;font-weight:850;cursor:pointer;">📖 MANUALを見る</button>
       </div>
     </div>`;
