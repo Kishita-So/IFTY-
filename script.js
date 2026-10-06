@@ -1,3 +1,298 @@
+// ★★★ IFTY Q3 STEP111 2026-10-06：CLASS DISTRIBUTION / UPDATE / BUG REPORT / PRIVACY HARDENING ★★★
+
+// ==========================================
+// Q3 STEP111：クラス配布用UX
+// 初回ガイド / STEP表示 / 更新検知 / 不具合報告
+// ==========================================
+const IFTY_APP_STEP = 111;
+const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
+let iftyRemoteAppStep = 0;
+let iftyUpdateCheckPromise = null;
+let iftyLastClientError = '';
+
+function getIftyFirstRunGuideKey() {
+  return `ifty_first_run_guide_v${IFTY_FIRST_RUN_GUIDE_VERSION}_${String(currentUser || 'default_user')}`;
+}
+
+function closeIftyFirstRunGuide(markSeen = true) {
+  const modal = document.getElementById('iftyFirstRunGuideModal');
+  if (modal) modal.remove();
+  if (markSeen) {
+    try { localStorage.setItem(getIftyFirstRunGuideKey(), '1'); } catch (_) {}
+  }
+}
+
+function renderIftyFirstRunGuideStep(index) {
+  const body = document.getElementById('iftyFirstRunGuideBody');
+  const prev = document.getElementById('iftyFirstRunPrev');
+  const next = document.getElementById('iftyFirstRunNext');
+  const count = document.getElementById('iftyFirstRunCount');
+  if (!body || !prev || !next || !count) return;
+
+  const steps = [
+    {
+      icon:'①',
+      title:'アカウントを準備',
+      text:'IFTY IDでログインすると学習データをクラウド同期できます。復旧コードはパスワードを忘れたときに必要なので、必ず安全な場所へ保存してください。'
+    },
+    {
+      icon:'②',
+      title:'教科を選ぶ',
+      text:'HOMEから LANGUAGES / ANCIENT / KANBUN / KANJI / SCIENCE / SOCIAL STUDIES / OTHERS を選びます。'
+    },
+    {
+      icon:'③',
+      title:'フォルダを作る',
+      text:'単元・授業・テスト範囲など、自分が復習しやすい単位でフォルダを作ります。フォルダは後から移動・名前変更できます。'
+    },
+    {
+      icon:'④',
+      title:'ALLIAまたは手動で追加',
+      text:'語句を入力してALLIA生成するか、白紙・手動入力を使います。AI生成内容は必ず教科書や授業内容と照合してください。'
+    },
+    {
+      icon:'⑤',
+      title:'PRACTICEで定着',
+      text:'フラッシュカードやクイズで練習し、＋復習で復習対象へ登録できます。困ったときは右下のMANUALを開いてください。'
+    }
+  ];
+  const i = Math.max(0, Math.min(steps.length - 1, Number(index) || 0));
+  const step = steps[i];
+  body.dataset.index = String(i);
+  body.innerHTML = `
+    <div style="font-size:2.2em;font-weight:950;color:#38bdf8;line-height:1;">${step.icon}</div>
+    <div style="font-size:1.18em;font-weight:950;color:#f8fafc;margin-top:10px;">${step.title}</div>
+    <div style="color:#cbd5e1;line-height:1.75;margin-top:9px;font-size:.92em;">${step.text}</div>
+    ${i === steps.length - 1 ? `
+      <div style="margin-top:14px;padding:11px;border:1px solid #475569;border-radius:11px;background:#0b1220;color:#cbd5e1;font-size:.78em;line-height:1.65;">
+        <b style="color:#f8fafc;">プライバシー：</b>
+        メールアドレスは復旧に使いません。IFTY IDと学習データはクラウド同期されます。
+        ALLIAへ入力した内容はAI処理のため外部AIサービスへ送られる場合があるので、氏名・住所・電話番号・パスワードなどの個人情報や秘密情報は入力しないでください。
+      </div>` : ''}
+  `;
+  count.textContent = `${i + 1} / ${steps.length}`;
+  prev.disabled = i === 0;
+  prev.style.opacity = i === 0 ? '.45' : '1';
+  next.textContent = i === steps.length - 1 ? '使い始める' : '次へ';
+}
+
+window.moveIftyFirstRunGuide = function(delta) {
+  const body = document.getElementById('iftyFirstRunGuideBody');
+  if (!body) return;
+  const current = Number(body.dataset.index || 0);
+  const next = current + Number(delta || 0);
+  if (next >= 5) {
+    closeIftyFirstRunGuide(true);
+    return;
+  }
+  renderIftyFirstRunGuideStep(next);
+};
+
+window.openIftyManualFromFirstRun = function() {
+  closeIftyFirstRunGuide(true);
+  if (typeof window.openIftyManual === 'function') window.openIftyManual();
+};
+
+function maybeShowIftyFirstRunGuide(options = {}) {
+  if (options.force !== true) {
+    try {
+      if (localStorage.getItem(getIftyFirstRunGuideKey()) === '1') return;
+    } catch (_) {}
+  }
+  if (document.getElementById('iftySecurityModal')) {
+    setTimeout(() => maybeShowIftyFirstRunGuide(options), 600);
+    return;
+  }
+  if (document.getElementById('iftyFirstRunGuideModal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'iftyFirstRunGuideModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:12950;background:rgba(2,6,23,.78);display:flex;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;backdrop-filter:blur(4px);';
+  modal.innerHTML = `
+    <div role="dialog" aria-modal="true" aria-labelledby="iftyFirstRunGuideTitle" style="width:min(560px,100%);max-height:92vh;overflow:auto;background:#111827;color:#f8fafc;border:1px solid #475569;border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.52);">
+      <div style="padding:16px 17px 12px;border-bottom:1px solid #334155;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+        <div>
+          <div style="color:#38bdf8;font-size:.72em;font-weight:950;letter-spacing:.12em;">WELCOME TO IFTY</div>
+          <div id="iftyFirstRunGuideTitle" style="font-size:1.25em;font-weight:950;margin-top:3px;">最初の5ステップ</div>
+        </div>
+        <button type="button" onclick="closeIftyFirstRunGuide(true)" style="border:1px solid #475569;background:#1e293b;color:#e2e8f0;border-radius:9px;padding:8px 10px;font-weight:900;cursor:pointer;">スキップ</button>
+      </div>
+      <div id="iftyFirstRunGuideBody" style="padding:20px 18px 15px;"></div>
+      <div style="padding:12px 16px 16px;border-top:1px solid #334155;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <span id="iftyFirstRunCount" style="color:#94a3b8;font-size:.8em;font-weight:800;"></span>
+          <div style="display:flex;gap:8px;">
+            <button id="iftyFirstRunPrev" type="button" onclick="moveIftyFirstRunGuide(-1)" style="border:1px solid #475569;background:#1e293b;color:#e2e8f0;border-radius:9px;padding:9px 12px;font-weight:900;cursor:pointer;">戻る</button>
+            <button id="iftyFirstRunNext" type="button" onclick="moveIftyFirstRunGuide(1)" style="border:none;background:#0284c7;color:white;border-radius:9px;padding:9px 14px;font-weight:950;cursor:pointer;">次へ</button>
+          </div>
+        </div>
+        <button type="button" onclick="openIftyManualFromFirstRun()" style="width:100%;margin-top:10px;border:1px solid #475569;background:#0f172a;color:#cbd5e1;border-radius:9px;padding:9px;font-weight:850;cursor:pointer;">📖 MANUALを見る</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  renderIftyFirstRunGuideStep(0);
+}
+
+function getIftyLoadedScriptUrl() {
+  const scripts = Array.from(document.scripts || []);
+  const target = [...scripts].reverse().find(el => {
+    const src = String(el.getAttribute('src') || '');
+    return /(?:^|\/)script\.js(?:[?#]|$)/i.test(src);
+  });
+  if (target?.src) return target.src;
+  try { return new URL('script.js', location.href).href; } catch (_) { return 'script.js'; }
+}
+
+function renderIftyUpdateBannerHtml() {
+  if (!(Number(iftyRemoteAppStep) > IFTY_APP_STEP)) return '';
+  return `
+    <div style="border:1px solid #0ea5e9;background:#0b2236;color:#e0f2fe;border-radius:12px;padding:11px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:950;">🔄 IFTY STEP${iftyRemoteAppStep} が利用できます</div>
+        <div style="font-size:.76em;color:#bae6fd;margin-top:3px;">現在 STEP${IFTY_APP_STEP}。更新して最新機能・修正を反映します。</div>
+      </div>
+      <button type="button" onclick="reloadIftyLatestVersion()" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:8px 11px;font-weight:950;cursor:pointer;">最新版を読み込む</button>
+    </div>`;
+}
+
+function applyIftyUpdateBanner() {
+  const host = document.getElementById('iftyUpdateBannerHost');
+  if (host) host.innerHTML = renderIftyUpdateBannerHtml();
+}
+
+async function checkIftyForUpdates(options = {}) {
+  const now = Date.now();
+  const last = Number(window.__iftyLastUpdateCheckAt || 0);
+  if (options.force !== true && now - last < 60_000) {
+    applyIftyUpdateBanner();
+    return iftyRemoteAppStep;
+  }
+  if (iftyUpdateCheckPromise) return iftyUpdateCheckPromise;
+  window.__iftyLastUpdateCheckAt = now;
+
+  iftyUpdateCheckPromise = (async () => {
+    try {
+      const base = getIftyLoadedScriptUrl();
+      const url = new URL(base, location.href);
+      url.searchParams.set('ifty_update_check', String(Date.now()));
+      const response = await fetch(url.href, { cache:'no-store', credentials:'same-origin' });
+      if (!response.ok) return iftyRemoteAppStep;
+      const text = await response.text();
+      const matches = [...text.matchAll(/IFTY Q3 STEP(\d+)/g)].map(m => Number(m[1])).filter(Number.isFinite);
+      if (matches.length) iftyRemoteAppStep = Math.max(...matches);
+      applyIftyUpdateBanner();
+    } catch (_) {
+      // 更新確認失敗で学習を止めない。
+    } finally {
+      iftyUpdateCheckPromise = null;
+    }
+    return iftyRemoteAppStep;
+  })();
+  return iftyUpdateCheckPromise;
+}
+
+window.reloadIftyLatestVersion = async function() {
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(key => caches.delete(key)));
+    }
+  } catch (_) {}
+  try {
+    if (navigator.serviceWorker?.getRegistrations) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(reg => reg.update().catch(() => null)));
+    }
+  } catch (_) {}
+  try {
+    const url = new URL(location.href);
+    url.searchParams.set('ifty_v', String(iftyRemoteAppStep || IFTY_APP_STEP));
+    url.searchParams.set('ifty_refresh', String(Date.now()));
+    location.replace(url.href);
+  } catch (_) {
+    location.reload();
+  }
+};
+
+function sanitizeIftyErrorText(value) {
+  let text = String(value || '').slice(0, 1200);
+  // accidental tokens / recovery codes should never be copied into reports
+  text = text.replace(/[A-Za-z0-9_-]{32,}/g, '[REDACTED]');
+  text = text.replace(/\b[A-HJ-NP-Z2-9]{5}(?:-[A-HJ-NP-Z2-9]{5}){3}\b/g, '[RECOVERY-CODE-REDACTED]');
+  return text;
+}
+
+window.addEventListener('error', event => {
+  iftyLastClientError = sanitizeIftyErrorText(event?.message || '');
+});
+window.addEventListener('unhandledrejection', event => {
+  iftyLastClientError = sanitizeIftyErrorText(event?.reason?.message || event?.reason || '');
+});
+
+function buildIftyBugReport(extra = '') {
+  const lines = [
+    'IFTY 不具合報告',
+    `Version: STEP${IFTY_APP_STEP}`,
+    `Time: ${new Date().toISOString()}`,
+    `Origin: ${location.origin}`,
+    `Page: ${String(iftyPortalPage || currentView || 'unknown')}`,
+    `Subject: ${String(currentIftySubject || '—')}`,
+    `Online: ${navigator.onLine ? 'yes' : 'no'}`,
+    `Browser: ${navigator.userAgent}`,
+    iftyLastClientError ? `Last error: ${sanitizeIftyErrorText(iftyLastClientError)}` : '',
+    extra ? `What happened: ${sanitizeIftyErrorText(extra)}` : ''
+  ].filter(Boolean);
+  return lines.join('\n');
+}
+
+window.openIftyBugReport = function() {
+  const old = document.getElementById('iftyBugReportModal');
+  if (old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = 'iftyBugReportModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:12940;background:rgba(2,6,23,.76);display:flex;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;';
+  modal.innerHTML = `
+    <div role="dialog" aria-modal="true" style="width:min(620px,100%);max-height:92vh;overflow:auto;background:#111827;color:#f8fafc;border:1px solid #475569;border-radius:17px;padding:17px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+        <div>
+          <div style="font-weight:950;font-size:1.15em;">🐞 不具合を報告</div>
+          <div style="color:#94a3b8;font-size:.78em;margin-top:4px;">STEP番号・画面・端末情報を自動でまとめます。</div>
+        </div>
+        <button type="button" onclick="document.getElementById('iftyBugReportModal')?.remove()" style="border:1px solid #475569;background:#1e293b;color:white;border-radius:8px;width:34px;height:34px;font-weight:900;cursor:pointer;">×</button>
+      </div>
+      <textarea id="iftyBugReportDescription" rows="5" placeholder="何をしたとき、どうなったかを書いてください" style="width:100%;box-sizing:border-box;margin-top:14px;background:#0f172a;color:#f8fafc;border:1px solid #475569;border-radius:10px;padding:11px;font:inherit;resize:vertical;"></textarea>
+      <div style="margin-top:8px;color:#fbbf24;font-size:.75em;line-height:1.55;">パスワード・復旧コード・氏名・住所・電話番号などは書かないでください。必要なら別途スクリーンショットを添付してください。</div>
+      <div id="iftyBugReportStatus" style="min-height:1.3em;margin-top:8px;color:#7dd3fc;font-size:.8em;"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button type="button" onclick="copyIftyBugReport()" style="flex:1;min-width:160px;border:none;background:#0284c7;color:white;border-radius:9px;padding:10px;font-weight:950;cursor:pointer;">📋 報告文をコピー</button>
+        <button type="button" onclick="checkIftyForUpdates({force:true})" style="border:1px solid #475569;background:#1e293b;color:#e2e8f0;border-radius:9px;padding:10px 12px;font-weight:900;cursor:pointer;">更新確認</button>
+      </div>
+    </div>`;
+  modal.addEventListener('click', event => {
+    if (event.target === modal) modal.remove();
+  });
+  document.body.appendChild(modal);
+};
+
+window.copyIftyBugReport = async function() {
+  const detail = String(document.getElementById('iftyBugReportDescription')?.value || '').trim();
+  const report = buildIftyBugReport(detail);
+  const status = document.getElementById('iftyBugReportStatus');
+  try {
+    await navigator.clipboard.writeText(report);
+    if (status) status.textContent = 'コピーしました。クラスの連絡先などへ貼り付けて送れます。';
+  } catch (_) {
+    const ta = document.getElementById('iftyBugReportDescription');
+    if (ta) {
+      ta.value = report;
+      ta.focus();
+      ta.select();
+    }
+    if (status) status.textContent = '自動コピーできなかったため、報告文を選択しました。';
+  }
+};
+
+
 // ★★★ IFTY Q3 STEP110 2026-10-06：FOLDER COLLAPSE VIEWPORT LOCK ★★★
 // ★★★ IFTY Q3 STEP109 2026-10-06：DARK SURFACES + RELIABLE FOLDER COLLAPSE ★★★
 // ★★★ IFTY Q3 STEP107 2026-10-06：ALL SUBJECTS LEVEL BADGES ★★★
@@ -3039,8 +3334,12 @@ window.openIftyHome = function() {
       <h1 class="ifty-portal-title">HOME</h1>
       <div class="ifty-portal-subtitle">IFTYの学習メニュー。科目を選ぶか、ALLIA・実践へ進めます。</div>
 
-      <div style="margin:14px 0 16px;">
+      <div style="margin:14px 0 10px;">
         ${renderIftyAlliaUsageBarHtml(false)}
+      </div>
+
+      <div id="iftyUpdateBannerHost" style="margin:0 0 16px;">
+        ${renderIftyUpdateBannerHtml()}
       </div>
 
       <div class="ifty-home-grid">
@@ -3124,13 +3423,18 @@ window.openIftyHome = function() {
         <button type="button" onclick="openPracticeHome()" style="background:#7c3aed;color:white;">⚔️ 実践</button>
         <button type="button" onclick="openIftyLearningStats()" style="background:#0f766e;color:white;">📊 学習統計</button>
         <button type="button" onclick="openIftyRecoveryCenter()" style="background:#334155;color:white;">🛟 バックアップ / 復元</button>
+        <button type="button" onclick="openIftyBugReport()" style="background:#7f1d1d;color:white;">🐞 不具合を報告</button>
       </div>
 
       <div class="ifty-settings-note" style="margin-top:14px;">
         実践：Flash ${stats.flashSets} / Quiz ${stats.quizSets}　・　例文資産 ${stats.examples}件　・　BASIC SENTENCES ${stats.basicSentences}件　・　YEARS ${stats.years}件　・　ALLIAチャット ${stats.chats}　・　復習管理 ${stats.reviewActive}語 / 卒業 ${stats.reviewGraduated}語
       </div>
+      <div style="margin-top:10px;text-align:right;color:#94a3b8;font-size:.72em;font-weight:800;letter-spacing:.04em;">
+        IFTY STEP${IFTY_APP_STEP}
+      </div>
     </section>
   `, 'home');
+  setTimeout(() => checkIftyForUpdates(), 0);
 };
 
 window.openIftySideMenuHome = function() {
@@ -13307,6 +13611,7 @@ async function enterIftyAccount(account, options = {}) {
   }
 
   if (typeof window.openIftyHome === 'function') window.openIftyHome();
+  setTimeout(() => maybeShowIftyFirstRunGuide(), 450);
 }
 
 async function enterIftyDeveloperSession() {
