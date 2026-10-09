@@ -1,3 +1,5 @@
+// ★★★ IFTY Q3 STEP122 2026-10-09：PRONUNCIATION MODAL OUTSIDE TAP FIX ★★★
+// ★★★ IFTY Q3 STEP121 2026-10-09：DISPLAY LANGUAGE ALSO APPLIES TO SIDE MENU TOOLS ★★★
 // ★★★ IFTY Q3 STEP120 2026-10-09：SUBJECT NAME DISPLAY ALSO APPLIES TO SIDE MENU ★★★
 // ★★★ IFTY Q3 STEP119 2026-10-09：HOME SUBJECT NAME DISPLAY SETTING ★★★
 // ★★★ IFTY Q3 STEP118 2026-10-09：FOLDER SHARE / FRIENDS ★★★
@@ -12,7 +14,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 120;
+const IFTY_APP_STEP = 122;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -1501,9 +1503,9 @@ function renderIftySideMenu() {
         <button class="ifty-side-menu-close" type="button" onclick="closeIftySideMenu()" aria-label="メニューを閉じる">×</button>
       </div>
 
-      <button class="ifty-side-menu-item" type="button" onclick="openIftySideMenuHome()">⌂ ホーム</button>
+      <button class="ifty-side-menu-item" type="button" onclick="openIftySideMenuHome()">⌂ ${escapeHtml(getIftySideMenuDisplayText('home'))}</button>
 
-      <div class="ifty-side-menu-label">教科</div>
+      <div class="ifty-side-menu-label">${escapeHtml(getIftySideMenuDisplayText('subjects'))}</div>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ENGLISH')">${escapeHtml(getIftyHomeSubjectDisplayName('ENGLISH'))}</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ANCIENT')">${escapeHtml(getIftyHomeSubjectDisplayName('ANCIENT'))}</button>
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('KANBUN')">${escapeHtml(getIftyHomeSubjectDisplayName('KANBUN'))}</button>
@@ -1513,19 +1515,19 @@ function renderIftySideMenu() {
       <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('OTHERS')">${escapeHtml(getIftyHomeSubjectDisplayName('OTHERS'))}</button>
 
       <div class="ifty-side-menu-separator"></div>
-      <div class="ifty-side-menu-label">ツール</div>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); switchToChatView();">🤖 ALLIA（AI）</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyExampleBank();">📚 例文</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPronunciation();">🗣 発音</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyBasicSentences();">📝 基本文</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyYears();">📅 年号</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openPracticeHome(currentIftySubject);">⚔️ 実践</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyFriendsPage();">👥 フレンド</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyFolderImportPicker();">📦 フォルダを受け取る</button>
+      <div class="ifty-side-menu-label">${escapeHtml(getIftySideMenuDisplayText('tools'))}</div>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); switchToChatView();">🤖 ${escapeHtml(getIftySideMenuDisplayText('allia'))}</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyExampleBank();">📚 ${escapeHtml(getIftySideMenuDisplayText('examples'))}</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPronunciation();">🗣 ${escapeHtml(getIftySideMenuDisplayText('pronunciation'))}</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyBasicSentences();">📝 ${escapeHtml(getIftySideMenuDisplayText('basicSentences'))}</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyYears();">📅 ${escapeHtml(getIftySideMenuDisplayText('years'))}</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openPracticeHome(currentIftySubject);">⚔️ ${escapeHtml(getIftySideMenuDisplayText('practice'))}</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyFriendsPage();">👥 ${escapeHtml(getIftySideMenuDisplayText('friends'))}</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyFolderImportPicker();">📦 ${escapeHtml(getIftySideMenuDisplayText('importFolder'))}</button>
 
       <div class="ifty-side-menu-separator"></div>
-      <button class="ifty-side-menu-item" type="button" onclick="openIftySettings()">⚙️ 設定</button>
-      <button class="ifty-side-menu-item ifty-side-logout" type="button" onclick="closeIftySideMenu(); logout();">ログアウト</button>
+      <button class="ifty-side-menu-item" type="button" onclick="openIftySettings()">⚙️ ${escapeHtml(getIftySideMenuDisplayText('settings'))}</button>
+      <button class="ifty-side-menu-item ifty-side-logout" type="button" onclick="closeIftySideMenu(); logout();">${escapeHtml(getIftySideMenuDisplayText('logout'))}</button>
     </nav>`;
 
   return overlay;
@@ -3980,6 +3982,42 @@ function getIftyHomeSubjectDisplayName(subject) {
   return (mode === 'ja' ? japanese : english)[key] || key;
 }
 
+function getIftySideMenuDisplayText(key) {
+  const mode = getIftyHomeSubjectNameMode();
+  const ja = {
+    home: 'ホーム',
+    subjects: '教科',
+    tools: 'ツール',
+    allia: 'ALLIA（AI）',
+    examples: '例文',
+    pronunciation: '発音',
+    basicSentences: '基本文',
+    years: '年号',
+    practice: '実践',
+    friends: 'フレンド',
+    importFolder: 'フォルダを受け取る',
+    settings: '設定',
+    logout: 'ログアウト'
+  };
+  const en = {
+    home: 'HOME',
+    subjects: 'SUBJECTS',
+    tools: 'TOOLS',
+    allia: 'ALLIA (AI)',
+    examples: 'EXAMPLES',
+    pronunciation: 'PRONUNCIATION',
+    basicSentences: 'BASIC SENTENCES',
+    years: 'YEARS',
+    practice: 'PRACTICE',
+    friends: 'FRIENDS',
+    importFolder: 'IMPORT FOLDER',
+    settings: 'SETTINGS',
+    logout: 'LOG OUT'
+  };
+  const table = mode === 'ja' ? ja : en;
+  return table[key] || key;
+}
+
 window.setIftyHomeSubjectNameMode = function(mode) {
   const next = String(mode || '').toLowerCase() === 'ja' ? 'ja' : 'en';
   try { localStorage.setItem(IFTY_HOME_SUBJECT_NAME_MODE_KEY, next); } catch (_) {}
@@ -4601,7 +4639,7 @@ function renderIftyPronunciationPracticeModal() {
   const result = st.result || item.lastResult || null;
   const style = result ? getIftyPronunciationScoreStyle(result.overallScore) : null;
   const recording = !!(st.recorder && st.recorder.state === 'recording');
-  modal.innerHTML = `<div style="width:min(700px,100%);max-height:92vh;overflow:auto;background:white;border-radius:16px;padding:15px;box-sizing:border-box;box-shadow:0 18px 55px rgba(15,23,42,.25);">
+  modal.innerHTML = `<div data-ifty-pron-dialog="1" onclick="event.stopPropagation()" style="width:min(700px,100%);max-height:92vh;overflow:auto;background:white;border-radius:16px;padding:15px;box-sizing:border-box;box-shadow:0 18px 55px rgba(15,23,42,.25);">
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
       <div style="min-width:0;"><div style="font-size:.72em;color:#7c3aed;font-weight:950;">PRONUNCIATION PRACTICE</div><h2 style="margin:4px 0 0;color:#0f172a;font-size:1.25rem;overflow-wrap:anywhere;">${escapeHtml(item.text)}</h2></div>
       <button type="button" onclick="closeIftyPronunciationPractice()" style="border:none;background:#e2e8f0;border-radius:8px;padding:7px 10px;font-weight:900;">×</button>
@@ -4647,8 +4685,29 @@ window.openIftyPronunciationPractice = function(folderId, itemId) {
   window.closeIftyPronunciationPractice?.();
   const modal = document.createElement('div');
   modal.id = 'iftyPronPracticeModal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:12230;background:rgba(15,23,42,.68);display:flex;align-items:center;justify-content:center;padding:10px;box-sizing:border-box;';
-  modal.addEventListener('click', event => { if (event.target === modal) window.closeIftyPronunciationPractice(); });
+  modal.style.cssText = 'position:fixed;inset:0;z-index:12230;background:rgba(15,23,42,.68);display:flex;align-items:center;justify-content:center;padding:10px;box-sizing:border-box;touch-action:manipulation;overscroll-behavior:contain;';
+
+  // STEP122:
+  // iPad / Safariでは背景タップが click まで到達しない場合があるため、
+  // pointerdown で背景そのものを押した時点で閉じる。
+  // ダイアログ内部は data-ifty-pron-dialog と stopPropagation で除外する。
+  const closeFromBackdrop = event => {
+    if (event.target !== modal) return;
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    window.closeIftyPronunciationPractice();
+  };
+  modal.addEventListener('pointerdown', closeFromBackdrop);
+  modal.addEventListener('click', closeFromBackdrop);
+
+  // 古いiOS Safari向けフォールバック。
+  modal.addEventListener('touchend', event => {
+    if (event.target !== modal) return;
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    window.closeIftyPronunciationPractice();
+  }, { passive: false });
+
   document.body.appendChild(modal);
   iftyPronunciationPracticeState = { folderId: String(folderId), itemId: String(itemId), recorder: null, stream: null, chunks: [], blob: null, url: '', durationSec: 0, startedAt: 0, stopTimer: null, grading: false, result: null };
   renderIftyPronunciationPracticeModal();
@@ -11733,8 +11792,8 @@ window.openIftySettings = function() {
       </div>
 
       <div class="ifty-settings-section">
-        <h3>教科名表示</h3>
-        <div class="ifty-settings-note">HOMEの教科カードと左メニューの教科名を、日本語または英語で統一して表示します。フォルダや学習データには影響しません。</div>
+        <h3>表示言語</h3>
+        <div class="ifty-settings-note">HOMEの教科カードと左メニュー全体の表示を、日本語または英語で切り替えます。フォルダ名・単語・学習データには影響しません。</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
           <button class="ifty-settings-action" type="button" onclick="setIftyHomeSubjectNameMode('ja')" aria-pressed="${getIftyHomeSubjectNameMode()==='ja' ? 'true' : 'false'}"
             style="background:${getIftyHomeSubjectNameMode()==='ja' ? '#0f766e' : '#334155'};color:white;border:${getIftyHomeSubjectNameMode()==='ja' ? '2px solid #5eead4' : '1px solid #64748b'};">
@@ -11747,7 +11806,7 @@ window.openIftySettings = function() {
         </div>
         <div class="ifty-settings-note" style="margin-top:8px;">
           現在：${getIftyHomeSubjectNameMode()==='ja' ? '日本語（言語・語彙 / 古文 / 漢文 / 漢字 / 理科 / 社会 / その他）' : '英語（LANGUAGES / ANCIENT / KANBUN / KANJI / SCIENCE / SOCIAL STUDIES / OTHERS）'}<br>
-          HOME・左メニューの両方に適用
+          HOMEの教科名・左メニューの教科名・ツール名・操作名に適用
         </div>
       </div>
 
