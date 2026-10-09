@@ -1,3 +1,4 @@
+// ★★★ IFTY Q3 STEP119 2026-10-09：HOME SUBJECT NAME DISPLAY SETTING ★★★
 // ★★★ IFTY Q3 STEP118 2026-10-09：FOLDER SHARE / FRIENDS ★★★
 // ★★★ IFTY Q3 STEP117 2026-10-09：ANCIENT / KANBUN REVIEW-WEAK COLLAPSE + DARK FIX ★★★
 // ★★★ IFTY Q3 STEP116 2026-10-09：FOLDER RENAME / REVIEW COLLAPSE / DARK SURFACE FIX ★★★
@@ -10,7 +11,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 118;
+const IFTY_APP_STEP = 119;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -3942,6 +3943,49 @@ function showIftyHubContent(html, pageName) {
   }
 }
 
+
+const IFTY_HOME_SUBJECT_NAME_MODE_KEY = 'ifty_home_subject_name_mode_v1';
+
+function getIftyHomeSubjectNameMode() {
+  try {
+    const value = String(localStorage.getItem(IFTY_HOME_SUBJECT_NAME_MODE_KEY) || '').toLowerCase();
+    return value === 'ja' ? 'ja' : 'en';
+  } catch (_) {
+    return 'en';
+  }
+}
+
+function getIftyHomeSubjectDisplayName(subject) {
+  const key = normalizeIftySubject(subject);
+  const mode = getIftyHomeSubjectNameMode();
+  const english = {
+    ENGLISH: 'LANGUAGES',
+    ANCIENT: 'ANCIENT',
+    KANBUN: 'KANBUN',
+    KANJI: 'KANJI',
+    SCIENCE: 'SCIENCE',
+    'SOCIAL STUDIES': 'SOCIAL STUDIES',
+    OTHERS: 'OTHERS'
+  };
+  const japanese = {
+    ENGLISH: '言語・語彙',
+    ANCIENT: '古文',
+    KANBUN: '漢文',
+    KANJI: '漢字',
+    SCIENCE: '理科',
+    'SOCIAL STUDIES': '社会',
+    OTHERS: 'その他'
+  };
+  return (mode === 'ja' ? japanese : english)[key] || key;
+}
+
+window.setIftyHomeSubjectNameMode = function(mode) {
+  const next = String(mode || '').toLowerCase() === 'ja' ? 'ja' : 'en';
+  try { localStorage.setItem(IFTY_HOME_SUBJECT_NAME_MODE_KEY, next); } catch (_) {}
+  if (typeof scheduleIftyCloudSave === 'function') scheduleIftyCloudSave();
+  if (typeof window.openIftySettings === 'function') window.openIftySettings();
+};
+
 window.openIftyHome = function() {
   currentIftySubject = 'ENGLISH';
   const stats = getIftyHomeStats();
@@ -3960,49 +4004,49 @@ window.openIftyHome = function() {
 
       <div class="ifty-home-grid">
         <button class="ifty-home-card" type="button" onclick="openIftySubject('ENGLISH')">
-          <div class="ifty-home-card-title">LANGUAGES</div>
+          <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('ENGLISH'))}</div>
           <div class="ifty-home-card-meta">フォルダ ${stats.folders} / 単語 ${stats.words}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">単語帳を開く →</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('ANCIENT')">
-          <div class="ifty-home-card-title">ANCIENT</div>
+          <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('ANCIENT'))}</div>
           <div class="ifty-home-card-meta">フォルダ ${stats.ancientFolders} / 古文単語 ${stats.ancientItems}${stats.ancientDueReview ? ` / 🔁 今日 ${stats.ancientDueReview}` : ''}${stats.ancientWeak ? ` / 🎯 苦手 ${stats.ancientWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">古文単語 →</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('KANBUN')">
-          <div class="ifty-home-card-title">KANBUN</div>
+          <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('KANBUN'))}</div>
           <div class="ifty-home-card-meta">フォルダ ${stats.kanbunFolders} / 漢文 ${stats.kanbunItems}${stats.kanbunDueReview ? ` / 🔁 今日 ${stats.kanbunDueReview}` : ''}${stats.kanbunWeak ? ` / 🎯 苦手 ${stats.kanbunWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">漢文・返点・手書き →</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('KANJI')">
-          <div class="ifty-home-card-title">KANJI</div>
+          <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('KANJI'))}</div>
           <div class="ifty-home-card-meta">フォルダ ${stats.kanjiFolders} / 漢字・熟語 ${stats.kanjiItems}${stats.kanjiDueReview ? ` / 🔁 今日 ${stats.kanjiDueReview}` : ''}${stats.kanjiWeak ? ` / 🎯 苦手 ${stats.kanjiWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">漢字・熟語・手書き →</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('SCIENCE')">
-          <div class="ifty-home-card-title">SCIENCE</div>
+          <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('SCIENCE'))}</div>
           <div class="ifty-home-card-meta">フォルダ ${stats.scienceFolders} / 項目 ${stats.scienceItems}${stats.scienceDueReview ? ` / 🔁 今日 ${stats.scienceDueReview}` : ''}${stats.scienceWeak ? ` / 🎯 苦手 ${stats.scienceWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">物理・化学・生物・地学 →</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('SOCIAL STUDIES')">
-          <div class="ifty-home-card-title">SOCIAL STUDIES</div>
+          <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('SOCIAL STUDIES'))}</div>
           <div class="ifty-home-card-meta">フォルダ ${stats.socialFolders} / 項目 ${stats.socialItems}${stats.socialDueReview ? ` / 🔁 今日 ${stats.socialDueReview}` : ''}${stats.socialWeak ? ` / 🎯 苦手 ${stats.socialWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">日本史・世界史・地理・公共 →</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('OTHERS')">
-          <div class="ifty-home-card-title">OTHERS</div>
+          <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('OTHERS'))}</div>
           <div class="ifty-home-card-meta">フォルダ ${stats.othersFolders} / 項目 ${stats.othersItems}${stats.othersDueReview ? ` / 🔁 今日 ${stats.othersDueReview}` : ''}${stats.othersWeak ? ` / 🎯 苦手 ${stats.othersWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
           <div class="ifty-home-card-action">保健・情報など →</div>
@@ -11672,6 +11716,24 @@ window.openIftySettings = function() {
           <button class="ifty-settings-action" type="button" onclick="toggleIftyTheme(); openIftySettings();" style="background:#334155;color:white;">
             ${iftyTheme === 'dark' ? '☀️ ライトへ' : '🌙 ダークへ'}
           </button>
+        </div>
+      </div>
+
+      <div class="ifty-settings-section">
+        <h3>HOME 教科名表示</h3>
+        <div class="ifty-settings-note">HOMEの教科カード名を日本語または英語で表示します。フォルダや学習データには影響しません。</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
+          <button class="ifty-settings-action" type="button" onclick="setIftyHomeSubjectNameMode('ja')" aria-pressed="${getIftyHomeSubjectNameMode()==='ja' ? 'true' : 'false'}"
+            style="background:${getIftyHomeSubjectNameMode()==='ja' ? '#0f766e' : '#334155'};color:white;border:${getIftyHomeSubjectNameMode()==='ja' ? '2px solid #5eead4' : '1px solid #64748b'};">
+            日本語
+          </button>
+          <button class="ifty-settings-action" type="button" onclick="setIftyHomeSubjectNameMode('en')" aria-pressed="${getIftyHomeSubjectNameMode()==='en' ? 'true' : 'false'}"
+            style="background:${getIftyHomeSubjectNameMode()==='en' ? '#0f766e' : '#334155'};color:white;border:${getIftyHomeSubjectNameMode()==='en' ? '2px solid #5eead4' : '1px solid #64748b'};">
+            ENGLISH
+          </button>
+        </div>
+        <div class="ifty-settings-note" style="margin-top:8px;">
+          現在：${getIftyHomeSubjectNameMode()==='ja' ? '日本語（言語・語彙 / 古文 / 漢文 / 漢字 / 理科 / 社会 / その他）' : '英語（LANGUAGES / ANCIENT / KANBUN / KANJI / SCIENCE / SOCIAL STUDIES / OTHERS）'}
         </div>
       </div>
 
