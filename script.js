@@ -1,10 +1,16 @@
+// ★★★ IFTY Q3 STEP118 2026-10-09：FOLDER SHARE / FRIENDS ★★★
+// ★★★ IFTY Q3 STEP117 2026-10-09：ANCIENT / KANBUN REVIEW-WEAK COLLAPSE + DARK FIX ★★★
+// ★★★ IFTY Q3 STEP116 2026-10-09：FOLDER RENAME / REVIEW COLLAPSE / DARK SURFACE FIX ★★★
+// ★★★ IFTY Q3 STEP115 2026-10-09：ACTIVE USER COUNTER / ADMIN USAGE ★★★
+// ★★★ IFTY Q3 STEP114 2026-10-08：NAVIGATION / INPUT UX IMPROVEMENT ★★★
+// ★★★ IFTY Q3 STEP113 2026-10-08：TOP ACCOUNT BAR HIDDEN ★★★
 // ★★★ IFTY Q3 STEP112 2026-10-06：FIRST RUN GUIDE / NEVER SHOW AGAIN ★★★
 
 // ==========================================
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 112;
+const IFTY_APP_STEP = 118;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -393,7 +399,8 @@ const IFTY_ALLIA_ACCOUNT_TYPES = new Set([
   'account_register','account_login','account_session','account_logout','account_profile',
   'account_username_change','account_email_request','account_email_verify','account_recovery_code_generate','account_password_change',
   'account_sessions','account_session_revoke','account_logout_all','account_delete',
-  'password_reset_request','password_reset_confirm','password_reset_recovery','cloud_load','cloud_save'
+  'password_reset_request','password_reset_confirm','password_reset_recovery','cloud_load','cloud_save','activity_heartbeat','activity_stats',
+  'friends_list','friend_request_send','friend_request_accept','friend_request_decline','friend_request_cancel','friend_remove','friend_activity_visibility'
 ]);
 
 let currentIftySubject = 'ENGLISH';
@@ -719,6 +726,14 @@ let iftyCloudSyncInFlight = false;
 let iftyCloudSyncQueued = false;
 let iftyCloudOnlineListenerInstalled = false;
 let iftyAccountProfile = null;
+
+// STEP115：利用状況。D1には user_id と最終アクセス時刻だけを保存する。
+const IFTY_ACTIVITY_HEARTBEAT_INTERVAL_MS = 60 * 1000;
+const IFTY_ACTIVITY_HEARTBEAT_MIN_GAP_MS = 45 * 1000;
+let iftyActivityHeartbeatTimer = null;
+let iftyActivityLastSentAt = 0;
+let iftyActivityHeartbeatInFlight = false;
+let iftyAdminUsageRefreshTimer = null;
 
 // Q3 STEP14：一時的なDeveloperローカル入場
 // 本物のアカウント認証やクラウドデータへの権限を迂回しない。
@@ -1484,29 +1499,31 @@ function renderIftySideMenu() {
         <button class="ifty-side-menu-close" type="button" onclick="closeIftySideMenu()" aria-label="メニューを閉じる">×</button>
       </div>
 
-      <button class="ifty-side-menu-item" type="button" onclick="openIftySideMenuHome()">HOME</button>
+      <button class="ifty-side-menu-item" type="button" onclick="openIftySideMenuHome()">⌂ ホーム</button>
 
-      <div class="ifty-side-menu-label">SUBJECTS</div>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ENGLISH')">LANGUAGES</button>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ANCIENT')">ANCIENT</button>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('KANBUN')">KANBUN</button>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('KANJI')">KANJI</button>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SCIENCE')">SCIENCE</button>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SOCIAL STUDIES')">SOCIAL STUDIES</button>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('OTHERS')">OTHERS</button>
-
-      <div class="ifty-side-menu-separator"></div>
-      <div class="ifty-side-menu-label">TOOLS</div>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); switchToChatView();">ALLIA</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyExampleBank();">EXAMPLES</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPronunciation();">PRONUNCIATION</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyBasicSentences();">BASIC SENTENCES</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyYears();">YEARS</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openPracticeHome(currentIftySubject);">PRACTICE</button>
+      <div class="ifty-side-menu-label">教科</div>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ENGLISH')">言語・語彙</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ANCIENT')">古文</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('KANBUN')">漢文</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('KANJI')">漢字</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SCIENCE')">理科</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SOCIAL STUDIES')">社会</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('OTHERS')">その他</button>
 
       <div class="ifty-side-menu-separator"></div>
-      <button class="ifty-side-menu-item" type="button" onclick="openIftySettings()">SETTINGS</button>
-      <button class="ifty-side-menu-item ifty-side-logout" type="button" onclick="closeIftySideMenu(); logout();">LOG OUT</button>
+      <div class="ifty-side-menu-label">ツール</div>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); switchToChatView();">🤖 ALLIA（AI）</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyExampleBank();">📚 例文</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPronunciation();">🗣 発音</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyBasicSentences();">📝 基本文</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyYears();">📅 年号</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openPracticeHome(currentIftySubject);">⚔️ 実践</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyFriendsPage();">👥 フレンド</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyFolderImportPicker();">📦 フォルダを受け取る</button>
+
+      <div class="ifty-side-menu-separator"></div>
+      <button class="ifty-side-menu-item" type="button" onclick="openIftySettings()">⚙️ 設定</button>
+      <button class="ifty-side-menu-item ifty-side-logout" type="button" onclick="closeIftySideMenu(); logout();">ログアウト</button>
     </nav>`;
 
   return overlay;
@@ -2703,10 +2720,10 @@ function renderIftySubjectHeaderActions(subject) {
   const key = normalizeIftySubject(subject);
   const safe = String(key).replace(/'/g, "\\'");
   return `<div class="ifty-subject-header-actions" style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;align-items:center;">
-    <button type="button" onclick="openIftyHome()" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">HOME</button>
-    <button type="button" onclick="openPracticeHome('${safe}')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">PRACTICE</button>
-    <button type="button" onclick="openIftySubjectOrder('${safe}')" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">ORDER</button>
-    <button type="button" onclick="openIftySubjectAllia('${safe}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">ALLIA</button>
+    <button type="button" onclick="openIftyHome()" aria-label="ホーム画面へ戻る" style="border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">⌂ ホームへ</button>
+    <button type="button" onclick="openPracticeHome('${safe}')" aria-label="実践問題を開く" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">⚔️ 実践</button>
+    <button type="button" onclick="openIftySubjectOrder('${safe}')" aria-label="生成ルールを開く" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">🧾 生成ルール</button>
+    <button type="button" onclick="openIftySubjectAllia('${safe}')" aria-label="ALLIAを開く" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">🤖 ALLIA</button>
   </div>`;
 }
 
@@ -2738,6 +2755,10 @@ function refreshIftyEnglishSubjectPanel() {
       </div>
       <div style="margin-top:8px;color:#64748b;font-size:.76em;">フォルダ ${folders.length} / 単語 ${wordCount}</div>
     </div>`;
+  setTimeout(() => {
+    if (typeof enhanceIftyFolderManagementPanels === 'function') enhanceIftyFolderManagementPanels();
+    if (typeof enhanceIftyInputPurposeLabels === 'function') enhanceIftyInputPurposeLabels(document);
+  }, 0);
 }
 
 window.createIftyEnglishFolder = function() {
@@ -2864,6 +2885,590 @@ window.openIftySubjectAllia = function(subject) {
   currentIftySubject = normalizeIftySubject(subject);
   window.switchToChatView();
 };
+
+
+// ==========================================
+// ★★★ IFTY Q3 STEP114：操作を迷わせない共通UI ★★★
+// ==========================================
+function ensureIftyUsabilityStyles() {
+  if (document.getElementById('iftyStep114UsabilityStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'iftyStep114UsabilityStyles';
+  style.textContent = `
+    #iftyScrollTopBtn{position:fixed;right:14px;bottom:calc(86px + env(safe-area-inset-bottom,0px));z-index:11950;display:none;align-items:center;gap:6px;border:1px solid #64748b;border-radius:999px;background:#111827;color:#f8fafc;box-shadow:0 7px 22px rgba(0,0,0,.28);padding:9px 12px;font-size:.82rem;font-weight:900;cursor:pointer}
+    #iftyScrollTopBtn.ifty-visible{display:inline-flex}
+    .ifty-input-purpose-wrap{flex:1 1 210px;min-width:0}
+    .ifty-input-purpose-label{display:block;margin:0 0 5px 2px;color:#cbd5e1;font-size:.72rem;font-weight:900;letter-spacing:.02em}
+    body:not([data-ifty-theme="dark"]) .ifty-input-purpose-label{color:#475569}
+    .ifty-folder-management-unified{margin-top:14px;padding:14px;border:1px solid #475569;border-radius:12px;background:#111827;color:#f8fafc}
+    .ifty-folder-management-unified-title{font-size:1rem;font-weight:900;margin-bottom:3px}
+    .ifty-folder-management-unified-note{color:#cbd5e1;font-size:.78rem;margin-bottom:10px}
+    .ifty-folder-management-unified .ifty-folder-management-part{margin:0!important;padding:10px 0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+    .ifty-folder-management-unified .ifty-folder-management-part+.ifty-folder-management-part{border-top:1px solid #334155!important}
+    #practiceModal button[data-ifty-practice-close="1"]{border:1px solid #64748b!important;border-radius:8px!important;background:#1e293b!important;color:#f8fafc!important;padding:7px 10px!important;width:auto!important;height:auto!important;min-width:58px;font-size:.82rem!important;line-height:1.2!important;font-weight:900!important}
+    @media(max-width:640px){#iftyScrollTopBtn{right:10px;bottom:calc(76px + env(safe-area-inset-bottom,0px));padding:8px 10px}.ifty-folder-management-unified{padding:12px}}
+  `;
+  document.head.appendChild(style);
+}
+
+function ensureIftyScrollTopButton() {
+  ensureIftyUsabilityStyles();
+  let btn = document.getElementById('iftyScrollTopBtn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'iftyScrollTopBtn';
+    btn.type = 'button';
+    btn.setAttribute('aria-label','ページ上部へ戻る');
+    btn.innerHTML = '↑ <span>上へ</span>';
+    btn.onclick = () => {
+      try { window.scrollTo({top:0,left:0,behavior:'smooth'}); }
+      catch (_) { window.scrollTo(0,0); }
+    };
+    document.body.appendChild(btn);
+  }
+  const sync = () => btn.classList.toggle('ifty-visible', Number(window.scrollY || document.scrollingElement?.scrollTop || 0) > 420);
+  if (!window.__iftyScrollTopListenerInstalled) {
+    window.__iftyScrollTopListenerInstalled = true;
+    window.addEventListener('scroll', sync, {passive:true});
+  }
+  sync();
+}
+
+function enhanceIftyPracticeCloseButtons(root=document.getElementById('practiceModal')) {
+  if (!root || !root.querySelectorAll) return;
+  root.querySelectorAll('button').forEach(btn => {
+    const text = String(btn.textContent || '').trim();
+    const onclick = String(btn.getAttribute('onclick') || '');
+    if (!onclick.includes('closePracticeModal')) return;
+    if (!['✕','×','✖','X','x'].includes(text)) return;
+    btn.textContent = '閉じる';
+    btn.dataset.iftyPracticeClose = '1';
+    btn.setAttribute('aria-label','実践画面を閉じる');
+    btn.setAttribute('title','閉じる');
+  });
+}
+
+function wrapIftyInputWithPurpose(input,label) {
+  if (!input || input.dataset.iftyPurposeLabeled === '1' || !input.parentElement) return;
+  const parent = input.parentElement;
+  const wrap = document.createElement('div');
+  wrap.className = 'ifty-input-purpose-wrap';
+  const labelEl = document.createElement('label');
+  labelEl.className = 'ifty-input-purpose-label';
+  labelEl.textContent = label;
+  if (input.id) labelEl.htmlFor = input.id;
+  parent.insertBefore(wrap,input);
+  wrap.appendChild(labelEl);
+  wrap.appendChild(input);
+  input.dataset.iftyPurposeLabeled = '1';
+  input.style.width = '100%';
+  input.style.boxSizing = 'border-box';
+  input.style.minWidth = '0';
+  input.style.flex = 'none';
+}
+
+function enhanceIftyInputPurposeLabels(root=document) {
+  const fixed = [
+    ['iftyEnglishFolderName','📁 フォルダ名'],
+    ['iftySocialFolderName','📁 フォルダ名'],
+    ['iftyScienceFolderName','📁 フォルダ名'],
+    ['iftyAncientNewFolderName','📁 フォルダ名'],
+    ['iftyKanbunNewFolderName','📁 フォルダ名'],
+    ['iftyKanjiFolderName','📁 フォルダ名'],
+    ['iftyOthersFolderName','📁 フォルダ名'],
+    ['iftyPronFolderName','📁 フォルダ名']
+  ];
+  fixed.forEach(([id,label]) => wrapIftyInputWithPurpose(document.getElementById(id),label));
+  root.querySelectorAll('[id^="wordInput_"]').forEach(el=>wrapIftyInputWithPurpose(el,'＋ 単語を追加'));
+  root.querySelectorAll('[id^="iftyAncientWord_"]').forEach(el=>wrapIftyInputWithPurpose(el,'＋ 古文単語を追加'));
+  root.querySelectorAll('[id^="iftySocialTopic_"]').forEach(el=>wrapIftyInputWithPurpose(el,'＋ 人物・出来事などを追加'));
+  root.querySelectorAll('[id^="iftyScienceTopic_"]').forEach(el=>wrapIftyInputWithPurpose(el,'＋ 用語・概念を追加'));
+  root.querySelectorAll('[id^="iftyKanbunText_"]').forEach(el=>wrapIftyInputWithPurpose(el,'＋ 漢文本文を追加'));
+  root.querySelectorAll('[id^="iftyKanjiTerm_"]').forEach(el=>wrapIftyInputWithPurpose(el,'＋ 漢字・熟語を追加'));
+  root.querySelectorAll('[id^="iftyOthersTopic_"]').forEach(el=>wrapIftyInputWithPurpose(el,'＋ 項目を追加'));
+  root.querySelectorAll('[id^="iftyPronText_"]').forEach(el=>wrapIftyInputWithPurpose(el,'＋ 発音練習を追加'));
+}
+
+function getIftyDirectShellChild(shell,node) {
+  let current = node;
+  while (current && current.parentElement && current.parentElement !== shell) current = current.parentElement;
+  return current && current.parentElement === shell ? current : null;
+}
+
+function makeIftyFolderManagementGroup(shell,key) {
+  const id = `iftyFolderManagementUnified_${key}`;
+  let group = document.getElementById(id);
+  if (!group) {
+    group = document.createElement('section');
+    group.id = id;
+    group.className = 'ifty-folder-management-unified';
+    group.innerHTML = `<div class="ifty-folder-management-unified-title">📁 フォルダ管理</div><div class="ifty-folder-management-unified-note">フォルダの作成と全フォルダ検索をここで行います。</div><div data-ifty-folder-management-body></div>`;
+  }
+  return group;
+}
+
+function enhanceIftyFolderManagementPanels() {
+  const shell = document.querySelector('#iftyHubPage .ifty-portal-shell, .ifty-portal-shell');
+  if (!shell) return;
+  [
+    ['SOCIAL','iftySocialFolderName','iftySocialSearchInput'],
+    ['SCIENCE','iftyScienceFolderName','iftyScienceSearchInput'],
+    ['ANCIENT','iftyAncientNewFolderName','iftyAncientSearchInput'],
+    ['KANBUN','iftyKanbunNewFolderName','iftyKanbunSearchInput'],
+    ['KANJI','iftyKanjiFolderName','iftyKanjiGlobalSearchInput']
+  ].forEach(([key,createId,searchId]) => {
+    const createInput = document.getElementById(createId);
+    const searchInput = document.getElementById(searchId);
+    if (!createInput || !searchInput) return;
+    const createPart = getIftyDirectShellChild(shell,createInput);
+    const searchPart = getIftyDirectShellChild(shell,searchInput);
+    if (!createPart || !searchPart || createPart===searchPart) return;
+    const group = makeIftyFolderManagementGroup(shell,key);
+    if (!group.isConnected) shell.insertBefore(group,createPart);
+    const body = group.querySelector('[data-ifty-folder-management-body]');
+    createPart.classList.add('ifty-folder-management-part');
+    searchPart.classList.add('ifty-folder-management-part');
+    body.appendChild(createPart);
+    body.appendChild(searchPart);
+  });
+
+  const enCreate = document.getElementById('iftyEnglishFolderName');
+  const enSearch = document.getElementById('iftyVocabSearchPanel');
+  const enSubject = document.getElementById('iftyEnglishSubjectPanel');
+  const enOrder = document.getElementById('iftyEnglishOrderPanel');
+  if (enCreate && enSearch && enSubject && enOrder) {
+    let createPart = enCreate;
+    while (createPart.parentElement && createPart.parentElement !== enSubject) createPart = createPart.parentElement;
+    if (createPart && createPart.parentElement===enSubject) {
+      const group = makeIftyFolderManagementGroup(shell,'LANGUAGES');
+      if (!group.isConnected) enOrder.insertAdjacentElement('afterend',group);
+      const body = group.querySelector('[data-ifty-folder-management-body]');
+      body.querySelectorAll('[data-ifty-en-create-part]').forEach(node=>node.remove());
+      createPart.dataset.iftyEnCreatePart = '1';
+      createPart.classList.add('ifty-folder-management-part');
+      enSearch.classList.add('ifty-folder-management-part');
+      body.insertBefore(createPart,body.firstChild);
+      body.appendChild(enSearch);
+    }
+  }
+}
+
+function enhanceIftyStep114Ui() {
+  ensureIftyScrollTopButton();
+  enhanceIftyPracticeCloseButtons();
+  enhanceIftyFolderManagementPanels();
+  enhanceIftyInputPurposeLabels(document);
+  if (typeof enhanceIftyFolderShareButtons === 'function') enhanceIftyFolderShareButtons(document);
+}
+
+function installIftyStep114Observer() {
+  if (window.__iftyStep114ObserverInstalled || !document.body) return;
+  window.__iftyStep114ObserverInstalled = true;
+  const observer = new MutationObserver(() => {
+    enhanceIftyPracticeCloseButtons();
+    enhanceIftyInputPurposeLabels(document);
+    if (typeof enhanceIftyFolderShareButtons === 'function') enhanceIftyFolderShareButtons(document);
+  });
+  observer.observe(document.body,{childList:true,subtree:true});
+}
+
+if (document.readyState==='loading') {
+  document.addEventListener('DOMContentLoaded',()=>{enhanceIftyStep114Ui();installIftyStep114Observer();},{once:true});
+} else {
+  enhanceIftyStep114Ui();
+  installIftyStep114Observer();
+}
+
+// ==========================================
+// ★★★ STEP118：フォルダ共有 / フレンド ★★★
+// フォルダは端末上で .iftyfolder に変換して共有する。
+// フレンド利用状況は相互フレンド + 本人の明示ONの場合だけ、粗い状態だけ表示する。
+// ==========================================
+const IFTY_FOLDER_PACKAGE_TYPE = 'IFTY_FOLDER_PACKAGE';
+const IFTY_FOLDER_PACKAGE_VERSION = 1;
+let iftyFriendsRefreshTimer = null;
+
+function normalizeIftyFolderShareSubject(subject) {
+  const raw = String(subject || '').trim().toUpperCase();
+  if (raw === 'LANGUAGES' || raw === 'ENGLISH') return 'ENGLISH';
+  if (raw === 'SOCIAL' || raw === 'SOCIAL STUDIES') return 'SOCIAL STUDIES';
+  if (raw === 'BASIC' || raw === 'BASIC SENTENCES') return 'BASIC SENTENCES';
+  if (raw === 'PRON' || raw === 'PRONUNCIATION') return 'PRONUNCIATION';
+  return raw;
+}
+
+function getIftyFolderShareSubjectLabel(subject) {
+  const key = normalizeIftyFolderShareSubject(subject);
+  return ({
+    ENGLISH:'LANGUAGES', ANCIENT:'古文', KANBUN:'漢文', KANJI:'漢字', SCIENCE:'理科',
+    'SOCIAL STUDIES':'社会', OTHERS:'その他', PRONUNCIATION:'発音',
+    'BASIC SENTENCES':'BASIC SENTENCES', YEARS:'YEARS'
+  })[key] || key;
+}
+
+function sanitizeIftyFilename(value) {
+  return String(value || 'IFTYフォルダ')
+    .normalize('NFKC')
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 70) || 'IFTYフォルダ';
+}
+
+function cleanIftySharedLearningState(value) {
+  const clone = deepClone(value);
+  const walk = node => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(walk); return; }
+    [
+      'study','review','reviewState','reviewHistory','nextReview','nextReviewAt','lastReviewedAt',
+      'correct','wrong','total','correctCount','wrongCount','attempts','lastResult','lastScore',
+      'selected','isSelected','sourceFolderId'
+    ].forEach(key => { if (Object.prototype.hasOwnProperty.call(node, key)) delete node[key]; });
+    Object.values(node).forEach(walk);
+  };
+  walk(clone);
+  return clone;
+}
+
+function getIftyFolderPackage(subject, folderId) {
+  const key = normalizeIftyFolderShareSubject(subject);
+  let folder = null;
+  let records = [];
+  let recordKey = 'items';
+
+  if (key === 'ENGLISH') {
+    folder = folders.find(row => String(row.id) === String(folderId)) || null;
+    records = folder && Array.isArray(folder.words) ? folder.words : [];
+    recordKey = 'words';
+  } else if (key === 'ANCIENT') {
+    folder = getIftyAncientFolder(folderId); records = folder?.items || [];
+  } else if (key === 'KANBUN') {
+    folder = getIftyKanbunFolder(folderId); records = folder?.items || [];
+  } else if (key === 'KANJI') {
+    folder = getIftyKanjiFolder(folderId); records = folder?.items || [];
+  } else if (key === 'SCIENCE') {
+    folder = getIftyScienceFolder(folderId); records = folder?.items || [];
+  } else if (key === 'SOCIAL STUDIES') {
+    folder = getIftySocialFolder(folderId); records = folder?.items || [];
+  } else if (key === 'OTHERS') {
+    folder = getIftyOthersFolder(folderId); records = folder?.items || [];
+  } else if (key === 'PRONUNCIATION') {
+    folder = getIftyPronunciationFolder(folderId); records = folder?.items || [];
+  } else if (key === 'BASIC SENTENCES') {
+    folder = getIftyBasicSentenceFolderById(folderId); records = getIftyBasicSentenceItemsForFolder(folderId); recordKey = 'sentences';
+  } else if (key === 'YEARS') {
+    folder = getIftyYearFolderById(folderId); records = getIftyYearEntriesForFolder(folderId); recordKey = 'entries';
+  }
+
+  if (!folder) throw new Error('共有するフォルダが見つかりません。');
+  const safeFolder = cleanIftySharedLearningState(folder);
+  delete safeFolder.id;
+  delete safeFolder.collapsed;
+  delete safeFolder.words;
+  delete safeFolder.items;
+
+  const safeRecords = cleanIftySharedLearningState(records).map(record => {
+    const row = { ...record };
+    delete row.id;
+    delete row.folderId;
+    return row;
+  });
+
+  return {
+    type: IFTY_FOLDER_PACKAGE_TYPE,
+    version: IFTY_FOLDER_PACKAGE_VERSION,
+    appStep: IFTY_APP_STEP,
+    exportedAt: Date.now(),
+    subject: key,
+    subjectLabel: getIftyFolderShareSubjectLabel(key),
+    folder: safeFolder,
+    recordKey,
+    records: safeRecords
+  };
+}
+
+function downloadIftyFolderPackage(file) {
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+window.exportIftyFolder = async function(subject, folderId) {
+  try {
+    const pack = getIftyFolderPackage(subject, folderId);
+    const filename = `${sanitizeIftyFilename(pack.folder?.name || 'IFTYフォルダ')}.iftyfolder`;
+    const file = new File([JSON.stringify(pack, null, 2)], filename, { type:'application/json' });
+    if (navigator.share && navigator.canShare && navigator.canShare({ files:[file] })) {
+      try {
+        await navigator.share({ files:[file], title:`IFTY：${pack.folder?.name || 'フォルダ'}`, text:`IFTYの${pack.subjectLabel}フォルダです。` });
+        return;
+      } catch (error) {
+        if (String(error?.name || '') === 'AbortError') return;
+      }
+    }
+    downloadIftyFolderPackage(file);
+    alert('共有用ファイルを作成しました。ファイルアプリなどから相手へ送れます。');
+  } catch (error) {
+    alert(String(error?.message || error));
+  }
+};
+
+function ensureIftyFolderImportInput() {
+  let input = document.getElementById('iftyFolderImportInput');
+  if (input) return input;
+  input = document.createElement('input');
+  input.id = 'iftyFolderImportInput';
+  input.type = 'file';
+  input.accept = '.iftyfolder,application/json';
+  input.style.display = 'none';
+  input.addEventListener('change', async () => {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    await importIftyFolderFile(file);
+  });
+  document.body.appendChild(input);
+  return input;
+}
+
+window.openIftyFolderImportPicker = function() {
+  window.closeIftySideMenu?.();
+  ensureIftyFolderImportInput().click();
+};
+
+function makeIftyUniqueSharedFolderName(existingFolders, requestedName) {
+  const base = String(requestedName || '共有フォルダ').trim().slice(0, 80) || '共有フォルダ';
+  const names = new Set((existingFolders || []).map(f => String(f?.name || '').trim().toLowerCase()));
+  if (!names.has(base.toLowerCase())) return base;
+  let n = 2;
+  while (names.has(`${base} (${n})`.toLowerCase())) n += 1;
+  return `${base} (${n})`;
+}
+
+function freshenIftySharedRecords(records, prefix, folderId = '') {
+  return (Array.isArray(records) ? records : []).map((source, index) => {
+    const row = cleanIftySharedLearningState(source && typeof source === 'object' ? source : {});
+    row.id = makeId(prefix);
+    if (folderId) row.folderId = folderId;
+    if (Object.prototype.hasOwnProperty.call(row, 'order')) row.order = index;
+    if (Object.prototype.hasOwnProperty.call(row, 'createdAt')) row.createdAt = Date.now();
+    if (Object.prototype.hasOwnProperty.call(row, 'updatedAt')) row.updatedAt = Date.now();
+    return row;
+  });
+}
+
+async function importIftyFolderPackage(pack) {
+  if (!pack || pack.type !== IFTY_FOLDER_PACKAGE_TYPE) throw new Error('IFTYフォルダファイルではありません。');
+  if (Number(pack.version || 0) > IFTY_FOLDER_PACKAGE_VERSION) throw new Error('このフォルダは新しいIFTYで作成されています。IFTYを更新してください。');
+  const key = normalizeIftyFolderShareSubject(pack.subject);
+  const rawFolder = pack.folder && typeof pack.folder === 'object' ? cleanIftySharedLearningState(pack.folder) : {};
+  const records = Array.isArray(pack.records) ? pack.records : [];
+  const count = records.length;
+  if (count > 5000) throw new Error('1フォルダ5000件を超えるファイルは読み込めません。');
+
+  recordUndoState('共有フォルダを読み込み');
+  let importedName = String(rawFolder.name || '共有フォルダ');
+
+  if (key === 'ENGLISH') {
+    importedName = makeIftyUniqueSharedFolderName(folders, importedName);
+    const folder = { ...rawFolder, id:makeId('folder'), name:importedName, collapsed:false, words:freshenIftySharedRecords(records,'word') };
+    folders.push(folder); saveUserData(); renderFolders(); refreshIftyEnglishSubjectPanel(); switchToVocabView();
+  } else if (key === 'ANCIENT') {
+    const module = getIftyAncientModule(); importedName = makeIftyUniqueSharedFolderName(module.folders, importedName);
+    module.folders.push({ ...rawFolder, id:makeId('ancientfolder'), name:importedName, collapsed:false, items:freshenIftySharedRecords(records,'ancient') }); savePracticeData(); renderIftyAncientPage();
+  } else if (key === 'KANBUN') {
+    const module = getIftyKanbunModule(); importedName = makeIftyUniqueSharedFolderName(module.folders, importedName);
+    module.folders.push({ ...rawFolder, id:makeId('kanbunfolder'), name:importedName, collapsed:false, items:freshenIftySharedRecords(records,'kanbun') }); savePracticeData(); renderIftyKanbunPage();
+  } else if (key === 'KANJI') {
+    const module = getIftyKanjiModule(); importedName = makeIftyUniqueSharedFolderName(module.folders, importedName);
+    module.folders.push({ ...rawFolder, id:makeId('kanjifolder'), name:importedName, collapsed:false, items:freshenIftySharedRecords(records,'kanji') }); savePracticeData(); renderIftyKanjiPage();
+  } else if (key === 'SCIENCE') {
+    const module = getIftyScienceModule(); importedName = makeIftyUniqueSharedFolderName(module.folders, importedName);
+    module.folders.push({ ...rawFolder, id:makeId('sciencefolder'), name:importedName, collapsed:false, items:freshenIftySharedRecords(records,'science') }); savePracticeData(); renderIftySciencePage();
+  } else if (key === 'SOCIAL STUDIES') {
+    const module = getIftySocialModule(); importedName = makeIftyUniqueSharedFolderName(module.folders, importedName);
+    module.folders.push({ ...rawFolder, id:makeId('socialfolder'), name:importedName, collapsed:false, items:freshenIftySharedRecords(records,'social') }); savePracticeData(); renderIftySocialStudiesPage();
+  } else if (key === 'OTHERS') {
+    const module = getIftyOthersModule(); importedName = makeIftyUniqueSharedFolderName(module.folders, importedName);
+    module.folders.push({ ...rawFolder, id:makeId('othersfolder'), name:importedName, collapsed:false, tags:Array.isArray(rawFolder.tags)?rawFolder.tags:[], items:freshenIftySharedRecords(records,'others') }); savePracticeData(); renderIftyOthersPage();
+  } else if (key === 'PRONUNCIATION') {
+    const module = getIftyPronunciationModule(); importedName = makeIftyUniqueSharedFolderName(module.folders, importedName);
+    module.folders.push(normalizeIftyPronunciationFolder({ ...rawFolder, id:makeId('pronfolder'), name:importedName, collapsed:false, sourceFolderId:'', items:freshenIftySharedRecords(records,'pronitem') }, module.folders.length)); savePracticeData(); openIftyPronunciation();
+  } else if (key === 'BASIC SENTENCES') {
+    const allFolders = getIftyBasicSentenceFolders(); importedName = makeIftyUniqueSharedFolderName(allFolders, importedName);
+    const folderId = makeId('basicsentencefolder');
+    allFolders.push(normalizeIftyCollectionFolder({ ...rawFolder, id:folderId, name:importedName, order:allFolders.length, collapsed:false }, 'basicsentencefolder', importedName, allFolders.length));
+    const items = freshenIftySharedRecords(records,'basic_sentence',folderId).map((row,index) => normalizeIftyBasicSentenceItem({ ...row, folderId, order:index, study:{} }));
+    getIftyBasicSentenceItems().push(...items); iftyBasicSentenceActiveFolderId = folderId; savePracticeData(); openIftyBasicSentences();
+  } else if (key === 'YEARS') {
+    const allFolders = getIftyYearFolders(); importedName = makeIftyUniqueSharedFolderName(allFolders, importedName);
+    const folderId = makeId('yearfolder');
+    allFolders.push(normalizeIftyCollectionFolder({ ...rawFolder, id:folderId, name:importedName, order:allFolders.length, collapsed:false }, 'yearfolder', importedName, allFolders.length));
+    const rows = freshenIftySharedRecords(records,'yearentry',folderId);
+    getIftyYearEntries().push(...rows); iftyYearActiveFolderId = folderId; savePracticeData(); openIftyYears();
+  } else {
+    throw new Error(`未対応の教科です：${key}`);
+  }
+
+  alert(`「${importedName}」を読み込みました（${count}件）。復習履歴や学習成績は共有されません。`);
+}
+
+async function importIftyFolderFile(file) {
+  try {
+    if (Number(file.size || 0) > 5 * 1024 * 1024) throw new Error('フォルダファイルは5MB以下にしてください。');
+    const text = await file.text();
+    const pack = JSON.parse(text);
+    await importIftyFolderPackage(pack);
+  } catch (error) {
+    alert(`フォルダを読み込めません：${String(error?.message || error)}`);
+  }
+}
+
+function enhanceIftyFolderShareButtons(root=document) {
+  if (!root || !root.querySelectorAll) return;
+  const patterns = [
+    ['renameIftyVocabularyFolder','ENGLISH'], ['renameIftyAncientFolder','ANCIENT'], ['renameIftyKanbunFolder','KANBUN'],
+    ['renameIftyKanjiFolder','KANJI'], ['renameIftyScienceFolder','SCIENCE'], ['renameIftySocialFolder','SOCIAL STUDIES'],
+    ['renameIftyOthersFolder','OTHERS'], ['renameIftyPronunciationFolder','PRONUNCIATION'],
+    ['renameIftyBasicSentenceFolder','BASIC SENTENCES'], ['renameIftyYearFolder','YEARS']
+  ];
+  root.querySelectorAll('button[onclick]').forEach(button => {
+    if (button.dataset.iftyShareAnchor === '1') return;
+    const onclick = String(button.getAttribute('onclick') || '');
+    let found = null;
+    for (const [fn,subject] of patterns) {
+      const re = new RegExp(fn.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + "\\('([^']+)'\\)");
+      const match = onclick.match(re);
+      if (match) { found = { subject, folderId:match[1] }; break; }
+    }
+    if (!found) return;
+    button.dataset.iftyShareAnchor = '1';
+    if (button.parentElement && Array.from(button.parentElement.children).some(node => node?.dataset?.iftyShareFolderId === found.folderId)) return;
+    const share = document.createElement('button');
+    share.type = 'button';
+    share.textContent = '📤 共有';
+    share.dataset.iftyShareFolderId = found.folderId;
+    share.title = 'このフォルダをIFTYファイルとして共有';
+    share.style.cssText = 'border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:7px;padding:6px 9px;font-weight:900;cursor:pointer;';
+    share.onclick = event => { event.preventDefault(); event.stopPropagation(); window.exportIftyFolder(found.subject, found.folderId); };
+    button.insertAdjacentElement('afterend', share);
+  });
+}
+
+function getIftyFriendStatusPresentation(status) {
+  const value = String(status || 'private');
+  if (value === 'online') return { label:'● 利用中', bg:'#064e3b', fg:'#bbf7d0', note:'直近5分以内' };
+  if (value === 'today') return { label:'今日利用', bg:'#1e3a5f', fg:'#bfdbfe', note:'今日中に利用' };
+  if (value === 'recent') return { label:'最近利用', bg:'#3f3f46', fg:'#e4e4e7', note:'7日以内' };
+  if (value === 'offline') return { label:'最近の利用なし', bg:'#27272a', fg:'#d4d4d8', note:'7日より前または未利用' };
+  return { label:'非公開', bg:'#312e81', fg:'#c7d2fe', note:'本人が利用状況を非公開にしています' };
+}
+
+function stopIftyFriendsAutoRefresh() {
+  if (iftyFriendsRefreshTimer) { clearTimeout(iftyFriendsRefreshTimer); iftyFriendsRefreshTimer = null; }
+}
+
+window.openIftyFriendsPage = function() {
+  window.closeIftySideMenu?.();
+  stopIftyFriendsAutoRefresh();
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
+        <div><h1 class="ifty-portal-title">👥 フレンド</h1><div class="ifty-portal-subtitle">IFTY IDで相互フレンドになります。利用状況は本人が公開をONにした場合だけ表示します。</div></div>
+        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">⌂ ホームへ</button>
+      </div>
+      <div id="iftyFriendsRoot" style="margin-top:14px;"><div class="ifty-settings-note">読み込み中…</div></div>
+    </section>`, 'friends');
+  refreshIftyFriendsPage({ force:true });
+};
+
+function renderIftyFriendRow(friend) {
+  const status = getIftyFriendStatusPresentation(friend.activityStatus);
+  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:11px;border:1px solid #475569;border-radius:10px;background:#172033;">
+    <div style="min-width:0;">
+      <div style="font-weight:900;color:#f8fafc;overflow-wrap:anywhere;">${escapeHtml(friend.username || '')}</div>
+      <div style="margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><span style="padding:3px 8px;border-radius:999px;background:${status.bg};color:${status.fg};font-size:.72em;font-weight:900;">${status.label}</span><span style="color:#94a3b8;font-size:.7em;">${escapeHtml(status.note)}</span></div>
+    </div>
+    <button type="button" onclick="removeIftyFriend('${escapeHtml(String(friend.userId || ''))}','${escapeHtml(String(friend.username || '').replace(/'/g,"\\'"))}')" style="border:1px solid #7f1d1d;background:#3f1d25;color:#fecdd3;border-radius:8px;padding:7px 9px;font-weight:900;cursor:pointer;">解除</button>
+  </div>`;
+}
+
+function renderIftyFriendsData(data) {
+  const friends = Array.isArray(data.friends) ? data.friends : [];
+  const incoming = Array.isArray(data.incoming) ? data.incoming : [];
+  const outgoing = Array.isArray(data.outgoing) ? data.outgoing : [];
+  const show = !!data.showActivity;
+  return `
+    <div class="ifty-settings-section" style="margin-top:0;background:#172033;border-color:#475569;">
+      <div class="ifty-settings-row">
+        <div><h3 style="color:#f8fafc;">利用状況の公開</h3><div class="ifty-settings-note">OFFが初期設定です。ONにすると、相互フレンドにだけ「利用中 / 今日利用 / 最近利用」のような粗い状態を表示します。正確な時刻は表示しません。</div></div>
+        <label style="display:flex;gap:8px;align-items:center;color:#f8fafc;font-weight:900;cursor:pointer;"><input type="checkbox" ${show?'checked':''} onchange="setIftyFriendActivityVisibility(this.checked)" style="width:20px;height:20px;"> ${show?'公開中':'非公開'}</label>
+      </div>
+    </div>
+    <div class="ifty-settings-section" style="background:#172033;border-color:#475569;">
+      <h3 style="color:#f8fafc;">フレンドを追加</h3>
+      <div class="ifty-settings-note">相手のIFTY IDを正確に入力してください。部分検索や一覧検索は行いません。</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><input id="iftyFriendUsernameInput" autocomplete="off" placeholder="IFTY ID" style="flex:1;min-width:190px;padding:10px;border:1px solid #64748b;border-radius:8px;background:#0f172a;color:#f8fafc;" onkeydown="if(event.key==='Enter'){event.preventDefault();sendIftyFriendRequest();}"><button type="button" onclick="sendIftyFriendRequest()" style="border:none;background:#2563eb;color:white;border-radius:8px;padding:10px 13px;font-weight:900;cursor:pointer;">申請を送る</button></div>
+      <div id="iftyFriendActionStatus" class="ifty-settings-note" style="margin-top:7px;"></div>
+    </div>
+    ${incoming.length ? `<div class="ifty-settings-section" style="background:#172033;border-color:#475569;"><h3 style="color:#f8fafc;">届いた申請 ${incoming.length}</h3><div style="display:grid;gap:8px;">${incoming.map(row=>`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid #475569;border-radius:9px;"><b style="color:#f8fafc;">${escapeHtml(row.username)}</b><div style="display:flex;gap:6px;"><button onclick="acceptIftyFriendRequest('${escapeHtml(String(row.requestId))}')" style="border:none;background:#047857;color:white;border-radius:7px;padding:7px 9px;font-weight:900;">承認</button><button onclick="declineIftyFriendRequest('${escapeHtml(String(row.requestId))}')" style="border:none;background:#475569;color:white;border-radius:7px;padding:7px 9px;font-weight:900;">拒否</button></div></div>`).join('')}</div></div>` : ''}
+    ${outgoing.length ? `<div class="ifty-settings-section" style="background:#172033;border-color:#475569;"><h3 style="color:#f8fafc;">送信済み申請 ${outgoing.length}</h3><div style="display:grid;gap:8px;">${outgoing.map(row=>`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid #475569;border-radius:9px;"><span style="color:#f8fafc;">${escapeHtml(row.username)}</span><button onclick="cancelIftyFriendRequest('${escapeHtml(String(row.requestId))}')" style="border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:7px;padding:7px 9px;font-weight:900;">取消</button></div>`).join('')}</div></div>` : ''}
+    <div class="ifty-settings-section" style="background:#172033;border-color:#475569;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><h3 style="color:#f8fafc;">フレンド ${friends.length}</h3><div class="ifty-settings-note">状態は約1分ごとに更新します。</div></div><button onclick="refreshIftyFriendsPage({force:true})" style="border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:8px;padding:8px 10px;font-weight:900;">↻ 更新</button></div>
+      <div style="display:grid;gap:8px;margin-top:10px;">${friends.length ? friends.map(renderIftyFriendRow).join('') : '<div class="ifty-settings-note">まだフレンドはいません。</div>'}</div>
+    </div>`;
+}
+
+window.refreshIftyFriendsPage = async function(options={}) {
+  const root = document.getElementById('iftyFriendsRoot');
+  if (!root || iftyDeveloperMode || !iftySessionToken) return;
+  stopIftyFriendsAutoRefresh();
+  if (options.force) root.innerHTML = '<div class="ifty-settings-note">読み込み中…</div>';
+  try {
+    const data = await iftyAccountApi('friends_list',{ token:iftySessionToken });
+    if (!document.getElementById('iftyFriendsRoot')) return;
+    root.innerHTML = renderIftyFriendsData(data);
+    iftyFriendsRefreshTimer = setTimeout(() => { if (document.getElementById('iftyFriendsRoot')) refreshIftyFriendsPage().catch(()=>{}); }, 60000);
+  } catch (error) {
+    root.innerHTML = `<div style="color:#fca5a5;">フレンド情報を取得できません：${escapeHtml(String(error?.message || error))}</div>`;
+  }
+};
+
+function setIftyFriendStatusMessage(text,error=false) {
+  const el = document.getElementById('iftyFriendActionStatus');
+  if (!el) return;
+  el.textContent = text || '';
+  el.style.color = error ? '#fca5a5' : '#86efac';
+}
+
+window.sendIftyFriendRequest = async function() {
+  const input = document.getElementById('iftyFriendUsernameInput');
+  const username = String(input?.value || '').trim();
+  if (!username) return setIftyFriendStatusMessage('IFTY IDを入力してください。',true);
+  try {
+    await iftyAccountApi('friend_request_send',{ token:iftySessionToken, username });
+    if (input) input.value = '';
+    await refreshIftyFriendsPage({force:true});
+  } catch (error) { setIftyFriendStatusMessage(String(error?.message || error),true); }
+};
+
+window.acceptIftyFriendRequest = async function(requestId) { try { await iftyAccountApi('friend_request_accept',{token:iftySessionToken,requestId}); await refreshIftyFriendsPage({force:true}); } catch(error){ alert(String(error?.message||error)); } };
+window.declineIftyFriendRequest = async function(requestId) { try { await iftyAccountApi('friend_request_decline',{token:iftySessionToken,requestId}); await refreshIftyFriendsPage({force:true}); } catch(error){ alert(String(error?.message||error)); } };
+window.cancelIftyFriendRequest = async function(requestId) { try { await iftyAccountApi('friend_request_cancel',{token:iftySessionToken,requestId}); await refreshIftyFriendsPage({force:true}); } catch(error){ alert(String(error?.message||error)); } };
+window.removeIftyFriend = async function(userId,username) { if(!confirm(`${username || 'このフレンド'}とのフレンド関係を解除しますか？`))return; try{await iftyAccountApi('friend_remove',{token:iftySessionToken,friendUserId:userId});await refreshIftyFriendsPage({force:true});}catch(error){alert(String(error?.message||error));} };
+window.setIftyFriendActivityVisibility = async function(showActivity) { try{await iftyAccountApi('friend_activity_visibility',{token:iftySessionToken,showActivity:!!showActivity});await refreshIftyFriendsPage({force:true});}catch(error){alert(String(error?.message||error));} };
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded',()=>{ ensureIftyFolderImportInput(); enhanceIftyFolderShareButtons(document); },{once:true});
+} else {
+  ensureIftyFolderImportInput(); enhanceIftyFolderShareButtons(document);
+}
 
 // ==========================================
 // Q3 STEP15：HOME / SUBJECTS / SETTINGS 実画面
@@ -3287,6 +3892,7 @@ function getIftyHomeStats() {
 }
 
 function showIftyHubContent(html, pageName) {
+  if (String(pageName || '') !== 'settings') stopIftyAdminUsageAutoRefresh();
   if (typeof window.closePracticeModal === 'function') window.closePracticeModal();
   if (typeof window.closeMainLauncher === 'function') window.closeMainLauncher();
   if (typeof window.closeMenuModal === 'function') window.closeMenuModal();
@@ -3311,6 +3917,7 @@ function showIftyHubContent(html, pageName) {
 
   page.innerHTML = html;
   page.style.display = 'block';
+  if (typeof enhanceIftyStep114Ui === 'function') enhanceIftyStep114Ui();
 
   if (preserveHubViewport) {
     const restoreHubViewport = () => {
@@ -3431,6 +4038,8 @@ window.openIftyHome = function() {
         <button type="button" onclick="openIftyYears()" style="background:#b45309;color:white;">📅 YEARS ${stats.years}</button>
         <button type="button" onclick="openPracticeHome()" style="background:#7c3aed;color:white;">⚔️ 実践</button>
         <button type="button" onclick="openIftyLearningStats()" style="background:#0f766e;color:white;">📊 学習統計</button>
+        <button type="button" onclick="openIftyFriendsPage()" style="background:#2563eb;color:white;">👥 フレンド</button>
+        <button type="button" onclick="openIftyFolderImportPicker()" style="background:#475569;color:white;">📦 フォルダを受け取る</button>
         <button type="button" onclick="openIftyRecoveryCenter()" style="background:#334155;color:white;">🛟 バックアップ / 復元</button>
         <button type="button" onclick="openIftyBugReport()" style="background:#7f1d1d;color:white;">🐞 不具合を報告</button>
       </div>
@@ -5054,6 +5663,7 @@ function renderIftySocialFolder(folder) {
         <div style="font-size:.72em;color:#64748b;margin-top:5px;">このフォルダでは複数科目を同時選択できます。ALLIA生成時には選択中の科目だけをコンテキストとして送ります。</div>
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
+        <button type="button" onclick="renameIftySocialFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">名前変更</button>
         <button type="button" onclick="openIftySubjectSelectedMoveDialog('SOCIAL STUDIES')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">選択中を移動</button>
         <button type="button" onclick="bulkDeleteIftySubjectSelectedItems('SOCIAL STUDIES')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">選択中を削除</button>
         <button type="button" onclick="deleteIftySocialFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">フォルダ削除</button>
@@ -5186,6 +5796,25 @@ window.toggleIftySocialFolderSubject = function(folderId, subjectKey, checked, c
     checkbox.parentElement.style.borderColor = checked ? '#38bdf8' : '#cbd5e1';
     checkbox.parentElement.style.background = checked ? '#f0f9ff' : 'white';
   }
+};
+
+
+window.renameIftySocialFolder = function(folderId) {
+  const folder = getIftySocialFolder(folderId);
+  if (!folder) return;
+  const next = prompt('新しいフォルダ名', folder.name || '');
+  if (next === null) return;
+  const name = String(next).trim();
+  if (!name || name === String(folder.name || '')) return;
+  const module = getIftySocialModule();
+  if (module.folders.some(f => String(f.id) !== String(folderId) && String(f.name || '').trim().toLowerCase() === name.toLowerCase())) {
+    alert('同じ名前のフォルダがあります。');
+    return;
+  }
+  recordUndoState('社会フォルダ名変更');
+  folder.name = name.slice(0, 80);
+  savePracticeData();
+  renderIftySocialStudiesPage({ preserveScroll: true });
 };
 
 window.deleteIftySocialFolder = function(folderId) {
@@ -7148,6 +7777,7 @@ function renderIftyScienceFolder(folder) {
         <div style="font-size:.72em;color:#64748b;margin-top:5px;">このフォルダでは複数科目を同時選択できます。ALLIA生成時には選択中の科目だけをコンテキストとして送ります。</div>
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
+        <button type="button" onclick="renameIftyScienceFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">名前変更</button>
         <button type="button" onclick="openIftySubjectSelectedMoveDialog('SCIENCE')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">選択中を移動</button>
         <button type="button" onclick="bulkDeleteIftySubjectSelectedItems('SCIENCE')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">選択中を削除</button>
         <button type="button" onclick="deleteIftyScienceFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">フォルダ削除</button>
@@ -7282,6 +7912,25 @@ window.toggleIftyScienceFolderSubject = function(folderId, subjectKey, checked, 
     checkbox.parentElement.style.borderColor = checked ? '#38bdf8' : '#cbd5e1';
     checkbox.parentElement.style.background = checked ? '#f0f9ff' : 'white';
   }
+};
+
+
+window.renameIftyScienceFolder = function(folderId) {
+  const folder = getIftyScienceFolder(folderId);
+  if (!folder) return;
+  const next = prompt('新しいフォルダ名', folder.name || '');
+  if (next === null) return;
+  const name = String(next).trim();
+  if (!name || name === String(folder.name || '')) return;
+  const module = getIftyScienceModule();
+  if (module.folders.some(f => String(f.id) !== String(folderId) && String(f.name || '').trim().toLowerCase() === name.toLowerCase())) {
+    alert('同じ名前のフォルダがあります。');
+    return;
+  }
+  recordUndoState('理科フォルダ名変更');
+  folder.name = name.slice(0, 80);
+  savePracticeData();
+  renderIftySciencePage({ preserveScroll: true });
 };
 
 window.deleteIftyScienceFolder = function(folderId) {
@@ -8854,7 +9503,7 @@ function renderIftyAncientFolder(folder, folderIndex) {
         <button type="button" onclick="bulkDeleteIftySubjectSelectedItems('ANCIENT')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">選択中を削除</button>
         <button type="button" onclick="moveIftyAncientFolder(${folderIndex},-1)" ${folderIndex <= 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">↑</button>
         <button type="button" onclick="moveIftyAncientFolder(${folderIndex},1)" ${folderIndex >= getIftyAncientModule().folders.length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">↓</button>
-        <button type="button" onclick="renameIftyAncientFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">名前変更</button>
+        <button type="button" onclick="renameIftyAncientFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">✏️ 名前変更</button>
         <button type="button" onclick="deleteIftyAncientFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">削除</button>
       </div>
     </div>
@@ -8911,6 +9560,7 @@ window.renderIftyAncientPage = function(options = {}) {
       ${renderIftySubjectSelectionToolbar('ANCIENT')}
       <div id="iftyAncientModuleSummary" style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 古文単語 ${countIftyAncientItems()}語</div>
       <div id="iftyAncientReviewPanelWrap">${renderIftySubjectReviewPanel('ANCIENT')}</div>
+      <div id="iftyAncientWeakPanelWrap">${renderIftySubjectWeakPanel('ANCIENT')}</div>
       <div>${module.folders.length ? module.folders.map((folder, index) => renderIftyAncientFolder(folder, index)).join('') : '<div style="margin-top:16px;padding:24px;text-align:center;color:#94a3b8;border:1px dashed #cbd5e1;border-radius:10px;">まだフォルダがありません。</div>'}</div>
     </section>
   `, 'ancient');
@@ -8943,6 +9593,11 @@ window.renameIftyAncientFolder = function(folderId) {
   if (name == null) return;
   const trimmed = String(name).trim();
   if (!trimmed || trimmed === folder.name) return;
+  const module = getIftyAncientModule();
+  if (module.folders.some(other => String(other.id) !== String(folderId) && String(other.name || '').trim().toLowerCase() === trimmed.toLowerCase())) {
+    alert('同じ名前のフォルダがあります。');
+    return;
+  }
 
   recordUndoState('古文単語フォルダ名変更');
   folder.name = trimmed;
@@ -10169,7 +10824,7 @@ function renderIftyKanbunFolder(folder, folderIndex) {
         <button type="button" onclick="toggleIftySubjectFolderItemsSelection('KANBUN','${folder.id}')" style="border:none;background:${allSelected ? '#dbeafe' : '#f1f5f9'};color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">${allSelected ? '選択解除' : '全選択'}</button>
         <button type="button" onclick="moveIftyKanbunFolder(${folderIndex},-1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;cursor:pointer;">↑</button>
         <button type="button" onclick="moveIftyKanbunFolder(${folderIndex},1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;cursor:pointer;">↓</button>
-        <button type="button" onclick="renameIftyKanbunFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;cursor:pointer;">名前変更</button>
+        <button type="button" onclick="renameIftyKanbunFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;cursor:pointer;">✏️ 名前変更</button>
         <button type="button" onclick="deleteIftyKanbunFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 8px;cursor:pointer;">削除</button>
       </div>
     </div>
@@ -10212,6 +10867,8 @@ function refreshIftyKanbunFolderDynamic(folderId) {
   refreshIftySubjectSelectionToolbar('KANBUN');
   const panel = document.getElementById('iftyKanbunReviewPanelWrap');
   if (panel) panel.innerHTML = renderIftySubjectReviewPanel('KANBUN');
+  const weakPanel = document.getElementById('iftyKanbunWeakPanelWrap');
+  if (weakPanel) weakPanel.innerHTML = renderIftySubjectWeakPanel('KANBUN');
   applyIftyKanbunSearchFilters();
 }
 
@@ -10238,6 +10895,7 @@ window.renderIftyKanbunPage = function(options = {}) {
     ${renderIftySubjectSelectionToolbar('KANBUN')}
     <div id="iftyKanbunModuleSummary" style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 漢文 ${countIftyKanbunItems()}題</div>
     <div id="iftyKanbunReviewPanelWrap">${renderIftySubjectReviewPanel('KANBUN')}</div>
+    <div id="iftyKanbunWeakPanelWrap">${renderIftySubjectWeakPanel('KANBUN')}</div>
     <div>${module.folders.length ? module.folders.map((folder,index)=>renderIftyKanbunFolder(folder,index)).join('') : '<div style="margin-top:16px;padding:24px;text-align:center;color:#94a3b8;border:1px dashed #cbd5e1;border-radius:10px;">まだフォルダがありません。</div>'}</div>
   </section>`, 'kanbun');
   applyIftyKanbunSearchFilters();
@@ -10259,7 +10917,15 @@ window.renameIftyKanbunFolder = function(folderId) {
   const folder = getIftyKanbunFolder(folderId); if (!folder) return;
   const name = prompt('新しいフォルダ名', folder.name); if (name == null) return;
   const trimmed = String(name).trim(); if (!trimmed || trimmed === folder.name) return;
-  recordUndoState('漢文フォルダ名変更'); folder.name = trimmed; savePracticeData(); renderIftyKanbunPage();
+  const module = getIftyKanbunModule();
+  if (module.folders.some(other => String(other.id) !== String(folderId) && String(other.name || '').trim().toLowerCase() === trimmed.toLowerCase())) {
+    alert('同じ名前のフォルダがあります。');
+    return;
+  }
+  recordUndoState('漢文フォルダ名変更');
+  folder.name = trimmed;
+  savePracticeData();
+  renderIftyKanbunPage();
 };
 
 window.deleteIftyKanbunFolder = function(folderId) {
@@ -11081,11 +11747,34 @@ window.openIftySettings = function() {
       <div class="ifty-settings-section">
         <div class="ifty-settings-row">
           <div>
+            <h3>SHARE / FRIENDS</h3>
+            <div class="ifty-settings-note">フォルダは .iftyfolder ファイルとして送受信できます。フレンドの利用状況は、相互フレンドかつ本人が公開をONにした場合だけ表示されます。</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="ifty-settings-action" type="button" onclick="openIftyFolderImportPicker()" style="background:#475569;color:white;">📦 フォルダを受け取る</button>
+            <button class="ifty-settings-action" type="button" onclick="openIftyFriendsPage()" style="background:#2563eb;color:white;">👥 フレンド</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="ifty-settings-section">
+        <div class="ifty-settings-row">
+          <div>
             <h3>BACKUP / RESTORE</h3>
             <div class="ifty-settings-note">PERIODICはオートセーブ1件を上書き。MANUALは手動保存を複数残します。</div>
           </div>
           <button class="ifty-settings-action" type="button" onclick="openIftyRecoveryCenter()" style="background:#0f766e;color:white;">🛟 開く</button>
         </div>
+      </div>
+
+      <div id="iftyAdminUsageSection" class="ifty-settings-section" style="display:none;">
+        <div class="ifty-settings-row">
+          <div>
+            <h3>📊 利用状況</h3>
+            <div class="ifty-settings-note">管理者のみ表示。現在利用中は直近5分以内にIFTYへアクセスしたアカウント数です。</div>
+          </div>
+        </div>
+        <div id="iftyAdminUsagePanel" class="ifty-settings-note">利用状況を読み込み中…</div>
       </div>
 
       <div class="ifty-settings-section">
@@ -11109,6 +11798,7 @@ window.openIftySettings = function() {
   `, 'settings');
 
   if (!iftyDeveloperMode) {
+    window.refreshIftyAdminUsagePanel().catch(() => {});
     refreshIftyAccountSecurityPanel().catch(error => {
       const panel = document.getElementById('iftyAccountSecurityPanel');
       if (panel) panel.innerHTML = `<span style="color:#dc2626;">アカウント情報を読み込めません：${escapeHtml(String(error.message || error))}</span>`;
@@ -12445,6 +13135,94 @@ function createLocalListeningQuestion(set, word) {
 }
 
 
+
+// ==========================================
+// ★★★ IFTY Q3 STEP113：画面最上部の旧ログイン表示を非表示 ★★★
+// 「ログイン中 / IFTY ID / ログアウト」の旧トップバーだけを隠す。
+// ログアウト機能そのものは SETTINGS / メニュー側に残す。
+// クラウド同期・セッション処理は変更しない。
+// ==========================================
+(function installIftyLegacyTopAccountBarHider() {
+  function normalizeText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function hasLogoutControl(root) {
+    if (!root || !root.querySelectorAll) return false;
+    return Array.from(root.querySelectorAll('button,a,[role="button"]')).some(el => {
+      const text = normalizeText(el.textContent).toLowerCase();
+      const onclick = String(el.getAttribute && el.getAttribute('onclick') || '').toLowerCase();
+      return text.includes('ログアウト') || text === 'log out' || text === 'logout' || onclick.includes('logout');
+    });
+  }
+
+  function looksLikeLegacyAccountBar(root) {
+    if (!root || root === document.body || root === document.documentElement) return false;
+    const text = normalizeText(root.textContent);
+    const hasLoginLabel = /ログイン中|logged\s*in/i.test(text);
+    return hasLoginLabel && hasLogoutControl(root);
+  }
+
+  function hideLegacyBar() {
+    const userDisplay = document.getElementById('userDisplay');
+    if (!userDisplay) return;
+
+    let candidate = userDisplay.parentElement;
+    let matched = null;
+
+    // 旧HTMLの構造が多少変わっても、mainPortal全体などを誤って消さない範囲で探索。
+    for (let depth = 0; candidate && depth < 4; depth += 1) {
+      if (candidate.id === 'mainPortal' || candidate.id === 'landingPage') break;
+      if (looksLikeLegacyAccountBar(candidate)) {
+        matched = candidate;
+        break;
+      }
+      candidate = candidate.parentElement;
+    }
+
+    if (matched) {
+      matched.style.setProperty('display', 'none', 'important');
+      matched.setAttribute('aria-hidden', 'true');
+      matched.dataset.iftyLegacyAccountBarHidden = '1';
+      return;
+    }
+
+    // 万一親要素を安全に特定できない場合も、IDとログアウト操作だけは見せない。
+    userDisplay.style.setProperty('display', 'none', 'important');
+    userDisplay.setAttribute('aria-hidden', 'true');
+    const parent = userDisplay.parentElement;
+    if (parent) {
+      Array.from(parent.querySelectorAll('button,a,[role="button"]')).forEach(el => {
+        const text = normalizeText(el.textContent).toLowerCase();
+        const onclick = String(el.getAttribute && el.getAttribute('onclick') || '').toLowerCase();
+        if (text.includes('ログアウト') || text === 'log out' || text === 'logout' || onclick.includes('logout')) {
+          el.style.setProperty('display', 'none', 'important');
+          el.setAttribute('aria-hidden', 'true');
+        }
+      });
+    }
+  }
+
+  window.hideIftyLegacyTopAccountBar = hideLegacyBar;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', hideLegacyBar, { once: true });
+  } else {
+    hideLegacyBar();
+  }
+
+  // ログイン後のUI再描画でも復活させない。
+  const observer = new MutationObserver(() => hideLegacyBar());
+  const startObserver = () => {
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
+      hideLegacyBar();
+    }
+  };
+  if (document.body) startObserver();
+  else document.addEventListener('DOMContentLoaded', startObserver, { once: true });
+})();
+
 // ==========================================
 // Q3 STEP12：IFTYアカウント / クラウドセーブ
 // ==========================================
@@ -12472,6 +13250,8 @@ function storeIftyAccountSession(account, token) {
 }
 
 function clearIftyAccountSession() {
+  stopIftyActivityHeartbeat();
+  stopIftyAdminUsageAutoRefresh();
   iftyAccount = null;
   iftySessionToken = '';
   iftyCloudRevision = 0;
@@ -12696,6 +13476,133 @@ async function iftyAccountApi(type, payload = {}) {
   }
   return data;
 }
+
+
+// ==========================================
+// ★★★ STEP115：利用中人数 / 管理者向け利用状況 ★★★
+// heartbeat はログイン中だけ送信し、D1側には user_id + 時刻だけを記録する。
+// ==========================================
+function stopIftyActivityHeartbeat() {
+  if (iftyActivityHeartbeatTimer) {
+    clearInterval(iftyActivityHeartbeatTimer);
+    iftyActivityHeartbeatTimer = null;
+  }
+  iftyActivityHeartbeatInFlight = false;
+  iftyActivityLastSentAt = 0;
+}
+
+async function sendIftyActivityHeartbeat(options = {}) {
+  if (iftyDeveloperMode || !iftySessionToken || !iftyAccount || !isIftyOnline()) return false;
+  if (document.visibilityState === 'hidden' && !options.force) return false;
+  const now = Date.now();
+  if (!options.force && now - iftyActivityLastSentAt < IFTY_ACTIVITY_HEARTBEAT_MIN_GAP_MS) return false;
+  if (iftyActivityHeartbeatInFlight) return false;
+  iftyActivityHeartbeatInFlight = true;
+  try {
+    await iftyAccountApi('activity_heartbeat', { token: iftySessionToken });
+    iftyActivityLastSentAt = Date.now();
+    return true;
+  } catch (error) {
+    if (Number(error && error.status) === 401) stopIftyActivityHeartbeat();
+    return false;
+  } finally {
+    iftyActivityHeartbeatInFlight = false;
+  }
+}
+
+function startIftyActivityHeartbeat() {
+  if (iftyDeveloperMode || !iftySessionToken || !iftyAccount) return;
+  if (iftyActivityHeartbeatTimer) clearInterval(iftyActivityHeartbeatTimer);
+  sendIftyActivityHeartbeat({ force: true }).catch(() => {});
+  iftyActivityHeartbeatTimer = setInterval(() => {
+    sendIftyActivityHeartbeat().catch(() => {});
+  }, IFTY_ACTIVITY_HEARTBEAT_INTERVAL_MS);
+}
+
+if (!window.__iftyActivityVisibilityListenerInstalled) {
+  window.__iftyActivityVisibilityListenerInstalled = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') sendIftyActivityHeartbeat({ force: true }).catch(() => {});
+  });
+  window.addEventListener('focus', () => sendIftyActivityHeartbeat({ force: true }).catch(() => {}));
+}
+
+function stopIftyAdminUsageAutoRefresh() {
+  if (iftyAdminUsageRefreshTimer) {
+    clearTimeout(iftyAdminUsageRefreshTimer);
+    iftyAdminUsageRefreshTimer = null;
+  }
+}
+
+function formatIftyActivityUpdatedAt(epoch) {
+  const n = Number(epoch || 0);
+  if (!n) return '—';
+  try {
+    return new Intl.DateTimeFormat('ja-JP', {
+      timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
+    }).format(new Date(n));
+  } catch (_) {
+    return new Date(n).toLocaleString();
+  }
+}
+
+function renderIftyAdminUsageStats(data) {
+  const online = Math.max(0, Number(data && data.currentUsers) || 0);
+  const today = Math.max(0, Number(data && data.todayUsers) || 0);
+  const registered = Math.max(0, Number(data && data.registeredUsers) || 0);
+  const week = Math.max(0, Number(data && data.last7DaysUsers) || 0);
+  const minutes = Math.max(1, Number(data && data.onlineWindowMinutes) || 5);
+  return `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:9px;margin-top:11px;">
+      <div style="padding:12px;border:1px solid #334155;border-radius:10px;background:#0f172a;color:#f8fafc;">
+        <div style="font-size:.72em;color:#cbd5e1;">現在利用中</div>
+        <div style="font-size:1.65em;font-weight:900;margin-top:3px;">${online}人</div>
+        <div style="font-size:.68em;color:#94a3b8;">直近${minutes}分</div>
+      </div>
+      <div style="padding:12px;border:1px solid #334155;border-radius:10px;background:#0f172a;color:#f8fafc;">
+        <div style="font-size:.72em;color:#cbd5e1;">今日利用</div>
+        <div style="font-size:1.65em;font-weight:900;margin-top:3px;">${today}人</div>
+        <div style="font-size:.68em;color:#94a3b8;">日本時間 0:00〜</div>
+      </div>
+      <div style="padding:12px;border:1px solid #334155;border-radius:10px;background:#0f172a;color:#f8fafc;">
+        <div style="font-size:.72em;color:#cbd5e1;">過去7日</div>
+        <div style="font-size:1.65em;font-weight:900;margin-top:3px;">${week}人</div>
+        <div style="font-size:.68em;color:#94a3b8;">ユニーク利用者</div>
+      </div>
+      <div style="padding:12px;border:1px solid #334155;border-radius:10px;background:#0f172a;color:#f8fafc;">
+        <div style="font-size:.72em;color:#cbd5e1;">登録アカウント</div>
+        <div style="font-size:1.65em;font-weight:900;margin-top:3px;">${registered}人</div>
+        <div style="font-size:.68em;color:#94a3b8;">現在存在するアカウント</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;">
+      <div style="font-size:.72em;color:#94a3b8;">更新 ${escapeHtml(formatIftyActivityUpdatedAt(data && data.updatedAt))}　・　個人名は表示しません</div>
+      <button type="button" onclick="refreshIftyAdminUsagePanel({force:true})" style="border:1px solid #475569;background:#1e293b;color:#f8fafc;border-radius:8px;padding:8px 11px;font-weight:900;cursor:pointer;">↻ 更新</button>
+    </div>`;
+}
+
+window.refreshIftyAdminUsagePanel = async function(options = {}) {
+  const section = document.getElementById('iftyAdminUsageSection');
+  const panel = document.getElementById('iftyAdminUsagePanel');
+  if (!section || !panel || iftyDeveloperMode || !iftySessionToken) return;
+  stopIftyAdminUsageAutoRefresh();
+  if (options.force) panel.innerHTML = '<div style="color:#cbd5e1;">利用状況を更新中…</div>';
+  try {
+    const data = await iftyAccountApi('activity_stats', { token: iftySessionToken });
+    section.style.display = 'block';
+    panel.innerHTML = renderIftyAdminUsageStats(data);
+    iftyAdminUsageRefreshTimer = setTimeout(() => {
+      if (document.getElementById('iftyAdminUsagePanel')) window.refreshIftyAdminUsagePanel().catch(() => {});
+    }, 30000);
+  } catch (error) {
+    if (Number(error && error.status) === 403) {
+      section.remove();
+      return;
+    }
+    section.style.display = 'block';
+    panel.innerHTML = `<div style="color:#fca5a5;">利用状況を取得できません：${escapeHtml(String(error && error.message || error))}</div>`;
+  }
+};
 
 
 function ensureIftySecurityModal() {
@@ -13594,6 +14501,7 @@ async function enterIftyAccount(account, options = {}) {
     }
   }
   setIftyAuthenticatedUiVisible(true);
+  if (typeof window.hideIftyLegacyTopAccountBar === 'function') window.hideIftyLegacyTopAccountBar();
   const userDisplay = document.getElementById('userDisplay');
   if (userDisplay) userDisplay.textContent = currentUser;
   ensureIftyCloudStatusUi();
@@ -13606,6 +14514,7 @@ async function enterIftyAccount(account, options = {}) {
   applyAlliaBranding();
   ensureIftyBrandUi();
   ensureIftyNetworkUi();
+  startIftyActivityHeartbeat();
   loadIftyAutosavePreference();
   loadIftySpellingAutoAcceptPreference();
   loadIftyDailyGoalPreference();
@@ -13638,6 +14547,7 @@ async function enterIftyDeveloperSession() {
   sessionStorage.setItem(IFTY_DEVELOPER_SESSION_KEY, '1');
 
   setIftyAuthenticatedUiVisible(true);
+  if (typeof window.hideIftyLegacyTopAccountBar === 'function') window.hideIftyLegacyTopAccountBar();
   const userDisplay = document.getElementById('userDisplay');
   if (userDisplay) userDisplay.textContent = 'Developer';
   ensureIftyCloudStatusUi();
@@ -13982,7 +14892,7 @@ function renderIftyKanjiPage(options={}){
     </div>
     <div style="margin-top:12px;padding:11px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;">
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
-        <input value="${escapeHtml(globalQ)}" oninput="setIftyKanjiGlobalSearch(this.value)" placeholder="漢字・読み・意味・類義語などを全フォルダ検索" style="flex:1;min-width:210px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">
+        <input id="iftyKanjiGlobalSearchInput" value="${escapeHtml(globalQ)}" oninput="setIftyKanjiGlobalSearch(this.value)" placeholder="漢字・読み・意味・類義語などを全フォルダ検索" style="flex:1;min-width:210px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">
         <span id="iftyKanjiGlobalCount" style="color:#64748b;font-size:.8em;">全 ${countIftyKanjiItems()}件</span>
       </div>
     </div>
@@ -14283,7 +15193,7 @@ function renderIftyOthersItemCard(folder,item){
 function renderIftyOthersPage(options={}){
   const y=options.preserveScroll?window.scrollY:0; currentIftySubject='OTHERS'; const module=getIftyOthersModule();
   const rows=module.folders.map(folder=>`<section style="margin-top:14px;border:1px solid #cbd5e1;border-radius:11px;background:white;padding:13px;">
-    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start;"><div style="min-width:0;flex:1;"><button type="button" onclick="toggleIftyOthersFolder('${folder.id}')" style="border:none;background:transparent;padding:0;font-weight:900;color:#0f172a;font-size:1.02em;cursor:pointer;">${folder.collapsed?'▶':'▼'} 📁 ${escapeHtml(folder.name)} (${(folder.items||[]).length}件)</button><div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">${folder.tags.map(t=>`<span style="padding:3px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.72em;font-weight:900;">${escapeHtml(t)}</span>`).join('')||'<span style="font-size:.75em;color:#94a3b8;">教科タグ未設定</span>'}</div></div><div style="display:flex;gap:5px;flex-wrap:wrap;"><button onclick="editIftyOthersFolderTags('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">教科タグ変更</button><button onclick="deleteIftyOthersFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">フォルダ削除</button></div></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start;"><div style="min-width:0;flex:1;"><button type="button" onclick="toggleIftyOthersFolder('${folder.id}')" style="border:none;background:transparent;padding:0;font-weight:900;color:#0f172a;font-size:1.02em;cursor:pointer;">${folder.collapsed?'▶':'▼'} 📁 ${escapeHtml(folder.name)} (${(folder.items||[]).length}件)</button><div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">${folder.tags.map(t=>`<span style="padding:3px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.72em;font-weight:900;">${escapeHtml(t)}</span>`).join('')||'<span style="font-size:.75em;color:#94a3b8;">教科タグ未設定</span>'}</div></div><div style="display:flex;gap:5px;flex-wrap:wrap;"><button onclick="renameIftyOthersFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">名前変更</button><button onclick="editIftyOthersFolderTags('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">教科タグ変更</button><button onclick="deleteIftyOthersFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">フォルダ削除</button></div></div>
     ${folder.collapsed?'':`<div style="margin-top:11px;"><div style="display:flex;gap:7px;flex-wrap:wrap;"><input id="iftyOthersTopic_${folder.id}" value="${escapeHtml(iftyOthersTopicDrafts[folder.id]||'')}" placeholder="用語・概念・人物など" oninput="iftyOthersTopicDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftyOthersItem('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}))}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;"><button onclick="generateIftyOthersItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">ALLIA生成</button><button onclick="addBlankIftyOthersItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;">白紙</button></div><div id="iftyOthersPending_${folder.id}" style="margin-top:6px;color:#64748b;font-size:.76em;">${Number(iftyOthersGenerationPending[folder.id]||0)>0?`ALLIA生成中… ${Number(iftyOthersGenerationPending[folder.id]||0)}件`:''}</div><div id="iftyOthersItems_${folder.id}">${(folder.items||[]).map(item=>renderIftyOthersItemCard(folder,item)).join('')||'<div style="padding:18px;text-align:center;color:#94a3b8;">まだ項目がありません。</div>'}</div></div>`}
   </section>`).join('');
   showIftyHubContent(`<section class="ifty-portal-shell"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;"><div><h1 class="ifty-portal-title">OTHERS</h1><div class="ifty-portal-subtitle">保健・情報など、専用教科がない内容を自由な教科タグで管理。</div></div>${renderIftySubjectHeaderActions('OTHERS')}</div><div style="margin-top:14px;padding:13px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-weight:900;color:#0c4a6e;">新しいOTHERSフォルダ</div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;"><input id="iftyOthersFolderName" placeholder="例：保健 / 情報I" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><input id="iftyOthersFolderTags" placeholder="教科タグ（例：保健, 情報）" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><button onclick="createIftyOthersFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">作成</button></div><div style="font-size:.75em;color:#64748b;margin-top:6px;">タグ名は自由に変更できます。「世界史 / 日本史」のような固定候補にはしません。</div></div>${renderIftySubjectSelectionToolbar('OTHERS')}<div id="iftyOthersReviewPanelWrap">${renderIftySubjectReviewPanel('OTHERS')}</div>${rows||'<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">OTHERSフォルダを作成してください。</div>'}</section>`,'subject');
@@ -14291,6 +15201,15 @@ function renderIftyOthersPage(options={}){
 }
 window.createIftyOthersFolder=function(){const n=String(document.getElementById('iftyOthersFolderName')?.value||'').trim();if(!n)return alert('フォルダ名を入力してください。');const tags=normalizeIftyOthersTags(document.getElementById('iftyOthersFolderTags')?.value||'');recordUndoState('OTHERSフォルダ作成');getIftyOthersModule().folders.push({id:makeId('othersfolder'),name:n,tags,collapsed:false,items:[]});savePracticeData();renderIftyOthersPage();};
 window.toggleIftyOthersFolder=function(id){const f=getIftyOthersFolder(id);if(!f)return;f.collapsed=!f.collapsed;savePracticeData();renderIftyOthersPage({preserveScroll:true});};
+
+window.renameIftyOthersFolder=function(id){
+  const f=getIftyOthersFolder(id);if(!f)return;
+  const v=prompt('新しいフォルダ名',f.name||'');if(v===null)return;
+  const name=String(v).trim();if(!name||name===String(f.name||''))return;
+  const m=getIftyOthersModule();
+  if(m.folders.some(x=>String(x.id)!==String(id)&&String(x.name||'').trim().toLowerCase()===name.toLowerCase())){alert('同じ名前のフォルダがあります。');return;}
+  recordUndoState('OTHERSフォルダ名変更');f.name=name.slice(0,80);savePracticeData();renderIftyOthersPage({preserveScroll:true});
+};
 window.editIftyOthersFolderTags=function(id){const f=getIftyOthersFolder(id);if(!f)return;const v=prompt('教科タグをカンマ区切りで入力',f.tags.join(', '));if(v===null)return;recordUndoState('OTHERS教科タグ変更');f.tags=normalizeIftyOthersTags(v);savePracticeData();renderIftyOthersPage({preserveScroll:true});};
 window.deleteIftyOthersFolder=function(id){const m=getIftyOthersModule(),f=getIftyOthersFolder(id);if(!f||!confirm(`「${f.name}」を削除しますか？`))return;recordUndoState('OTHERSフォルダ削除');m.folders=m.folders.filter(x=>x.id!==id);savePracticeData();renderIftyOthersPage();};
 window.addBlankIftyOthersItem=function(folderId){const f=getIftyOthersFolder(folderId);if(!f)return;const title=prompt('用語・項目名');if(title===null||!String(title).trim())return;const memoryText=prompt('説明', '')??'';recordUndoState('OTHERS項目追加');f.items.push(normalizeIftyOthersItem({title:String(title).trim(),memoryText,tags:f.tags,source:'MANUAL'}));savePracticeData();renderIftyOthersPage({preserveScroll:true});};
@@ -15434,6 +16353,57 @@ window.toggleIftyOthersItemReview = function(folderId, itemId) {
   toggleIftySubjectItemReview('OTHERS', folderId, itemId);
 };
 
+const IFTY_SUBJECT_REVIEW_COLLAPSE_PREFIX = 'ifty_subject_review_collapsed_v2:';
+const IFTY_SUBJECT_WEAK_COLLAPSE_PREFIX = 'ifty_subject_weak_collapsed_v2:';
+
+function getIftySubjectPanelCollapsed(prefix, subject) {
+  try { return localStorage.getItem(prefix + normalizeIftySubject(subject)) === '1'; }
+  catch (_) { return false; }
+}
+
+function setIftySubjectPanelCollapsed(prefix, subject, collapsed) {
+  try { localStorage.setItem(prefix + normalizeIftySubject(subject), collapsed ? '1' : '0'); }
+  catch (_) {}
+}
+
+function getIftySubjectReviewWrapId(subject) {
+  const key = normalizeIftySubject(subject);
+  if (key === 'ANCIENT') return 'iftyAncientReviewPanelWrap';
+  if (key === 'KANBUN') return 'iftyKanbunReviewPanelWrap';
+  if (key === 'SCIENCE') return 'iftyScienceReviewPanelWrap';
+  if (key === 'SOCIAL STUDIES') return 'iftySocialReviewPanelWrap';
+  if (key === 'KANJI') return 'iftyKanjiReviewPanelWrap';
+  if (key === 'OTHERS') return 'iftyOthersReviewPanelWrap';
+  return '';
+}
+
+function getIftySubjectWeakWrapId(subject) {
+  const key = normalizeIftySubject(subject);
+  if (key === 'ANCIENT') return 'iftyAncientWeakPanelWrap';
+  if (key === 'KANBUN') return 'iftyKanbunWeakPanelWrap';
+  if (key === 'SCIENCE') return 'iftyScienceWeakPanelWrap';
+  if (key === 'SOCIAL STUDIES') return 'iftySocialWeakPanelWrap';
+  if (key === 'KANJI') return 'iftyKanjiWeakPanelWrap';
+  if (key === 'OTHERS') return 'iftyOthersWeakPanelWrap';
+  return '';
+}
+
+window.toggleIftySubjectReviewPanel = function(subject) {
+  const key = normalizeIftySubject(subject);
+  const collapsed = getIftySubjectPanelCollapsed(IFTY_SUBJECT_REVIEW_COLLAPSE_PREFIX, key);
+  setIftySubjectPanelCollapsed(IFTY_SUBJECT_REVIEW_COLLAPSE_PREFIX, key, !collapsed);
+  const wrap = document.getElementById(getIftySubjectReviewWrapId(key));
+  if (wrap) wrap.innerHTML = renderIftySubjectReviewPanel(key);
+};
+
+window.toggleIftySubjectWeakPanel = function(subject) {
+  const key = normalizeIftySubject(subject);
+  const collapsed = getIftySubjectPanelCollapsed(IFTY_SUBJECT_WEAK_COLLAPSE_PREFIX, key);
+  setIftySubjectPanelCollapsed(IFTY_SUBJECT_WEAK_COLLAPSE_PREFIX, key, !collapsed);
+  const wrap = document.getElementById(getIftySubjectWeakWrapId(key));
+  if (wrap) wrap.innerHTML = renderIftySubjectWeakPanel(key);
+};
+
 function renderIftySubjectReviewPanel(subject) {
   const key = normalizeIftySubject(subject);
   const label = getIftySubjectReviewLabel(key);
@@ -15441,11 +16411,18 @@ function renderIftySubjectReviewPanel(subject) {
   const dueEntries = getIftySubjectReviewEntries(key, { dueOnly: true });
   const graduated = getIftySubjectReviewGraduatedCount(key);
   const nextReview = getIftySubjectNextReviewTimestamp(key);
+  const collapsed = getIftySubjectPanelCollapsed(IFTY_SUBJECT_REVIEW_COLLAPSE_PREFIX, key);
 
   const dueList = dueEntries.length
     ? dueEntries.slice(0, 12).map(({ folder, item, review }) => {
-        const title = String(item.term || item.title || item.word || item.topic || '無題');
-        const summary = String(item.explanation || item.memoryText || (Array.isArray(item.meanings)?item.meanings.join(' / '):'')).trim().replace(/\s+/g, ' ');
+        const title = String(item.term || item.title || item.word || item.topic || item.originalText || '無題');
+        const summary = String(
+          item.explanation ||
+          item.memoryText ||
+          item.translation ||
+          item.kundoku ||
+          (Array.isArray(item.meanings) ? item.meanings.join(' / ') : '')
+        ).trim().replace(/\s+/g, ' ');
         const stage = review.level < 0 ? '今すぐ' : `${IFTY_REVIEW_INTERVAL_DAYS[Math.max(0, review.level)]}日段階`;
         const toggleFn = key === 'SCIENCE'
           ? 'toggleIftyScienceItemReview'
@@ -15456,26 +16433,63 @@ function renderIftySubjectReviewPanel(subject) {
                   : (key === 'KANJI'
                       ? 'toggleIftyKanjiItemReview'
                       : (key === 'OTHERS' ? 'toggleIftyOthersItemReview' : 'toggleIftySocialItemReview'))));
-        return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #fed7aa;">
+        return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #805f3d;">
           <div style="min-width:0;flex:1;">
-            <div style="font-weight:900;color:#7c2d12;overflow-wrap:anywhere;">${escapeHtml(title)}</div>
-            ${summary ? `<div style="margin-top:2px;color:#9a3412;font-size:.78em;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtml(summary)}</div>` : ''}
-            <div style="margin-top:3px;color:#a16207;font-size:.7em;">📁 ${escapeHtml(folder.name || '')} ・ ${escapeHtml(stage)} ・ ${review.source === 'auto' ? '自動登録' : '手動登録'}</div>
+            <div style="font-weight:900;color:#fed7aa;overflow-wrap:anywhere;">${escapeHtml(title)}</div>
+            ${summary ? `<div style="margin-top:2px;color:#fdba74;font-size:.78em;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtml(summary)}</div>` : ''}
+            <div style="margin-top:3px;color:#fdba74;font-size:.7em;">📁 ${escapeHtml(folder.name || '')} ・ ${escapeHtml(stage)} ・ ${review.source === 'auto' ? '自動登録' : '手動登録'}</div>
           </div>
-          <button type="button" onclick="${toggleFn}('${folder.id}','${item.id}')" style="border:none;background:#ffedd5;color:#9a3412;border-radius:6px;padding:6px 8px;font-size:.72em;font-weight:900;cursor:pointer;flex:none;">解除</button>
+          <button type="button" onclick="${toggleFn}('${folder.id}','${item.id}')" style="border:1px solid #9a6430;background:#352617;color:#fed7aa;border-radius:6px;padding:6px 8px;font-size:.72em;font-weight:900;cursor:pointer;flex:none;">解除</button>
         </div>`;
       }).join('')
-    : `<div style="padding:11px 2px;color:#a16207;font-size:.8em;">今日の復習はありません。${nextReview ? `次回は ${escapeHtml(formatIftyReviewDate(nextReview))}。` : 'カードの「＋復習」またはフラッシュカード学習で登録できます。'}</div>`;
+    : `<div style="padding:11px 2px;color:#fdba74;font-size:.8em;">今日の復習はありません。${nextReview ? `次回は ${escapeHtml(formatIftyReviewDate(nextReview))}。` : 'カードの「＋復習」またはフラッシュカード学習で登録できます。'}</div>`;
 
-  return `<div class="ifty-subject-review-panel" style="background:#fff7ed;border:2px solid #fb923c;border-radius:10px;padding:12px;margin-top:12px;">
+  return `<div class="ifty-subject-review-panel" style="background:#1b2638;border:2px solid #c76b28;border-radius:10px;padding:12px;margin-top:12px;">
     <div style="display:flex;justify-content:space-between;gap:9px;align-items:center;flex-wrap:wrap;">
-      <div>
-        <div style="font-weight:900;color:#7c2d12;">🔁 ${label}の復習 <span style="font-size:.8em;color:#c2410c;">今日 ${dueEntries.length} / 管理 ${allEntries.length} / 卒業 ${graduated}</span></div>
-        <div style="margin-top:3px;color:#9a3412;font-size:.72em;">1日 → 3日 → 7日 → 14日 → 30日 → 卒業。未定着なら1日段階へ戻ります。</div>
+      <button type="button" onclick="toggleIftySubjectReviewPanel('${key}')" aria-expanded="${collapsed ? 'false' : 'true'}" style="border:none;background:transparent;padding:0;text-align:left;cursor:pointer;min-width:0;flex:1;color:inherit;">
+        <div style="font-weight:900;color:#fed7aa;">${collapsed ? '▶' : '▼'} 🔁 ${label}の復習 <span style="font-size:.8em;color:#fb923c;">今日 ${dueEntries.length} / 管理 ${allEntries.length} / 卒業 ${graduated}</span></div>
+        ${collapsed ? '' : '<div style="margin-top:3px;color:#fdba74;font-size:.72em;">1日 → 3日 → 7日 → 14日 → 30日 → 卒業。未定着なら1日段階へ戻ります。</div>'}
+      </button>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <button type="button" onclick="toggleIftySubjectReviewPanel('${key}')" style="border:1px solid #c76b28;background:#202d41;color:#fed7aa;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${collapsed ? '開く' : '折りたたむ'}</button>
+        ${collapsed ? '' : `<button type="button" onclick="startIftySubjectDueReviewFlashcards('${key}','front')" ${dueEntries.length ? '' : 'disabled'} style="border:none;background:#ea580c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${dueEntries.length ? 'pointer' : 'default'};opacity:${dueEntries.length ? '1' : '.45'};">📇 今日の復習</button>`}
       </div>
-      <button type="button" onclick="startIftySubjectDueReviewFlashcards('${key}','front')" ${dueEntries.length ? '' : 'disabled'} style="border:none;background:#ea580c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${dueEntries.length ? 'pointer' : 'default'};opacity:${dueEntries.length ? '1' : '.45'};">📇 今日の復習</button>
     </div>
-    <div style="margin-top:7px;">${dueList}${dueEntries.length > 12 ? `<div style="padding-top:6px;color:#9a3412;font-size:.72em;">ほか ${dueEntries.length - 12}件</div>` : ''}</div>
+    ${collapsed ? '' : `<div style="margin-top:7px;">${dueList}${dueEntries.length > 12 ? `<div style="padding-top:6px;color:#fdba74;font-size:.72em;">ほか ${dueEntries.length - 12}件</div>` : ''}</div>`}
+  </div>`;
+}
+
+function renderIftySubjectWeakPanel(subject) {
+  const key = normalizeIftySubject(subject);
+  const entries = getIftySubjectWeakEntries(key);
+  const collapsed = getIftySubjectPanelCollapsed(IFTY_SUBJECT_WEAK_COLLAPSE_PREFIX, key);
+  const label = getIftySubjectReviewLabel(key);
+
+  const list = entries.slice(0, 12).map(({ folder, item, study, accuracy }) => {
+    const title = String(item.term || item.word || item.title || item.topic || item.originalText || '無題');
+    const summary = String(
+      item.explanation ||
+      item.memoryText ||
+      item.translation ||
+      item.kundoku ||
+      (Array.isArray(item.meanings) ? item.meanings.join(' / ') : '')
+    ).trim().replace(/\s+/g, ' ');
+    return `<div style="padding:8px 0;border-bottom:1px solid #713044;">
+      <div style="font-weight:900;color:#fecdd3;overflow-wrap:anywhere;">${escapeHtml(title)}</div>
+      ${summary ? `<div style="margin-top:2px;color:#fda4af;font-size:.78em;line-height:1.4;">${escapeHtml(summary)}</div>` : ''}
+      <div style="margin-top:3px;color:#fb7185;font-size:.72em;">📁 ${escapeHtml(folder.name || '')} ・ ${study.correct}/${study.total}正解 ・ 正答率${Math.round(accuracy * 100)}%</div>
+    </div>`;
+  }).join('');
+
+  return `<div class="ifty-subject-weak-panel" style="background:#1b2638;border:2px solid #be4161;border-radius:10px;padding:12px;margin-top:10px;">
+    <div style="display:flex;justify-content:space-between;gap:9px;align-items:center;flex-wrap:wrap;">
+      <button type="button" onclick="toggleIftySubjectWeakPanel('${key}')" aria-expanded="${collapsed ? 'false' : 'true'}" style="border:none;background:transparent;padding:0;text-align:left;cursor:pointer;min-width:0;flex:1;color:inherit;">
+        <div style="font-weight:900;color:#fecdd3;">${collapsed ? '▶' : '▼'} 🎯 ${label}の苦手候補 <span style="font-size:.8em;color:#fb7185;">${entries.length}件</span></div>
+        ${collapsed ? '' : '<div style="margin-top:3px;color:#fda4af;font-size:.72em;">3回以上学習・2回以上不正解・正答率70%未満を自動抽出します。</div>'}
+      </button>
+      <button type="button" onclick="toggleIftySubjectWeakPanel('${key}')" style="border:1px solid #be4161;background:#202d41;color:#fecdd3;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${collapsed ? '開く' : '折りたたむ'}</button>
+    </div>
+    ${collapsed ? '' : `<div style="margin-top:7px;">${entries.length ? list + (entries.length > 12 ? `<div style="padding-top:6px;color:#fda4af;font-size:.72em;">ほか ${entries.length - 12}件</div>` : '') : `<div style="padding:10px 2px;color:#fda4af;font-size:.8em;">現在、${escapeHtml(label)}の苦手候補はありません。</div>`}</div>`}
   </div>`;
 }
 
@@ -15529,11 +16543,35 @@ window.startIftySubjectDueReviewFlashcards = function(subject, direction = 'fron
   renderFlashcardModal();
 };
 
+
+const IFTY_REVIEW_PANEL_COLLAPSE_KEY = 'ifty_review_panel_collapsed_v1';
+const IFTY_WEAK_PANEL_COLLAPSE_KEY = 'ifty_weak_panel_collapsed_v1';
+
+function getIftyLearningPanelCollapsed(key) {
+  try { return localStorage.getItem(key) === '1'; } catch (_) { return false; }
+}
+function setIftyLearningPanelCollapsed(key, collapsed) {
+  try { localStorage.setItem(key, collapsed ? '1' : '0'); } catch (_) {}
+}
+window.toggleIftyReviewFolderPanel = function() {
+  setIftyLearningPanelCollapsed(IFTY_REVIEW_PANEL_COLLAPSE_KEY, !getIftyLearningPanelCollapsed(IFTY_REVIEW_PANEL_COLLAPSE_KEY));
+  const y = window.scrollY;
+  renderFolders();
+  requestAnimationFrame(() => window.scrollTo({ top:y, left:0, behavior:'auto' }));
+};
+window.toggleIftyWeakFolderPanel = function() {
+  setIftyLearningPanelCollapsed(IFTY_WEAK_PANEL_COLLAPSE_KEY, !getIftyLearningPanelCollapsed(IFTY_WEAK_PANEL_COLLAPSE_KEY));
+  const y = window.scrollY;
+  renderFolders();
+  requestAnimationFrame(() => window.scrollTo({ top:y, left:0, behavior:'auto' }));
+};
+
 function renderIftyReviewFolder() {
   const allEntries = getIftyReviewEntries();
   const dueEntries = getIftyReviewEntries({ dueOnly: true });
   const nextReview = getIftyNextReviewTimestamp();
   const stats = getIftyLearningStats();
+  const collapsed = getIftyLearningPanelCollapsed(IFTY_REVIEW_PANEL_COLLAPSE_KEY);
 
   const dueList = dueEntries.length
     ? dueEntries.map(({ folder, word, review }) => {
@@ -15554,27 +16592,41 @@ function renderIftyReviewFolder() {
   return `
     <div id="iftyReviewFolder" style="background:#fff7ed;border:2px solid #fb923c;border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 2px 5px rgba(154,52,18,.08);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-        <div>
-          <h3 style="margin:0;color:#7c2d12;font-size:1.12em;">🔁 復習 <span style="font-size:.82em;color:#c2410c;">(今日 ${dueEntries.length}件 / 管理 ${allEntries.length}件 / 卒業 ${stats.reviewGraduated}件)</span></h3>
-<div style="margin-top:4px;color:#9a3412;font-size:.78em;">自動：学習 → 1日 → 3日 → 7日 → 14日 → 30日 → 卒業　／　間違いは1日段階へ戻る</div>
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button type="button" onclick="startIftyDueReviewFlashcards('front')" ${dueEntries.length ? '' : 'disabled'} style="border:none;background:#ea580c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${dueEntries.length ? 'pointer' : 'default'};opacity:${dueEntries.length ? '1' : '.45'};">📇 今日の復習</button>
-          <button type="button" onclick="startIftyDueReviewQuiz()" ${dueEntries.length ? '' : 'disabled'} style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${dueEntries.length ? 'pointer' : 'default'};opacity:${dueEntries.length ? '1' : '.45'};">❓ クイズ</button>
+        <button type="button" onclick="toggleIftyReviewFolderPanel()" aria-expanded="${collapsed ? 'false' : 'true'}" style="border:none;background:transparent;padding:0;text-align:left;cursor:pointer;min-width:0;flex:1;color:inherit;">
+          <h3 style="margin:0;color:#7c2d12;font-size:1.12em;">${collapsed ? '▶' : '▼'} 🔁 復習 <span style="font-size:.82em;color:#c2410c;">(今日 ${dueEntries.length}件 / 管理 ${allEntries.length}件 / 卒業 ${stats.reviewGraduated}件)</span></h3>
+          ${collapsed ? '' : '<div style="margin-top:4px;color:#9a3412;font-size:.78em;">自動：学習 → 1日 → 3日 → 7日 → 14日 → 30日 → 卒業　／　間違いは1日段階へ戻る</div>'}
+        </button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          <button type="button" onclick="toggleIftyReviewFolderPanel()" style="border:1px solid #fb923c;background:transparent;color:#c2410c;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${collapsed ? '開く' : '折りたたむ'}</button>
+          ${collapsed ? '' : `<button type="button" onclick="startIftyDueReviewFlashcards('front')" ${dueEntries.length ? '' : 'disabled'} style="border:none;background:#ea580c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${dueEntries.length ? 'pointer' : 'default'};opacity:${dueEntries.length ? '1' : '.45'};">📇 今日の復習</button>
+          <button type="button" onclick="startIftyDueReviewQuiz()" ${dueEntries.length ? '' : 'disabled'} style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${dueEntries.length ? 'pointer' : 'default'};opacity:${dueEntries.length ? '1' : '.45'};">❓ クイズ</button>`}
         </div>
       </div>
-      <div style="margin-top:10px;">${dueList}</div>
+      ${collapsed ? '' : `<div style="margin-top:10px;">${dueList}</div>`}
     </div>`;
 }
 
 function renderIftyWeakFolder() {
   const entries = getIftyWeakEntries();
   if (!entries.length) return '';
+  const collapsed = getIftyLearningPanelCollapsed(IFTY_WEAK_PANEL_COLLAPSE_KEY);
   const list = entries.slice(0, 12).map(({ folder, word, study, accuracy }) => {
     const meanings = Array.isArray(word.meanings) ? word.meanings : (word.meanings ? [word.meanings] : []);
     return `<div style="padding:8px 0;border-bottom:1px solid #fecdd3;display:flex;justify-content:space-between;gap:10px;align-items:flex-start;"><div><div style="font-weight:900;color:#881337;">${escapeHtml(word.word || '')}</div><div style="font-size:.8em;color:#9f1239;margin-top:2px;">${escapeHtml(meanings.join(' / '))}</div><div style="font-size:.72em;color:#be123c;margin-top:3px;">📁 ${escapeHtml(folder.name || '')} ・ ${study.correct}/${study.total}正解 ・ 正答率${Math.round(accuracy * 100)}%</div></div></div>`;
   }).join('');
-  return `<div id="iftyWeakFolder" style="background:#fff1f2;border:2px solid #fb7185;border-radius:10px;padding:16px;margin-bottom:12px;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><h3 style="margin:0;color:#881337;font-size:1.08em;">🎯 苦手候補 <span style="font-size:.82em;color:#be123c;">${entries.length}語</span></h3><div style="font-size:.76em;color:#9f1239;margin-top:4px;">3回以上学習・2回以上不正解・正答率70%未満を自動抽出</div></div><button type="button" onclick="startIftyWeakFlashcards('front')" style="border:none;background:#be123c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">📇 苦手だけ学習</button></div><div style="margin-top:9px;">${list}${entries.length > 12 ? `<div style="padding-top:8px;color:#9f1239;font-size:.76em;">ほか ${entries.length - 12}語</div>` : ''}</div></div>`;
+  return `<div id="iftyWeakFolder" style="background:#fff1f2;border:2px solid #fb7185;border-radius:10px;padding:16px;margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button type="button" onclick="toggleIftyWeakFolderPanel()" aria-expanded="${collapsed ? 'false' : 'true'}" style="border:none;background:transparent;padding:0;text-align:left;cursor:pointer;min-width:0;flex:1;color:inherit;">
+        <h3 style="margin:0;color:#881337;font-size:1.08em;">${collapsed ? '▶' : '▼'} 🎯 苦手候補 <span style="font-size:.82em;color:#be123c;">${entries.length}語</span></h3>
+        ${collapsed ? '' : '<div style="font-size:.76em;color:#9f1239;margin-top:4px;">3回以上学習・2回以上不正解・正答率70%未満を自動抽出</div>'}
+      </button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <button type="button" onclick="toggleIftyWeakFolderPanel()" style="border:1px solid #fb7185;background:transparent;color:#be123c;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${collapsed ? '開く' : '折りたたむ'}</button>
+        ${collapsed ? '' : `<button type="button" onclick="startIftyWeakFlashcards('front')" style="border:none;background:#be123c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">📇 苦手だけ学習</button>`}
+      </div>
+    </div>
+    ${collapsed ? '' : `<div style="margin-top:9px;">${list}${entries.length > 12 ? `<div style="padding-top:8px;color:#9f1239;font-size:.76em;">ほか ${entries.length - 12}語</div>` : ''}</div>`}
+  </div>`;
 }
 
 window.startIftyWeakFlashcards = function(direction = 'front') {
@@ -17446,6 +18498,24 @@ window.moveFolder = function(index, direction) {
   renderFolders();
 };
 
+
+window.renameIftyVocabularyFolder = function(folderId) {
+  const folder = folders.find(f => String(f.id) === String(folderId));
+  if (!folder) return;
+  const next = prompt('新しいフォルダ名', folder.name || '');
+  if (next === null) return;
+  const name = String(next).trim();
+  if (!name || name === String(folder.name || '')) return;
+  if (folders.some(f => String(f.id) !== String(folderId) && String(f.name || '').trim().toLowerCase() === name.toLowerCase())) {
+    alert('同じ名前のフォルダがあります。');
+    return;
+  }
+  recordUndoState('フォルダ名変更');
+  folder.name = name.slice(0, 80);
+  saveUserData();
+  renderFolders();
+};
+
 window.clearFolderWords = function(folderId) {
   if (!confirm("このフォルダ内の単語をすべて削除しますか？")) return;
 
@@ -17525,6 +18595,7 @@ function renderFolders() {
         </div>
         <div class="ifty-folder-actions" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
           <button onclick="selectAllWordsInFolder('${folder.id}')" title="フォルダ内全選択" style="background:${allWordsSelected ? '#10b981' : '#e2e8f0'};color:${allWordsSelected ? 'white' : '#334155'};border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:.75em;">全選択</button>
+          <button onclick="renameIftyVocabularyFolder('${folder.id}')" title="フォルダ名を変更" style="background:#64748b;color:white;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:.75em;font-weight:800;">名前変更</button>
           <button onclick="moveFolder(${fIndex}, -1)" title="上に移動" style="background:#e2e8f0;border:none;padding:2px 6px;border-radius:4px;cursor:pointer;font-size:.8em;">⬆️</button>
           <button onclick="moveFolder(${fIndex}, 1)" title="下に移動" style="background:#e2e8f0;border:none;padding:2px 6px;border-radius:4px;cursor:pointer;font-size:.8em;">⬇️</button>
           <button onclick="clearFolderWords('${folder.id}')" title="全消し" style="background:#f59e0b;color:white;border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:.75em;">全消し</button>
@@ -25122,4 +26193,92 @@ window.logout = async function() {
       anchor:() => findToggleButton('toggleIftyBasicSentenceFolder', folderId)
     });
   };
+})();
+
+
+
+// ==========================================
+// ★★★ STEP117：ANCIENT / KANBUN の明色背景を完全排除 ★★★
+// ==========================================
+(function ensureIftyStep117AncientKanbunDarkStyles(){
+  if(document.getElementById('iftyStep117AncientKanbunDarkStyles')) return;
+  const style=document.createElement('style');
+  style.id='iftyStep117AncientKanbunDarkStyles';
+  style.textContent=`
+    body[data-ifty-theme="dark"] .ifty-ancient-item-card,
+    body[data-ifty-theme="dark"] .ifty-kanbun-item-card,
+    body[data-ifty-theme="dark"] [id^="iftyAncientFolder_"],
+    body[data-ifty-theme="dark"] [id^="iftyKanbunFolder_"]{
+      background:#1b2638 !important;
+      border-color:#64748b !important;
+      color:#f8fafc !important;
+    }
+
+    body[data-ifty-theme="dark"] .ifty-ancient-item-card :where(div,span,p,section,aside)[style*="background:#"],
+    body[data-ifty-theme="dark"] .ifty-ancient-item-card :where(div,span,p,section,aside)[style*="background: #"],
+    body[data-ifty-theme="dark"] .ifty-ancient-item-card :where(div,span,p,section,aside)[style*="background:white"],
+    body[data-ifty-theme="dark"] .ifty-ancient-item-card :where(div,span,p,section,aside)[style*="background: white"],
+    body[data-ifty-theme="dark"] .ifty-kanbun-item-card :where(div,span,p,section,aside)[style*="background:#"],
+    body[data-ifty-theme="dark"] .ifty-kanbun-item-card :where(div,span,p,section,aside)[style*="background: #"],
+    body[data-ifty-theme="dark"] .ifty-kanbun-item-card :where(div,span,p,section,aside)[style*="background:white"],
+    body[data-ifty-theme="dark"] .ifty-kanbun-item-card :where(div,span,p,section,aside)[style*="background: white"]{
+      background:#223149 !important;
+      border-color:#6f829b !important;
+    }
+
+    body[data-ifty-theme="dark"] .ifty-ancient-item-card :where(div,span,strong,p)[style*="color:#0f172a"],
+    body[data-ifty-theme="dark"] .ifty-ancient-item-card :where(div,span,strong,p)[style*="color: #0f172a"],
+    body[data-ifty-theme="dark"] .ifty-ancient-item-card :where(div,span,strong,p)[style*="color:#334155"],
+    body[data-ifty-theme="dark"] .ifty-ancient-item-card :where(div,span,strong,p)[style*="color: #334155"],
+    body[data-ifty-theme="dark"] .ifty-kanbun-item-card :where(div,span,strong,p)[style*="color:#0f172a"],
+    body[data-ifty-theme="dark"] .ifty-kanbun-item-card :where(div,span,strong,p)[style*="color: #0f172a"],
+    body[data-ifty-theme="dark"] .ifty-kanbun-item-card :where(div,span,strong,p)[style*="color:#334155"],
+    body[data-ifty-theme="dark"] .ifty-kanbun-item-card :where(div,span,strong,p)[style*="color: #334155"]{
+      color:#f8fafc !important;
+    }
+
+    body[data-ifty-theme="dark"] .ifty-subject-review-panel,
+    body[data-ifty-theme="dark"] .ifty-subject-weak-panel{
+      background:#1b2638 !important;
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
+// ==========================================
+// ★★★ STEP116：ダークモードの明色背景を追加で排除 ★★★
+// STEP109で取りこぼした #eef2ff 等も含め、非操作系の明色面を暗色へ統一。
+// ==========================================
+(function ensureIftyStep116DarkSurfaceStyles(){
+  if(document.getElementById('iftyStep116DarkSurfaceStyles')) return;
+  const style=document.createElement('style');
+  style.id='iftyStep116DarkSurfaceStyles';
+  style.textContent=`
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span,p,ul,ol,li)[style*="background:#eef2ff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span,p,ul,ol,li)[style*="background: #eef2ff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span,p,ul,ol,li)[style*="background:#fefce8"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span,p,ul,ol,li)[style*="background: #fefce8"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span,p,ul,ol,li)[style*="background:#fef9c3"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span,p,ul,ol,li)[style*="background: #fef9c3"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span,p,ul,ol,li)[style*="background:#fff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span,p,ul,ol,li)[style*="background: #fff"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span,p,ul,ol,li)[style*="background:white"],
+    body[data-ifty-theme="dark"] :where(div,section,article,aside,details,summary,form,label,span,p,ul,ol,li)[style*="background: white"]{
+      background:#223149 !important;
+      border-color:#6f829b !important;
+    }
+
+    /* LANGUAGESの活用欄を明示的に暗色化。 */
+    body[data-ifty-theme="dark"] .ifty-word-card [style*="background: #eef2ff"],
+    body[data-ifty-theme="dark"] .ifty-word-card [style*="background:#eef2ff"]{
+      background:#223149 !important;
+      color:#f8fafc !important;
+    }
+
+    body[data-ifty-theme="dark"] #iftyReviewFolder,
+    body[data-ifty-theme="dark"] #iftyWeakFolder{
+      background:#1b2638 !important;
+    }
+  `;
+  document.head.appendChild(style);
 })();
