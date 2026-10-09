@@ -1,3 +1,4 @@
+// ★★★ IFTY Q3 STEP120 2026-10-09：SUBJECT NAME DISPLAY ALSO APPLIES TO SIDE MENU ★★★
 // ★★★ IFTY Q3 STEP119 2026-10-09：HOME SUBJECT NAME DISPLAY SETTING ★★★
 // ★★★ IFTY Q3 STEP118 2026-10-09：FOLDER SHARE / FRIENDS ★★★
 // ★★★ IFTY Q3 STEP117 2026-10-09：ANCIENT / KANBUN REVIEW-WEAK COLLAPSE + DARK FIX ★★★
@@ -11,7 +12,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 119;
+const IFTY_APP_STEP = 120;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -1503,13 +1504,13 @@ function renderIftySideMenu() {
       <button class="ifty-side-menu-item" type="button" onclick="openIftySideMenuHome()">⌂ ホーム</button>
 
       <div class="ifty-side-menu-label">教科</div>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ENGLISH')">言語・語彙</button>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ANCIENT')">古文</button>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('KANBUN')">漢文</button>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('KANJI')">漢字</button>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SCIENCE')">理科</button>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SOCIAL STUDIES')">社会</button>
-      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('OTHERS')">その他</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ENGLISH')">${escapeHtml(getIftyHomeSubjectDisplayName('ENGLISH'))}</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('ANCIENT')">${escapeHtml(getIftyHomeSubjectDisplayName('ANCIENT'))}</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('KANBUN')">${escapeHtml(getIftyHomeSubjectDisplayName('KANBUN'))}</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('KANJI')">${escapeHtml(getIftyHomeSubjectDisplayName('KANJI'))}</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SCIENCE')">${escapeHtml(getIftyHomeSubjectDisplayName('SCIENCE'))}</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('SOCIAL STUDIES')">${escapeHtml(getIftyHomeSubjectDisplayName('SOCIAL STUDIES'))}</button>
+      <button class="ifty-side-menu-item ifty-side-subject" type="button" onclick="openIftySubject('OTHERS')">${escapeHtml(getIftyHomeSubjectDisplayName('OTHERS'))}</button>
 
       <div class="ifty-side-menu-separator"></div>
       <div class="ifty-side-menu-label">ツール</div>
@@ -3983,6 +3984,18 @@ window.setIftyHomeSubjectNameMode = function(mode) {
   const next = String(mode || '').toLowerCase() === 'ja' ? 'ja' : 'en';
   try { localStorage.setItem(IFTY_HOME_SUBJECT_NAME_MODE_KEY, next); } catch (_) {}
   if (typeof scheduleIftyCloudSave === 'function') scheduleIftyCloudSave();
+
+  const sideOverlay = document.getElementById('iftySideMenuOverlay');
+  const sideWasOpen = !!(sideOverlay && sideOverlay.classList.contains('ifty-side-menu-open'));
+  if (typeof renderIftySideMenu === 'function') {
+    const refreshedOverlay = renderIftySideMenu();
+    if (sideWasOpen && refreshedOverlay) {
+      refreshedOverlay.style.display = 'block';
+      refreshedOverlay.setAttribute('aria-hidden', 'false');
+      refreshedOverlay.classList.add('ifty-side-menu-open');
+    }
+  }
+
   if (typeof window.openIftySettings === 'function') window.openIftySettings();
 };
 
@@ -11720,8 +11733,8 @@ window.openIftySettings = function() {
       </div>
 
       <div class="ifty-settings-section">
-        <h3>HOME 教科名表示</h3>
-        <div class="ifty-settings-note">HOMEの教科カード名を日本語または英語で表示します。フォルダや学習データには影響しません。</div>
+        <h3>教科名表示</h3>
+        <div class="ifty-settings-note">HOMEの教科カードと左メニューの教科名を、日本語または英語で統一して表示します。フォルダや学習データには影響しません。</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
           <button class="ifty-settings-action" type="button" onclick="setIftyHomeSubjectNameMode('ja')" aria-pressed="${getIftyHomeSubjectNameMode()==='ja' ? 'true' : 'false'}"
             style="background:${getIftyHomeSubjectNameMode()==='ja' ? '#0f766e' : '#334155'};color:white;border:${getIftyHomeSubjectNameMode()==='ja' ? '2px solid #5eead4' : '1px solid #64748b'};">
@@ -11733,7 +11746,8 @@ window.openIftySettings = function() {
           </button>
         </div>
         <div class="ifty-settings-note" style="margin-top:8px;">
-          現在：${getIftyHomeSubjectNameMode()==='ja' ? '日本語（言語・語彙 / 古文 / 漢文 / 漢字 / 理科 / 社会 / その他）' : '英語（LANGUAGES / ANCIENT / KANBUN / KANJI / SCIENCE / SOCIAL STUDIES / OTHERS）'}
+          現在：${getIftyHomeSubjectNameMode()==='ja' ? '日本語（言語・語彙 / 古文 / 漢文 / 漢字 / 理科 / 社会 / その他）' : '英語（LANGUAGES / ANCIENT / KANBUN / KANJI / SCIENCE / SOCIAL STUDIES / OTHERS）'}<br>
+          HOME・左メニューの両方に適用
         </div>
       </div>
 
