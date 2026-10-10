@@ -1,3 +1,7 @@
+// ★★★ IFTY Q3 STEP130 2026-10-10：PUBLIC FOLDER MANAGEMENT PAGE ★★★
+// ★★★ IFTY Q3 STEP129 2026-10-10：PUBLIC FOLDER CODES / REVOKE ★★★
+// ★★★ IFTY Q3 STEP128 2026-10-10：RELIABLE FOLDER SHARE LINKS / LINE SHARE ★★★
+// ★★★ IFTY Q3 STEP127 2026-10-10：ENGLISH LEVEL CALIBRATION FIX ★★★
 // ★★★ IFTY Q3 STEP126 2026-10-10：GLOBAL VOCAB SEARCH INPUT / SCROLL STABILITY FIX ★★★
 // ★★★ IFTY Q3 STEP125 2026-10-10：ALLIA SEMANTIC VOCAB SEARCH + SINGLE WORD MOVE ★★★
 // ★★★ IFTY Q3 STEP124 2026-10-10：SMARTPHONE PRACTICE UI FIX ★★★
@@ -18,7 +22,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 126;
+const IFTY_APP_STEP = 130;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -1545,6 +1549,8 @@ function renderIftySideMenu() {
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openPracticeHome(currentIftySubject);">⚔️ ${escapeHtml(getIftySideMenuDisplayText('practice'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyFriendsPage();">👥 ${escapeHtml(getIftySideMenuDisplayText('friends'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyFolderImportPicker();">📦 ${escapeHtml(getIftySideMenuDisplayText('importFolder'))}</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPublicFolderCodeModal();">🌐 公開コードから取得</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPublishedFoldersPage();">📡 ${escapeHtml(getIftySideMenuDisplayText('publishedFolders'))}</button>
 
       <div class="ifty-side-menu-separator"></div>
       <button class="ifty-side-menu-item" type="button" onclick="openIftySettings()">⚙️ ${escapeHtml(getIftySideMenuDisplayText('settings'))}</button>
@@ -3584,25 +3590,704 @@ function downloadIftyFolderPackage(file) {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
-window.exportIftyFolder = async function(subject, folderId) {
+
+const IFTY_PENDING_FOLDER_SHARE_KEY = 'ifty_pending_folder_share_v1';
+let iftyFolderShareDraft = null;
+let iftyFolderShareCreating = false;
+let iftyIncomingFolderShareProcessing = false;
+
+// STEP129：公開コード。
+// 公開は7日リンクとは別物で、停止するまで有効。所有者だけ更新・停止できる。
+let iftyFolderPublicationLoading = false;
+let iftyPublicFolderLookupBusy = false;
+
+function makeIftyFolderFile(pack, preferJsonName = false) {
+  const base = sanitizeIftyFilename(pack?.folder?.name || 'IFTYフォルダ');
+  const filename = preferJsonName ? `${base}.iftyfolder.json` : `${base}.iftyfolder`;
+  return new File([JSON.stringify(pack, null, 2)], filename, { type:'application/json' });
+}
+
+async function shareIftyFolderAsFile(pack) {
+  const file = makeIftyFolderFile(pack, true);
+  if (navigator.share && navigator.canShare && navigator.canShare({ files:[file] })) {
+    try {
+      await navigator.share({
+        files:[file],
+        title:`IFTY：${pack.folder?.name || 'フォルダ'}`,
+        text:`IFTYの${pack.subjectLabel}フォルダです。`
+      });
+      return true;
+    } catch (error) {
+      if (String(error?.name || '') === 'AbortError') return false;
+    }
+  }
+  downloadIftyFolderPackage(file);
+  alert('JSON形式の共有ファイルを作成しました。ファイルアプリ・AirDropなどから送れます。');
+  return true;
+}
+
+function getIftyFolderSharePageUrl(shareToken) {
+  const url = new URL(window.location.href);
+  url.hash = '';
+  url.search = '';
+  url.searchParams.set('iftyShare', String(shareToken || ''));
+  return url.toString();
+}
+
+function getIftyFolderShareMessage(link, pack) {
+  const name = String(pack?.folder?.name || 'IFTYフォルダ');
+  const subject = String(pack?.subjectLabel || '学習');
+  return `IFTYの「${name}」（${subject}）を共有します。\nこのリンクをIFTYで開くとフォルダをそのまま受け取れます。\n${link}`;
+}
+
+
+function getIftyFolderPublicationSourceKey(subject, folderId) {
+  return `${normalizeIftyFolderShareSubject(subject)}:${String(folderId || '')}`;
+}
+
+function formatIftyPublicCode(value) {
+  const raw = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!raw) return '';
+  return raw.match(/.{1,4}/g)?.join('-') || raw;
+}
+
+function normalizeIftyPublicCodeInput(value) {
+  return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 24);
+}
+
+function renderIftyFolderPublicationStatus(message, kind = 'normal') {
+  const el = document.getElementById('iftyFolderPublicationStatus');
+  if (!el) return;
+  el.textContent = String(message || '');
+  el.style.color = kind === 'error' ? '#fca5a5' : kind === 'ok' ? '#86efac' : '#cbd5e1';
+}
+
+function renderIftyFolderPublicationPanel(publication = null) {
+  const root = document.getElementById('iftyFolderPublicationPanel');
+  if (!root || !iftyFolderShareDraft) return;
+
+  const active = !!publication?.active && !!publication?.code;
+  iftyFolderShareDraft.publication = active ? publication : null;
+
+  root.innerHTML = `
+    <div style="font-weight:950;color:#f8fafc;">🌐 公開</div>
+    <div style="margin-top:5px;color:#cbd5e1;font-size:.76rem;line-height:1.5;">
+      公開すると、IFTYを使う人なら誰でも公開コードを入力してこのフォルダのコピーを入手できます。
+      <b style="color:#fde68a;">停止するまで有効</b>です。公開後に元フォルダを編集しても自動同期はされません。
+    </div>
+    ${active ? `
+      <div style="margin-top:10px;padding:11px;border:1px solid #0ea5e9;border-radius:10px;background:#0c2538;">
+        <div style="color:#bae6fd;font-size:.72rem;font-weight:900;">公開コード</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:5px;">
+          <code style="font-size:1.15rem;font-weight:950;letter-spacing:.08em;color:#f8fafc;background:#071521;border:1px solid #334155;border-radius:8px;padding:8px 10px;">${escapeHtml(formatIftyPublicCode(publication.code))}</code>
+          <button type="button" onclick="copyIftyPublishedFolderCode()" style="border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:8px;padding:9px 10px;font-weight:900;cursor:pointer;">コードをコピー</button>
+        </div>
+        <div style="margin-top:7px;color:#94a3b8;font-size:.72rem;">取得 ${Number(publication.importCount || 0)}回 ・ 最終更新 ${escapeHtml(publication.updatedAtText || '')}</div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px;">
+          <button type="button" onclick="updateIftyPublishedFolder()" style="border:none;background:#0369a1;color:white;border-radius:8px;padding:10px;font-weight:950;cursor:pointer;">公開内容を更新</button>
+          <button type="button" onclick="stopIftyPublishedFolder()" style="border:1px solid #ef4444;background:#3f1d25;color:#fecaca;border-radius:8px;padding:10px;font-weight:950;cursor:pointer;">公開停止</button>
+        </div>
+      </div>
+    ` : `
+      <button type="button" onclick="publishIftyFolder()" style="width:100%;margin-top:10px;border:none;background:#0284c7;color:white;border-radius:9px;padding:11px 12px;font-weight:950;cursor:pointer;">🌐 このフォルダを公開</button>
+    `}
+    <div id="iftyFolderPublicationStatus" style="min-height:1.35em;margin-top:8px;color:#cbd5e1;font-size:.76rem;"></div>`;
+}
+
+async function refreshIftyFolderPublicationPanel() {
+  if (!iftyFolderShareDraft || !iftySessionToken || iftyDeveloperMode) {
+    renderIftyFolderPublicationPanel(null);
+    return;
+  }
+  if (iftyFolderPublicationLoading) return;
+  iftyFolderPublicationLoading = true;
   try {
-    const pack = getIftyFolderPackage(subject, folderId);
-    const filename = `${sanitizeIftyFilename(pack.folder?.name || 'IFTYフォルダ')}.iftyfolder`;
-    const file = new File([JSON.stringify(pack, null, 2)], filename, { type:'application/json' });
-    if (navigator.share && navigator.canShare && navigator.canShare({ files:[file] })) {
+    const data = await iftyAccountApi('folder_public_status', {
+      token: iftySessionToken,
+      sourceKey: getIftyFolderPublicationSourceKey(iftyFolderShareDraft.subject, iftyFolderShareDraft.folderId)
+    });
+    renderIftyFolderPublicationPanel(data?.publication || null);
+  } catch (error) {
+    renderIftyFolderPublicationPanel(null);
+    renderIftyFolderPublicationStatus(String(error?.message || error), 'error');
+  } finally {
+    iftyFolderPublicationLoading = false;
+  }
+}
+
+window.publishIftyFolder = async function() {
+  if (!iftyFolderShareDraft) return;
+  if (!iftySessionToken || !iftyAccount || iftyDeveloperMode) {
+    return renderIftyFolderPublicationStatus('公開にはIFTYアカウントへのログインが必要です。', 'error');
+  }
+  if (!isIftyOnline()) return renderIftyFolderPublicationStatus('公開にはインターネット接続が必要です。', 'error');
+
+  const ok = window.confirm(
+    'このフォルダを公開しますか？\\n\\n公開コードを知っている人は誰でもコピーを入手できます。\\n復習履歴・正答率・アカウント情報は公開されません。'
+  );
+  if (!ok) return;
+
+  renderIftyFolderPublicationStatus('公開コードを作成中…');
+  try {
+    const data = await iftyAccountApi('folder_public_publish', {
+      token: iftySessionToken,
+      sourceKey: getIftyFolderPublicationSourceKey(iftyFolderShareDraft.subject, iftyFolderShareDraft.folderId),
+      package: iftyFolderShareDraft.pack
+    });
+    renderIftyFolderPublicationPanel(data?.publication || null);
+    renderIftyFolderPublicationStatus('公開しました。このコードは公開停止するまで有効です。', 'ok');
+  } catch (error) {
+    renderIftyFolderPublicationStatus(String(error?.message || error), 'error');
+  }
+};
+
+window.updateIftyPublishedFolder = async function() {
+  if (!iftyFolderShareDraft?.publication?.code) return;
+  renderIftyFolderPublicationStatus('公開内容を更新中…');
+  try {
+    // 元フォルダの現在内容からパッケージを作り直してスナップショットを更新する。
+    const freshPack = getIftyFolderPackage(iftyFolderShareDraft.subject, iftyFolderShareDraft.folderId);
+    iftyFolderShareDraft.pack = freshPack;
+    const data = await iftyAccountApi('folder_public_update', {
+      token: iftySessionToken,
+      sourceKey: getIftyFolderPublicationSourceKey(iftyFolderShareDraft.subject, iftyFolderShareDraft.folderId),
+      code: iftyFolderShareDraft.publication.code,
+      package: freshPack
+    });
+    renderIftyFolderPublicationPanel(data?.publication || null);
+    renderIftyFolderPublicationStatus('公開内容を現在のフォルダ内容に更新しました。', 'ok');
+  } catch (error) {
+    renderIftyFolderPublicationStatus(String(error?.message || error), 'error');
+  }
+};
+
+window.stopIftyPublishedFolder = async function() {
+  const publication = iftyFolderShareDraft?.publication;
+  if (!publication?.code) return;
+  if (!window.confirm(`公開コード ${formatIftyPublicCode(publication.code)} を停止しますか？\\n停止後、このコードからは取得できなくなります。`)) return;
+
+  renderIftyFolderPublicationStatus('公開を停止中…');
+  try {
+    await iftyAccountApi('folder_public_stop', {
+      token: iftySessionToken,
+      code: publication.code
+    });
+    renderIftyFolderPublicationPanel(null);
+    renderIftyFolderPublicationStatus('公開を停止しました。以前のコードは無効です。', 'ok');
+  } catch (error) {
+    renderIftyFolderPublicationStatus(String(error?.message || error), 'error');
+  }
+};
+
+window.copyIftyPublishedFolderCode = async function() {
+  const code = iftyFolderShareDraft?.publication?.code;
+  if (!code) return;
+  const pretty = formatIftyPublicCode(code);
+  const ok = await copyIftyText(pretty);
+  renderIftyFolderPublicationStatus(ok ? `公開コード ${pretty} をコピーしました。` : 'コピーできませんでした。', ok ? 'ok' : 'error');
+};
+
+function closeIftyPublicFolderCodeModal() {
+  const modal = document.getElementById('iftyPublicFolderCodeModal');
+  if (modal) modal.remove();
+}
+window.closeIftyPublicFolderCodeModal = closeIftyPublicFolderCodeModal;
+
+window.openIftyPublicFolderCodeModal = function() {
+  closeIftyPublicFolderCodeModal();
+  const modal = document.createElement('div');
+  modal.id = 'iftyPublicFolderCodeModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:12370;background:rgba(2,6,23,.8);display:flex;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;';
+  modal.addEventListener('pointerdown', event => {
+    if (event.target === modal) closeIftyPublicFolderCodeModal();
+  });
+  modal.innerHTML = `
+    <div role="dialog" aria-modal="true" onclick="event.stopPropagation()" style="width:min(500px,100%);background:#172033;border:1px solid #64748b;border-radius:14px;padding:16px;color:#f8fafc;box-sizing:border-box;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+        <div>
+          <div style="font-size:1.1rem;font-weight:950;">🌐 公開フォルダを取得</div>
+          <div style="margin-top:4px;color:#cbd5e1;font-size:.78rem;">送り主から教えてもらった公開コードを入力してください。</div>
+        </div>
+        <button type="button" onclick="closeIftyPublicFolderCodeModal()" aria-label="閉じる" style="border:none;background:#334155;color:#f8fafc;border-radius:999px;width:36px;height:36px;font-size:1.15rem;font-weight:900;">×</button>
+      </div>
+      <input id="iftyPublicFolderCodeInput" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="例：ABCD-EFGH-JKLM" oninput="this.value=formatIftyPublicCode(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();lookupIftyPublicFolderCode();}" style="width:100%;box-sizing:border-box;margin-top:14px;padding:12px;background:#0f172a;color:#f8fafc;border:1px solid #64748b;border-radius:9px;font-size:1rem;font-weight:900;letter-spacing:.05em;">
+      <button id="iftyPublicFolderLookupButton" type="button" onclick="lookupIftyPublicFolderCode()" style="width:100%;margin-top:9px;border:none;background:#0284c7;color:white;border-radius:9px;padding:11px;font-weight:950;cursor:pointer;">コードから取得</button>
+      <div id="iftyPublicFolderLookupStatus" style="min-height:1.5em;margin-top:9px;color:#cbd5e1;font-size:.78rem;"></div>
+      <div id="iftyPublicFolderLookupPreview"></div>
+    </div>`;
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('iftyPublicFolderCodeInput')?.focus({ preventScroll:true }), 30);
+};
+
+function setIftyPublicFolderLookupStatus(message, error = false) {
+  const el = document.getElementById('iftyPublicFolderLookupStatus');
+  if (!el) return;
+  el.textContent = String(message || '');
+  el.style.color = error ? '#fca5a5' : '#cbd5e1';
+}
+
+window.lookupIftyPublicFolderCode = async function() {
+  if (iftyPublicFolderLookupBusy) return;
+  const input = document.getElementById('iftyPublicFolderCodeInput');
+  const normalized = normalizeIftyPublicCodeInput(input?.value || '');
+  if (normalized.length < 8) return setIftyPublicFolderLookupStatus('公開コードを入力してください。', true);
+  if (!isIftyOnline()) return setIftyPublicFolderLookupStatus('インターネット接続が必要です。', true);
+
+  iftyPublicFolderLookupBusy = true;
+  const button = document.getElementById('iftyPublicFolderLookupButton');
+  if (button) { button.disabled = true; button.style.opacity = '.55'; }
+  setIftyPublicFolderLookupStatus('公開フォルダを確認中…');
+
+  try {
+    const data = await iftyAccountApi('folder_public_fetch', { code: normalized });
+    const pack = data?.package;
+    if (!pack || pack.type !== IFTY_FOLDER_PACKAGE_TYPE) throw new Error('公開フォルダの形式が不正です。');
+
+    window.__iftyPendingPublicFolderPack = pack;
+    const preview = document.getElementById('iftyPublicFolderLookupPreview');
+    if (preview) {
+      preview.innerHTML = `
+        <div style="margin-top:10px;padding:12px;border:1px solid #475569;border-radius:10px;background:#0f172a;">
+          <div style="font-weight:950;color:#f8fafc;">${escapeHtml(pack.folder?.name || '公開フォルダ')}</div>
+          <div style="margin-top:4px;color:#cbd5e1;font-size:.78rem;">${escapeHtml(pack.subjectLabel || getIftyFolderShareSubjectLabel(pack.subject))} ・ ${Array.isArray(pack.records) ? pack.records.length : 0}件</div>
+          <div style="margin-top:4px;color:#94a3b8;font-size:.7rem;">取得回数 ${Number(data.importCount || 0)}回</div>
+          <button type="button" onclick="importIftyPendingPublicFolder()" style="width:100%;margin-top:10px;border:none;background:#059669;color:white;border-radius:8px;padding:10px;font-weight:950;cursor:pointer;">このフォルダを追加</button>
+        </div>`;
+    }
+    setIftyPublicFolderLookupStatus('公開フォルダが見つかりました。');
+  } catch (error) {
+    window.__iftyPendingPublicFolderPack = null;
+    const preview = document.getElementById('iftyPublicFolderLookupPreview');
+    if (preview) preview.innerHTML = '';
+    setIftyPublicFolderLookupStatus(String(error?.message || error), true);
+  } finally {
+    iftyPublicFolderLookupBusy = false;
+    if (button) { button.disabled = false; button.style.opacity = '1'; }
+  }
+};
+
+window.importIftyPendingPublicFolder = async function() {
+  const pack = window.__iftyPendingPublicFolderPack;
+  if (!pack) return;
+  try {
+    await importIftyFolderPackage(pack);
+    window.__iftyPendingPublicFolderPack = null;
+    closeIftyPublicFolderCodeModal();
+  } catch (error) {
+    setIftyPublicFolderLookupStatus(String(error?.message || error), true);
+  }
+};
+
+
+
+let iftyPublishedFoldersPageLoading = false;
+
+function getIftyPublicationSubjectLabel(subject) {
+  try { return getIftyFolderShareSubjectLabel(subject); }
+  catch (_) { return String(subject || ''); }
+}
+
+function renderIftyPublishedFolderManagerRows(publications) {
+  const rows = Array.isArray(publications) ? publications : [];
+  if (!rows.length) {
+    return `
+      <div style="margin-top:14px;padding:28px 18px;border:1px dashed #475569;border-radius:12px;background:#111827;text-align:center;">
+        <div style="font-size:2rem;">📭</div>
+        <div style="margin-top:7px;font-weight:950;color:#f8fafc;">現在公開中のフォルダはありません</div>
+        <div style="margin-top:5px;color:#94a3b8;font-size:.82rem;line-height:1.55;">各フォルダの「📤 共有」→「🌐 このフォルダを公開」から公開できます。</div>
+      </div>`;
+  }
+
+  return rows.map(row => {
+    const code = String(row.code || '');
+    const prettyCode = formatIftyPublicCode(code);
+    const folderName = String(row.folderName || '公開フォルダ');
+    const subjectLabel = String(row.subjectLabel || getIftyPublicationSubjectLabel(row.subject));
+    const recordCount = Math.max(0, Number(row.recordCount || 0));
+    const importCount = Math.max(0, Number(row.importCount || 0));
+    const updatedAtText = String(row.updatedAtText || '');
+    return `
+      <article style="padding:14px;border:1px solid #475569;border-radius:12px;background:#172033;color:#f8fafc;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+          <div style="min-width:0;flex:1;">
+            <div style="font-size:1.02rem;font-weight:950;overflow-wrap:anywhere;">📁 ${escapeHtml(folderName)}</div>
+            <div style="margin-top:4px;color:#cbd5e1;font-size:.78rem;">${escapeHtml(subjectLabel)} ・ ${recordCount}件</div>
+          </div>
+          <span style="flex:none;padding:5px 8px;border:1px solid #059669;border-radius:999px;background:#0d3328;color:#a7f3d0;font-size:.72rem;font-weight:950;">公開中</span>
+        </div>
+
+        <div style="margin-top:11px;padding:10px;border:1px solid #334155;border-radius:9px;background:#0f172a;">
+          <div style="color:#94a3b8;font-size:.7rem;font-weight:900;">公開コード</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:5px;">
+            <code style="font-size:1.05rem;font-weight:950;letter-spacing:.08em;color:#f8fafc;overflow-wrap:anywhere;">${escapeHtml(prettyCode)}</code>
+            <button type="button" onclick="copyIftyPublishedFolderCodeFromManager('${escapeHtml(code)}')" style="border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:7px;padding:7px 9px;font-size:.76rem;font-weight:900;cursor:pointer;">コピー</button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:7px;margin-top:9px;">
+          <div style="padding:9px;border:1px solid #334155;border-radius:8px;background:#111827;">
+            <div style="color:#94a3b8;font-size:.68rem;">取得回数</div>
+            <div style="margin-top:2px;font-size:1.1rem;font-weight:950;">${importCount}回</div>
+          </div>
+          <div style="padding:9px;border:1px solid #334155;border-radius:8px;background:#111827;">
+            <div style="color:#94a3b8;font-size:.68rem;">最終更新</div>
+            <div style="margin-top:2px;font-size:.78rem;font-weight:900;overflow-wrap:anywhere;">${escapeHtml(updatedAtText || '—')}</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
+          <button type="button" onclick="shareIftyPublishedFolderCodeFromManager('${escapeHtml(code)}','${escapeHtml(folderName)}')" style="flex:1 1 135px;border:none;background:#2563eb;color:white;border-radius:8px;padding:9px 10px;font-weight:900;cursor:pointer;">共有</button>
+          <button type="button" onclick="stopIftyPublishedFolderFromManager('${escapeHtml(code)}','${escapeHtml(folderName)}')" style="flex:1 1 135px;border:1px solid #ef4444;background:#3f1d25;color:#fecaca;border-radius:8px;padding:9px 10px;font-weight:950;cursor:pointer;">公開停止</button>
+        </div>
+      </article>`;
+  }).join('');
+}
+
+function renderIftyPublishedFoldersPage(publications = [], options = {}) {
+  const rows = Array.isArray(publications) ? publications : [];
+  const loading = !!options.loading;
+  const error = String(options.error || '');
+  const totalImports = rows.reduce((sum, row) => sum + Math.max(0, Number(row.importCount || 0)), 0);
+
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">📡 公開フォルダ管理</h1>
+          <div class="ifty-portal-subtitle">自分が公開しているフォルダのコード・取得回数を確認し、ここから公開停止できます。</div>
+        </div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;">
+          <button type="button" onclick="openIftyPublicFolderCodeModal()" style="border:none;background:#0369a1;color:white;border-radius:8px;padding:9px 11px;font-weight:900;cursor:pointer;">🌐 コードから取得</button>
+          <button type="button" onclick="refreshIftyPublishedFoldersPage()" ${loading ? 'disabled' : ''} style="border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:8px;padding:9px 11px;font-weight:900;cursor:${loading ? 'default' : 'pointer'};opacity:${loading ? '.55' : '1'};">↻ 更新</button>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;">
+        <div style="padding:11px;border:1px solid #475569;border-radius:10px;background:#111827;">
+          <div style="color:#94a3b8;font-size:.72rem;">公開中</div>
+          <div style="margin-top:2px;font-size:1.45rem;font-weight:950;color:#f8fafc;">${rows.length}</div>
+        </div>
+        <div style="padding:11px;border:1px solid #475569;border-radius:10px;background:#111827;">
+          <div style="color:#94a3b8;font-size:.72rem;">合計取得回数</div>
+          <div style="margin-top:2px;font-size:1.45rem;font-weight:950;color:#f8fafc;">${totalImports}</div>
+        </div>
+      </div>
+
+      <div style="margin-top:11px;padding:10px;border:1px solid #475569;border-radius:9px;background:#111827;color:#cbd5e1;font-size:.76rem;line-height:1.55;">
+        公開コードは公開停止するまで有効です。停止すると、そのコードを知っている人でも新しく取得できなくなります。すでに相手が取得したコピーは相手側に残ります。
+      </div>
+
+      ${loading ? `<div style="margin-top:16px;padding:28px;text-align:center;color:#a78bfa;font-weight:900;">公開フォルダを読み込み中…</div>` : ''}
+      ${error ? `<div style="margin-top:14px;padding:11px;border:1px solid #ef4444;border-radius:9px;background:#3f1d25;color:#fecaca;">${escapeHtml(error)}</div>` : ''}
+      ${!loading && !error ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;margin-top:14px;">${renderIftyPublishedFolderManagerRows(rows)}</div>` : ''}
+    </section>
+  `, 'published-folders');
+}
+
+window.openIftyPublishedFoldersPage = function() {
+  renderIftyPublishedFoldersPage([], { loading:true });
+  refreshIftyPublishedFoldersPage();
+};
+
+window.refreshIftyPublishedFoldersPage = async function() {
+  if (iftyPublishedFoldersPageLoading) return;
+  if (!iftySessionToken || !iftyAccount || iftyDeveloperMode) {
+    renderIftyPublishedFoldersPage([], { error:'公開フォルダ管理にはIFTYアカウントへのログインが必要です。' });
+    return;
+  }
+  if (!isIftyOnline()) {
+    renderIftyPublishedFoldersPage([], { error:'公開フォルダ一覧の取得にはインターネット接続が必要です。' });
+    return;
+  }
+
+  iftyPublishedFoldersPageLoading = true;
+  try {
+    const data = await iftyAccountApi('folder_public_list', { token:iftySessionToken });
+    renderIftyPublishedFoldersPage(Array.isArray(data?.publications) ? data.publications : []);
+  } catch (error) {
+    renderIftyPublishedFoldersPage([], { error:String(error?.message || error) });
+  } finally {
+    iftyPublishedFoldersPageLoading = false;
+  }
+};
+
+window.copyIftyPublishedFolderCodeFromManager = async function(code) {
+  const pretty = formatIftyPublicCode(code);
+  const ok = await copyIftyText(pretty);
+  if (!ok) alert('公開コードをコピーできませんでした。');
+};
+
+window.shareIftyPublishedFolderCodeFromManager = async function(code, folderName) {
+  const pretty = formatIftyPublicCode(code);
+  const text = `IFTYの公開フォルダ「${String(folderName || 'フォルダ')}」です。\nIFTYの「公開コードから取得」で次のコードを入力してください。\n${pretty}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title:`IFTY：${String(folderName || '公開フォルダ')}`, text });
+      return;
+    } catch (error) {
+      if (String(error?.name || '') === 'AbortError') return;
+    }
+  }
+  const ok = await copyIftyText(text);
+  alert(ok ? '共有文をコピーしました。' : '共有できませんでした。');
+};
+
+window.stopIftyPublishedFolderFromManager = async function(code, folderName) {
+  const normalizedCode = normalizeIftyPublicCodeInput(code);
+  if (!normalizedCode) return;
+  const pretty = formatIftyPublicCode(normalizedCode);
+  if (!window.confirm(`「${String(folderName || '公開フォルダ')}」の公開を停止しますか？\n\n公開コード：${pretty}\n停止後、このコードからは新しく取得できなくなります。`)) return;
+
+  try {
+    await iftyAccountApi('folder_public_stop', {
+      token:iftySessionToken,
+      code:normalizedCode
+    });
+    await refreshIftyPublishedFoldersPage();
+  } catch (error) {
+    alert(`公開を停止できません：${String(error?.message || error)}`);
+  }
+};
+
+
+async function copyIftyText(text) {
+  const value = String(text || '');
+  if (!value) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch (_) {}
+  const area = document.createElement('textarea');
+  area.value = value;
+  area.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+  document.body.appendChild(area);
+  area.focus();
+  area.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (_) {}
+  area.remove();
+  return ok;
+}
+
+function closeIftyFolderShareModal() {
+  const modal = document.getElementById('iftyFolderShareModal');
+  if (modal) modal.remove();
+  iftyFolderShareDraft = null;
+  iftyFolderShareCreating = false;
+}
+window.closeIftyFolderShareModal = closeIftyFolderShareModal;
+
+function renderIftyFolderShareModalStatus(message, kind = 'normal') {
+  const el = document.getElementById('iftyFolderShareStatus');
+  if (!el) return;
+  el.textContent = String(message || '');
+  el.style.color = kind === 'error' ? '#fca5a5' : kind === 'ok' ? '#86efac' : '#cbd5e1';
+}
+
+async function ensureIftyCloudFolderShareLink() {
+  if (!iftyFolderShareDraft) throw new Error('共有するフォルダがありません。');
+  if (iftyFolderShareDraft.link) return iftyFolderShareDraft.link;
+  if (!iftySessionToken || !iftyAccount || iftyDeveloperMode) {
+    throw new Error('共有リンクの作成にはIFTYアカウントへのログインが必要です。');
+  }
+  if (!isIftyOnline()) throw new Error('共有リンクの作成にはインターネット接続が必要です。');
+  if (iftyFolderShareCreating) throw new Error('共有リンクを作成中です。');
+
+  const json = JSON.stringify(iftyFolderShareDraft.pack);
+  const byteLength = new TextEncoder().encode(json).length;
+  if (byteLength > 2_200_000) {
+    throw new Error('このフォルダは共有リンク用として大きすぎます。ファイル共有を使用してください。');
+  }
+
+  iftyFolderShareCreating = true;
+  renderIftyFolderShareModalStatus('共有リンクを作成中…');
+  try {
+    const data = await iftyAccountApi('folder_share_create', {
+      token: iftySessionToken,
+      package: iftyFolderShareDraft.pack
+    });
+    if (!data?.shareToken) throw new Error('共有リンクを作成できませんでした。');
+    const link = getIftyFolderSharePageUrl(data.shareToken);
+    iftyFolderShareDraft.link = link;
+    iftyFolderShareDraft.expiresAt = Number(data.expiresAt || 0);
+    renderIftyFolderShareModalStatus('共有リンクを作成しました。7日間有効です。', 'ok');
+    return link;
+  } finally {
+    iftyFolderShareCreating = false;
+  }
+}
+
+window.shareIftyFolderViaSystemShare = async function() {
+  try {
+    const link = await ensureIftyCloudFolderShareLink();
+    const pack = iftyFolderShareDraft?.pack;
+    const message = getIftyFolderShareMessage(link, pack);
+    if (navigator.share) {
       try {
-        await navigator.share({ files:[file], title:`IFTY：${pack.folder?.name || 'フォルダ'}`, text:`IFTYの${pack.subjectLabel}フォルダです。` });
+        await navigator.share({
+          title:`IFTY：${pack?.folder?.name || 'フォルダ'}`,
+          text:message,
+          url:link
+        });
         return;
       } catch (error) {
         if (String(error?.name || '') === 'AbortError') return;
       }
     }
-    downloadIftyFolderPackage(file);
-    alert('共有用ファイルを作成しました。ファイルアプリなどから相手へ送れます。');
+    const ok = await copyIftyText(message);
+    renderIftyFolderShareModalStatus(ok ? '共有文とリンクをコピーしました。' : '共有機能を開けませんでした。', ok ? 'ok' : 'error');
+  } catch (error) {
+    renderIftyFolderShareModalStatus(String(error?.message || error), 'error');
+  }
+};
+
+window.shareIftyFolderViaLine = async function() {
+  try {
+    const link = await ensureIftyCloudFolderShareLink();
+    const message = getIftyFolderShareMessage(link, iftyFolderShareDraft?.pack);
+    const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(message)}`;
+    window.location.href = lineUrl;
+  } catch (error) {
+    renderIftyFolderShareModalStatus(String(error?.message || error), 'error');
+  }
+};
+
+window.copyIftyFolderShareLink = async function() {
+  try {
+    const link = await ensureIftyCloudFolderShareLink();
+    const ok = await copyIftyText(link);
+    renderIftyFolderShareModalStatus(ok ? 'リンクをコピーしました。' : 'コピーできませんでした。', ok ? 'ok' : 'error');
+  } catch (error) {
+    renderIftyFolderShareModalStatus(String(error?.message || error), 'error');
+  }
+};
+
+window.shareIftyFolderAsFileFromModal = async function() {
+  try {
+    if (!iftyFolderShareDraft?.pack) throw new Error('共有するフォルダがありません。');
+    await shareIftyFolderAsFile(iftyFolderShareDraft.pack);
+  } catch (error) {
+    renderIftyFolderShareModalStatus(String(error?.message || error), 'error');
+  }
+};
+
+window.exportIftyFolder = async function(subject, folderId) {
+  try {
+    const pack = getIftyFolderPackage(subject, folderId);
+    iftyFolderShareDraft = { subject, folderId, pack, link:'', expiresAt:0 };
+
+    const old = document.getElementById('iftyFolderShareModal');
+    if (old) old.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'iftyFolderShareModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:12350;background:rgba(2,6,23,.78);display:flex;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;';
+    modal.addEventListener('pointerdown', event => {
+      if (event.target === modal) closeIftyFolderShareModal();
+    });
+    modal.innerHTML = `
+      <div role="dialog" aria-modal="true" onclick="event.stopPropagation()" style="width:min(520px,100%);max-height:92vh;overflow:auto;background:#172033;border:1px solid #64748b;border-radius:14px;padding:16px;color:#f8fafc;box-sizing:border-box;box-shadow:0 20px 60px rgba(0,0,0,.42);">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+          <div>
+            <div style="font-size:1.1rem;font-weight:950;">📤 フォルダを共有</div>
+            <div style="margin-top:4px;color:#cbd5e1;font-size:.82rem;line-height:1.45;">${escapeHtml(pack.folder?.name || 'IFTYフォルダ')} ・ ${escapeHtml(pack.subjectLabel || '')} ・ ${Array.isArray(pack.records) ? pack.records.length : 0}件</div>
+          </div>
+          <button type="button" onclick="closeIftyFolderShareModal()" aria-label="閉じる" style="border:none;background:#334155;color:#f8fafc;border-radius:999px;width:36px;height:36px;font-size:1.15rem;font-weight:900;cursor:pointer;flex:none;">×</button>
+        </div>
+
+        <div style="margin-top:13px;padding:11px;border:1px solid #334155;border-radius:10px;background:#0f172a;color:#cbd5e1;font-size:.78rem;line-height:1.55;">
+          <b style="color:#f8fafc;">おすすめ：共有リンク</b><br>
+          LINE・メッセージ・メール・AirDropなどでは、ファイルそのものではなくIFTYの受取リンクを送ります。相手はリンクを開いてログインするだけで読み込めます。リンクは7日後に失効します。
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px;">
+          <button type="button" onclick="shareIftyFolderViaLine()" style="border:none;background:#06c755;color:white;border-radius:9px;padding:12px 10px;font-weight:950;cursor:pointer;">LINEで送る</button>
+          <button type="button" onclick="shareIftyFolderViaSystemShare()" style="border:none;background:#2563eb;color:white;border-radius:9px;padding:12px 10px;font-weight:950;cursor:pointer;">共有メニュー</button>
+          <button type="button" onclick="copyIftyFolderShareLink()" style="border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:9px;padding:11px 10px;font-weight:900;cursor:pointer;">リンクをコピー</button>
+          <button type="button" onclick="shareIftyFolderAsFileFromModal()" style="border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:9px;padding:11px 10px;font-weight:900;cursor:pointer;">JSONファイル</button>
+        </div>
+
+        <div id="iftyFolderShareStatus" style="min-height:1.4em;margin-top:10px;color:#cbd5e1;font-size:.78rem;"></div>
+
+        <div id="iftyFolderPublicationPanel" style="margin-top:12px;padding:12px;border:1px solid #475569;border-radius:10px;background:#101a2b;">
+          <div style="color:#cbd5e1;font-size:.78rem;">公開状態を確認中…</div>
+        </div>
+
+        <div style="margin-top:8px;color:#94a3b8;font-size:.7rem;line-height:1.45;">復習履歴・正答率・苦手判定・アカウント情報は共有・公開しません。対象はフォルダ本体の学習内容だけです。</div>
+      </div>`;
+    document.body.appendChild(modal);
+    renderIftyFolderPublicationPanel(null);
+    refreshIftyFolderPublicationPanel().catch(() => {});
   } catch (error) {
     alert(String(error?.message || error));
   }
 };
+
+function captureIftyIncomingFolderShareLink() {
+  try {
+    const url = new URL(window.location.href);
+    const token = String(url.searchParams.get('iftyShare') || '').trim();
+    if (!token) return '';
+    if (!/^[A-Za-z0-9_-]{20,180}$/.test(token)) return '';
+
+    sessionStorage.setItem(IFTY_PENDING_FOLDER_SHARE_KEY, token);
+    url.searchParams.delete('iftyShare');
+    window.history.replaceState({}, document.title, url.toString());
+    return token;
+  } catch (_) {
+    return '';
+  }
+}
+
+function getPendingIftyFolderShareToken() {
+  try { return String(sessionStorage.getItem(IFTY_PENDING_FOLDER_SHARE_KEY) || '').trim(); }
+  catch (_) { return ''; }
+}
+
+function clearPendingIftyFolderShareToken() {
+  try { sessionStorage.removeItem(IFTY_PENDING_FOLDER_SHARE_KEY); } catch (_) {}
+}
+
+async function processPendingIftyFolderShareLink() {
+  if (iftyIncomingFolderShareProcessing) return;
+  const shareToken = getPendingIftyFolderShareToken();
+  if (!shareToken || !iftyAccount || !iftySessionToken || iftyDeveloperMode) return;
+  if (!isIftyOnline()) return;
+
+  iftyIncomingFolderShareProcessing = true;
+  try {
+    const data = await iftyAccountApi('folder_share_fetch', { shareToken });
+    const pack = data?.package;
+    if (!pack || pack.type !== IFTY_FOLDER_PACKAGE_TYPE) throw new Error('共有フォルダのデータが不正です。');
+
+    const name = String(pack.folder?.name || '共有フォルダ');
+    const subject = String(pack.subjectLabel || getIftyFolderShareSubjectLabel(pack.subject));
+    const count = Array.isArray(pack.records) ? pack.records.length : 0;
+    const ok = window.confirm(`共有フォルダを受け取りました。\n\n「${name}」\n${subject} / ${count}件\n\nこのフォルダをIFTYに追加しますか？`);
+    clearPendingIftyFolderShareToken();
+    if (!ok) return;
+
+    await importIftyFolderPackage(pack);
+  } catch (error) {
+    const status = Number(error?.status || 0);
+    if (status === 404 || status === 410 || status === 400) clearPendingIftyFolderShareToken();
+    alert(`共有フォルダを受け取れません：${String(error?.message || error)}`);
+  } finally {
+    iftyIncomingFolderShareProcessing = false;
+  }
+}
+
+window.processPendingIftyFolderShareLink = processPendingIftyFolderShareLink;
+
+// ログイン前にLINE等のリンクから来た場合も、トークンだけ安全に一時保存しておく。
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', captureIftyIncomingFolderShareLink, { once:true });
+} else {
+  captureIftyIncomingFolderShareLink();
+}
+
 
 function ensureIftyFolderImportInput() {
   let input = document.getElementById('iftyFolderImportInput');
@@ -3610,7 +4295,7 @@ function ensureIftyFolderImportInput() {
   input = document.createElement('input');
   input.id = 'iftyFolderImportInput';
   input.type = 'file';
-  input.accept = '.iftyfolder,application/json';
+  input.accept = '.iftyfolder,.json,application/json';
   input.style.display = 'none';
   input.addEventListener('change', async () => {
     const file = input.files && input.files[0];
@@ -3739,7 +4424,7 @@ function enhanceIftyFolderShareButtons(root=document) {
     share.type = 'button';
     share.textContent = '📤 共有';
     share.dataset.iftyShareFolderId = found.folderId;
-    share.title = 'このフォルダをIFTYファイルとして共有';
+    share.title = 'LINE・共有リンク・ファイルでこのフォルダを共有';
     share.style.cssText = 'border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:7px;padding:6px 9px;font-weight:900;cursor:pointer;';
     share.onclick = event => { event.preventDefault(); event.stopPropagation(); window.exportIftyFolder(found.subject, found.folderId); };
     button.insertAdjacentElement('afterend', share);
@@ -4377,6 +5062,7 @@ function getIftySideMenuDisplayText(key) {
     practice: '実践',
     friends: 'フレンド',
     importFolder: 'フォルダを受け取る',
+    publishedFolders: '公開フォルダ管理',
     settings: '設定',
     logout: 'ログアウト'
   };
@@ -4392,6 +5078,7 @@ function getIftySideMenuDisplayText(key) {
     practice: 'PRACTICE',
     friends: 'FRIENDS',
     importFolder: 'IMPORT FOLDER',
+    publishedFolders: 'PUBLIC FOLDERS',
     settings: 'SETTINGS',
     logout: 'LOG OUT'
   };
@@ -4516,6 +5203,7 @@ window.openIftyHome = function() {
         <button type="button" onclick="openIftyLearningStats()" style="background:#0f766e;color:white;">📊 学習統計</button>
         <button type="button" onclick="openIftyFriendsPage()" style="background:#2563eb;color:white;">👥 フレンド</button>
         <button type="button" onclick="openIftyFolderImportPicker()" style="background:#475569;color:white;">📦 フォルダを受け取る</button>
+        <button type="button" onclick="openIftyPublicFolderCodeModal()" style="background:#0369a1;color:white;">🌐 公開コードから取得</button>
         <button type="button" onclick="openIftyRecoveryCenter()" style="background:#334155;color:white;">🛟 バックアップ / 復元</button>
         <button type="button" onclick="openIftyBugReport()" style="background:#7f1d1d;color:white;">🐞 不具合を報告</button>
       </div>
@@ -12268,6 +12956,8 @@ window.openIftySettings = function() {
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="ifty-settings-action" type="button" onclick="openIftyFolderImportPicker()" style="background:#475569;color:white;">📦 フォルダを受け取る</button>
+            <button class="ifty-settings-action" type="button" onclick="openIftyPublicFolderCodeModal()" style="background:#0369a1;color:white;">🌐 公開コード</button>
+            <button class="ifty-settings-action" type="button" onclick="openIftyPublishedFoldersPage()" style="background:#334155;color:white;">📡 公開フォルダ管理</button>
             <button class="ifty-settings-action" type="button" onclick="openIftyFriendsPage()" style="background:#2563eb;color:white;">👥 フレンド</button>
           </div>
         </div>
@@ -13957,6 +14647,10 @@ function renderIftyAccountLanding(message = '') {
     });
   }
   updateIftyAccountPasswordValidityUi();
+
+  if (getPendingIftyFolderShareToken()) {
+    setIftyAccountFormStatus('📦 共有フォルダのリンクを受け取りました。ログイン後に読み込みます。');
+  }
 }
 
 function ensureIftyCloudStatusUi() {
@@ -15045,7 +15739,16 @@ async function enterIftyAccount(account, options = {}) {
   }
 
   if (typeof window.openIftyHome === 'function') window.openIftyHome();
-  setTimeout(() => maybeShowIftyFirstRunGuide(), 450);
+
+  const pendingShare = getPendingIftyFolderShareToken();
+  if (pendingShare) {
+    setTimeout(async () => {
+      await processPendingIftyFolderShareLink();
+      setTimeout(() => maybeShowIftyFirstRunGuide(), 350);
+    }, 450);
+  } else {
+    setTimeout(() => maybeShowIftyFirstRunGuide(), 450);
+  }
 }
 
 async function enterIftyDeveloperSession() {
@@ -16070,6 +16773,54 @@ function normalizeIftyLearningLevel(value) {
   return { primary, secondary, rank, reason };
 }
 
+
+const IFTY_ENGLISH_LEVEL_SECONDARY_MAP = {
+  '英検5級レベル': '中学レベル',
+  '英検4級レベル': '中学レベル',
+  '英検3級レベル': '中学レベル',
+  '英検準2級レベル': '高校基礎レベル',
+  '英検2級レベル': '共通テストレベル',
+  '英検準1級レベル': '難関国公立レベル',
+  '英検1級レベル': '最難関国公立レベル',
+  '英検1級超': '最難関国公立レベル'
+};
+
+const IFTY_ENGLISH_LEVEL_RANK_MAP = {
+  '英検5級レベル': 1,
+  '英検4級レベル': 2,
+  '英検3級レベル': 3,
+  '英検準2級レベル': 4,
+  '英検2級レベル': 5,
+  '英検準1級レベル': 6,
+  '英検1級レベル': 7,
+  '英検1級超': 8
+};
+
+function calibrateIftyEnglishLevelForDisplay(itemId, value) {
+  const level = normalizeIftyLearningLevel(value);
+  if (!level) return null;
+
+  const ref = getWordById(String(itemId || ''));
+  const headword = String(ref?.word?.word || '').trim().toLowerCase();
+
+  // STEP127：実際に英検1級語彙問題で確認できる語を既知アンカーとして扱う。
+  // 旧バージョンで誤判定済みのデータも表示時に即座に補正する。
+  if (headword === 'tantrum') {
+    return {
+      primary: '英検1級レベル',
+      secondary: '最難関国公立レベル',
+      rank: 7,
+      reason: '英検1級語彙問題で扱われる水準の語で、高校基礎語彙ではありません。'
+    };
+  }
+
+  const mappedSecondary = IFTY_ENGLISH_LEVEL_SECONDARY_MAP[level.primary];
+  const mappedRank = IFTY_ENGLISH_LEVEL_RANK_MAP[level.primary];
+  if (mappedSecondary) level.secondary = mappedSecondary;
+  if (mappedRank) level.rank = mappedRank;
+  return level;
+}
+
 const iftyLevelCheckPending = new Set();
 
 function getIftyLearningLevelColors(rank) {
@@ -16081,7 +16832,10 @@ function getIftyLearningLevelColors(rank) {
 }
 
 function renderIftyLearningLevelInline(subject, itemId, value) {
-  const level = normalizeIftyLearningLevel(value);
+  const rawSubject = String(subject || '').trim().toUpperCase();
+  const level = rawSubject === 'ENGLISH'
+    ? calibrateIftyEnglishLevelForDisplay(itemId, value)
+    : normalizeIftyLearningLevel(value);
   const safeSubject = String(subject || '').replace(/'/g, "\\'");
   const safeId = String(itemId || '').replace(/'/g, "\\'");
   const pendingKey = `${String(subject || '').toUpperCase()}::${String(itemId || '')}`;
