@@ -1,3 +1,7 @@
+// ★★★ IFTY Q3 STEP126 2026-10-10：GLOBAL VOCAB SEARCH INPUT / SCROLL STABILITY FIX ★★★
+// ★★★ IFTY Q3 STEP125 2026-10-10：ALLIA SEMANTIC VOCAB SEARCH + SINGLE WORD MOVE ★★★
+// ★★★ IFTY Q3 STEP124 2026-10-10：SMARTPHONE PRACTICE UI FIX ★★★
+// ★★★ IFTY Q3 STEP123 2026-10-10：PRONUNCIATION / PREPOSITION VISUAL DIAGRAMS ★★★
 // ★★★ IFTY Q3 STEP122 2026-10-09：PRONUNCIATION MODAL OUTSIDE TAP FIX ★★★
 // ★★★ IFTY Q3 STEP121 2026-10-09：DISPLAY LANGUAGE ALSO APPLIES TO SIDE MENU TOOLS ★★★
 // ★★★ IFTY Q3 STEP120 2026-10-09：SUBJECT NAME DISPLAY ALSO APPLIES TO SIDE MENU ★★★
@@ -14,7 +18,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 122;
+const IFTY_APP_STEP = 126;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -649,6 +653,23 @@ let wordInputDrafts = {};
 // Q3 STEP18：語彙検索（全フォルダ / フォルダ内）
 let iftyGlobalVocabSearchQuery = '';
 let iftyFolderSearchQueries = {};
+
+// STEP125：ALLIAを使う意味・概念検索。
+// 通常の文字検索とは別状態にし、入力が変わったら結果を無効化する。
+let iftyGlobalSemanticVocabSearch = {
+  active: false,
+  query: '',
+  ids: new Set(),
+  reasons: new Map(),
+  loading: false,
+  error: ''
+};
+let iftyFolderSemanticVocabSearches = {};
+let iftySemanticVocabSearchCache = new Map();
+
+// STEP126：全フォルダ検索入力中に300語規模のDOMを毎キー再構築しない。
+// 入力欄そのものも作り直さず、短いdebounce後に結果だけ再描画する。
+let iftyGlobalVocabSearchRenderTimer = null;
 
 // 選択状態（フォルダ・単語）
 let selectedFolderIds = new Set();
@@ -2814,72 +2835,432 @@ function iftyWordMatchesSearch(word, query) {
   return meanings.some(value => normalizeIftyVocabSearchText(value).includes(q));
 }
 
+function makeIftyEmptySemanticSearchState() {
+  return {
+    active: false,
+    query: '',
+    ids: new Set(),
+    reasons: new Map(),
+    loading: false,
+    error: ''
+  };
+}
+
+function getIftyFolderSemanticSearchState(folderId, create = true) {
+  const id = String(folderId || '');
+  if (!id) return makeIftyEmptySemanticSearchState();
+  if (!iftyFolderSemanticVocabSearches[id] && create) {
+    iftyFolderSemanticVocabSearches[id] = makeIftyEmptySemanticSearchState();
+  }
+  return iftyFolderSemanticVocabSearches[id] || makeIftyEmptySemanticSearchState();
+}
+
+function clearIftyGlobalSemanticSearchState() {
+  iftyGlobalSemanticVocabSearch = makeIftyEmptySemanticSearchState();
+}
+
+function clearIftyFolderSemanticSearchState(folderId) {
+  const id = String(folderId || '');
+  if (!id) return;
+  delete iftyFolderSemanticVocabSearches[id];
+}
+
+function isIftyGlobalSemanticSearchActive() {
+  const q = normalizeIftyVocabSearchText(iftyGlobalVocabSearchQuery);
+  return !!(
+    q &&
+    iftyGlobalSemanticVocabSearch.active &&
+    !iftyGlobalSemanticVocabSearch.loading &&
+    normalizeIftyVocabSearchText(iftyGlobalSemanticVocabSearch.query) === q
+  );
+}
+
+function isIftyFolderSemanticSearchActive(folderId) {
+  const state = getIftyFolderSemanticSearchState(folderId, false);
+  const q = normalizeIftyVocabSearchText(iftyFolderSearchQueries[folderId] || '');
+  return !!(
+    q &&
+    state.active &&
+    !state.loading &&
+    normalizeIftyVocabSearchText(state.query) === q
+  );
+}
+
 function getIftyVisibleWordEntries(folder) {
   const words = folder && Array.isArray(folder.words) ? folder.words : [];
   const globalQuery = normalizeIftyVocabSearchText(iftyGlobalVocabSearchQuery);
   const folderQuery = normalizeIftyVocabSearchText(iftyFolderSearchQueries[folder && folder.id] || '');
+  const globalSemanticActive = isIftyGlobalSemanticSearchActive();
+  const folderSemanticActive = isIftyFolderSemanticSearchActive(folder && folder.id);
+  const folderSemanticState = getIftyFolderSemanticSearchState(folder && folder.id, false);
 
   return words
     .map((word, index) => ({ word, index }))
     .filter(entry => {
-      if (globalQuery && !iftyWordMatchesSearch(entry.word, globalQuery)) return false;
-      if (folderQuery && !iftyWordMatchesSearch(entry.word, folderQuery)) return false;
+      const wordId = String(entry.word?.id || '');
+
+      if (globalSemanticActive) {
+        if (!iftyGlobalSemanticVocabSearch.ids.has(wordId)) return false;
+      } else if (globalQuery && !iftyWordMatchesSearch(entry.word, globalQuery)) {
+        return false;
+      }
+
+      if (folderSemanticActive) {
+        if (!folderSemanticState.ids.has(wordId)) return false;
+      } else if (folderQuery && !iftyWordMatchesSearch(entry.word, folderQuery)) {
+        return false;
+      }
+
       return true;
     });
 }
 
 function countIftyGlobalVocabMatches() {
   const query = normalizeIftyVocabSearchText(iftyGlobalVocabSearchQuery);
-  if (!query) return folders.reduce((sum, folder) => sum + (Array.isArray(folder.words) ? folder.words.length : 0), 0);
+  if (!query) {
+    return folders.reduce((sum, folder) => sum + (Array.isArray(folder.words) ? folder.words.length : 0), 0);
+  }
+  if (isIftyGlobalSemanticSearchActive()) return iftyGlobalSemanticVocabSearch.ids.size;
   return folders.reduce((sum, folder) => {
     const words = Array.isArray(folder.words) ? folder.words : [];
     return sum + words.filter(word => iftyWordMatchesSearch(word, query)).length;
   }, 0);
 }
 
+function buildIftySemanticSearchCandidates(folderId = '') {
+  const targetId = String(folderId || '');
+  const sourceFolders = targetId ? folders.filter(folder => String(folder.id) === targetId) : folders;
+  const rows = [];
+
+  sourceFolders.forEach(folder => {
+    (Array.isArray(folder.words) ? folder.words : []).forEach(word => {
+      if (!word || !word.id || !String(word.word || '').trim()) return;
+      const meanings = Array.isArray(word.meanings)
+        ? word.meanings
+        : (word.meanings ? [word.meanings] : (word.meaning ? [word.meaning] : []));
+      const examples = Array.isArray(word.examples) ? word.examples : [];
+
+      rows.push({
+        id: String(word.id),
+        word: String(word.word || '').slice(0, 140),
+        meanings: meanings.slice(0, 6).map(value => String(value || '').slice(0, 120)),
+        partOfSpeech: String(word.partOfSpeech || '').slice(0, 60),
+        details: String(word.details || '').slice(0, 180),
+        examples: examples.slice(0, 2).map(ex => {
+          if (typeof ex === 'string') return ex.slice(0, 160);
+          return [ex?.en, ex?.ja].filter(Boolean).join(' = ').slice(0, 160);
+        })
+      });
+    });
+  });
+
+  // 一度のALLIA検索で扱う上限。通常の学校用単語帳なら十分余裕がある。
+  return rows.slice(0, 900);
+}
+
+function makeIftySemanticSearchFingerprint(candidates) {
+  let hash = 2166136261;
+  const feed = text => {
+    const value = String(text || '');
+    for (let i = 0; i < value.length; i += 1) {
+      hash ^= value.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+  };
+  candidates.forEach(row => {
+    feed(row.id);
+    feed(row.word);
+    feed((row.meanings || []).join('|'));
+    feed(row.partOfSpeech);
+    feed(row.details);
+  });
+  return `${candidates.length}:${hash >>> 0}`;
+}
+
+function getIftySemanticMatchInfo(wordId, folderId) {
+  const id = String(wordId || '');
+  if (!id) return null;
+
+  if (isIftyFolderSemanticSearchActive(folderId)) {
+    const state = getIftyFolderSemanticSearchState(folderId, false);
+    if (state.ids.has(id)) return state.reasons.get(id) || { score: 0, reason: '' };
+  }
+  if (isIftyGlobalSemanticSearchActive() && iftyGlobalSemanticVocabSearch.ids.has(id)) {
+    return iftyGlobalSemanticVocabSearch.reasons.get(id) || { score: 0, reason: '' };
+  }
+  return null;
+}
+
+function renderIftySemanticSearchBadge(wordId, folderId) {
+  const info = getIftySemanticMatchInfo(wordId, folderId);
+  if (!info) return '';
+  const score = Math.max(0, Math.min(100, Math.round(Number(info.score) || 0)));
+  const reason = String(info.reason || '').trim();
+  return `<span title="${escapeHtml(reason || 'ALLIAが意味・概念の近さを判定')}" style="display:inline-block;padding:2px 7px;border-radius:999px;background:#312e81;color:#ddd6fe;border:1px solid #8b5cf6;font-size:.68em;font-weight:900;">🤖 意味一致${score ? ` ${score}` : ''}</span>`;
+}
+
+function getIftySemanticSearchStatusHtml(state, query, total) {
+  if (state.loading) {
+    return `<span style="font-size:.78em;color:#a78bfa;font-weight:900;">🤖 ALLIA検索中…</span>`;
+  }
+  if (state.error) {
+    return `<span style="font-size:.76em;color:#fb7185;">${escapeHtml(state.error)}</span>`;
+  }
+  if (state.active && normalizeIftyVocabSearchText(state.query) === normalizeIftyVocabSearchText(query)) {
+    return `<span style="font-size:.78em;color:#a78bfa;font-weight:900;">🤖 意味検索 ${state.ids.size}件</span>`;
+  }
+  return `<span style="font-size:.76em;color:#64748b;">${normalizeIftyVocabSearchText(query) ? `${total}件一致` : `${total}語`}</span>`;
+}
+
+async function runIftySemanticVocabSearch(folderId = '') {
+  const targetId = String(folderId || '');
+  const isFolder = !!targetId;
+  const query = String(isFolder ? (iftyFolderSearchQueries[targetId] || '') : iftyGlobalVocabSearchQuery || '').trim();
+  if (!query) {
+    alert('意味・概念を入力してから「ALLIA意味検索」を押してください。');
+    return;
+  }
+  if (!ensureIftyOnline('ALLIA意味検索')) return;
+
+  const candidates = buildIftySemanticSearchCandidates(targetId);
+  if (!candidates.length) {
+    alert('検索できる単語がありません。');
+    return;
+  }
+
+  const state = isFolder
+    ? getIftyFolderSemanticSearchState(targetId, true)
+    : iftyGlobalSemanticVocabSearch;
+
+  state.active = false;
+  state.loading = true;
+  state.error = '';
+  state.query = query;
+  state.ids = new Set();
+  state.reasons = new Map();
+
+  if (isFolder) refreshFolderWordArea(targetId);
+  else {
+    if (typeof renderIftyGlobalVocabSearchResultsStable === 'function') {
+      renderIftyGlobalVocabSearchResultsStable({ restoreFocus: false });
+    } else {
+      renderFolders();
+      refreshIftyVocabSearchPanel();
+    }
+  }
+
+  const fingerprint = makeIftySemanticSearchFingerprint(candidates);
+  const cacheKey = `${targetId || 'ALL'}\u0000${normalizeIftyVocabSearchText(query)}\u0000${fingerprint}`;
+
+  try {
+    let data = iftySemanticVocabSearchCache.get(cacheKey) || null;
+
+    if (!data) {
+      const response = await iftyAlliaFetch(WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'semantic_vocab_search',
+          query,
+          candidates
+        })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'ALLIA意味検索に失敗しました。');
+      data = payload;
+
+      iftySemanticVocabSearchCache.set(cacheKey, data);
+      while (iftySemanticVocabSearchCache.size > 20) {
+        const first = iftySemanticVocabSearchCache.keys().next().value;
+        iftySemanticVocabSearchCache.delete(first);
+      }
+    }
+
+    const matches = Array.isArray(data.matches) ? data.matches : [];
+    state.ids = new Set(matches.map(row => String(row.id || '')).filter(Boolean));
+    state.reasons = new Map(matches.map(row => [
+      String(row.id || ''),
+      {
+        score: Math.max(0, Math.min(100, Number(row.score) || 0)),
+        reason: String(row.reason || '')
+      }
+    ]));
+    state.active = true;
+    state.loading = false;
+    state.error = '';
+  } catch (error) {
+    console.error('ALLIA意味検索エラー:', error);
+    state.active = false;
+    state.loading = false;
+    state.error = String(error?.message || 'ALLIA意味検索に失敗しました。').slice(0, 100);
+  }
+
+  if (isFolder) refreshFolderWordArea(targetId);
+  else {
+    if (typeof renderIftyGlobalVocabSearchResultsStable === 'function') {
+      renderIftyGlobalVocabSearchResultsStable({ restoreFocus: false });
+    } else {
+      renderFolders();
+      refreshIftyVocabSearchPanel();
+    }
+  }
+}
+
+window.runIftyGlobalSemanticVocabSearch = function() {
+  return runIftySemanticVocabSearch('');
+};
+
+window.runIftyFolderSemanticVocabSearch = function(folderId) {
+  return runIftySemanticVocabSearch(folderId);
+};
+
 function refreshIftyVocabSearchPanel() {
   const panel = document.getElementById('iftyVocabSearchPanel');
   if (!panel) return;
 
   const inputValue = String(iftyGlobalVocabSearchQuery || '');
-  const total = folders.reduce((sum, folder) => sum + (Array.isArray(folder.words) ? folder.words.length : 0), 0);
+  const totalWords = folders.reduce((sum, folder) => sum + (Array.isArray(folder.words) ? folder.words.length : 0), 0);
   const matchCount = countIftyGlobalVocabMatches();
+  const statusCount = normalizeIftyVocabSearchText(inputValue) ? matchCount : totalWords;
+
   panel.innerHTML = `
-    <div style="font-weight:900;color:#0f172a;margin-bottom:7px;">全フォルダ検索</div>
+    <div style="font-weight:900;color:#0f172a;margin-bottom:5px;">全フォルダ検索</div>
+    <div style="font-size:.74em;color:#64748b;margin-bottom:8px;">文字検索は即時。<b>ALLIA意味検索</b>は「捨てる」「寄付して財産を与える」のような意味・概念から近い語を探します。</div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-      <input id="iftyGlobalVocabSearchInput" value="${escapeHtml(inputValue)}" oninput="setIftyGlobalVocabSearch(this.value)" placeholder="スペル・意味で全フォルダを検索" style="flex:1;min-width:180px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.92em;">
+      <input id="iftyGlobalVocabSearchInput" value="${escapeHtml(inputValue)}" oninput="setIftyGlobalVocabSearch(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();runIftyGlobalSemanticVocabSearch();}" placeholder="スペル・意味・概念を入力" autocomplete="off" autocapitalize="none" spellcheck="false" style="flex:1;min-width:180px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.92em;">
+      <button id="iftyGlobalSemanticSearchButton" type="button" onclick="runIftyGlobalSemanticVocabSearch()" ${iftyGlobalSemanticVocabSearch.loading ? 'disabled' : ''} style="border:none;background:#7c3aed;color:white;padding:9px 11px;border-radius:7px;font-weight:900;cursor:${iftyGlobalSemanticVocabSearch.loading ? 'default' : 'pointer'};opacity:${iftyGlobalSemanticVocabSearch.loading ? '.55' : '1'};">🤖 ALLIA意味検索</button>
       <button type="button" onclick="clearIftyGlobalVocabSearch()" style="border:none;background:#e2e8f0;color:#334155;padding:9px 11px;border-radius:7px;font-weight:800;cursor:pointer;">クリア</button>
-      <span style="font-size:.8em;color:#64748b;white-space:nowrap;">${normalizeIftyVocabSearchText(inputValue) ? `${matchCount}件一致` : `${total}語`}</span>
-    </div>`;
+      <span id="iftyGlobalVocabSearchStatus">${getIftySemanticSearchStatusHtml(iftyGlobalSemanticVocabSearch, inputValue, statusCount)}</span>
+    </div>
+    <div style="font-size:.68em;color:#64748b;margin-top:6px;">※ ALLIA意味検索はAIを1回使用します。同じ語彙内容・同じ検索語は、この画面を開いている間は結果を再利用します。</div>`;
+}
+
+function refreshIftyGlobalVocabSearchStatusOnly() {
+  const status = document.getElementById('iftyGlobalVocabSearchStatus');
+  if (!status) return;
+
+  const inputValue = String(iftyGlobalVocabSearchQuery || '');
+  const totalWords = folders.reduce((sum, folder) => sum + (Array.isArray(folder.words) ? folder.words.length : 0), 0);
+  const matchCount = countIftyGlobalVocabMatches();
+  const statusCount = normalizeIftyVocabSearchText(inputValue) ? matchCount : totalWords;
+
+  status.innerHTML = getIftySemanticSearchStatusHtml(
+    iftyGlobalSemanticVocabSearch,
+    inputValue,
+    statusCount
+  );
+
+  const button = document.getElementById('iftyGlobalSemanticSearchButton');
+  if (button) {
+    button.disabled = !!iftyGlobalSemanticVocabSearch.loading;
+    button.style.opacity = iftyGlobalSemanticVocabSearch.loading ? '.55' : '1';
+    button.style.cursor = iftyGlobalSemanticVocabSearch.loading ? 'default' : 'pointer';
+  }
+}
+
+function getIftyStableWindowScrollY() {
+  return Number(window.scrollY || document.scrollingElement?.scrollTop || 0);
+}
+
+function restoreIftyGlobalSearchViewport(y) {
+  const restore = () => {
+    try { window.scrollTo({ top: y, left: 0, behavior: 'auto' }); }
+    catch (_) { window.scrollTo(0, y); }
+  };
+  restore();
+  requestAnimationFrame(restore);
+  setTimeout(restore, 0);
+  setTimeout(restore, 90);
+}
+
+function renderIftyGlobalVocabSearchResultsStable(options = {}) {
+  const y = getIftyStableWindowScrollY();
+  const input = document.getElementById('iftyGlobalVocabSearchInput');
+  const wasFocused = document.activeElement === input;
+  const selectionStart = input && Number.isFinite(input.selectionStart) ? input.selectionStart : null;
+  const selectionEnd = input && Number.isFinite(input.selectionEnd) ? input.selectionEnd : selectionStart;
+
+  renderFolders();
+  refreshIftyGlobalVocabSearchStatusOnly();
+
+  if (options.restoreFocus !== false && wasFocused) {
+    const refocus = () => {
+      const current = document.getElementById('iftyGlobalVocabSearchInput');
+      if (!current) return;
+      try {
+        current.focus({ preventScroll: true });
+        if (selectionStart !== null && typeof current.setSelectionRange === 'function') {
+          current.setSelectionRange(selectionStart, selectionEnd ?? selectionStart);
+        }
+      } catch (_) {}
+    };
+    refocus();
+    requestAnimationFrame(refocus);
+  }
+
+  restoreIftyGlobalSearchViewport(y);
+}
+
+function scheduleIftyGlobalVocabSearchRender() {
+  if (iftyGlobalVocabSearchRenderTimer) clearTimeout(iftyGlobalVocabSearchRenderTimer);
+
+  // 連続入力中はDOM再構築を待つ。これでスマホのキーボード入力を邪魔しない。
+  iftyGlobalVocabSearchRenderTimer = setTimeout(() => {
+    iftyGlobalVocabSearchRenderTimer = null;
+    renderIftyGlobalVocabSearchResultsStable({ restoreFocus: true });
+  }, 110);
 }
 
 window.setIftyGlobalVocabSearch = function(value) {
-  iftyGlobalVocabSearchQuery = String(value || '');
-  renderFolders();
-  const panel = document.getElementById('iftyVocabSearchPanel');
-  if (panel) {
-    const total = folders.reduce((sum, folder) => sum + (Array.isArray(folder.words) ? folder.words.length : 0), 0);
-    const count = countIftyGlobalVocabMatches();
-    const status = panel.querySelector('span');
-    if (status) status.textContent = normalizeIftyVocabSearchText(iftyGlobalVocabSearchQuery) ? `${count}件一致` : `${total}語`;
+  const next = String(value || '');
+  const nextNormalized = normalizeIftyVocabSearchText(next);
+
+  if (
+    iftyGlobalSemanticVocabSearch.query &&
+    normalizeIftyVocabSearchText(iftyGlobalSemanticVocabSearch.query) !== nextNormalized
+  ) {
+    clearIftyGlobalSemanticSearchState();
   }
+
+  // 入力欄自体は絶対にinnerHTMLで作り直さない。
+  // stateだけ即時更新し、結果部分は短いdebounce後に更新する。
+  iftyGlobalVocabSearchQuery = next;
+  refreshIftyGlobalVocabSearchStatusOnly();
+  scheduleIftyGlobalVocabSearchRender();
 };
 
 window.clearIftyGlobalVocabSearch = function() {
+  if (iftyGlobalVocabSearchRenderTimer) {
+    clearTimeout(iftyGlobalVocabSearchRenderTimer);
+    iftyGlobalVocabSearchRenderTimer = null;
+  }
+
   iftyGlobalVocabSearchQuery = '';
+  clearIftyGlobalSemanticSearchState();
+
   const input = document.getElementById('iftyGlobalVocabSearchInput');
   if (input) input.value = '';
-  renderFolders();
-  refreshIftyVocabSearchPanel();
+
+  renderIftyGlobalVocabSearchResultsStable({ restoreFocus: false });
 };
 
 window.setIftyFolderSearchQuery = function(folderId, value) {
-  iftyFolderSearchQueries[folderId] = String(value || '');
+  const next = String(value || '');
+  const state = getIftyFolderSemanticSearchState(folderId, false);
+  if (
+    state.query &&
+    normalizeIftyVocabSearchText(state.query) !== normalizeIftyVocabSearchText(next)
+  ) {
+    clearIftyFolderSemanticSearchState(folderId);
+  }
+  iftyFolderSearchQueries[folderId] = next;
   refreshFolderWordArea(folderId);
 };
 
 window.clearIftyFolderSearchQuery = function(folderId) {
   iftyFolderSearchQueries[folderId] = '';
+  clearIftyFolderSemanticSearchState(folderId);
   const input = document.getElementById(`folderSearch_${folderId}`);
   if (input) input.value = '';
   refreshFolderWordArea(folderId);
@@ -18746,9 +19127,11 @@ function renderFolders() {
         </div>
         <div id="spellingSuggestion_${folder.id}">${suggestion ? renderSpellingSuggestion(folder.id, suggestion) : ''}</div>
         <div style="display:flex;gap:6px;align-items:center;margin:8px 0 10px;flex-wrap:wrap;">
-          <input id="folderSearch_${folder.id}" value="${escapeHtml(iftyFolderSearchQueries[folder.id] || '')}" oninput="setIftyFolderSearchQuery('${folder.id}', this.value)" placeholder="このフォルダ内をスペル・意味で検索" style="flex:1;min-width:170px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-size:.86em;">
+          <input id="folderSearch_${folder.id}" value="${escapeHtml(iftyFolderSearchQueries[folder.id] || '')}" oninput="setIftyFolderSearchQuery('${folder.id}', this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();runIftyFolderSemanticVocabSearch('${folder.id}');}" placeholder="スペル・意味・概念を入力" style="flex:1;min-width:170px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-size:.86em;">
+          <button type="button" onclick="runIftyFolderSemanticVocabSearch('${folder.id}')" ${getIftyFolderSemanticSearchState(folder.id,false).loading ? 'disabled' : ''} style="border:none;background:#7c3aed;color:white;padding:8px 10px;border-radius:6px;font-size:.8em;font-weight:900;cursor:${getIftyFolderSemanticSearchState(folder.id,false).loading ? 'default' : 'pointer'};opacity:${getIftyFolderSemanticSearchState(folder.id,false).loading ? '.55' : '1'};">🤖 意味検索</button>
           <button type="button" onclick="clearIftyFolderSearchQuery('${folder.id}')" style="border:none;background:#e2e8f0;color:#334155;padding:8px 10px;border-radius:6px;font-size:.8em;font-weight:800;cursor:pointer;">クリア</button>
           <span id="folderSearchCount_${folder.id}" style="font-size:.76em;color:#64748b;white-space:nowrap;">${getIftyVisibleWordEntries(folder).length}/${words.length}件</span>
+          ${getIftyFolderSemanticSearchState(folder.id,false).loading ? '<span style="font-size:.72em;color:#a78bfa;font-weight:900;">ALLIA検索中…</span>' : (isIftyFolderSemanticSearchActive(folder.id) ? `<span style="font-size:.72em;color:#a78bfa;font-weight:900;">🤖 ${getIftyFolderSemanticSearchState(folder.id,false).ids.size}件</span>` : '')}
         </div>
         <div id="wordList_${folder.id}" style="display:flex;flex-direction:column;gap:8px;">
           ${renderFolderWordList(folder)}
@@ -19138,6 +19521,7 @@ function renderWordItem(w, folderId, wIndex) {
             <div style="font-size: 1.25em; font-weight: bold; color: #0f172a;">${escapeHtml(w.word || '')}</div>
             ${(() => { const lang = getIftyWordLanguageInfo(w); return `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.68em;font-weight:900;">🌐 ${escapeHtml(lang.label)}</span>`; })()}
             ${renderIftyLearningLevelInline('ENGLISH', w.id, w.level)}
+            ${renderIftySemanticSearchBadge(w.id, folderId)}
             ${isIftyReviewTagged(w) ? `<span style="display:inline-block;padding:2px 6px;border-radius:999px;background:${isIftyReviewDue(w) ? '#ffedd5' : '#fef3c7'};color:${isIftyReviewDue(w) ? '#c2410c' : '#a16207'};font-size:.68em;font-weight:900;">${isIftyReviewDue(w) ? '🔁 復習：今日' : `🔁 次回 ${escapeHtml(formatIftyReviewDate(w.review.nextReview))}`}</span>` : (w.review && Number(w.review.graduatedAt) > 0 ? '<span style="display:inline-block;padding:2px 6px;border-radius:999px;background:#dcfce7;color:#047857;font-size:.68em;font-weight:900;">✅ 復習卒業</span>' : '')}
             ${isIftyWeakWord(w) ? '<span style="display:inline-block;padding:2px 6px;border-radius:999px;background:#ffe4e6;color:#be123c;font-size:.68em;font-weight:900;">🎯 苦手候補</span>' : ''}
           </div>
@@ -19199,6 +19583,7 @@ function renderWordItem(w, folderId, wIndex) {
           ${w.word ? `<button onclick="speakWord('${escapeHtml(String(w.word).replace(/'/g, "\\'"))}','${escapeHtml(getIftyWordLanguageInfo(w).code)}')" style="background: #0284c7; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="語彙を発音">🔊</button>` : ''}
           <button id="iftyRegenVocab_${w.id}" onclick="regenerateIftyVocabularyWord('${folderId}','${w.id}')" style="background:#7c3aed;color:white;border:none;padding:3px 6px;border-radius:4px;font-size:.75em;cursor:pointer;font-weight:800;" title="言語・意味・用法を最初から慎重に再検討する">再生成</button>
           <button onclick="toggleIftyWordReview('${folderId}','${w.id}')" style="background:${isIftyReviewTagged(w) ? '#ea580c' : '#f59e0b'};color:white;border:none;padding:3px 6px;border-radius:4px;font-size:.75em;cursor:pointer;" title="${isIftyReviewTagged(w) ? '復習登録を解除' : 'この単語を復習に登録'}">${isIftyReviewTagged(w) ? '🔁 復習中' : '🔁 手動で復習登録'}</button>
+          <button onclick="openIftySingleWordMoveModal('${folderId}','${w.id}')" style="background:#0369a1;color:white;border:none;padding:3px 6px;border-radius:4px;font-size:.75em;cursor:pointer;font-weight:800;" title="この単語を別フォルダへ移動">移動</button>
           <button onclick="openEditWordModal('${folderId}', ${wIndex})" style="background: #64748b; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="編集">編集</button>
           <button onclick="moveWordWithinFolder('${folderId}', ${wIndex}, -1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="上へ">⬆️</button>
           <button onclick="moveWordWithinFolder('${folderId}', ${wIndex}, 1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="下へ">⬇️</button>
@@ -19585,6 +19970,92 @@ window.moveWordWithinFolder = function(folderId, wordIndex, direction) {
   saveUserData();
   renderFolders();
 };
+
+
+window.closeIftySingleWordMoveModal = function() {
+  const modal = document.getElementById('iftySingleWordMoveModal');
+  if (modal) modal.remove();
+};
+
+window.openIftySingleWordMoveModal = function(sourceFolderId, wordId) {
+  const source = folders.find(folder => String(folder.id) === String(sourceFolderId));
+  const word = source && (source.words || []).find(item => String(item.id) === String(wordId));
+  if (!source || !word) return;
+
+  const destinations = folders.filter(folder => String(folder.id) !== String(sourceFolderId));
+  if (!destinations.length) {
+    alert('移動先のフォルダがありません。先に別のフォルダを作成してください。');
+    return;
+  }
+
+  window.closeIftySingleWordMoveModal();
+
+  const modal = document.createElement('div');
+  modal.id = 'iftySingleWordMoveModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:12280;background:rgba(2,6,23,.72);display:flex;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;';
+  modal.addEventListener('pointerdown', event => {
+    if (event.target === modal) window.closeIftySingleWordMoveModal();
+  });
+
+  modal.innerHTML = `
+    <div role="dialog" aria-modal="true" aria-label="単語を移動" onclick="event.stopPropagation()" style="width:min(460px,100%);background:#182235;border:1px solid #64748b;border-radius:14px;padding:16px;color:#f8fafc;box-shadow:0 18px 55px rgba(0,0,0,.38);">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+        <div>
+          <div style="font-size:1.05rem;font-weight:950;">📁 単語を移動</div>
+          <div style="margin-top:3px;color:#cbd5e1;font-size:.82rem;"><b>${escapeHtml(word.word || '')}</b> を別フォルダへ移動します。</div>
+        </div>
+        <button type="button" onclick="closeIftySingleWordMoveModal()" aria-label="閉じる" style="border:none;background:#334155;color:#f8fafc;border-radius:999px;width:36px;height:36px;font-size:1.15rem;font-weight:900;cursor:pointer;">×</button>
+      </div>
+
+      <div style="margin-top:14px;">
+        <label for="iftySingleWordMoveDestination" style="display:block;color:#cbd5e1;font-size:.78rem;font-weight:900;margin-bottom:6px;">移動先フォルダ</label>
+        <select id="iftySingleWordMoveDestination" style="width:100%;min-height:44px;padding:9px 10px;background:#0f172a;color:#f8fafc;border:1px solid #64748b;border-radius:8px;box-sizing:border-box;">
+          ${destinations.map(folder => `<option value="${escapeHtml(String(folder.id))}">${escapeHtml(folder.name || '無題')}</option>`).join('')}
+        </select>
+      </div>
+
+      <div style="margin-top:9px;color:#94a3b8;font-size:.74rem;line-height:1.45;">
+        単語IDは変えないため、復習状態・学習回数・正答率・PRACTICEへの登録はそのまま維持されます。
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:15px;">
+        <button type="button" onclick="closeIftySingleWordMoveModal()" style="border:1px solid #64748b;background:#334155;color:#f8fafc;border-radius:8px;padding:9px 13px;font-weight:900;cursor:pointer;">キャンセル</button>
+        <button type="button" onclick="confirmIftySingleWordMove('${sourceFolderId}','${wordId}')" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 14px;font-weight:950;cursor:pointer;">このフォルダへ移動</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+};
+
+window.confirmIftySingleWordMove = function(sourceFolderId, wordId) {
+  const source = folders.find(folder => String(folder.id) === String(sourceFolderId));
+  if (!source) return;
+
+  const destinationSelect = document.getElementById('iftySingleWordMoveDestination');
+  const destinationId = String(destinationSelect?.value || '');
+  const destination = folders.find(folder => String(folder.id) === destinationId);
+  if (!destination || String(destination.id) === String(sourceFolderId)) return;
+
+  const sourceIndex = (source.words || []).findIndex(item => String(item.id) === String(wordId));
+  if (sourceIndex < 0) return;
+
+  const word = source.words[sourceIndex];
+  if (!Array.isArray(destination.words)) destination.words = [];
+
+  // IDを変えずにオブジェクトごと移動するので、復習・学習履歴・クイズ参照を維持する。
+  recordUndoState('単語を別フォルダへ移動');
+  source.words.splice(sourceIndex, 1);
+
+  if (!destination.words.some(item => String(item.id) === String(word.id))) {
+    destination.words.push(word);
+  }
+
+  selectedWordIds.delete(String(word.id));
+  saveUserData();
+  window.closeIftySingleWordMoveModal();
+  renderFolders();
+};
+
 
 window.openEditWordModal = function(folderId, wordIndex, options = {}) {
   const folder = folders.find(f => f.id === folderId);
@@ -22891,7 +23362,7 @@ window.openQuizSet = function(setId) {
     ['inflection','活用','set–set–set / lie–lay–lain など、保存済みの過去形・過去分詞・-ing・三単現を確認']
   ];
   modal.innerHTML = `
-    <div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(880px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);>
+    <div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(880px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
         <button onclick="renderPracticeHome()" style="border:none;background:#ede9fe;color:#5b21b6;border-radius:6px;padding:7px 10px;cursor:pointer;">◀ 戻る</button>
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
@@ -22919,7 +23390,7 @@ window.openQuizSet = function(setId) {
         </div>
       </div>
 
-      <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+      <div class="ifty-mobile-practice-section ifty-mobile-practice-count" style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
         <b style="color:#334155;">3. 問題数</b>
         <select onchange="setQuizQuestionCount('${set.id}',this.value)" style="padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
           <option value="5" ${set.questionCount === 5 ? 'selected' : ''}>5問</option>
@@ -22932,7 +23403,7 @@ window.openQuizSet = function(setId) {
         <span style="font-size:.76em;color:#64748b;">登録語数が少ない場合は、ある分だけ出題します。</span>
       </div>
 
-      <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
+      <div class="ifty-mobile-practice-section ifty-mobile-practice-addwords" style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
         <b style="color:#334155;">4. 語彙を追加</b>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
           <button onclick="addSelectedWordsToQuizSet('${set.id}')" style="border:none;background:#7c3aed;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">チェックしたフォルダ・語彙から追加</button>
@@ -24715,6 +25186,101 @@ window.logout = async function() {
       .ifty-manual-ipa-contrastrow b { color:#0f172a; }
       .ifty-manual-ipa-pair { color:#6d28d9; font-weight:950; }
 
+      /* STEP123：発音・前置詞の簡易SVG図 */
+      .ifty-manual-visual {
+        margin-top:8px;
+        border:1px solid #475569;
+        border-radius:12px;
+        background:#111827;
+        color:#e2e8f0;
+        overflow:hidden;
+      }
+      .ifty-manual-visual-head {
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:8px;
+        padding:7px 9px;
+        border-bottom:1px solid #334155;
+        color:#f8fafc;
+        font-size:10.5px;
+        font-weight:900;
+      }
+      .ifty-manual-visual-note {
+        color:#94a3b8;
+        font-size:9.5px;
+        font-weight:700;
+      }
+      .ifty-manual-visual-body {
+        padding:7px;
+      }
+      .ifty-manual-art-svg {
+        display:block;
+        width:100%;
+        height:auto;
+        min-height:100px;
+      }
+      .ifty-manual-art-svg .outline {
+        fill:none;
+        stroke:#cbd5e1;
+        stroke-width:2.2;
+        stroke-linecap:round;
+        stroke-linejoin:round;
+      }
+      .ifty-manual-art-svg .soft {
+        fill:none;
+        stroke:#64748b;
+        stroke-width:1.6;
+        stroke-linecap:round;
+        stroke-linejoin:round;
+      }
+      .ifty-manual-art-svg .guide {
+        fill:none;
+        stroke:#475569;
+        stroke-width:1.2;
+        stroke-dasharray:4 4;
+      }
+      .ifty-manual-art-svg .accent {
+        fill:#38bdf8;
+        stroke:#7dd3fc;
+        stroke-width:1.5;
+      }
+      .ifty-manual-art-svg .accent2 {
+        fill:#a78bfa;
+        stroke:#c4b5fd;
+        stroke-width:1.5;
+      }
+      .ifty-manual-art-svg .warn {
+        fill:#f59e0b;
+        stroke:#fcd34d;
+        stroke-width:1.4;
+      }
+      .ifty-manual-art-svg .air {
+        fill:none;
+        stroke:#38bdf8;
+        stroke-width:2;
+        stroke-linecap:round;
+        stroke-linejoin:round;
+      }
+      .ifty-manual-art-svg text {
+        fill:#cbd5e1;
+        font:700 8.5px/1.2 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      }
+      .ifty-manual-art-svg .strongtext {
+        fill:#f8fafc;
+        font-weight:900;
+      }
+      .ifty-manual-prep-visual {
+        margin:8px 0 2px;
+      }
+      .ifty-manual-prep-visual .ifty-manual-art-svg {
+        min-height:82px;
+      }
+      @media (max-width:560px) {
+        .ifty-manual-visual-head { align-items:flex-start; flex-direction:column; gap:2px; }
+        .ifty-manual-art-svg { min-height:92px; }
+      }
+
 
       /* STEP102：前置詞 / 発音・アクセントルール */
       .ifty-manual-ref { display:grid; gap:12px; padding-bottom:2px; }
@@ -25210,6 +25776,188 @@ window.logout = async function() {
     `;
   }
 
+
+  function getIftyIpaVisualConfig(symbol) {
+    const s = String(symbol || '');
+    const vowel = (x, y, lips='neutral', jaw='mid', x2=null, y2=null) => ({
+      kind:'vowel', tongueX:x, tongueY:y, lips, jaw, tongueX2:x2, tongueY2:y2
+    });
+    if (s.includes('/iː/')) return vowel(0.18,0.18,'spread','small');
+    if (s.includes('/ɪ/')) return vowel(0.25,0.28,'neutral','small');
+    if (s.includes('/e/') || s.includes('/ɛ/')) return vowel(0.22,0.42,'neutral','mid');
+    if (s.includes('/æ/')) return vowel(0.18,0.72,'spread','open');
+    if (s.includes('/ʌ/')) return vowel(0.50,0.62,'neutral','mid');
+    if (s.includes('/ɑ')) return vowel(0.78,0.76,'neutral','open');
+    if (s.includes('/ɒ/')) return vowel(0.78,0.70,'round','open');
+    if (s.includes('/ɔ')) return vowel(0.75,0.52,'round','mid');
+    if (s.includes('/ʊ/')) return vowel(0.72,0.28,'round','small');
+    if (s.includes('/uː/')) return vowel(0.82,0.18,'round','small');
+    if (s.includes('/ɜ')) return vowel(0.50,0.42,'neutral','mid');
+    if (s.includes('/ə/')) return vowel(0.50,0.50,'neutral','mid');
+    if (s.includes('/ɚ/')) return vowel(0.55,0.46,'slight-round','mid');
+    if (s.includes('/eɪ/')) return vowel(0.22,0.42,'neutral','mid',0.25,0.26);
+    if (s.includes('/aɪ/')) return vowel(0.42,0.78,'neutral','open',0.25,0.26);
+    if (s.includes('/ɔɪ/')) return vowel(0.75,0.52,'round','mid',0.25,0.26);
+    if (s.includes('/aʊ/')) return vowel(0.42,0.78,'neutral','open',0.72,0.30);
+    if (s.includes('/oʊ/') || s.includes('/əʊ/')) return vowel(0.55,0.48,'round','mid',0.72,0.28);
+    if (s.includes('/ɪə/')) return vowel(0.25,0.26,'neutral','small',0.50,0.48);
+    if (s.includes('/eə/')) return vowel(0.22,0.42,'neutral','mid',0.50,0.50);
+
+    const voiced = /\/(?:b|d|ɡ|g|v|ð|z|ʒ|dʒ|m|n|ŋ|l|r|ɹ|j|w)\//.test(s) || s.includes('/r/・/ɹ/');
+    let place = 'alveolar';
+    let lips = 'neutral';
+    let nasal = false;
+    let noContact = false;
+
+    if (/\/(?:p|b|m)\//.test(s)) { place='bilabial'; lips='closed'; }
+    else if (/\/(?:f|v)\//.test(s)) { place='labiodental'; lips='teeth-lip'; }
+    else if (/\/(?:θ|ð)\//.test(s)) { place='dental'; lips='neutral'; }
+    else if (/\/(?:t|d|s|z|n|l)\//.test(s)) place='alveolar';
+    else if (/\/(?:ʃ|ʒ|tʃ|dʒ)\//.test(s)) { place='postalveolar'; lips='slight-round'; }
+    else if (/\/(?:k|ɡ|g|ŋ)\//.test(s)) place='velar';
+    else if (/\/h\//.test(s)) { place='glottal'; noContact=true; }
+    else if (/\/j\//.test(s)) { place='palatal'; noContact=true; }
+    else if (s.includes('/r/・/ɹ/')) { place='postalveolar'; lips='slight-round'; noContact=true; }
+    else if (/\/w\//.test(s)) { place='velar'; lips='round'; noContact=true; }
+
+    if (/\/(?:m|n|ŋ)\//.test(s)) nasal = true;
+    return { kind:'consonant', place, lips, voiced, nasal, noContact };
+  }
+
+  function renderIftyLipShape(lips, x=205, y=63) {
+    if (lips === 'closed') {
+      return `<ellipse class="soft" cx="${x}" cy="${y}" rx="28" ry="22"></ellipse><path class="accent" d="M${x-20} ${y} Q${x} ${y+1} ${x+20} ${y}"></path>`;
+    }
+    if (lips === 'round') {
+      return `<ellipse class="soft" cx="${x}" cy="${y}" rx="28" ry="25"></ellipse><ellipse class="accent" cx="${x}" cy="${y}" rx="9" ry="14"></ellipse>`;
+    }
+    if (lips === 'slight-round') {
+      return `<ellipse class="soft" cx="${x}" cy="${y}" rx="29" ry="23"></ellipse><ellipse class="accent" cx="${x}" cy="${y}" rx="14" ry="10"></ellipse>`;
+    }
+    if (lips === 'spread') {
+      return `<ellipse class="soft" cx="${x}" cy="${y}" rx="31" ry="21"></ellipse><path class="accent" d="M${x-22} ${y} Q${x} ${y+10} ${x+22} ${y} Q${x} ${y-6} ${x-22} ${y}"></path>`;
+    }
+    if (lips === 'teeth-lip') {
+      return `<ellipse class="soft" cx="${x}" cy="${y}" rx="29" ry="23"></ellipse><path class="outline" d="M${x-18} ${y-4} Q${x} ${y-9} ${x+18} ${y-4}"></path><path class="accent" d="M${x-18} ${y+5} Q${x} ${y-1} ${x+18} ${y+5}"></path><text x="${x-22}" y="${y+34}">上歯＋下唇</text>`;
+    }
+    return `<ellipse class="soft" cx="${x}" cy="${y}" rx="29" ry="23"></ellipse><ellipse class="accent" cx="${x}" cy="${y}" rx="18" ry="8"></ellipse>`;
+  }
+
+  function renderIftyPronunciationVisual(symbol) {
+    const cfg = getIftyIpaVisualConfig(symbol);
+    const front = renderIftyLipShape(cfg.lips);
+
+    if (cfg.kind === 'vowel') {
+      const x = 66 + cfg.tongueX * 78;
+      const y = 31 + cfg.tongueY * 54;
+      const x2 = cfg.tongueX2 == null ? null : 66 + cfg.tongueX2 * 78;
+      const y2 = cfg.tongueY2 == null ? null : 31 + cfg.tongueY2 * 54;
+      const jawText = cfg.jaw === 'open' ? '口：大きめ' : cfg.jaw === 'small' ? '口：小さめ' : '口：中くらい';
+      return `
+        <div class="ifty-manual-visual">
+          <div class="ifty-manual-visual-head"><span>👄 口・舌の簡易図</span><span class="ifty-manual-visual-note">模式図・実際の形には個人差あり</span></div>
+          <div class="ifty-manual-visual-body">
+            <svg class="ifty-manual-art-svg" viewBox="0 0 250 118" role="img" aria-label="${symbol} の口と舌の位置の簡易図">
+              <text class="strongtext" x="13" y="13">横から見た舌</text>
+              <path class="outline" d="M24 67 Q34 34 72 27 Q114 18 149 35 Q157 44 157 62 Q157 86 138 97"></path>
+              <path class="soft" d="M40 61 Q64 80 95 82 Q127 83 145 69"></path>
+              <path class="guide" d="M67 31 L67 91 M105 27 L105 91 M143 35 L143 91 M52 46 L151 46 M46 69 L148 69"></path>
+              <circle class="accent" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7"></circle>
+              ${x2 == null ? '' : `
+                <path class="air" d="M${(x+6).toFixed(1)} ${(y-3).toFixed(1)} Q${((x+x2)/2).toFixed(1)} ${((y+y2)/2-10).toFixed(1)} ${(x2-6).toFixed(1)} ${(y2-3).toFixed(1)}"></path>
+                <polyline class="air" points="${(x2-12).toFixed(1)},${(y2-8).toFixed(1)} ${(x2-5).toFixed(1)},${(y2-3).toFixed(1)} ${(x2-12).toFixed(1)},${(y2+2).toFixed(1)}"></polyline>
+                <circle class="accent2" cx="${x2.toFixed(1)}" cy="${y2.toFixed(1)}" r="6"></circle>`}
+              <text x="25" y="108">前</text><text x="137" y="108">奥</text>
+              <text class="strongtext" x="175" y="13">正面の唇</text>
+              ${front}
+              <text x="174" y="104">${jawText}</text>
+            </svg>
+          </div>
+        </div>`;
+    }
+
+    const placeMap = {
+      bilabial:[45,62,'両唇'],
+      labiodental:[47,60,'上歯＋下唇'],
+      dental:[57,58,'歯'],
+      alveolar:[73,42,'歯茎'],
+      postalveolar:[88,39,'歯茎の後ろ'],
+      palatal:[108,38,'硬口蓋'],
+      velar:[128,43,'軟口蓋'],
+      glottal:[150,61,'喉']
+    };
+    const [cx, cy, label] = placeMap[cfg.place] || placeMap.alveolar;
+    return `
+      <div class="ifty-manual-visual">
+        <div class="ifty-manual-visual-head"><span>👄 口・舌の簡易図</span><span class="ifty-manual-visual-note">青＝主な構音位置</span></div>
+        <div class="ifty-manual-visual-body">
+          <svg class="ifty-manual-art-svg" viewBox="0 0 250 118" role="img" aria-label="${symbol} の構音位置の簡易図">
+            <text class="strongtext" x="13" y="13">横から見た口腔</text>
+            <path class="outline" d="M24 67 Q34 34 72 27 Q114 18 149 35 Q157 44 157 62 Q157 86 138 97"></path>
+            <path class="soft" d="M40 61 Q66 79 96 80 Q124 80 145 66"></path>
+            <path class="soft" d="M48 50 L48 66 M53 49 L53 65"></path>
+            ${cfg.noContact ? `<circle class="accent2" cx="${cx}" cy="${cy}" r="8" fill="none"></circle><text x="${Math.max(10,cx-18)}" y="${Math.max(24,cy-11)}">非接触</text>` : `<circle class="accent" cx="${cx}" cy="${cy}" r="6"></circle>`}
+            ${cfg.nasal ? `<path class="air" d="M112 40 Q116 21 98 16 Q82 13 77 23"></path><polyline class="air" points="77,23 82,18 84,26"></polyline><text x="89" y="17">鼻へ</text>` : `<path class="air" d="M57 66 Q35 66 21 66"></path><polyline class="air" points="22,66 29,61 29,71"></polyline>`}
+            <text x="113" y="106">位置：${label}</text>
+            <text class="strongtext" x="175" y="13">正面の唇</text>
+            ${front}
+            <text x="174" y="104">声帯：${cfg.voiced ? 'ON' : 'OFF'}</text>
+          </svg>
+        </div>
+      </div>`;
+  }
+
+  function renderIftyPrepositionVisual(word) {
+    const w = String(word || '').toLowerCase().trim();
+    const frame = (inner, note='') => `
+      <div class="ifty-manual-visual ifty-manual-prep-visual">
+        <div class="ifty-manual-visual-head"><span>🧭 核イメージ図</span><span class="ifty-manual-visual-note">${note || '位置・動きだけを簡略化'}</span></div>
+        <div class="ifty-manual-visual-body">
+          <svg class="ifty-manual-art-svg" viewBox="0 0 250 92" role="img" aria-label="${w} の核イメージ図">${inner}</svg>
+        </div>
+      </div>`;
+
+    const box = `<rect class="outline" x="92" y="24" width="68" height="46" rx="5"></rect>`;
+    const dot = (x,y,cls='accent') => `<circle class="${cls}" cx="${x}" cy="${y}" r="7"></circle>`;
+    const arrow = (x1,y1,x2,y2) => {
+      const dx=x2-x1, dy=y2-y1, len=Math.max(1,Math.hypot(dx,dy));
+      const ux=dx/len, uy=dy/len, px=-uy, py=ux;
+      const hx=x2-9*ux, hy=y2-9*uy;
+      return `<path class="air" d="M${x1} ${y1} L${x2} ${y2}"></path><polyline class="air" points="${(hx+5*px).toFixed(1)},${(hy+5*py).toFixed(1)} ${x2},${y2} ${(hx-5*px).toFixed(1)},${(hy-5*py).toFixed(1)}"></polyline>`;
+    };
+    const label = (x,y,t,strong=false) => `<text${strong ? ' class="strongtext"' : ''} x="${x}" y="${y}">${t}</text>`;
+
+    if (w === 'at') return frame(`${box}${dot(126,47)}<path class="guide" d="M126 17 L126 78 M80 47 L171 47"></path>${label(106,86,'一点として捉える',true)}`);
+    if (w === 'in') return frame(`${box}${dot(126,47)}${label(111,86,'内部',true)}`);
+    if (w === 'on') return frame(`<path class="outline" d="M70 61 L181 61"></path>${dot(126,54)}${label(104,82,'面に接触',true)}`);
+    if (w === 'off') return frame(`<path class="outline" d="M70 62 L148 62"></path>${dot(118,55)}${arrow(128,48,185,23)}${label(157,82,'離れる',true)}`);
+    if (w === 'to') return frame(`${dot(55,47,'accent2')}${arrow(68,47,185,47)}${dot(198,47)}${label(45,76,'起点')}${label(183,76,'到達点',true)}`);
+    if (w === 'for') return frame(`${dot(55,47,'accent2')}${arrow(68,47,174,47)}<path class="guide" d="M189 31 L194 43 L207 44 L197 52 L200 65 L189 58 L178 65 L181 52 L171 44 L184 43 Z"></path>${label(166,82,'目的・利益',true)}`);
+    if (w === 'from') return frame(`${dot(56,47)}${arrow(68,47,190,47)}${label(38,78,'起点',true)}${label(166,78,'外へ')}`);
+    if (w === 'up') return frame(`${dot(126,70,'accent2')}${arrow(126,61,126,20)}${label(139,35,'上昇・増加',true)}`);
+    if (w === 'down') return frame(`${dot(126,20,'accent2')}${arrow(126,29,126,72)}${label(139,67,'下降・減少',true)}`);
+    if (w === 'away') return frame(`${dot(126,47,'accent2')}${arrow(112,47,49,47)}${arrow(140,47,203,47)}${label(94,82,'距離化',true)}`);
+    if (w === 'forward') return frame(`<path class="guide" d="M42 64 L210 64"></path>${dot(72,64,'accent2')}${arrow(84,64,198,64)}${label(132,43,'前へ進む',true)}`);
+    if (w === 'by') return frame(`${box}${dot(77,47)}${label(58,80,'そば',true)}${label(101,86,'対象・媒介')}`);
+    if (w === 'with') return frame(`${dot(105,47)}${dot(145,47,'accent2')}<path class="air" d="M113 47 L137 47"></path>${label(91,80,'一緒・付帯',true)}`);
+    if (w === 'of') return frame(`<circle class="outline" cx="126" cy="47" r="31"></circle>${dot(139,45)}<path class="guide" d="M139 45 L184 29"></path>${label(101,86,'全体と部分',true)}`);
+    if (w === 'over') return frame(`${box}<path class="air" d="M69 54 Q126 5 184 54"></path><polyline class="air" points="177,48 184,54 176,57"></polyline>${label(107,84,'上を越える',true)}`);
+    if (w === 'under') return frame(`<path class="outline" d="M70 35 L181 35"></path>${dot(126,58)}${label(105,81,'下・支配下',true)}`);
+    if (w === 'through') return frame(`${box}${arrow(48,47,202,47)}${label(101,86,'内部を貫通',true)}`);
+    if (w === 'across') return frame(`<rect class="outline" x="73" y="27" width="104" height="40" rx="5"></rect>${arrow(48,47,202,47)}${label(108,86,'横断',true)}`);
+    if (w === 'along') return frame(`<path class="outline" d="M48 62 Q90 26 126 52 Q158 75 205 30"></path><path class="air" d="M58 58 Q92 32 124 53 Q155 71 194 36"></path><polyline class="air" points="184,36 194,36 190,46"></polyline>${label(101,86,'線に沿う',true)}`);
+    if (w === 'into') return frame(`${box}${dot(47,47,'accent2')}${arrow(60,47,118,47)}${label(94,86,'外 → 内',true)}`);
+    if (w === 'onto') return frame(`<path class="outline" d="M91 60 L171 60"></path>${dot(55,69,'accent2')}${arrow(66,66,125,53)}${label(92,84,'面へ移動',true)}`);
+    if (w === 'beyond') return frame(`<path class="outline" d="M125 17 L125 75"></path>${dot(178,47)}${label(103,86,'境界')}${label(166,79,'向こう',true)}`);
+    if (w === 'before / after') return frame(`<path class="outline" d="M38 47 L212 47"></path>${dot(126,47,'accent2')}${dot(72,47)}${dot(180,47)}${label(57,75,'before',true)}${label(112,75,'基準')}${label(165,75,'after',true)}`);
+    if (w === 'against') return frame(`<path class="outline" d="M173 18 L173 75"></path>${dot(92,47,'accent2')}${arrow(105,47,165,47)}${label(116,82,'押し当たる',true)}`);
+    if (w === 'about') return frame(`${dot(126,47,'accent2')}<ellipse class="air" cx="126" cy="47" rx="67" ry="26"></ellipse><polyline class="air" points="186,32 194,34 189,41"></polyline>${label(101,86,'周囲・関連',true)}`);
+    if (w === 'between / among') return frame(`${dot(67,47,'accent2')}${dot(126,47)}${dot(185,47,'accent2')}${label(102,80,'between',true)}<circle class="soft" cx="126" cy="47" r="31"></circle>`, '個々の間 / 集団の中');
+    if (w === 'out of') return frame(`${box}${dot(126,47,'accent2')}${arrow(139,47,203,47)}${label(97,86,'内 → 外',true)}`);
+
+    return frame(`${dot(126,47)}${label(86,81,'核イメージを位置関係で確認',true)}`);
+  }
+
   function renderIftyIpaSection() {
     const vowelGroups = [
       {
@@ -25283,6 +26031,7 @@ window.logout = async function() {
           <span class="ifty-manual-ipa-symbol">${item.symbol}</span>
           <div class="ifty-manual-ipa-examples">${item.words}</div>
         </div>
+        ${renderIftyPronunciationVisual(item.symbol)}
         <div class="ifty-manual-ipa-how">
           <div><b>口：</b>${item.mouth}</div>
           <div><b>舌：</b>${item.tongue}</div>
@@ -25315,7 +26064,8 @@ window.logout = async function() {
         </div>
 
         <div class="ifty-manual-ipa-note">
-          <strong>英米差：</strong> /ɒ/・/ɑː/・/ɜː/・/ɪə/ などは特に表記が変わります。発音記号が違って見えても、まず辞書が British / American のどちらを示しているか確認してください。
+          <strong>英米差：</strong> /ɒ/・/ɑː/・/ɜː/・/ɪə/ などは特に表記が変わります。発音記号が違って見えても、まず辞書が British / American のどちらを示しているか確認してください。<br>
+          <strong>図について：</strong>口腔図は「どの辺を使うか」を掴むための簡易模式図です。舌・歯・口蓋の正確な形や位置には個人差があり、解剖図そのものではありません。
         </div>
 
         <div class="ifty-manual-ipa-group">
@@ -25368,6 +26118,7 @@ window.logout = async function() {
             <div class="ifty-manual-core-word">${item.w}</div>
             <div class="ifty-manual-core-text"><strong>核イメージ：</strong>${item.image}</div>
           </div>
+          ${renderIftyPrepositionVisual(item.w)}
           <div class="ifty-manual-example-list">
             ${item.examples.map(ex => `<div class="ifty-manual-example"><b>${ex[0]}</b><br>${ex[1]}</div>`).join('')}
           </div>
@@ -25391,7 +26142,8 @@ window.logout = async function() {
         </div>
 
         <div class="ifty-manual-ref-note">
-          <strong>重要：</strong>「この前置詞＝この日本語」ではありません。たとえば on は「上に」ではなく<b>接触</b>が核なので、on the wall / on TV / keep on working のように意味が広がります。
+          <strong>重要：</strong>「この前置詞＝この日本語」ではありません。たとえば on は「上に」ではなく<b>接触</b>が核なので、on the wall / on TV / keep on working のように意味が広がります。<br>
+          <strong>図の見方：</strong>青い点＝対象、線・箱＝基準となる場所、矢印＝移動や意味の方向です。抽象用法も、まずこの空間イメージから考えます。
         </div>
 
         <div class="ifty-manual-ref-group">
@@ -26059,6 +26811,194 @@ window.logout = async function() {
 })();
 
 
+
+
+// ==========================================
+// ★★★ STEP124：SMARTPHONE PRACTICE UI ★★★
+// スマホではPRACTICE設定を全画面・1列にして横はみ出しを禁止。
+// PRACTICE表示中だけ固定ロゴ / クイック操作 / MANUALを隠し、内容と重ならせない。
+// ==========================================
+(function ensureIftyStep124MobilePracticeStyles(){
+  if (document.getElementById('iftyStep124MobilePracticeStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'iftyStep124MobilePracticeStyles';
+  style.textContent = `
+    @media (max-width:700px) {
+      #practiceModal {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100dvw !important;
+        max-width: 100dvw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        align-items: stretch !important;
+        justify-content: stretch !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+        background: #0f172a !important;
+        z-index: 12160 !important;
+      }
+
+      #practiceModal > div,
+      #practiceModal .ifty-practice-config {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        height: 100% !important;
+        min-height: 100% !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        padding:
+          max(13px, env(safe-area-inset-top))
+          max(12px, env(safe-area-inset-right))
+          max(18px, env(safe-area-inset-bottom))
+          max(12px, env(safe-area-inset-left)) !important;
+        border-radius: 0 !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain !important;
+        -webkit-overflow-scrolling: touch !important;
+      }
+
+      #practiceModal .ifty-practice-config *,
+      #practiceModal > div * {
+        box-sizing: border-box;
+        max-width: 100%;
+      }
+
+      /* 設定ブロックはスマホでは必ず縦1列 */
+      #practiceModal .ifty-practice-config [style*="display:grid"],
+      #practiceModal .ifty-practice-config [style*="display: grid"] {
+        grid-template-columns: minmax(0, 1fr) !important;
+      }
+
+      #practiceModal .ifty-practice-config [style*="display:flex"],
+      #practiceModal .ifty-practice-config [style*="display: flex"] {
+        min-width: 0 !important;
+      }
+
+      /* 「問題数」「語彙を追加」などの横並び部品を縦に落とす */
+      #practiceModal .ifty-practice-config select,
+      #practiceModal .ifty-practice-config input[type="search"],
+      #practiceModal .ifty-practice-config input[type="text"],
+      #practiceModal .ifty-practice-config textarea {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+      }
+
+      #practiceModal .ifty-practice-config select {
+        min-height: 44px !important;
+      }
+
+      #practiceModal .ifty-practice-config button {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        min-height: 42px !important;
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
+        line-height: 1.35 !important;
+      }
+
+      /* 操作用ボタン群は押しやすい幅に */
+      #practiceModal .ifty-practice-config div[style*="flex-wrap:wrap"] > button,
+      #practiceModal .ifty-practice-config div[style*="flex-wrap: wrap"] > button,
+      #practiceModal .ifty-practice-config div[style*="flex-wrap:wrap"] > select,
+      #practiceModal .ifty-practice-config div[style*="flex-wrap: wrap"] > select {
+        flex: 1 1 100% !important;
+        width: 100% !important;
+      }
+
+      #practiceModal .ifty-practice-config h2 {
+        font-size: 1.12rem !important;
+        line-height: 1.35 !important;
+        overflow-wrap: anywhere !important;
+      }
+
+      #practiceModal .ifty-practice-config > div {
+        min-width: 0 !important;
+      }
+
+      /* 登録語彙リストの1件も横にはみ出さない */
+      #practiceModal [data-ifty-quiz-word-row],
+      #practiceModal [data-ifty-practice-word-row] {
+        min-width: 0 !important;
+        align-items: flex-start !important;
+      }
+
+      #practiceModal [data-ifty-quiz-word-row] > span,
+      #practiceModal [data-ifty-practice-word-row] > span {
+        min-width: 0 !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+      }
+
+      .ifty-mobile-practice-count {
+        align-items: stretch !important;
+      }
+      .ifty-mobile-practice-count > b,
+      .ifty-mobile-practice-count > span {
+        width: 100% !important;
+      }
+      .ifty-mobile-practice-addwords > div {
+        display: grid !important;
+        grid-template-columns: minmax(0,1fr) !important;
+        width: 100% !important;
+      }
+      .ifty-mobile-practice-addwords button,
+      .ifty-mobile-practice-addwords select {
+        width: 100% !important;
+      }
+
+      body.ifty-mobile-practice-open #iftyGlobalLogo,
+      body.ifty-mobile-practice-open #iftyQuickControls,
+      body.ifty-mobile-practice-open .ifty-manual-launcher {
+        display: none !important;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
+(function installIftyStep124MobilePracticeChromeSync(){
+  if (window.__iftyStep124MobilePracticeSyncInstalled) return;
+  window.__iftyStep124MobilePracticeSyncInstalled = true;
+
+  const sync = () => {
+    const modal = document.getElementById('practiceModal');
+    const mobile = window.matchMedia ? window.matchMedia('(max-width:700px)').matches : window.innerWidth <= 700;
+    let visible = false;
+    if (modal) {
+      const style = window.getComputedStyle(modal);
+      visible = style.display !== 'none' && style.visibility !== 'hidden';
+    }
+    document.body?.classList.toggle('ifty-mobile-practice-open', !!(mobile && visible));
+  };
+
+  const start = () => {
+    sync();
+    const observer = new MutationObserver(sync);
+    if (document.body) {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class']
+      });
+    }
+    window.addEventListener('resize', sync, { passive: true });
+    window.addEventListener('orientationchange', sync, { passive: true });
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else {
+    start();
+  }
+})();
 
 // ==========================================
 // ★★★ STEP109：DARK SURFACES + RELIABLE FOLDER COLLAPSE ★★★
