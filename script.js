@@ -1,3 +1,6 @@
+// ★★★ IFTY Q3 STEP133 2026-10-13：SUBJECT ADD UI / READING SPLIT / ALLIA REMAINING ★★★
+// ★★★ IFTY Q3 STEP132 2026-10-11：REALTIME BATTLE FOUNDATION ★★★
+// ★★★ IFTY Q3 STEP131 2026-10-11：FRIEND ACTIVITY PRIVACY LABEL CLARITY ★★★
 // ★★★ IFTY Q3 STEP130 2026-10-10：PUBLIC FOLDER MANAGEMENT PAGE ★★★
 // ★★★ IFTY Q3 STEP129 2026-10-10：PUBLIC FOLDER CODES / REVOKE ★★★
 // ★★★ IFTY Q3 STEP128 2026-10-10：RELIABLE FOLDER SHARE LINKS / LINE SHARE ★★★
@@ -22,7 +25,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 130;
+const IFTY_APP_STEP = 133;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -412,7 +415,8 @@ const IFTY_ALLIA_ACCOUNT_TYPES = new Set([
   'account_username_change','account_email_request','account_email_verify','account_recovery_code_generate','account_password_change',
   'account_sessions','account_session_revoke','account_logout_all','account_delete',
   'password_reset_request','password_reset_confirm','password_reset_recovery','cloud_load','cloud_save','activity_heartbeat','activity_stats',
-  'friends_list','friend_request_send','friend_request_accept','friend_request_decline','friend_request_cancel','friend_remove','friend_activity_visibility'
+  'friends_list','friend_request_send','friend_request_accept','friend_request_decline','friend_request_cancel','friend_remove','friend_activity_visibility',
+  'battle_list','battle_invite_create','battle_invite_accept','battle_invite_decline','battle_invite_cancel','battle_ws_ticket'
 ]);
 
 let currentIftySubject = 'ENGLISH';
@@ -1548,6 +1552,7 @@ function renderIftySideMenu() {
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyYears();">📅 ${escapeHtml(getIftySideMenuDisplayText('years'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openPracticeHome(currentIftySubject);">⚔️ ${escapeHtml(getIftySideMenuDisplayText('practice'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyFriendsPage();">👥 ${escapeHtml(getIftySideMenuDisplayText('friends'))}</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyBattlePage();">⚔️ ${escapeHtml(getIftySideMenuDisplayText('battle'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyFolderImportPicker();">📦 ${escapeHtml(getIftySideMenuDisplayText('importFolder'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPublicFolderCodeModal();">🌐 公開コードから取得</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPublishedFoldersPage();">📡 ${escapeHtml(getIftySideMenuDisplayText('publishedFolders'))}</button>
@@ -1984,7 +1989,11 @@ function renderIftyAlliaUsageBarHtml(compact = false) {
   let border = '#ddd6fe';
   let background = '#faf5ff';
   let headline = `🤖 ALLIA 今日 ${usage.total}回`;
-  let statusText = '残量はAPIから取得できる場合のみ判定';
+  const learnedLimit = Math.max(0, Number(limitState.learnedLimit || loadIftyAlliaLearnedLimit()) || 0);
+  const estimatedRemaining = learnedLimit ? Math.max(0, learnedLimit - usage.total) : null;
+  let statusText = estimatedRemaining !== null
+    ? `推定残り ${estimatedRemaining}回 / 前回上限 ${learnedLimit}回`
+    : '残量未学習（上限到達時に自動学習）';
   if (limitState.status === 'reached') {
     border = '#fca5a5';
     background = '#fef2f2';
@@ -2000,12 +2009,12 @@ function renderIftyAlliaUsageBarHtml(compact = false) {
     background = '#fffbeb';
     headline = limitState.estimated ? '⚠️ ALLIA 上限が近い可能性' : '⚠️ ALLIA 上限が近い';
     if (limitState.remaining !== null) {
-      statusText = limitState.limit !== null ? `残り ${limitState.remaining} / ${limitState.limit}` : `残り ${limitState.remaining}`;
-    } else if (limitState.learnedLimit) {
-      statusText = `前回到達 ${limitState.learnedLimit}回を基準にした目安`;
+      statusText = limitState.limit !== null ? `API残り ${limitState.remaining} / ${limitState.limit}` : `API残り ${limitState.remaining}`;
+    } else if (learnedLimit) {
+      statusText = `推定残り ${Math.max(0, learnedLimit - usage.total)}回 / 前回上限 ${learnedLimit}回`;
     }
   } else if (limitState.remaining !== null) {
-    statusText = limitState.limit !== null ? `残り ${limitState.remaining} / ${limitState.limit}` : `残り ${limitState.remaining}`;
+    statusText = limitState.limit !== null ? `API残り ${limitState.remaining} / ${limitState.limit}` : `API残り ${limitState.remaining}`;
   }
 
   return `
@@ -2016,7 +2025,20 @@ function renderIftyAlliaUsageBarHtml(compact = false) {
       </div>
       <div style="display:flex;gap:2px;margin-top:7px;width:100%;" aria-label="ALLIAの日次使用状況">${cells}</div>
       ${compact ? '' : '<div style="display:flex;justify-content:space-between;margin-top:3px;font-size:.65em;color:#94a3b8;"><span>9時</span><span>15時</span><span>21時</span><span>3時</span><span>9時</span></div>'}
-      ${limitState.estimated ? '<div style="margin-top:5px;font-size:.67em;color:#92400e;">※「近い可能性」は過去にこの端末で上限へ到達した使用量からの目安です。AI処理量により実際の上限時点は前後します。</div>' : ''}
+      ${(limitState.limit || learnedLimit) ? (() => {
+        const quotaLimit = Math.max(1, Number(limitState.limit || learnedLimit));
+        const quotaRemaining = limitState.remaining !== null
+          ? Math.max(0, Number(limitState.remaining))
+          : Math.max(0, quotaLimit - usage.total);
+        const usedRatio = Math.max(0, Math.min(1, (quotaLimit - quotaRemaining) / quotaLimit));
+        return `<div style="margin-top:7px;">
+          <div style="height:7px;border-radius:999px;background:#22143a;overflow:hidden;border:1px solid #5b21b6;">
+            <div style="height:100%;width:${Math.round(usedRatio * 100)}%;background:#7c3aed;"></div>
+          </div>
+          <div style="margin-top:3px;font-size:.66em;color:#a78bfa;">${limitState.remaining !== null ? 'API残量' : '推定残量'}：${Math.round(quotaRemaining)} / ${Math.round(quotaLimit)}</div>
+        </div>`;
+      })() : ''}
+      ${(limitState.estimated || (learnedLimit && limitState.remaining === null)) ? '<div style="margin-top:5px;font-size:.67em;color:#92400e;">※推定残量は、この端末で過去に上限へ到達した使用回数を基準にした目安です。AI処理量により実際の残量とは一致しない場合があります。</div>' : ''}
     </div>`;
 }
 
@@ -4476,9 +4498,20 @@ function renderIftyFriendsData(data) {
   const show = !!data.showActivity;
   return `
     <div class="ifty-settings-section" style="margin-top:0;background:#172033;border-color:#475569;">
-      <div class="ifty-settings-row">
-        <div><h3 style="color:#f8fafc;">利用状況の公開</h3><div class="ifty-settings-note">OFFが初期設定です。ONにすると、相互フレンドにだけ「利用中 / 今日利用 / 最近利用」のような粗い状態を表示します。正確な時刻は表示しません。</div></div>
-        <label style="display:flex;gap:8px;align-items:center;color:#f8fafc;font-weight:900;cursor:pointer;"><input type="checkbox" ${show?'checked':''} onchange="setIftyFriendActivityVisibility(this.checked)" style="width:20px;height:20px;"> ${show?'公開中':'非公開'}</label>
+      <div>
+        <h3 style="color:#f8fafc;">利用状況の公開</h3>
+        <div class="ifty-settings-note">
+          見せたい場合だけチェックしてください。チェックあり＝相互フレンドに「利用中 / 今日利用 / 最近利用」のような粗い状態を表示、チェックなし＝非公開です。正確な時刻は表示しません。
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+          <label style="display:flex;gap:8px;align-items:center;color:#f8fafc;font-weight:900;cursor:pointer;">
+            <input type="checkbox" ${show?'checked':''} onchange="setIftyFriendActivityVisibility(this.checked)" aria-label="フレンドに利用状況を表示する" style="width:20px;height:20px;">
+            フレンドに利用状況を表示する
+          </label>
+          <span style="display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;border:1px solid ${show?'#10b981':'#64748b'};background:${show?'#0d3328':'#1e293b'};color:${show?'#a7f3d0':'#cbd5e1'};font-size:.76rem;font-weight:950;">
+            現在：${show?'公開中':'非公開'}
+          </span>
+        </div>
       </div>
     </div>
     <div class="ifty-settings-section" style="background:#172033;border-color:#475569;">
@@ -4539,6 +4572,471 @@ if (document.readyState === 'loading') {
 } else {
   ensureIftyFolderImportInput(); enhanceIftyFolderShareButtons(document);
 }
+
+
+// ==========================================
+// ★★★ STEP132：REALTIME BATTLE 基盤 ★★★
+// Durable Object + WebSocket。
+// このSTEPでは「招待 / 承認 / 2人入室 / READY同期 / 切断検知」まで。
+// 問題配信・採点・勝敗処理は次段階でこの基盤上に追加する。
+// ==========================================
+let iftyBattlePageRefreshTimer = null;
+let iftyBattleSocket = null;
+let iftyBattlePingTimer = null;
+let iftyBattleCurrentRoom = null;
+let iftyBattleLobbyState = {
+  connected: false,
+  reconnecting: false,
+  players: [],
+  bothReady: false,
+  latencyMs: null,
+  message: ''
+};
+
+function stopIftyBattlePageAutoRefresh() {
+  if (iftyBattlePageRefreshTimer) {
+    clearTimeout(iftyBattlePageRefreshTimer);
+    iftyBattlePageRefreshTimer = null;
+  }
+}
+
+function closeIftyBattleSocket(options = {}) {
+  if (iftyBattlePingTimer) {
+    clearInterval(iftyBattlePingTimer);
+    iftyBattlePingTimer = null;
+  }
+  const socket = iftyBattleSocket;
+  iftyBattleSocket = null;
+  if (socket) {
+    try {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type:'leave' }));
+      }
+    } catch (_) {}
+    try { socket.close(1000, 'leave'); } catch (_) {}
+  }
+  if (!options.keepRoom) iftyBattleCurrentRoom = null;
+  iftyBattleLobbyState.connected = false;
+}
+
+function renderIftyBattleFriendRow(friend) {
+  const username = String(friend?.username || '');
+  const userId = String(friend?.userId || '');
+  return `<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:11px;border:1px solid #475569;border-radius:10px;background:#172033;">
+    <div style="min-width:0;">
+      <div style="font-weight:950;color:#f8fafc;overflow-wrap:anywhere;">${escapeHtml(username)}</div>
+      <div style="margin-top:3px;color:#94a3b8;font-size:.72rem;">フレンド</div>
+    </div>
+    <button type="button" onclick="sendIftyBattleInvite('${escapeHtml(userId)}','${escapeHtml(username.replace(/'/g,"\\'"))}')" style="border:none;background:#991b1b;color:white;border-radius:8px;padding:9px 11px;font-weight:950;cursor:pointer;">⚔️ 対戦申請</button>
+  </div>`;
+}
+
+function renderIftyBattleData(data) {
+  const friends = Array.isArray(data?.friends) ? data.friends : [];
+  const incoming = Array.isArray(data?.incoming) ? data.incoming : [];
+  const outgoing = Array.isArray(data?.outgoing) ? data.outgoing : [];
+  const rooms = Array.isArray(data?.rooms) ? data.rooms : [];
+  const realtimeAvailable = data?.realtimeAvailable !== false;
+
+  return `
+    ${!realtimeAvailable ? `
+      <div style="padding:11px;border:1px solid #ef4444;border-radius:10px;background:#3f1d25;color:#fecaca;margin-bottom:12px;">
+        <b>Cloudflareのリアルタイム対戦基盤がまだ有効ではありません。</b><br>
+        <span style="font-size:.78rem;">IFTY_BATTLE_ROOM Durable Object binding を設定すると利用できます。</span>
+      </div>` : ''}
+
+    <div class="ifty-settings-section" style="margin-top:0;background:#172033;border-color:#475569;">
+      <h3 style="color:#f8fafc;">リアルタイム対戦とは</h3>
+      <div class="ifty-settings-note">
+        STEP132では通信基盤を実装しています。フレンドへ対戦申請 → 承認 → 2人が同じルームへWebSocket接続 → READY状態をリアルタイム同期できます。
+        問題・採点はまだ開始せず、まず接続基盤が正常に動くことを確認します。
+      </div>
+    </div>
+
+    ${incoming.length ? `
+      <div class="ifty-settings-section" style="background:#172033;border-color:#7f1d1d;">
+        <h3 style="color:#f8fafc;">⚔️ 届いた対戦申請 ${incoming.length}</h3>
+        <div style="display:grid;gap:8px;margin-top:10px;">
+          ${incoming.map(row => `
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:10px;border:1px solid #475569;border-radius:9px;background:#111827;">
+              <b style="color:#f8fafc;">${escapeHtml(row.username || '')}</b>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button type="button" onclick="acceptIftyBattleInvite('${escapeHtml(String(row.inviteId || ''))}')" style="border:none;background:#047857;color:white;border-radius:7px;padding:8px 10px;font-weight:950;">承認</button>
+                <button type="button" onclick="declineIftyBattleInvite('${escapeHtml(String(row.inviteId || ''))}')" style="border:none;background:#475569;color:white;border-radius:7px;padding:8px 10px;font-weight:900;">拒否</button>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>` : ''}
+
+    ${outgoing.length ? `
+      <div class="ifty-settings-section" style="background:#172033;border-color:#475569;">
+        <h3 style="color:#f8fafc;">送信中の対戦申請 ${outgoing.length}</h3>
+        <div style="display:grid;gap:8px;margin-top:10px;">
+          ${outgoing.map(row => `
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:10px;border:1px solid #475569;border-radius:9px;">
+              <span style="color:#f8fafc;">${escapeHtml(row.username || '')}</span>
+              <button type="button" onclick="cancelIftyBattleInvite('${escapeHtml(String(row.inviteId || ''))}')" style="border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:7px;padding:8px 10px;font-weight:900;">取消</button>
+            </div>`).join('')}
+        </div>
+      </div>` : ''}
+
+    ${rooms.length ? `
+      <div class="ifty-settings-section" style="background:#172033;border-color:#991b1b;">
+        <h3 style="color:#f8fafc;">🎮 対戦ロビー ${rooms.length}</h3>
+        <div class="ifty-settings-note">承認済みの対戦です。両者が「READY」にするとリアルタイム同期テストが完了します。</div>
+        <div style="display:grid;gap:8px;margin-top:10px;">
+          ${rooms.map(room => `
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:11px;border:1px solid #7f1d1d;border-radius:9px;background:#1f1720;">
+              <div>
+                <div style="color:#f8fafc;font-weight:950;">VS ${escapeHtml(room.opponentUsername || '')}</div>
+                <div style="margin-top:3px;color:#94a3b8;font-size:.7rem;">有効期限 ${escapeHtml(room.expiresAtText || '')}</div>
+              </div>
+              <button type="button" onclick="openIftyBattleLobby('${escapeHtml(String(room.roomId || ''))}','${escapeHtml(String(room.opponentUsername || '').replace(/'/g,"\\'"))}')" style="border:none;background:#b91c1c;color:white;border-radius:8px;padding:9px 12px;font-weight:950;">入室</button>
+            </div>`).join('')}
+        </div>
+      </div>` : ''}
+
+    <div class="ifty-settings-section" style="background:#172033;border-color:#475569;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div>
+          <h3 style="color:#f8fafc;">フレンドに対戦申請</h3>
+          <div class="ifty-settings-note">1対1のリアルタイムルームを作成します。申請は30分で失効します。</div>
+        </div>
+        <button type="button" onclick="refreshIftyBattlePage({force:true})" style="border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:8px;padding:8px 10px;font-weight:900;">↻ 更新</button>
+      </div>
+      <div style="display:grid;gap:8px;margin-top:10px;">
+        ${friends.length ? friends.map(renderIftyBattleFriendRow).join('') : '<div class="ifty-settings-note">対戦できるフレンドがいません。</div>'}
+      </div>
+      <div id="iftyBattleActionStatus" class="ifty-settings-note" style="margin-top:8px;"></div>
+    </div>`;
+}
+
+window.openIftyBattlePage = function() {
+  stopIftyBattlePageAutoRefresh();
+  closeIftyBattleSocket();
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">⚔️ リアルタイム対戦</h1>
+          <div class="ifty-portal-subtitle">フレンドと同じ対戦ルームにリアルタイム接続する基盤です。</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">⌂ ホームへ</button>
+      </div>
+      <div id="iftyBattleRoot" style="margin-top:14px;"><div class="ifty-settings-note">読み込み中…</div></div>
+    </section>`, 'battle');
+  refreshIftyBattlePage({ force:true });
+};
+
+window.refreshIftyBattlePage = async function(options = {}) {
+  const root = document.getElementById('iftyBattleRoot');
+  if (!root || iftyDeveloperMode || !iftySessionToken) return;
+  stopIftyBattlePageAutoRefresh();
+  if (options.force) root.innerHTML = '<div class="ifty-settings-note">読み込み中…</div>';
+  try {
+    const data = await iftyAccountApi('battle_list', { token:iftySessionToken });
+    if (!document.getElementById('iftyBattleRoot')) return;
+    root.innerHTML = renderIftyBattleData(data);
+    iftyBattlePageRefreshTimer = setTimeout(() => {
+      if (document.getElementById('iftyBattleRoot')) refreshIftyBattlePage().catch(() => {});
+    }, 8000);
+  } catch (error) {
+    root.innerHTML = `<div style="color:#fca5a5;">対戦情報を取得できません：${escapeHtml(String(error?.message || error))}</div>`;
+  }
+};
+
+function setIftyBattleActionStatus(text, error = false) {
+  const el = document.getElementById('iftyBattleActionStatus');
+  if (!el) return;
+  el.textContent = String(text || '');
+  el.style.color = error ? '#fca5a5' : '#86efac';
+}
+
+window.sendIftyBattleInvite = async function(friendUserId, username) {
+  if (!window.confirm(`${username || 'このフレンド'}にリアルタイム対戦を申し込みますか？`)) return;
+  try {
+    await iftyAccountApi('battle_invite_create', {
+      token:iftySessionToken,
+      friendUserId:String(friendUserId || '')
+    });
+    setIftyBattleActionStatus('対戦申請を送りました。');
+    await refreshIftyBattlePage();
+  } catch (error) {
+    setIftyBattleActionStatus(String(error?.message || error), true);
+  }
+};
+
+window.acceptIftyBattleInvite = async function(inviteId) {
+  try {
+    const data = await iftyAccountApi('battle_invite_accept', { token:iftySessionToken, inviteId });
+    await refreshIftyBattlePage();
+    if (data?.roomId) {
+      setTimeout(() => openIftyBattleLobby(String(data.roomId), String(data.opponentUsername || '')), 100);
+    }
+  } catch (error) { alert(String(error?.message || error)); }
+};
+
+window.declineIftyBattleInvite = async function(inviteId) {
+  try {
+    await iftyAccountApi('battle_invite_decline', { token:iftySessionToken, inviteId });
+    await refreshIftyBattlePage();
+  } catch (error) { alert(String(error?.message || error)); }
+};
+
+window.cancelIftyBattleInvite = async function(inviteId) {
+  try {
+    await iftyAccountApi('battle_invite_cancel', { token:iftySessionToken, inviteId });
+    await refreshIftyBattlePage();
+  } catch (error) { alert(String(error?.message || error)); }
+};
+
+function makeIftyBattleWebSocketUrl(roomKey, ticket) {
+  const url = new URL(WORKER_URL);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.pathname = '/_ifty/battle/ws';
+  url.search = '';
+  url.searchParams.set('room', String(roomKey || ''));
+  url.searchParams.set('ticket', String(ticket || ''));
+  return url.toString();
+}
+
+function getIftyBattleSelfUsername() {
+  return String(iftyAccount?.username || currentUser || '');
+}
+
+function renderIftyBattleLobbyState() {
+  const connection = document.getElementById('iftyBattleLobbyConnection');
+  const players = document.getElementById('iftyBattleLobbyPlayers');
+  const readyBtn = document.getElementById('iftyBattleReadyButton');
+  const readyInfo = document.getElementById('iftyBattleReadyInfo');
+  const latency = document.getElementById('iftyBattleLatency');
+
+  if (connection) {
+    connection.textContent = iftyBattleLobbyState.connected
+      ? '● リアルタイム接続中'
+      : (iftyBattleLobbyState.reconnecting ? '● 再接続中…' : '● 未接続');
+    connection.style.color = iftyBattleLobbyState.connected ? '#86efac' : '#fca5a5';
+  }
+
+  if (latency) {
+    latency.textContent = Number.isFinite(iftyBattleLobbyState.latencyMs)
+      ? `通信 ${iftyBattleLobbyState.latencyMs}ms`
+      : '通信 —';
+  }
+
+  const selfUsername = getIftyBattleSelfUsername();
+  if (players) {
+    const list = Array.isArray(iftyBattleLobbyState.players) ? iftyBattleLobbyState.players : [];
+    const slots = [...list];
+    while (slots.length < 2) slots.push(null);
+    players.innerHTML = slots.slice(0, 2).map((player, index) => {
+      if (!player) {
+        return `<div style="padding:14px;border:1px dashed #475569;border-radius:12px;background:#111827;min-width:0;">
+          <div style="font-weight:950;color:#94a3b8;">PLAYER ${index + 1}</div>
+          <div style="margin-top:8px;color:#64748b;">接続待ち…</div>
+        </div>`;
+      }
+      const isMe = String(player.username || '') === selfUsername;
+      return `<div style="padding:14px;border:1px solid ${player.ready ? '#10b981' : '#475569'};border-radius:12px;background:${player.ready ? '#0d3328' : '#111827'};min-width:0;">
+        <div style="font-size:.72rem;color:#94a3b8;">${isMe ? 'YOU' : 'OPPONENT'}</div>
+        <div style="margin-top:4px;font-size:1.05rem;font-weight:950;color:#f8fafc;overflow-wrap:anywhere;">${escapeHtml(player.username || '')}</div>
+        <div style="margin-top:8px;font-size:.78rem;font-weight:950;color:${player.ready ? '#a7f3d0' : '#fbbf24'};">${player.ready ? 'READY ✓' : '準備中'}</div>
+      </div>`;
+    }).join('');
+
+    const me = list.find(player => String(player.username || '') === selfUsername);
+    if (readyBtn) {
+      readyBtn.disabled = !iftyBattleLobbyState.connected;
+      readyBtn.textContent = me?.ready ? 'READYを解除' : 'READY';
+      readyBtn.style.background = me?.ready ? '#475569' : '#059669';
+      readyBtn.dataset.ready = me?.ready ? '1' : '0';
+    }
+  }
+
+  if (readyInfo) {
+    readyInfo.innerHTML = iftyBattleLobbyState.bothReady
+      ? '<b style="color:#86efac;">✅ 両者READY。リアルタイム同期基盤は正常です。</b><br><span style="color:#cbd5e1;">次STEPで、この状態から同じ問題セットを同時開始できるようにします。</span>'
+      : '<span style="color:#cbd5e1;">2人が接続し、両者がREADYになると基盤テスト完了です。</span>';
+  }
+}
+
+function applyIftyBattleServerState(payload) {
+  iftyBattleLobbyState.players = Array.isArray(payload?.players) ? payload.players : [];
+  iftyBattleLobbyState.bothReady = !!payload?.bothReady;
+  renderIftyBattleLobbyState();
+}
+
+function startIftyBattlePing() {
+  if (iftyBattlePingTimer) clearInterval(iftyBattlePingTimer);
+  iftyBattlePingTimer = setInterval(() => {
+    if (!iftyBattleSocket || iftyBattleSocket.readyState !== WebSocket.OPEN) return;
+    try {
+      iftyBattleSocket.send(JSON.stringify({ type:'ping', clientTime:Date.now() }));
+    } catch (_) {}
+  }, 20000);
+}
+
+async function connectIftyBattleLobby(roomId, options = {}) {
+  if (!roomId) return;
+  iftyBattleCurrentRoom = {
+    roomId:String(roomId),
+    opponentUsername:String(options.opponentUsername || iftyBattleCurrentRoom?.opponentUsername || '')
+  };
+  iftyBattleLobbyState.reconnecting = true;
+  renderIftyBattleLobbyState();
+
+  try {
+    const ticketData = await iftyAccountApi('battle_ws_ticket', {
+      token:iftySessionToken,
+      roomId:String(roomId)
+    });
+
+    closeIftyBattleSocket({ keepRoom:true });
+
+    const socket = new WebSocket(makeIftyBattleWebSocketUrl(ticketData.roomKey, ticketData.ticket));
+    iftyBattleSocket = socket;
+
+    socket.addEventListener('open', () => {
+      if (socket !== iftyBattleSocket) return;
+      iftyBattleLobbyState.connected = true;
+      iftyBattleLobbyState.reconnecting = false;
+      renderIftyBattleLobbyState();
+      startIftyBattlePing();
+    });
+
+    socket.addEventListener('message', event => {
+      if (socket !== iftyBattleSocket) return;
+      let payload = null;
+      try { payload = JSON.parse(String(event.data || '')); } catch (_) { return; }
+
+      if (payload.type === 'state') {
+        applyIftyBattleServerState(payload);
+        return;
+      }
+      if (payload.type === 'pong') {
+        const sent = Number(payload.clientTime || 0);
+        if (sent > 0) iftyBattleLobbyState.latencyMs = Math.max(0, Date.now() - sent);
+        renderIftyBattleLobbyState();
+        return;
+      }
+      if (payload.type === 'battle_ready') {
+        iftyBattleLobbyState.bothReady = true;
+        applyIftyBattleServerState(payload);
+        return;
+      }
+      if (payload.type === 'error') {
+        const status = document.getElementById('iftyBattleLobbyStatus');
+        if (status) {
+          status.textContent = String(payload.message || '対戦通信でエラーが発生しました。');
+          status.style.color = '#fca5a5';
+        }
+      }
+    });
+
+    socket.addEventListener('close', event => {
+      if (socket !== iftyBattleSocket) return;
+      iftyBattleSocket = null;
+      iftyBattleLobbyState.connected = false;
+      iftyBattleLobbyState.reconnecting = false;
+      renderIftyBattleLobbyState();
+
+      const status = document.getElementById('iftyBattleLobbyStatus');
+      if (status && Number(event.code || 0) !== 1000) {
+        status.textContent = '接続が切れました。「再接続」を押してください。';
+        status.style.color = '#fca5a5';
+      }
+    });
+
+    socket.addEventListener('error', () => {
+      const status = document.getElementById('iftyBattleLobbyStatus');
+      if (status) {
+        status.textContent = 'WebSocket接続エラー。CloudflareのDurable Object設定を確認してください。';
+        status.style.color = '#fca5a5';
+      }
+    });
+  } catch (error) {
+    iftyBattleLobbyState.connected = false;
+    iftyBattleLobbyState.reconnecting = false;
+    renderIftyBattleLobbyState();
+    const status = document.getElementById('iftyBattleLobbyStatus');
+    if (status) {
+      status.textContent = String(error?.message || error);
+      status.style.color = '#fca5a5';
+    }
+  }
+}
+
+window.openIftyBattleLobby = function(roomId, opponentUsername = '') {
+  stopIftyBattlePageAutoRefresh();
+  closeIftyBattleSocket();
+  iftyBattleCurrentRoom = { roomId:String(roomId || ''), opponentUsername:String(opponentUsername || '') };
+  iftyBattleLobbyState = {
+    connected:false,
+    reconnecting:true,
+    players:[],
+    bothReady:false,
+    latencyMs:null,
+    message:''
+  };
+
+  showIftyHubContent(`
+    <section class="ifty-portal-shell">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
+        <div>
+          <h1 class="ifty-portal-title">⚔️ REALTIME BATTLE LOBBY</h1>
+          <div class="ifty-portal-subtitle">VS ${escapeHtml(opponentUsername || 'フレンド')} ・ STEP132 通信基盤テスト</div>
+        </div>
+        <button class="ifty-portal-back" type="button" onclick="leaveIftyBattleLobby()">← 対戦一覧</button>
+      </div>
+
+      <div style="margin-top:14px;padding:12px;border:1px solid #475569;border-radius:11px;background:#111827;">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+          <div id="iftyBattleLobbyConnection" style="font-weight:950;color:#fbbf24;">● 接続中…</div>
+          <div id="iftyBattleLatency" style="color:#94a3b8;font-size:.78rem;">通信 —</div>
+        </div>
+      </div>
+
+      <div id="iftyBattleLobbyPlayers" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:10px;margin-top:12px;"></div>
+
+      <div style="margin-top:12px;padding:14px;border:1px solid #7f1d1d;border-radius:12px;background:#1f1720;">
+        <div style="font-weight:950;color:#f8fafc;">READY CHECK</div>
+        <div id="iftyBattleReadyInfo" style="margin-top:5px;font-size:.8rem;line-height:1.5;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+          <button id="iftyBattleReadyButton" type="button" onclick="toggleIftyBattleReady()" disabled style="flex:1 1 150px;border:none;background:#059669;color:white;border-radius:9px;padding:11px;font-weight:950;opacity:1;">READY</button>
+          <button type="button" onclick="reconnectIftyBattleLobby()" style="flex:1 1 130px;border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:9px;padding:11px;font-weight:900;">↻ 再接続</button>
+        </div>
+        <div id="iftyBattleLobbyStatus" style="min-height:1.4em;margin-top:8px;color:#cbd5e1;font-size:.76rem;"></div>
+      </div>
+
+      <div style="margin-top:12px;padding:11px;border:1px solid #334155;border-radius:10px;background:#111827;color:#94a3b8;font-size:.74rem;line-height:1.55;">
+        このSTEPでは問題・答え・得点はまだ送信しません。WebSocketルーム、2人の接続、READY同期、切断・再接続だけを先に安定させています。
+      </div>
+    </section>`, 'battle-lobby');
+
+  renderIftyBattleLobbyState();
+  connectIftyBattleLobby(String(roomId || ''), { opponentUsername });
+};
+
+window.toggleIftyBattleReady = function() {
+  if (!iftyBattleSocket || iftyBattleSocket.readyState !== WebSocket.OPEN) return;
+  const button = document.getElementById('iftyBattleReadyButton');
+  const current = button?.dataset.ready === '1';
+  try {
+    iftyBattleSocket.send(JSON.stringify({ type:'ready', ready:!current }));
+  } catch (_) {}
+};
+
+window.reconnectIftyBattleLobby = function() {
+  const room = iftyBattleCurrentRoom;
+  if (!room?.roomId) return;
+  connectIftyBattleLobby(room.roomId, { opponentUsername:room.opponentUsername });
+};
+
+window.leaveIftyBattleLobby = function() {
+  closeIftyBattleSocket();
+  openIftyBattlePage();
+};
+
 
 // ==========================================
 // Q3 STEP15：HOME / SUBJECTS / SETTINGS 実画面
@@ -4963,6 +5461,8 @@ function getIftyHomeStats() {
 
 function showIftyHubContent(html, pageName) {
   if (String(pageName || '') !== 'settings') stopIftyAdminUsageAutoRefresh();
+  if (String(pageName || '') !== 'battle-lobby' && typeof closeIftyBattleSocket === 'function') closeIftyBattleSocket();
+  if (String(pageName || '') !== 'battle' && typeof stopIftyBattlePageAutoRefresh === 'function') stopIftyBattlePageAutoRefresh();
   if (typeof window.closePracticeModal === 'function') window.closePracticeModal();
   if (typeof window.closeMainLauncher === 'function') window.closeMainLauncher();
   if (typeof window.closeMenuModal === 'function') window.closeMenuModal();
@@ -5061,6 +5561,7 @@ function getIftySideMenuDisplayText(key) {
     years: '年号',
     practice: '実践',
     friends: 'フレンド',
+    battle: 'リアルタイム対戦',
     importFolder: 'フォルダを受け取る',
     publishedFolders: '公開フォルダ管理',
     settings: '設定',
@@ -5077,6 +5578,7 @@ function getIftySideMenuDisplayText(key) {
     years: 'YEARS',
     practice: 'PRACTICE',
     friends: 'FRIENDS',
+    battle: 'REALTIME BATTLE',
     importFolder: 'IMPORT FOLDER',
     publishedFolders: 'PUBLIC FOLDERS',
     settings: 'SETTINGS',
@@ -5202,6 +5704,7 @@ window.openIftyHome = function() {
         <button type="button" onclick="openPracticeHome()" style="background:#7c3aed;color:white;">⚔️ 実践</button>
         <button type="button" onclick="openIftyLearningStats()" style="background:#0f766e;color:white;">📊 学習統計</button>
         <button type="button" onclick="openIftyFriendsPage()" style="background:#2563eb;color:white;">👥 フレンド</button>
+        <button type="button" onclick="openIftyBattlePage()" style="background:#991b1b;color:white;">⚔️ リアルタイム対戦</button>
         <button type="button" onclick="openIftyFolderImportPicker()" style="background:#475569;color:white;">📦 フォルダを受け取る</button>
         <button type="button" onclick="openIftyPublicFolderCodeModal()" style="background:#0369a1;color:white;">🌐 公開コードから取得</button>
         <button type="button" onclick="openIftyRecoveryCenter()" style="background:#334155;color:white;">🛟 バックアップ / 復元</button>
@@ -6480,11 +6983,82 @@ function buildIftySocialLegacyMemoryText(value) {
   return sentences.join(' ').trim();
 }
 
+
+function normalizeIftyAcademicAliasList(value, limit = 12) {
+  const source = Array.isArray(value)
+    ? value
+    : String(value || '').split(/\r?\n|[、,／|]+/);
+  return [...new Set(source
+    .map(v => String(v || '').trim())
+    .filter(Boolean))]
+    .slice(0, Math.max(1, Number(limit) || 12));
+}
+
+function splitIftyAcademicTermIdentity(rawTitle, rawReading = '', rawAliases = [], preferredTerm = '') {
+  const original = String(rawTitle || '').trim();
+  let title = original;
+  let reading = String(rawReading || '').trim();
+  const aliases = normalizeIftyAcademicAliasList(rawAliases, 16);
+
+  // Legacy cards sometimes stored "用語 (English)" or "用語（よみ）" inside title.
+  // Keep the actual term in title and move the extra identity information out.
+  const match = title.match(/^(.*?)\s*[（(]([^()（）]+)[）)]\s*$/u);
+  if (match) {
+    const base = String(match[1] || '').trim();
+    const extra = String(match[2] || '').trim();
+    if (base) title = base;
+
+    if (extra) {
+      // Reading is inferred only from hiragana-like content.
+      // Katakana / English / abbreviations are treated as aliases, not blindly as "reading".
+      if (!reading && /^[ぁ-ゖー・\s]+$/u.test(extra)) reading = extra;
+      else if (!aliases.some(v => v.normalize('NFKC').toLowerCase() === extra.normalize('NFKC').toLowerCase())) aliases.unshift(extra);
+    }
+  }
+
+  const preferred = String(preferredTerm || '').trim();
+  if (preferred && original) {
+    const nOriginal = original.normalize('NFKC').toLowerCase();
+    const nPreferred = preferred.normalize('NFKC').toLowerCase();
+    if (nPreferred && nOriginal.includes(nPreferred)) {
+      if (title && title.normalize('NFKC').toLowerCase() !== nPreferred) aliases.unshift(title);
+      title = preferred;
+    }
+  } else if (preferred && !title) {
+    title = preferred;
+  }
+
+  const canonical = String(title || preferred || original).trim();
+  const canonicalKey = canonical.normalize('NFKC').toLowerCase();
+  const cleanAliases = [...new Set(aliases
+    .map(v => String(v || '').trim())
+    .filter(v => v && v.normalize('NFKC').toLowerCase() !== canonicalKey))]
+    .slice(0, 12);
+
+  return { title: canonical, reading, aliases: cleanAliases };
+}
+
+function getIftyAcademicAcceptedTermAnswers(item) {
+  const source = item && typeof item === 'object' ? item : {};
+  const values = [
+    source.title,
+    source.topic,
+    ...(Array.isArray(source.aliases) ? source.aliases : [])
+  ];
+  return [...new Set(values.map(v => String(v || '').trim()).filter(Boolean))];
+}
+
 function normalizeIftySocialItem(value) {
   if (!value || typeof value !== 'object') return null;
   const text = field => String(value[field] || '').trim();
   const normalizedTopic = text('topic');
-  const normalizedTitle = text('title') || normalizedTopic;
+  const identity = splitIftyAcademicTermIdentity(
+    text('title') || normalizedTopic,
+    text('reading'),
+    value.aliases,
+    normalizedTopic
+  );
+  const normalizedTitle = identity.title || normalizedTopic;
   let normalizedMemoryText = buildIftySocialLegacyMemoryText(value);
   let normalizedKeyPoints = Array.isArray(value.keyPoints) ? value.keyPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12) : [];
   if (`${normalizedTopic}${normalizedTitle}`.replace(/\s+/g, '').includes('応天門の変')) {
@@ -6493,8 +7067,10 @@ function normalizeIftySocialItem(value) {
   }
   return {
     id: value.id || makeId('socialitem'),
-    topic: normalizedTopic,
+    topic: normalizedTopic || normalizedTitle,
     title: normalizedTitle,
+    reading: identity.reading,
+    aliases: identity.aliases,
     summary: text('summary'),
     memoryText: normalizedMemoryText,
     who: text('who'),
@@ -6586,6 +7162,8 @@ function buildIftySocialSearchText(folder, item) {
     folder?.name,
     item?.title,
     item?.topic,
+    item?.reading,
+    ...(Array.isArray(item?.aliases) ? item.aliases : []),
     item?.memoryText,
     item?.workTitle,
     item?.imageFocus,
@@ -6605,6 +7183,8 @@ function renderIftySocialItemCard(folder, item) {
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <input type="checkbox" ${iftySocialSelectedItemIds.has(String(item.id)) ? 'checked' : ''} onchange="toggleIftySubjectItemSelection('SOCIAL STUDIES','${item.id}',this.checked)" title="この項目を選択" style="width:18px;height:18px;flex:none;">
           <strong style="font-size:1.08em;color:#0f172a;">${escapeHtml(item.title || item.topic || '無題')}</strong>
+          ${item.reading ? `<span style="font-size:.76em;color:#0369a1;font-weight:900;">読み：${escapeHtml(item.reading)}</span>` : ''}
+          ${item.aliases?.length ? `<span style="font-size:.72em;color:#64748b;">別名：${escapeHtml(item.aliases.join(' / '))}</span>` : ''}
           ${renderIftySocialSubjectBadges(item.subjects.length ? item.subjects : folder.subjects)}
           ${renderIftyLearningLevelInline('SOCIAL STUDIES', item.id, item.level)}
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
@@ -6646,6 +7226,8 @@ window.regenerateIftySocialItem = async function(folderId, itemId) {
   const previousData = {
     title: item.title,
     topic: item.topic,
+    reading: item.reading,
+    aliases: item.aliases,
     memoryText: item.memoryText,
     keyPoints: item.keyPoints,
     imageKind: item.imageKind,
@@ -6671,6 +7253,8 @@ window.regenerateIftySocialItem = async function(folderId, itemId) {
     if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
 
     recordUndoState('社会項目再生成');
+    item.reading = String(data.reading || item.reading || '').trim();
+    item.aliases = normalizeIftyAcademicAliasList(data.aliases?.length ? data.aliases : item.aliases, 12);
     item.memoryText = String(data.memoryText || '').trim();
     item.keyPoints = Array.isArray(data.keyPoints) ? data.keyPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12) : [];
     item.imageKind = String(data.imageKind || '').trim();
@@ -6780,14 +7364,7 @@ function renderIftySocialPendingImage(folderId) {
 }
 
 function renderIftySocialVisualQuizBar(folder) {
-  const items = Array.isArray(folder?.items) ? folder.items : [];
-  const imageCount = items.filter(item => !!item.imageData).length;
-  return `<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:7px;padding:8px;border:1px solid #ede9fe;border-radius:8px;background:#fafaff;">
-    <span style="font-size:.76em;font-weight:900;color:#6d28d9;">画像クイズ ${imageCount}枚</span>
-    <button type="button" onclick="startIftySocialVisualQuiz('${folder.id}','image_to_text')" ${imageCount < 2 ? 'disabled' : ''} style="border:none;background:${imageCount < 2 ? '#cbd5e1' : '#7c3aed'};color:white;border-radius:7px;padding:6px 9px;font-weight:900;cursor:${imageCount < 2 ? 'not-allowed' : 'pointer'};">画像を見て選ぶ</button>
-    <button type="button" onclick="startIftySocialVisualQuiz('${folder.id}','text_to_image')" ${imageCount < 2 ? 'disabled' : ''} style="border:none;background:${imageCount < 2 ? '#cbd5e1' : '#6d28d9'};color:white;border-radius:7px;padding:6px 9px;font-weight:900;cursor:${imageCount < 2 ? 'not-allowed' : 'pointer'};">画像を選ぶ</button>
-    ${imageCount < 2 ? '<span style="font-size:.7em;color:#94a3b8;">2枚以上の画像を登録すると使用できます。</span>' : ''}
-  </div>`;
+  return '';
 }
 
 function renderIftySocialItemsHtml(folder) {
@@ -6858,6 +7435,7 @@ function renderIftySocialFolder(folder) {
     ${folder.collapsed ? '' : `<div style="margin-top:12px;">
       <div style="display:flex;gap:7px;flex-wrap:wrap;">
         <input id="iftySocialTopic_${folder.id}" value="${escapeHtml(iftySocialTopicDrafts[folder.id] || '')}" placeholder="人物・出来事・制度・地名など（画像だけでも可）" oninput="iftySocialTopicDrafts['${folder.id}']=this.value;clearIftyAcademicTermSuggestion('SOCIAL STUDIES','${folder.id}')" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftySocialItem('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}));}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;">
+        <button type="button" onclick="generateIftySocialItem('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">追加</button>
         <button type="button" onclick="document.getElementById('iftySocialImageInput_${folder.id}').click()" style="border:1px solid #c084fc;background:#faf5ff;color:#7e22ce;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">🖼 画像</button>
         <input id="iftySocialImageInput_${folder.id}" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleIftySocialImageSelect(event,'${folder.id}')" style="display:none;">
         <button type="button" onclick="addBlankIftySocialItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">白紙</button>
@@ -6865,7 +7443,6 @@ function renderIftySocialFolder(folder) {
       <div id="iftySocialTermSuggestion_${folder.id}">${renderIftyAcademicTermSuggestion('SOCIAL STUDIES', folder.id)}</div>
       <div id="iftySocialImagePreview_${folder.id}" style="display:${iftySocialImageDrafts[folder.id]?.storedDataUrl ? 'flex' : 'none'};align-items:center;gap:8px;margin-top:7px;padding:7px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:8px;"></div>
       <div id="iftySocialStatus_${folder.id}" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;">${Number(iftySocialGenerationPending[folder.id] || 0) > 0 ? `ALLIA生成中… ${Number(iftySocialGenerationPending[folder.id] || 0)}件` : ''}</div>
-      <div id="iftySocialVisualQuizBar_${folder.id}">${renderIftySocialVisualQuizBar(folder)}</div>
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;">
         <input id="iftySocialFolderSearch_${folder.id}" value="${escapeHtml(iftySocialFolderSearchQueries[folder.id] || '')}" placeholder="🔎 このフォルダ内を検索" oninput="applyIftySocialFolderSearch('${folder.id}',this.value)" style="flex:1;min-width:180px;padding:8px 9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.86em;">
         <button type="button" onclick="document.getElementById('iftySocialFolderSearch_${folder.id}').value='';applyIftySocialFolderSearch('${folder.id}','');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-size:.8em;font-weight:900;cursor:pointer;">クリア</button>
@@ -7326,7 +7903,9 @@ window.openIftySocialItemEditor = function(folderId, itemId) {
         <button type="button" onclick="closeIftySocialItemEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:999px;width:34px;height:34px;font-size:1.2em;font-weight:900;cursor:pointer;touch-action:manipulation;">×</button>
       </div>
     </div>
-    ${field('iftySocialEditTitle','タイトル',item.title)}
+    ${field('iftySocialEditTitle','用語そのもの',item.title)}
+    ${field('iftySocialEditReading','読みがな',item.reading)}
+    ${field('iftySocialEditAliases','別名・英語名（1行1項目）',(item.aliases || []).join('\n'),3)}
     ${field('iftySocialEditMemoryText','暗記用説明文（Who / When / Where / What / Why / Howを、必要な範囲で自然な文章として含める）',item.memoryText,7)}
     ${field('iftySocialEditKeyPoints','重要ポイント（1行1項目）',item.keyPoints.join('\n'),4)}
     <div style="margin-top:12px;padding:10px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:9px;">
@@ -7403,6 +7982,9 @@ window.saveIftySocialItemEditor = function(folderId, itemId) {
   recordUndoState('社会項目編集');
   const val = id => String(document.getElementById(id)?.value || '').trim();
   item.title = val('iftySocialEditTitle');
+  item.topic = item.title || item.topic;
+  item.reading = val('iftySocialEditReading');
+  item.aliases = val('iftySocialEditAliases').split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 12);
   item.memoryText = val('iftySocialEditMemoryText');
   item.keyPoints = val('iftySocialEditKeyPoints').split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 12);
   item.imageData = normalizeIftySocialImageData(iftySocialEditorImageDraft?.imageData);
@@ -7966,6 +8548,8 @@ function serializeIftySocialPracticeItems(items) {
   return items.slice(0, 60).map(ref => ({
     id: String(ref.item.id || ''),
     title: String(ref.item.title || ref.item.topic || '').trim(),
+    reading: String(ref.item.reading || '').trim(),
+    aliases: Array.isArray(ref.item.aliases) ? ref.item.aliases.slice(0, 8) : [],
     memoryText: String(ref.item.memoryText || '').trim(),
     keyPoints: Array.isArray(ref.item.keyPoints) ? ref.item.keyPoints.slice(0, 4) : [],
     subjects: normalizeIftySocialSubjects(ref.item.subjects?.length ? ref.item.subjects : ref.folder.subjects)
@@ -8475,10 +9059,19 @@ function buildIftyScienceLegacyMemoryText(value) {
 function normalizeIftyScienceItem(value) {
   if (!value || typeof value !== 'object') return null;
   const text = field => String(value[field] || '').trim();
+  const topic = text('topic');
+  const identity = splitIftyAcademicTermIdentity(
+    text('title') || topic,
+    text('reading'),
+    value.aliases,
+    topic
+  );
   return {
     id: value.id || makeId('scienceitem'),
-    topic: text('topic'),
-    title: text('title') || text('topic'),
+    topic: topic || identity.title,
+    title: identity.title || topic,
+    reading: identity.reading,
+    aliases: identity.aliases,
     summary: text('summary'),
     memoryText: buildIftyScienceLegacyMemoryText(value),
     who: text('who'),
@@ -8686,6 +9279,8 @@ function buildIftyScienceSearchText(folder, item) {
     folder?.name,
     item?.title,
     item?.topic,
+    item?.reading,
+    ...(Array.isArray(item?.aliases) ? item.aliases : []),
     item?.memoryText,
     item?.formula,
     item?.unit,
@@ -8708,6 +9303,8 @@ function renderIftyScienceItemCard(folder, item) {
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <input type="checkbox" ${iftyScienceSelectedItemIds.has(String(item.id)) ? 'checked' : ''} onchange="toggleIftySubjectItemSelection('SCIENCE','${item.id}',this.checked)" title="この項目を選択" style="width:18px;height:18px;flex:none;">
           <strong style="font-size:1.08em;color:#0f172a;">${escapeHtml(item.title || item.topic || '無題')}</strong>
+          ${item.reading ? `<span style="font-size:.76em;color:#0369a1;font-weight:900;">読み：${escapeHtml(item.reading)}</span>` : ''}
+          ${item.aliases?.length ? `<span style="font-size:.72em;color:#64748b;">別名：${escapeHtml(item.aliases.join(' / '))}</span>` : ''}
           ${renderIftyScienceSubjectBadges(item.subjects.length ? item.subjects : folder.subjects)}
           ${renderIftyLearningLevelInline('SCIENCE', item.id, item.level)}
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
@@ -8754,6 +9351,8 @@ const item = ref.item;
   const previousData = {
     title: item.title,
     topic: item.topic,
+    reading: item.reading,
+    aliases: item.aliases,
     memoryText: item.memoryText,
     keyPoints: item.keyPoints,
     formula: item.formula,
@@ -8783,6 +9382,8 @@ const item = ref.item;
 
     recordUndoState('理科項目再生成');
     item.title = chooseIftyScienceGeneratedTitle(String(item.topic || topic), data.title);
+    item.reading = String(data.reading || item.reading || '').trim();
+    item.aliases = normalizeIftyAcademicAliasList(data.aliases?.length ? data.aliases : item.aliases, 12);
     item.memoryText = String(data.memoryText || '').trim();
     item.keyPoints = Array.isArray(data.keyPoints) ? data.keyPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12) : [];
     item.formula = String(data.formula || '').trim();
@@ -8894,14 +9495,7 @@ function renderIftySciencePendingImage(folderId) {
 }
 
 function renderIftyScienceVisualQuizBar(folder) {
-  const items = Array.isArray(folder?.items) ? folder.items : [];
-  const imageCount = items.filter(item => !!item.imageData).length;
-  return `<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:7px;padding:8px;border:1px solid #ede9fe;border-radius:8px;background:#fafaff;">
-    <span style="font-size:.76em;font-weight:900;color:#6d28d9;">画像クイズ ${imageCount}枚</span>
-    <button type="button" onclick="startIftyScienceVisualQuiz('${folder.id}','image_to_text')" ${imageCount < 2 ? 'disabled' : ''} style="border:none;background:${imageCount < 2 ? '#cbd5e1' : '#7c3aed'};color:white;border-radius:7px;padding:6px 9px;font-weight:900;cursor:${imageCount < 2 ? 'not-allowed' : 'pointer'};">画像を見て選ぶ</button>
-    <button type="button" onclick="startIftyScienceVisualQuiz('${folder.id}','text_to_image')" ${imageCount < 2 ? 'disabled' : ''} style="border:none;background:${imageCount < 2 ? '#cbd5e1' : '#6d28d9'};color:white;border-radius:7px;padding:6px 9px;font-weight:900;cursor:${imageCount < 2 ? 'not-allowed' : 'pointer'};">画像を選ぶ</button>
-    ${imageCount < 2 ? '<span style="font-size:.7em;color:#94a3b8;">2枚以上の画像を登録すると使用できます。</span>' : ''}
-  </div>`;
+  return '';
 }
 
 function renderIftyScienceItemsHtml(folder) {
@@ -8972,6 +9566,7 @@ function renderIftyScienceFolder(folder) {
     ${folder.collapsed ? '' : `<div style="margin-top:12px;">
       <div style="display:flex;gap:7px;flex-wrap:wrap;">
         <input id="iftyScienceTopic_${folder.id}" value="${escapeHtml(iftyScienceTopicDrafts[folder.id] || '')}" placeholder="用語・法則・現象・反応・生体機能など（画像だけでも可）" oninput="iftyScienceTopicDrafts['${folder.id}']=this.value;clearIftyAcademicTermSuggestion('SCIENCE','${folder.id}')" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftyScienceItem('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}));}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;">
+        <button type="button" onclick="generateIftyScienceItem('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">追加</button>
         <button type="button" onclick="document.getElementById('iftyScienceImageInput_${folder.id}').click()" style="border:1px solid #c084fc;background:#faf5ff;color:#7e22ce;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">🖼 画像</button>
         <input id="iftyScienceImageInput_${folder.id}" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleIftyScienceImageSelect(event,'${folder.id}')" style="display:none;">
         <button type="button" onclick="addBlankIftyScienceItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">白紙</button>
@@ -8979,7 +9574,6 @@ function renderIftyScienceFolder(folder) {
       <div id="iftyScienceTermSuggestion_${folder.id}">${renderIftyAcademicTermSuggestion('SCIENCE', folder.id)}</div>
       <div id="iftyScienceImagePreview_${folder.id}" style="display:${iftyScienceImageDrafts[folder.id]?.storedDataUrl ? 'flex' : 'none'};align-items:center;gap:8px;margin-top:7px;padding:7px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:8px;"></div>
       <div id="iftyScienceStatus_${folder.id}" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;">${Number(iftyScienceGenerationPending[folder.id] || 0) > 0 ? `ALLIA生成中… ${Number(iftyScienceGenerationPending[folder.id] || 0)}件` : ''}</div>
-      <div id="iftyScienceVisualQuizBar_${folder.id}">${renderIftyScienceVisualQuizBar(folder)}</div>
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;">
         <input id="iftyScienceFolderSearch_${folder.id}" value="${escapeHtml(iftyScienceFolderSearchQueries[folder.id] || '')}" placeholder="🔎 このフォルダ内を検索" oninput="applyIftyScienceFolderSearch('${folder.id}',this.value)" style="flex:1;min-width:180px;padding:8px 9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.86em;">
         <button type="button" onclick="document.getElementById('iftyScienceFolderSearch_${folder.id}').value='';applyIftyScienceFolderSearch('${folder.id}','');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-size:.8em;font-weight:900;cursor:pointer;">クリア</button>
@@ -9439,7 +10033,9 @@ window.openIftyScienceItemEditor = function(folderId, itemId) {
       <div><div style="font-size:1.15em;font-weight:900;color:#0f172a;">理科項目を編集</div><div style="font-size:.75em;color:#64748b;">原理・因果・公式・単位・条件を含む暗記用説明と、画像の覚える核を修正できます。</div></div>
       <button type="button" onclick="closeIftyScienceItemEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:999px;width:34px;height:34px;font-size:1.2em;font-weight:900;cursor:pointer;">×</button>
     </div>
-    ${field('iftyScienceEditTitle','タイトル',item.title)}
+    ${field('iftyScienceEditTitle','用語そのもの',item.title)}
+    ${field('iftyScienceEditReading','読みがな',item.reading)}
+    ${field('iftyScienceEditAliases','別名・英語名（1行1項目）',(item.aliases || []).join('\n'),3)}
     ${field('iftyScienceEditMemoryText','暗記用説明文（定義・原理・因果・仕組みを必要な範囲で簡潔に）',item.memoryText,7)}
     ${field('iftyScienceEditFormula','公式・関係式',item.formula)}
     ${field('iftyScienceEditUnit','単位',item.unit)}
@@ -9519,6 +10115,9 @@ window.saveIftyScienceItemEditor = function(folderId, itemId) {
   recordUndoState('理科項目編集');
   const val = id => String(document.getElementById(id)?.value || '').trim();
   item.title = val('iftyScienceEditTitle');
+  item.topic = item.title || item.topic;
+  item.reading = val('iftyScienceEditReading');
+  item.aliases = val('iftyScienceEditAliases').split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 12);
   item.memoryText = val('iftyScienceEditMemoryText');
   item.formula = val('iftyScienceEditFormula');
   item.unit = val('iftyScienceEditUnit');
@@ -10082,6 +10681,8 @@ function serializeIftySciencePracticeItems(items) {
   return items.slice(0, 60).map(ref => ({
     id: String(ref.item.id || ''),
     title: String(ref.item.title || ref.item.topic || '').trim(),
+    reading: String(ref.item.reading || '').trim(),
+    aliases: Array.isArray(ref.item.aliases) ? ref.item.aliases.slice(0, 8) : [],
     memoryText: String(ref.item.memoryText || '').trim(),
     keyPoints: Array.isArray(ref.item.keyPoints) ? ref.item.keyPoints.slice(0, 4) : [],
     formula: String(ref.item.formula || '').trim(),
@@ -10695,7 +11296,8 @@ function renderIftyAncientFolder(folder, folderIndex) {
 
     ${folder.collapsed ? '' : `<div style="margin-top:12px;">
       <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;">
-        <input id="iftyAncientWord_${folder.id}" value="${escapeHtml(iftyAncientWordDrafts[folder.id] || '')}" placeholder="古文単語を入力してEnter（例：あはれ / いみじ / をかし）" oninput="iftyAncientWordDrafts['${folder.id}']=this.value;clearIftyAcademicTermSuggestion('ANCIENT','${folder.id}')" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftyAncientWord('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}));}" style="flex:1;min-width:210px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;">
+        <input id="iftyAncientWord_${folder.id}" value="${escapeHtml(iftyAncientWordDrafts[folder.id] || '')}" placeholder="古文単語を入力（Enterまたは追加でALLIA生成）" oninput="iftyAncientWordDrafts['${folder.id}']=this.value;clearIftyAcademicTermSuggestion('ANCIENT','${folder.id}')" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftyAncientWord('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}));}" style="flex:1;min-width:210px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;">
+        <button type="button" onclick="generateIftyAncientWord('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">追加</button>
         <button type="button" onclick="startIftyAncientFlashcards('${folder.id}','front')" ${items.length ? '' : 'disabled'} style="border:none;background:#0f766e;color:white;border-radius:7px;padding:9px 11px;font-weight:900;cursor:${items.length ? 'pointer' : 'default'};opacity:${items.length ? '1' : '.45'};">📇 単語→意味</button>
         <button type="button" onclick="startIftyAncientFlashcards('${folder.id}','back')" ${items.length ? '' : 'disabled'} style="border:none;background:#115e59;color:white;border-radius:7px;padding:9px 11px;font-weight:900;cursor:${items.length ? 'pointer' : 'default'};opacity:${items.length ? '1' : '.45'};">意味→単語</button>
       </div>
@@ -12030,7 +12632,7 @@ function renderIftyKanbunFolder(folder, folderIndex) {
           <button type="button" onclick="openIftyKanbunInputHandwriting('iftyKanbunText_${folder.id}','${folder.id}')" style="border:none;background:#0f766e;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">✍️ 手書き</button>
           <button type="button" onclick="openIftyKanbunDraftReturnMarkEditor('${folder.id}')" style="border:none;background:#b91c1c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">返点・送り仮名</button>
           <span id="iftyKanbunDraftMarkCount_${folder.id}" style="font-size:.74em;color:#991b1b;font-weight:900;">${(() => { const d=iftyKanbunDraftReturnMarks[String(folder.id)]; if(!(d && String(d.text||'')===String(iftyKanbunTextDrafts[folder.id]||'').trim())) return ''; const mc=Array.isArray(d.marks)?d.marks.filter(Boolean).length:0; const kc=Array.isArray(d.okurigana)?d.okurigana.filter(Boolean).length:0; return (mc||kc)?`返点 ${mc} / 送り仮名 ${kc}`:''; })()}</span>
-          <button type="button" onclick="generateIftyKanbunItem('${folder.id}')" style="margin-left:auto;border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 13px;font-weight:900;cursor:pointer;min-height:42px;">ALLIA生成</button>
+          <button type="button" onclick="generateIftyKanbunItem('${folder.id}')" style="margin-left:auto;border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 13px;font-weight:900;cursor:pointer;min-height:42px;">追加</button>
         </div>
       </div>
       <div id="iftyKanbunTermSuggestion_${folder.id}">${renderIftyAcademicTermSuggestion('KANBUN', folder.id)}</div>
@@ -16084,7 +16686,7 @@ function renderIftyKanjiPage(options={}){
         <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;">
           <input id="iftyKanjiTerm_${folder.id}" value="${escapeHtml(iftyKanjiTermDrafts[folder.id]||'')}" oninput="iftyKanjiTermDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftyKanjiItem('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}))}" placeholder="漢字・熟語を入力（EnterでALLIA生成）" style="flex:1;min-width:180px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1em;">
           <button type="button" onclick="openIftyKanbunInputHandwriting('iftyKanjiTerm_${folder.id}','${folder.id}','KANJI')" style="border:none;background:#0f766e;color:white;border-radius:7px;padding:9px 11px;font-weight:900;">✍️ 手書き</button>
-          <button id="iftyKanjiGenerateBtn_${folder.id}" type="button" onclick="generateIftyKanjiItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">ALLIA生成</button>
+          <button id="iftyKanjiGenerateBtn_${folder.id}" type="button" onclick="generateIftyKanjiItem('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">追加</button>
           <button type="button" onclick="addBlankIftyKanjiItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 11px;font-weight:900;">白紙</button>
         </div>
         <div id="iftyKanjiPending_${folder.id}" style="min-height:1.2em;margin-top:6px;color:#7c3aed;font-size:.76em;font-weight:800;">${Number(iftyKanjiGenerationPending[folder.id]||0)>0?`ALLIA生成中… ${Number(iftyKanjiGenerationPending[folder.id]||0)}件`:''}</div>
@@ -16367,14 +16969,22 @@ function normalizeIftyOthersTags(value) {
 }
 function normalizeIftyOthersItem(value) {
   if (!value || typeof value !== 'object') return null;
-  const title = String(value.title || value.topic || '').trim();
+  const topic = String(value.topic || '').trim();
+  const identity = splitIftyAcademicTermIdentity(
+    String(value.title || topic || '').trim(),
+    String(value.reading || '').trim(),
+    value.aliases,
+    topic
+  );
+  const title = identity.title || topic;
   return {
     id: String(value.id || makeId('othersitem')),
-    topic: String(value.topic || title).trim(),
+    topic: topic || title,
     title,
+    reading: identity.reading,
     memoryText: String(value.memoryText || value.explanation || '').trim(),
     keyPoints: Array.isArray(value.keyPoints) ? value.keyPoints.map(v=>String(v||'').trim()).filter(Boolean).slice(0,8) : [],
-    aliases: Array.isArray(value.aliases) ? value.aliases.map(v=>String(v||'').trim()).filter(Boolean).slice(0,8) : [],
+    aliases: identity.aliases.slice(0,8),
     tags: normalizeIftyOthersTags(value.tags),
     level: normalizeIftyLearningLevel(value.level),
     mastery: value.mastery === 'fixed' ? 'fixed' : 'unfixed',
@@ -16401,7 +17011,7 @@ function renderIftyOthersItemCard(folder,item){
   const study=normalizeIftySubjectStudyState(item); const weak=isIftySubjectWeakItem(item);
   return `<div style="margin-top:9px;border:1px solid #dbeafe;background:#fff;border-radius:10px;padding:11px;">
     <div style="display:flex;gap:8px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;">
-      <label style="display:flex;gap:7px;align-items:flex-start;min-width:0;flex:1;"><input type="checkbox" ${iftyOthersSelectedItemIds.has(String(item.id))?'checked':''} onchange="toggleIftySubjectItemSelection('OTHERS','${item.id}',this.checked)" style="width:18px;height:18px;margin-top:2px;"><span style="min-width:0;"><b style="color:#0f172a;font-size:1.02em;">${escapeHtml(item.title||item.topic)}</b><span style="margin-left:6px;">${renderIftyLearningLevelInline('OTHERS', item.id, item.level)}</span>${item.tags?.length?`<span style="display:block;margin-top:4px;">${item.tags.map(t=>`<span style="display:inline-block;margin-right:4px;padding:2px 6px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.7em;font-weight:900;">${escapeHtml(t)}</span>`).join('')}</span>`:''}</span></label>
+      <label style="display:flex;gap:7px;align-items:flex-start;min-width:0;flex:1;"><input type="checkbox" ${iftyOthersSelectedItemIds.has(String(item.id))?'checked':''} onchange="toggleIftySubjectItemSelection('OTHERS','${item.id}',this.checked)" style="width:18px;height:18px;margin-top:2px;"><span style="min-width:0;"><b style="color:#0f172a;font-size:1.02em;">${escapeHtml(item.title||item.topic)}</b>${item.reading?`<span style="display:block;margin-top:3px;color:#0369a1;font-size:.78em;font-weight:900;">読み：${escapeHtml(item.reading)}</span>`:''}${item.aliases?.length?`<span style="display:block;margin-top:2px;color:#64748b;font-size:.74em;">別名：${escapeHtml(item.aliases.join(' / '))}</span>`:''}<span style="margin-left:6px;">${renderIftyLearningLevelInline('OTHERS', item.id, item.level)}</span>${item.tags?.length?`<span style="display:block;margin-top:4px;">${item.tags.map(t=>`<span style="display:inline-block;margin-right:4px;padding:2px 6px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.7em;font-weight:900;">${escapeHtml(t)}</span>`).join('')}</span>`:''}</span></label>
       <div style="display:flex;gap:5px;flex-wrap:wrap;"><button type="button" onclick="toggleIftySubjectItemReview('OTHERS','${folder.id}','${item.id}')" style="border:none;background:#f59e0b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${isIftyReviewTagged(item)?'🔁 復習中':'🔁 復習'}</button><button type="button" onclick="editIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">編集</button><button type="button" onclick="deleteIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">削除</button></div>
     </div>
     ${item.memoryText?`<div style="margin-top:8px;line-height:1.6;color:#334155;white-space:pre-wrap;">${escapeHtml(item.memoryText)}</div>`:''}
@@ -16413,7 +17023,7 @@ function renderIftyOthersPage(options={}){
   const y=options.preserveScroll?window.scrollY:0; currentIftySubject='OTHERS'; const module=getIftyOthersModule();
   const rows=module.folders.map(folder=>`<section style="margin-top:14px;border:1px solid #cbd5e1;border-radius:11px;background:white;padding:13px;">
     <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start;"><div style="min-width:0;flex:1;"><button type="button" onclick="toggleIftyOthersFolder('${folder.id}')" style="border:none;background:transparent;padding:0;font-weight:900;color:#0f172a;font-size:1.02em;cursor:pointer;">${folder.collapsed?'▶':'▼'} 📁 ${escapeHtml(folder.name)} (${(folder.items||[]).length}件)</button><div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">${folder.tags.map(t=>`<span style="padding:3px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.72em;font-weight:900;">${escapeHtml(t)}</span>`).join('')||'<span style="font-size:.75em;color:#94a3b8;">教科タグ未設定</span>'}</div></div><div style="display:flex;gap:5px;flex-wrap:wrap;"><button onclick="renameIftyOthersFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">名前変更</button><button onclick="editIftyOthersFolderTags('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">教科タグ変更</button><button onclick="deleteIftyOthersFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">フォルダ削除</button></div></div>
-    ${folder.collapsed?'':`<div style="margin-top:11px;"><div style="display:flex;gap:7px;flex-wrap:wrap;"><input id="iftyOthersTopic_${folder.id}" value="${escapeHtml(iftyOthersTopicDrafts[folder.id]||'')}" placeholder="用語・概念・人物など" oninput="iftyOthersTopicDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftyOthersItem('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}))}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;"><button onclick="generateIftyOthersItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">ALLIA生成</button><button onclick="addBlankIftyOthersItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;">白紙</button></div><div id="iftyOthersPending_${folder.id}" style="margin-top:6px;color:#64748b;font-size:.76em;">${Number(iftyOthersGenerationPending[folder.id]||0)>0?`ALLIA生成中… ${Number(iftyOthersGenerationPending[folder.id]||0)}件`:''}</div><div id="iftyOthersItems_${folder.id}">${(folder.items||[]).map(item=>renderIftyOthersItemCard(folder,item)).join('')||'<div style="padding:18px;text-align:center;color:#94a3b8;">まだ項目がありません。</div>'}</div></div>`}
+    ${folder.collapsed?'':`<div style="margin-top:11px;"><div style="display:flex;gap:7px;flex-wrap:wrap;"><input id="iftyOthersTopic_${folder.id}" value="${escapeHtml(iftyOthersTopicDrafts[folder.id]||'')}" placeholder="用語・概念・人物など" oninput="iftyOthersTopicDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftyOthersItem('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}))}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;"><button type="button" onclick="generateIftyOthersItem('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">追加</button><button onclick="addBlankIftyOthersItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;">白紙</button></div><div id="iftyOthersPending_${folder.id}" style="margin-top:6px;color:#64748b;font-size:.76em;">${Number(iftyOthersGenerationPending[folder.id]||0)>0?`ALLIA生成中… ${Number(iftyOthersGenerationPending[folder.id]||0)}件`:''}</div><div id="iftyOthersItems_${folder.id}">${(folder.items||[]).map(item=>renderIftyOthersItemCard(folder,item)).join('')||'<div style="padding:18px;text-align:center;color:#94a3b8;">まだ項目がありません。</div>'}</div></div>`}
   </section>`).join('');
   showIftyHubContent(`<section class="ifty-portal-shell"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;"><div><h1 class="ifty-portal-title">OTHERS</h1><div class="ifty-portal-subtitle">保健・情報など、専用教科がない内容を自由な教科タグで管理。</div></div>${renderIftySubjectHeaderActions('OTHERS')}</div><div style="margin-top:14px;padding:13px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-weight:900;color:#0c4a6e;">新しいOTHERSフォルダ</div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;"><input id="iftyOthersFolderName" placeholder="例：保健 / 情報I" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><input id="iftyOthersFolderTags" placeholder="教科タグ（例：保健, 情報）" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><button onclick="createIftyOthersFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">作成</button></div><div style="font-size:.75em;color:#64748b;margin-top:6px;">タグ名は自由に変更できます。「世界史 / 日本史」のような固定候補にはしません。</div></div>${renderIftySubjectSelectionToolbar('OTHERS')}<div id="iftyOthersReviewPanelWrap">${renderIftySubjectReviewPanel('OTHERS')}</div>${rows||'<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">OTHERSフォルダを作成してください。</div>'}</section>`,'subject');
   if(options.preserveScroll){requestAnimationFrame(()=>window.scrollTo({top:y,left:0,behavior:'auto'}));}
@@ -16432,7 +17042,7 @@ window.renameIftyOthersFolder=function(id){
 window.editIftyOthersFolderTags=function(id){const f=getIftyOthersFolder(id);if(!f)return;const v=prompt('教科タグをカンマ区切りで入力',f.tags.join(', '));if(v===null)return;recordUndoState('OTHERS教科タグ変更');f.tags=normalizeIftyOthersTags(v);savePracticeData();renderIftyOthersPage({preserveScroll:true});};
 window.deleteIftyOthersFolder=function(id){const m=getIftyOthersModule(),f=getIftyOthersFolder(id);if(!f||!confirm(`「${f.name}」を削除しますか？`))return;recordUndoState('OTHERSフォルダ削除');m.folders=m.folders.filter(x=>x.id!==id);savePracticeData();renderIftyOthersPage();};
 window.addBlankIftyOthersItem=function(folderId){const f=getIftyOthersFolder(folderId);if(!f)return;const title=prompt('用語・項目名');if(title===null||!String(title).trim())return;const memoryText=prompt('説明', '')??'';recordUndoState('OTHERS項目追加');f.items.push(normalizeIftyOthersItem({title:String(title).trim(),memoryText,tags:f.tags,source:'MANUAL'}));savePracticeData();renderIftyOthersPage({preserveScroll:true});};
-window.editIftyOthersItem=function(folderId,itemId){const ref=getIftyOthersItemById(itemId);if(!ref)return;const t=prompt('用語・項目名',ref.item.title||'');if(t===null)return;const d=prompt('説明',ref.item.memoryText||'');if(d===null)return;const k=prompt('要点（改行区切り）',(ref.item.keyPoints||[]).join('\n'));if(k===null)return;recordUndoState('OTHERS項目編集');ref.item.title=String(t).trim();ref.item.topic=ref.item.title;ref.item.memoryText=String(d).trim();ref.item.keyPoints=String(k).split(/\n+/).map(x=>x.trim()).filter(Boolean).slice(0,8);ref.item.updatedAt=Date.now();savePracticeData();renderIftyOthersPage({preserveScroll:true});};
+window.editIftyOthersItem=function(folderId,itemId){const ref=getIftyOthersItemById(itemId);if(!ref)return;const t=prompt('用語そのもの',ref.item.title||'');if(t===null)return;const r=prompt('読みがな',ref.item.reading||'');if(r===null)return;const a=prompt('別名・英語名（改行区切り）',(ref.item.aliases||[]).join('\n'));if(a===null)return;const d=prompt('説明',ref.item.memoryText||'');if(d===null)return;const k=prompt('要点（改行区切り）',(ref.item.keyPoints||[]).join('\n'));if(k===null)return;recordUndoState('OTHERS項目編集');ref.item.title=String(t).trim();ref.item.topic=ref.item.title;ref.item.reading=String(r).trim();ref.item.aliases=String(a).split(/\n+/).map(x=>x.trim()).filter(Boolean).slice(0,8);ref.item.memoryText=String(d).trim();ref.item.keyPoints=String(k).split(/\n+/).map(x=>x.trim()).filter(Boolean).slice(0,8);ref.item.updatedAt=Date.now();savePracticeData();renderIftyOthersPage({preserveScroll:true});};
 window.deleteIftyOthersItem=function(folderId,itemId){const f=getIftyOthersFolder(folderId);if(!f)return;const i=f.items.findIndex(x=>String(x.id)===String(itemId));if(i<0)return;if(!confirm('この項目を削除しますか？'))return;recordUndoState('OTHERS項目削除');f.items.splice(i,1);iftyOthersSelectedItemIds.delete(String(itemId));savePracticeData();renderIftyOthersPage({preserveScroll:true});};
 function keepIftyOthersTopicFocused(folderId){const input=document.getElementById(`iftyOthersTopic_${folderId}`);if(!input)return;try{input.focus({preventScroll:true});}catch(_){input.focus();}}
 function refreshIftyOthersFolderDynamic(folderId){const f=getIftyOthersFolder(folderId);if(!f)return;const area=document.getElementById(`iftyOthersItems_${folderId}`);if(area)area.innerHTML=(f.items||[]).map(item=>renderIftyOthersItemCard(f,item)).join('')||'<div style="padding:18px;text-align:center;color:#94a3b8;">まだ項目がありません。</div>';}
@@ -16458,7 +17068,7 @@ window.generateIftyOthersItem=async function(folderId){
 };
 
 function getIftyOthersPracticeRefs(){if(iftySubjectQuizRunOverride?.subject==='OTHERS'){const ids=new Set((iftySubjectQuizRunOverride.itemIds||[]).map(String));return getIftyOthersModule().folders.flatMap(folder=>(folder.items||[]).filter(item=>ids.has(String(item.id))).map(item=>({folder,item})));}return getIftyOthersModule().folders.flatMap(folder=>(folder.items||[]).map(item=>({folder,item})));}
-function buildIftyOthersPracticeQuestions(modes,count){const refs=shuffleArray(getIftyOthersPracticeRefs());const out=[];const usableModes=modes.length?modes:['simple'];for(let i=0;i<Math.min(count,refs.length);i++){const ref=refs[i];const mode=usableModes[i%usableModes.length];if(mode==='simple'){const distract=shuffleArray(refs.filter(x=>x.item.id!==ref.item.id)).slice(0,3).map(x=>x.item.title);const options=shuffleArray([ref.item.title,...distract]);if(options.length<2){out.push({mode:'term_write',targetItemId:ref.item.id,prompt:ref.item.memoryText||ref.item.title,answer:ref.item.title});}else out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この説明に当てはまる用語は？',options,answer:ref.item.title});}else if(mode==='term_write')out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この項目名を書いてください。',answer:ref.item.title,aliases:ref.item.aliases||[]});else out.push({mode:'explanation',targetItemId:ref.item.id,prompt:`「${ref.item.title}」を簡潔に説明してください。`,referenceAnswer:ref.item.memoryText,keyPoints:ref.item.keyPoints||[]});}return out;}
+function buildIftyOthersPracticeQuestions(modes,count){const refs=shuffleArray(getIftyOthersPracticeRefs());const out=[];const usableModes=modes.length?modes:['simple'];for(let i=0;i<Math.min(count,refs.length);i++){const ref=refs[i];const mode=usableModes[i%usableModes.length];const accepted=getIftyAcademicAcceptedTermAnswers(ref.item);if(mode==='simple'){const distract=shuffleArray(refs.filter(x=>x.item.id!==ref.item.id)).slice(0,3).map(x=>x.item.title);const options=shuffleArray([ref.item.title,...distract]);if(options.length<2){out.push({mode:'term_write',targetItemId:ref.item.id,prompt:ref.item.memoryText||ref.item.title,answer:ref.item.title,aliases:accepted.filter(x=>x!==ref.item.title)});}else out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この説明に当てはまる用語は？',options,answer:ref.item.title});}else if(mode==='term_write')out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この項目名を書いてください。',answer:ref.item.title,aliases:accepted.filter(x=>x!==ref.item.title)});else out.push({mode:'explanation',targetItemId:ref.item.id,prompt:`「${ref.item.title}」を簡潔に説明してください。`,referenceAnswer:ref.item.memoryText,keyPoints:ref.item.keyPoints||[]});}return out;}
 window.startIftyOthersPractice=async function(modes){const refs=getIftyOthersPracticeRefs();if(!refs.length)return alert('出題できるOTHERS項目がありません。');const ms=[...new Set((Array.isArray(modes)?modes:[modes]).filter(Boolean))];iftyOthersPracticeState={modes:ms,questions:buildIftyOthersPracticeQuestions(ms,iftyOthersPracticeQuestionCount),index:0,correct:0,wrong:0,answered:false,feedback:'',modelAnswer:'',last:null};closePracticeModal();renderIftyOthersPracticePlayer();};
 function renderIftyOthersPracticePlayer(){const st=iftyOthersPracticeState;if(!st)return;let modal=document.getElementById('practiceModal');if(!modal){modal=document.createElement('div');modal.id='practiceModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;justify-content:center;align-items:center;padding:18px;box-sizing:border-box;z-index:10030;';document.body.appendChild(modal);}modal.style.display='flex';if(st.index>=st.questions.length){setIftyPracticeQuestionActive(modal,false);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:22px;text-align:center;"><h2>OTHERS PRACTICE 完了</h2><div style="font-size:1.2em;font-weight:900;color:#0f766e;">正解 ${st.correct} / ${st.questions.length}</div><button onclick="openPracticeHome('OTHERS')" style="margin-top:14px;border:none;background:#334155;color:white;border-radius:8px;padding:10px 14px;font-weight:900;">PRACTICEへ戻る</button></div>`;return;}setIftyPracticeQuestionActive(modal,true);const q=st.questions[st.index],meta=getIftyOthersPracticeModeMeta(q.mode);const result=st.answered?`<div style="margin-top:12px;padding:10px;border-radius:8px;background:${st.last?.correct?'#f0fdf4':'#fef2f2'};color:${st.last?.correct?'#166534':'#991b1b'};"><b>${st.last?.correct?'⭕ 正解':'❌ 要復習'}</b>${st.feedback?`<div style="margin-top:5px;white-space:pre-wrap;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:6px;color:#475569;"><b>基準：</b>${escapeHtml(st.modelAnswer)}</div>`:''}<button onclick="nextIftyOthersPracticeQuestion()" style="width:100%;margin-top:10px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px;font-weight:900;">次へ</button></div>`:'';const answer=st.answered?'':(q.mode==='simple'?`<div style="display:grid;gap:8px;margin-top:12px;">${q.options.map(o=>`<button onclick="submitIftyOthersPracticeAnswer(${JSON.stringify(o).replace(/"/g,'&quot;')})" style="border:1px solid #cbd5e1;background:white;border-radius:8px;padding:10px;text-align:left;font-weight:800;">${escapeHtml(o)}</button>`).join('')}</div>`:`<textarea id="iftyOthersPracticeAnswer" rows="4" placeholder="回答を入力" style="width:100%;box-sizing:border-box;margin-top:12px;padding:10px;border:1px solid #c4b5fd;border-radius:8px;"></textarea><button onclick="submitIftyOthersPracticeAnswer()" style="width:100%;margin-top:8px;border:none;background:${meta.color};color:white;border-radius:8px;padding:10px;font-weight:900;">回答する</button>`);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(680px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><b style="color:${meta.color};">OTHERS ・ ${meta.title} ・ ${st.index+1}/${st.questions.length}</b><button onclick="openPracticeHome('OTHERS')" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;">終了</button></div><div style="margin-top:14px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:9px;line-height:1.65;white-space:pre-wrap;">${escapeHtml(q.prompt)}</div>${answer}${result}</div>`;}
 window.submitIftyOthersPracticeAnswer=async function(choice){const st=iftyOthersPracticeState;if(!st||st.answered)return;const q=st.questions[st.index];const ref=getIftyOthersItemById(q.targetItemId);if(!ref)return;const user=choice!==undefined?String(choice):String(document.getElementById('iftyOthersPracticeAnswer')?.value||'').trim();if(!user)return;let correct=false,feedback='',model=q.answer||q.referenceAnswer||'';if(q.mode==='simple'||q.mode==='term_write'){const accepted=[q.answer,...(q.aliases||[])].map(x=>String(x||'').trim().toLowerCase());correct=accepted.includes(user.trim().toLowerCase());feedback=correct?'登録内容と一致しました。':'登録内容とは一致しませんでした。';}else{if(!ensureIftyOnline('OTHERS記述採点'))return;try{const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_grade',quizType:'others_explanation',direction:'term_to_explanation',question:q.prompt,referenceAnswer:q.referenceAnswer||'',userAnswer:user,word:{word:ref.item.title,meanings:[ref.item.memoryText],details:(ref.item.keyPoints||[]).join(' / ')},subject:'OTHERS',order:getIftySubjectOrder('OTHERS')})});const data=await response.json().catch(()=>({}));if(!response.ok)throw alliaHttpError(response,data,'採点に失敗しました。');correct=data.correct===true;feedback=data.feedback||'';model=data.modelAnswer||model;}catch(e){return alert(String(e.message||e));}}st.answered=true;st.last={correct,userAnswer:user};st.feedback=feedback;st.modelAnswer=model;if(correct)st.correct++;else st.wrong++;recordIftySubjectStudyEvent('OTHERS',q.targetItemId,correct,`others_${q.mode}`);enrollIftyEntityReviewFromStudy(ref.item,correct);savePracticeData();renderIftyOthersPracticePlayer();};
@@ -16879,6 +17489,8 @@ function buildIftyLevelCheckItem(subject, item) {
   if (key === 'KANBUN') return { title:item.title, originalText:item.originalText, inputKind:item.inputKind, kundoku:item.kundoku, translation:item.translation, grammarPoints:item.grammarPoints, keyPoints:item.keyPoints };
   return {
     title:item.title || item.topic,
+    reading:item.reading,
+    aliases:item.aliases,
     memoryText:item.memoryText,
     keyPoints:item.keyPoints,
     subjects:item.subjects,
@@ -23600,6 +24212,7 @@ window.startIftySubjectTermWritePractice = function(subject) {
       itemId: String(ref.item.id),
       folderId: String(ref.folder.id),
       answer: String(ref.item.title || ref.item.topic || '').trim(),
+      acceptedAnswers: getIftyAcademicAcceptedTermAnswers(ref.item),
       prompt: buildIftySubjectTermWritePrompt(key, ref),
       context: String(ref.item.memoryText || '').trim()
     })),
@@ -23680,7 +24293,9 @@ window.submitIftySubjectTermWriteAnswer = function() {
     return;
   }
 
-  const correct = normalizeIftyLocalTermAnswer(userAnswer) === normalizeIftyLocalTermAnswer(q.answer);
+  const acceptedAnswers = Array.isArray(q.acceptedAnswers) && q.acceptedAnswers.length ? q.acceptedAnswers : [q.answer];
+  const normalizedUser = normalizeIftyLocalTermAnswer(userAnswer);
+  const correct = acceptedAnswers.some(answer => normalizeIftyLocalTermAnswer(answer) === normalizedUser);
   st.answered = true;
   if (correct) st.correct += 1;
   else st.wrong += 1;
@@ -25107,7 +25722,7 @@ folderCollection: 'folders',
       itemLabelField: 'title',
       generator: 'social_study',
       folderDefaults: { subjects: ['WORLD_HISTORY'], collapsed: false },
-      itemSchema: ['title','memoryText','keyPoints','subjects','imageData','imageName','imageKind','imageFocus','workTitle','source','createdAt','updatedAt'],
+      itemSchema: ['title','reading','aliases','memoryText','keyPoints','subjects','imageData','imageName','imageKind','imageFocus','workTitle','source','createdAt','updatedAt'],
       supportsPractice: true
     },
     ANCIENT: {
@@ -25140,7 +25755,7 @@ folderCollection: 'folders',
       itemLabelField: 'title',
       generator: 'science_study',
       folderDefaults: { subjects: ['PHYSICS'], collapsed: false },
-      itemSchema: ['title','memoryText','keyPoints','formula','unit','conditions','subjects','imageData','imageName','imageKind','imageFocus','workTitle','source','createdAt','updatedAt'],
+      itemSchema: ['title','reading','aliases','memoryText','keyPoints','formula','unit','conditions','subjects','imageData','imageName','imageKind','imageFocus','workTitle','source','createdAt','updatedAt'],
       supportsPractice: true
     }
   };
