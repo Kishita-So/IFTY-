@@ -405,7 +405,7 @@ const IFTY_ALLIA_ACCOUNT_TYPES = new Set([
   'account_sessions','account_session_revoke','account_logout_all','account_delete',
   'password_reset_request','password_reset_confirm','password_reset_recovery','cloud_load','cloud_save','activity_heartbeat','activity_stats',
   'friends_list','friend_request_send','friend_request_accept','friend_request_decline','friend_request_cancel','friend_remove','friend_activity_visibility',
-  'class_list','class_create','class_join','class_leave','class_delete','class_members'
+  'class_list','class_create','class_join','class_leave','class_delete','class_members','class_avatar_save'
 ]);
 
 let currentIftySubject = 'ENGLISH';
@@ -806,7 +806,10 @@ function setIftyProfileVisualValue(value, options = {}) {
   localStorage.setItem(getIftyProfileStorageKey(username), JSON.stringify(normalized));
   localStorage.setItem(getIftyProfileUpdatedAtKey(username), String(updatedAt));
   if (!options.skipApply && username === getIftyVisualUserKey()) applyIftyProfileVisual();
-  if (!options.skipCloud && username === getIftyVisualUserKey()) queueIftyCloudSave('プロフィール画像変更');
+  if (!options.skipCloud && username === getIftyVisualUserKey()) {
+    queueIftyCloudSave('プロフィール画像変更');
+    syncIftyClassAvatarIfNeeded().catch(error => console.warn('クラス用アイコンの同期エラー:', error));
+  }
   return true;
 }
 
@@ -3368,8 +3371,79 @@ function enhanceIftyFolderShareButtons(root=document) {
 
 
 // ==========================================
+// ★★★ STEP123：クラスメンバーのプロフィールアイコン（D1サムネイル） ★★★
 // ★★★ STEP122：クラスコードで参加（D1管理 / 学習データ非共有） ★★★
 // ==========================================
+// STEP123: profile images are stored locally by the existing profile UI.
+// Send a compressed thumbnail to D1, so other accounts can see it in class member lists.
+const IFTY_CLASS_AVATAR_SYNC_PREFIX = 'ifty_class_avatar_synced_';
+let iftyClassAvatarSyncPending = null;
+
+function getIftyClassMemberAvatarSrc(avatar) {
+  if (avatar && avatar.type === 'custom' && typeof avatar.data === 'string' &&
+      avatar.data.length <= 32000 &&
+      /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(avatar.data)) {
+    return avatar.data;
+  }
+  const index = avatar && avatar.type === 'preset' ? Number(avatar.index) : 0;
+  const preset = IFTY_PROFILE_PRESETS[index] || IFTY_PROFILE_PRESETS[0];
+  return makeIftyPresetAvatar(preset[0], preset[1]);
+}
+
+async function getIftyClassAvatarSnapshot() {
+  const profile = getIftyProfileVisual();
+  if (profile.type !== 'custom') {
+    return { type:'preset', index:Number(profile.index) || 0 };
+  }
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const size = 96;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('画像を縮小できません。');
+        const scale = Math.max(size / img.naturalWidth, size / img.naturalHeight);
+        const width = img.naturalWidth * scale;
+        const height = img.naturalHeight * scale;
+        ctx.drawImage(img, (size - width) / 2, (size - height) / 2, width, height);
+        const thumbnail = canvas.toDataURL('image/jpeg', 0.78);
+        if (thumbnail.length > 32000) throw new Error('プロフィール画像を縮小できませんでした。');
+        resolve({ type:'custom', data:thumbnail });
+      } catch (error) { reject(error); }
+    };
+    img.onerror = () => reject(new Error('プロフィール画像を読み込めません。'));
+    img.src = profile.data;
+  });
+}
+
+async function syncIftyClassAvatarIfNeeded() {
+  if (!iftySessionToken || !iftyAccount || iftyDeveloperMode || !isIftyOnline()) return;
+  // Serialize simultaneous profile changes so the newest image ultimately wins.
+  if (iftyClassAvatarSyncPending) {
+    await iftyClassAvatarSyncPending.catch(() => {});
+    return syncIftyClassAvatarIfNeeded();
+  }
+  const username = getIftyVisualUserKey();
+  const token = iftySessionToken;
+  const updatedAt = getIftyProfileVisualUpdatedAt(username);
+  const syncedKey = IFTY_CLASS_AVATAR_SYNC_PREFIX + username;
+  const previous = localStorage.getItem(syncedKey);
+  if (previous !== null && Number(previous) === updatedAt) return;
+
+  const task = (async () => {
+    const avatar = await getIftyClassAvatarSnapshot();
+    if (currentUser !== username || iftySessionToken !== token || iftyDeveloperMode) return;
+    await iftyAccountApi('class_avatar_save', { token, avatar, updatedAt });
+    localStorage.setItem(syncedKey, String(updatedAt));
+  })();
+  iftyClassAvatarSyncPending = task;
+  try { await task; }
+  finally { if (iftyClassAvatarSyncPending === task) iftyClassAvatarSyncPending = null; }
+}
+
 let iftyClassOperationPending = false;
 
 function setIftyClassActionMessage(message, isError = false) {
@@ -3539,10 +3613,20 @@ window.showIftyClassMembers = async function(id) {
   node.hidden = false;
   node.textContent = '読み込み中…';
   try {
+    await syncIftyClassAvatarIfNeeded().catch(error => console.warn('クラス用アイコンの同期エラー:', error));
     const data = await iftyAccountApi('class_members', { token:iftySessionToken, classId:safeId });
     if (!node.isConnected) return;
     const members = Array.isArray(data.members) ? data.members : [];
-    node.innerHTML = `<div style="font-weight:850;margin-bottom:4px;">メンバー (${members.length})</div>` + members.map(m => `<div style="padding:4px 0;overflow-wrap:anywhere;">${escapeHtml(String(m.username || ''))}</div>`).join('');
+    node.innerHTML = `<div style="font-weight:850;margin-bottom:7px;">メンバー (${members.length})</div>` + members.map(m => {
+      const username = String(m.username || '');
+      const avatarSrc = m.avatar?.type === 'custom' || m.avatar?.type === 'preset'
+        ? getIftyClassMemberAvatarSrc(m.avatar)
+        : username === currentUser ? getIftyProfileImageSrc() : getIftyClassMemberAvatarSrc(null);
+      return `<div style="display:flex;align-items:center;gap:10px;min-width:0;padding:6px 0;">
+        <img src="${escapeHtml(avatarSrc)}" alt="" width="36" height="36" loading="lazy" decoding="async" style="display:block;width:36px;height:36px;flex:0 0 36px;object-fit:cover;border-radius:50%;background:#fff;border:1px solid #64748b;">
+        <span style="min-width:0;flex:1;overflow-wrap:anywhere;line-height:1.45;">${escapeHtml(username)}</span>
+      </div>`;
+    }).join('');
   } catch (error) {
     if (node.isConnected) node.textContent = `取得できません：${String(error?.message || error)}`;
   }
@@ -14824,6 +14908,7 @@ async function enterIftyAccount(account, options = {}) {
     setIftyCloudStatus('☁️ オフライン：端末キャッシュ使用', 'offline');
   } else {
     await syncIftyCloudAfterLogin();
+    syncIftyClassAvatarIfNeeded().catch(error => console.warn('クラス用アイコンの同期エラー:', error));
   }
 
   if (typeof window.openIftyHome === 'function') window.openIftyHome();
