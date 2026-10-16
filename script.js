@@ -1,3 +1,4 @@
+// ★★★ IFTY STEP129 2026-10-15：CHAT GAME SOLO ALLIA + PAGE HISTORY ARROWS ★★★
 // ★★★ IFTY STEP127: CHAT GAME (2026-10-14) ★★★
 // ★★★ IFTY STEP126 2026-10-14：LINE FOLDER LINKS / CLASS SHARED FOLDERS / OWNER-EDITOR-MEMBER ★★★
 // ★★★ IFTY Q3 STEP125 2026-10-14：MULTIPLAYER QUIZ / QUESTION BANK ★★★
@@ -3480,7 +3481,7 @@ window.openIftyClassesPage = function() {
         <div><h1 class="ifty-portal-title">🏫 クラス</h1>
           <div class="ifty-portal-subtitle">クラスコードを入力すると、そのクラスに参加できます。</div>
         </div>
-        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">⌂ ホームへ</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" onclick="openIftySoloChatGames()" class="ifty-portal-back">🎲 1人でALLIA</button><button class="ifty-portal-back" type="button" onclick="openIftyHome()">⌂ ホームへ</button></div>
       </div>
       <div id="iftyClassesRoot" style="margin-top:14px;">
         <div class="ifty-settings-note">読み込み中…</div>
@@ -4505,6 +4506,7 @@ function showIftyHubContent(html, pageName) {
 
   page.innerHTML = html;
   page.style.display = 'block';
+  if (typeof window.ifty129NavRecord === 'function') window.ifty129NavRecord(pageName || 'home', html);
   if (typeof enhanceIftyStep114Ui === 'function') enhanceIftyStep114Ui();
 
   if (preserveHubViewport) {
@@ -4639,6 +4641,7 @@ window.openIftyHome = function() {
         ${renderIftyUpdateBannerHtml()}
       </div>
 
+      <button type="button" onclick="openIftySoloChatGames()" style="width:100%;border:1px solid #a78bfa;border-radius:13px;background:#4c1d95;color:white;font-weight:900;padding:14px;margin:0 0 14px;min-height:48px;cursor:pointer;">🎲 CHAT GAME — 1人でALLIAと遊ぶ →</button>
       <div class="ifty-home-grid">
         <button class="ifty-home-card" type="button" onclick="openIftySubject('ENGLISH')">
           <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('ENGLISH'))}</div>
@@ -24529,8 +24532,13 @@ window.handleImageSelect = async function(event) {
 
   try {
     const rawDataUrl = await readFileAsDataUrl(file);
-    selectedImageBase64 = await resizeImageDataUrl(rawDataUrl, 1800);
-
+    selectedImageBase64 = await resizeImageDataUrl(rawDataUrl, 1400);
+    if (!/^data:image\/(?:png|jpeg|jpg|webp|gif);base64,/i.test(selectedImageBase64)) {
+      throw new Error('この画像形式はAIで読み取れません。PNG・JPEG・WebP画像を選んでください。');
+    }
+    if (selectedImageBase64.length > 8_000_000) {
+      throw new Error('画像データが大きすぎます。画像を縮小して再選択してください。');
+    }
     const previewContainer = document.getElementById("imagePreviewContainer");
     const previewImg = document.getElementById("imagePreview");
 
@@ -24634,7 +24642,7 @@ window.sendChatMessage = async function() {
   const session = chatSessions.find(s => s.id === currentChatSessionId);
   if (!session) return;
 
-  const userMsg = text || '[画像を送信しました]';
+  const userMsg = text || 'この画像に書かれている内容を読み取って説明してください。';
   const activeSubject = normalizeIftySubject(currentIftySubject);
   const activeOrder = getIftySubjectOrder(activeSubject);
 
@@ -24652,7 +24660,8 @@ window.sendChatMessage = async function() {
   input.value = "";
 
   const currentImg = selectedImageBase64;
-  clearSelectedImage();
+  // 送信失敗時に画像を失わないよう、サーバーの成功応答まで添付を保持する。
+  let imageSentSuccessfully = false;
 
   const thinkingMessage = { role: 'assistant', text: 'Thinking…', temporaryThinking: true, subject: activeSubject };
   session.messages.push(thinkingMessage);
@@ -24698,6 +24707,7 @@ window.sendChatMessage = async function() {
     const data = await response.json();
 
     if (response.ok) {
+      imageSentSuccessfully = true;
       replyText = data.reply || data.content || data.message || "応答を取得しました。";
       if (activeSubject === 'ENGLISH' && Array.isArray(data.updatedFolders)) {
         folders = data.updatedFolders;
@@ -24721,6 +24731,7 @@ replyText = isAlliaQuotaError(response, data)
     replyText = "通信エラーが発生しました: " + e.message;
   }
 
+  if (imageSentSuccessfully && currentImg === selectedImageBase64) clearSelectedImage();
   thinkingMessage.text = replyText;
   delete thinkingMessage.temporaryThinking;
   saveChatSessions();
@@ -27425,7 +27436,7 @@ let iftyMpLastState=null;
 
 // ★★★ IFTY STEP127: CHAT GAME — independent screens; STEP126 multiplayer remains unchanged ★★★
 const IFTY_CG_LABELS={shiritori:'しりとり',association:'連想',maniac:'マニアック',wordwolf:'ワードウルフ系',quiz:'早押しクイズ'};
-let iftyCgClassId='',iftyCgRoomId='',iftyCgTimer=null,iftyCgLastRevision=-1,iftyCgLastState=null,iftyCgBusy=false,iftyCgBank={folders:[],questions:[]};
+let iftyCgClassId='',iftyCgRoomId='',iftyCgTimer=null,iftyCgLastRevision=-1,iftyCgLastState=null,iftyCgBusy=false,iftyCgSoloRoomActive=false,iftyCgBank={folders:[],questions:[]};
 const iftyCgCss=`<style>
 .ifty-cg{color:#f8fafc;max-width:1000px;margin:0 auto;padding:12px 0 45px;font-size:clamp(14px,1.7vw,17px);line-height:1.6;min-width:0}
 .ifty-cg *{box-sizing:border-box}.ifty-cg h2,.ifty-cg h3{color:#f8fafc;margin:0 0 10px;font-weight:850}.ifty-cg h2{font-size:1.12em}.ifty-cg h3{font-size:1em}
@@ -27452,7 +27463,7 @@ async function iftyCgCall(type,payload={},then){if(iftyCgBusy)return null;iftyCg
 function iftyCgShell(title,body){return iftyCgCss+`<div class="ifty-cg"><div class="cg-head"><h1 style="color:#f8fafc;font-size:1.4em;margin:8px 0">🎲 ${iftyCgE(title)}</h1><button type="button" onclick="iftyCgStop();openIftyClassesPage()">🏫 クラス一覧へ</button></div>${body}</div>`;}
 window.openIftyChatGamesClass=async classId=>{
  if(!iftyCgValid(classId)||!String(classId).startsWith('cls_'))return;
- iftyMpStopPolling();iftyCgStop();iftyCgClassId=classId;iftyCgRoomId='';iftyCgLastState=null;
+ iftyMpStopPolling();iftyCgStop();iftyCgSoloRoomActive=false;iftyCgClassId=classId;iftyCgRoomId='';iftyCgLastState=null;
  showIftyHubContent(iftyCgShell('CHAT GAME',`<div id="iftyCgClassRoot" class="cg-panel">ゲーム一覧を読み込んでいます…</div><div id="iftyCgMessage" role="status" class="cg-status"></div>`),'chat-game');
  await iftyCgLoadClass();
 };
@@ -27489,10 +27500,11 @@ window.iftyCgCreate=async()=>{
  }
  await iftyCgCall('cg_create',{classId:iftyCgClassId,title:iftyCgInput('cgName'),mode,settings},r=>openIftyCgRoom(r.id));
 };
-window.openIftyCgRoom=async roomId=>{
+window.openIftyCgRoom=async (roomId,options={})=>{
  if(!/^cgr_[a-zA-Z0-9_-]{4,120}$/.test(roomId))return;
- iftyMpStopPolling();iftyCgStop();iftyCgRoomId=roomId;iftyCgLastState=null;
- showIftyHubContent(iftyCgShell('CHAT GAME',`<div class="cg-row"><button onclick="openIftyChatGamesClass('${iftyCgE(iftyCgClassId)}')">← ゲーム一覧</button></div><div id="iftyCgRoomRoot"><div class="cg-panel">接続中…</div></div><div id="iftyCgMessage" role="status" aria-live="polite" class="cg-status"></div>`),'chat-game-room');
+ iftyMpStopPolling();iftyCgStop();iftyCgSoloRoomActive=!!options.solo;iftyCgRoomId=roomId;iftyCgLastState=null;
+ const backCmd=iftyCgSoloRoomActive?'openIftySoloChatGames()':`openIftyChatGamesClass('${iftyCgE(iftyCgClassId)}')`;
+ showIftyHubContent(iftyCgShell('CHAT GAME',`<div class="cg-row"><button onclick="${backCmd}">← ゲーム一覧</button></div><div id="iftyCgRoomRoot"><div class="cg-panel">接続中…</div></div><div id="iftyCgMessage" role="status" aria-live="polite" class="cg-status"></div>`),iftyCgSoloRoomActive?'solo-game-room':'chat-game-room');
  await iftyCgPoll(true);iftyCgTimer=setInterval(()=>{if(document.getElementById('iftyCgRoomRoot'))iftyCgPoll(false);else iftyCgStop();},2500);
 };
 async function iftyCgPoll(force=false){
@@ -27515,9 +27527,10 @@ window.iftyCgRestore=()=>{if(confirm('保存した時点の状態に戻し、停
 window.iftyCgDelete=()=>{if(confirm('ゲームとその記録を削除しますか？'))iftyCgCall('cg_delete',{roomId:iftyCgRoomId},()=>openIftyChatGamesClass(iftyCgClassId));};
 window.iftyCgVote=id=>iftyCgAction('vote',{target:id});
 window.iftyCgPickChoice=index=>{const state=iftyCgLastState;const option=state?.question?.options?.[index];const field=document.getElementById('cgAnswer');if(field&&option!==undefined)field.value=String(option);};
-function iftyCgName(s,id){return s.members?.find(x=>x.id===id)?.username||(id==='ALLIA'?'ALLIA':id);}
+function iftyCgName(s,id){return s.members?.find(x=>x.id===id)?.username||(id==='ALLIA'?'ALLIA':id==='ALLIA_2'?'ALLIA B':id);}
 function iftyCgRenderRoom(s){
  const root=document.getElementById('iftyCgRoomRoot');if(!root)return;
+ if(s.settings?.soloMode){iftyCgRenderSoloRoom(s,root);return;}
  const master=s.isMaster,player=s.role==='player'||master&&s.settings.masterPlays,playing=s.phase==='playing',lobby=s.phase==='lobby';
  const labels={lobby:'準備中',playing:'進行中',paused:'一時停止',finished:'終了'};
  const me=s.members.find(x=>x.id===s.ownerId)?.username||'';
@@ -27869,4 +27882,211 @@ function iftyCgRenderRoom(s){
   window.enhanceIftyUnifiedFolderInputs=all;
   if(document.readyState!=='loading')queueMicrotask(all);
   else document.addEventListener('DOMContentLoaded',all,{once:true});
+})();
+
+// ==========================================================================
+// IFTY STEP129 - PERSONAL CHAT GAME & in-app previous/next navigation
+// Only STEP129 paths added; class CHAT GAME and the STEP128 folder input remain.
+// ==========================================================================
+window.openIftySoloChatGames=async function(){
+ if(typeof iftyMpStopPolling==='function')iftyMpStopPolling();
+ iftyCgStop();iftyCgSoloRoomActive=false;iftyCgRoomId='';iftyCgLastState=null;
+ showIftyHubContent(iftyCgShell('1人でALLIA',`<div id="iftyCgSoloList" class="cg-panel">ゲーム一覧を読み込んでいます…</div><div id="iftyCgMessage" class="cg-status" role="status"></div>`),'solo-game');
+ await iftyCgSoloLoad();
+};
+async function iftyCgSoloLoad(){
+ const root=document.getElementById('iftyCgSoloList');if(!root)return;
+ try{
+  const data=await iftyCgApi('cg_solo_list');
+  if(root!==document.getElementById('iftyCgSoloList'))return;
+  root.innerHTML=`<h2>🎮 1人プレイを始める</h2><p class="cg-note">クラス不要。ALLIAと1人で遊べます（AIの利用回数を消費します）。</p>
+  <label class="cg-label" for="cgSoloTitle">ゲーム名</label><input id="cgSoloTitle" maxlength="70" placeholder="例：ALLIAと単語対決">
+  <div class="cg-grid"><div><label class="cg-label" for="cgSoloMode">ゲームの種類</label><select id="cgSoloMode" onchange="iftyCgSoloModeChanged()">${Object.entries(IFTY_CG_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div>
+  <div><label class="cg-label" for="cgSoloRounds">ラウンド数</label><input id="cgSoloRounds" type="number" min="1" max="30" value="5"></div></div>
+  <label class="cg-label" for="cgSoloTheme">テーマ（自由でも可）</label><input id="cgSoloTheme" maxlength="160" placeholder="例：世界史、動物、英単語、日本史">
+  <div id="cgSoloLoseRow"><label class="cg-label" for="cgSoloLose">しりとりの負け文字</label><input id="cgSoloLose" value="ん" maxlength="24"></div>
+  <div id="cgSoloWolfRow" class="cg-hidden"><p class="cg-note">ALLIA A・ALLIA Bと3人で遊びます。2つのお題はALLIAが秘密に生成します。</p></div>
+  <div id="cgSoloQuizRow" class="cg-hidden"><label class="cg-label" for="cgSoloQuizSource">早押し問題の用意</label><select id="cgSoloQuizSource" onchange="iftyCgSoloQuizSourceChanged()"><option value="ai">ALLIAに問題を作ってもらう</option><option value="manual">自分で問題を入力</option><option value="saved">保存済み問題フォルダ</option></select><div id="cgSoloManualRow" class="cg-hidden"><label class="cg-label" for="cgSoloQuestions">問題 | 正解 | 解説（1行に1問）</label><textarea id="cgSoloQuestions" rows="5" placeholder="地球の衛星は？ | 月 | 月は地球の天然衛星です"></textarea></div><div id="cgSoloSavedRow" class="cg-hidden"><label class="cg-label" for="cgSoloFolder">問題フォルダ</label><select id="cgSoloFolder"><option value="">読み込み中</option></select></div></div>
+  <div class="cg-row" style="margin-top:14px"><button class="cg-ok" onclick="iftyCgSoloCreate()">▶ ALLIAと対戦を始める</button></div>
+  <h2 style="margin-top:22px">過去の1人プレイ</h2>${(data.rooms||[]).length?(data.rooms||[]).map(r=>`<div class="cg-player"><strong>${iftyCgE(r.title)}<div class="cg-note">${iftyCgE(IFTY_CG_LABELS[r.mode]||r.mode)} · ${iftyCgE(r.phase==='lobby'?'準備中':r.phase==='finished'?'終了':'進行中')}</div></strong><button onclick="openIftyCgRoom('${iftyCgE(r.id)}',{solo:true})">開く</button></div>`).join(''):'<p class="cg-note">まだ履歴はありません。</p>'}`;
+  try{const bank=await iftyCgApi('mp_folder_list');iftyCgBank=bank;const folder=document.getElementById('cgSoloFolder');if(folder)folder.innerHTML=(bank.folders||[]).map(f=>`<option value="${iftyCgE(f.id)}">${iftyCgE(f.name)} (${(bank.questions||[]).filter(q=>q.folderId===f.id).length}問)</option>`).join('')||'<option value="">フォルダなし</option>';}catch(_){iftyCgBank={folders:[],questions:[]};}
+  iftyCgSoloModeChanged();
+ }catch(e){root.textContent='読み込みに失敗しました：'+String(e.message||e);}
+}
+window.iftyCgSoloModeChanged=()=>{
+ const mode=iftyCgInput('cgSoloMode');
+ document.getElementById('cgSoloLoseRow')?.classList.toggle('cg-hidden',mode!=='shiritori');
+ document.getElementById('cgSoloWolfRow')?.classList.toggle('cg-hidden',mode!=='wordwolf');
+ document.getElementById('cgSoloQuizRow')?.classList.toggle('cg-hidden',mode!=='quiz');
+};
+window.iftyCgSoloQuizSourceChanged=()=>{
+ const mode=iftyCgInput('cgSoloQuizSource');document.getElementById('cgSoloManualRow')?.classList.toggle('cg-hidden',mode!=='manual');document.getElementById('cgSoloSavedRow')?.classList.toggle('cg-hidden',mode!=='saved');
+};
+window.iftyCgSoloCreate=async()=>{
+ const mode=iftyCgInput('cgSoloMode'),settings={theme:iftyCgInput('cgSoloTheme'),roundLimit:Number(iftyCgInput('cgSoloRounds')),shiritoriLose:iftyCgInput('cgSoloLose'),quizScoring:10,answerSeconds:0,allowAllia:true,masterPlays:true};
+ if(mode==='quiz'){
+  const source=iftyCgInput('cgSoloQuizSource');
+  if(source==='manual')settings.questions=iftyCgInput('cgSoloQuestions').split(/\r?\n/).map(line=>{const a=line.split(/\s*\|\s*/);return {question:a[0]||'',answer:a[1]||'',explanation:a.slice(2).join(' | ')}}).filter(q=>q.question&&q.answer);
+  if(source==='saved')settings.questions=(iftyCgBank.questions||[]).filter(q=>q.folderId===iftyCgInput('cgSoloFolder')).map(q=>({question:q.question,answer:q.answer,explanation:q.explanation,options:q.options||[]}));
+  if(source!=='ai'&&!settings.questions.length){iftyCgNotify('クイズ問題が見つかりません。',true);return;}
+ }
+ await iftyCgCall('cg_solo_create',{title:iftyCgInput('cgSoloTitle'),mode,settings},r=>openIftyCgRoom(r.id,{solo:true}));
+};
+window.iftyCgSoloWord=async()=>{
+ const text=iftyCgInput('cgSoloWord');if(!text.trim()){iftyCgNotify('言葉を入力してください。',true);return;}
+ await iftyCgAction('solo_turn',{text});
+};
+window.iftyCgSoloQuizAnswer=async()=>{
+ const text=iftyCgInput('cgSoloAnswer');if(!text.trim()){iftyCgNotify('解答を入力してください。',true);return;}
+ await iftyCgCall('cg_action',{roomId:iftyCgRoomId,action:'submit',text},async()=>{
+  try{await iftyCgApi('cg_action',{roomId:iftyCgRoomId,action:'solo_quiz_judge'});await iftyCgPoll(true);}catch(e){iftyCgNotify(e.message||String(e),true);await iftyCgPoll(true);}
+ });
+};
+window.iftyCgSoloPickChoice=index=>{const field=document.getElementById('cgSoloAnswer');const val=iftyCgLastState?.question?.options?.[index];if(field&&val!==undefined)field.value=String(val);};
+window.iftyCgSoloTalk=async()=>{const text=iftyCgInput('cgSoloTalk');if(!text.trim()){iftyCgNotify('発言を入力してください。',true);return;}await iftyCgAction('solo_wolf_exchange',{text});};
+window.iftyCgSoloVote=id=>{if(confirm('このALLIAが少数派だと思いますか？ 投票すると結果が公開されます。'))iftyCgAction('solo_wolf_vote',{target:id});};
+function iftyCgRenderSoloRoom(s,root){
+ const label=IFTY_CG_LABELS[s.mode]||s.mode,playing=s.phase==='playing',finished=s.phase==='finished',lobby=s.phase==='lobby';
+ let html=`<div class="cg-panel"><div class="cg-head"><h2>🎲 ${iftyCgE(s.title)}</h2><button onclick="iftyCgPoll(true)">↻ 更新</button></div><div class="cg-row"><span class="cg-pill">${iftyCgE(label)}</span><span class="cg-pill">${lobby?'準備中':finished?'終了':s.phase==='paused'?'一時停止':'対戦中'}</span><span class="cg-pill">第${Math.max(1,(s.round??-1)+1)}ラウンド</span></div><p class="cg-note">あなたがゲームマスターです。ALLIAはAIの利用枠を消費します。</p></div>`;
+ html+=`<div class="cg-panel"><div class="cg-row">${lobby?'<button class="cg-ok" onclick="iftyCgAction(\'start\')">▶ ゲーム開始</button>':''}${playing?'<button onclick="iftyCgAction(\'pause\')">⏸ 一時停止</button>':''}${s.phase==='paused'?'<button class="cg-ok" onclick="iftyCgAction(\'resume\')">▶ 再開</button>':''}${s.mode==='quiz'&&!lobby&&!finished?'<button onclick="iftyCgAction(\'next\')">次の問題 〉</button>':''}${!lobby&&!finished?'<button onclick="iftyCgAction(\'finish\')">終了</button>':''}<button onclick="iftyCgAction('manual_save')">💾 手動保存</button><button onclick="iftyCgRestore()">保存から再開</button>${s.undoAvailable?'<button onclick="iftyCgAction(\'undo\')">↶ 取り消し</button>':''}<button class="cg-danger" onclick="iftyCgDelete()">削除</button></div></div>`;
+ if(s.mode==='quiz'){
+  const q=s.question||{};
+  html+=`<div class="cg-panel"><h2>⚡ ALLIAの早押しクイズ</h2>${lobby?'<p class="cg-note">開始を押すと問題が表示されます。</p>':`<div class="cg-question">${iftyCgE(q.question||'全問題が終了しました。')}</div>`}`;
+  if(playing&&!s.opened){
+   if(s.buzz?.answer)html+=`<p class="cg-note">回答は送信済みです。採点を完了してください。</p><button class="cg-ok" onclick="iftyCgAction('solo_quiz_judge')">ALLIAの採点を再試行</button>`;
+   else if(!s.buzz?.userId)html+='<button class="cg-buzz" onclick="iftyCgAction(\'buzz\')">⚡ 早押し！</button>';
+   else if(s.buzz.userId===s.selfId){html+=`<label class="cg-label" for="cgSoloAnswer">あなたの答え</label><input id="cgSoloAnswer" maxlength="400" placeholder="正解を入力" onkeydown="if(event.key==='Enter'){event.preventDefault();iftyCgSoloQuizAnswer()}">${(q.options||[]).length?`<div class="cg-grid" style="margin:9px 0">${q.options.map((v,i)=>`<button type="button" onclick="iftyCgSoloPickChoice(${i})">${i+1}. ${iftyCgE(v)}</button>`).join('')}</div>`:''}<div class="cg-row"><button class="cg-main" onclick="iftyCgSoloQuizAnswer()">ALLIAに採点してもらう</button></div>`;}
+   else html+='<p class="cg-note">判定待ちです。更新してください。</p>';
+  }
+  if(s.opened)html+=`<div class="cg-answer">${s.soloJudgement?`<strong>${s.soloJudgement.correct?'✓ 正解':'× 不正解'}</strong><p>あなたの解答：${iftyCgE(s.soloJudgement.submitted||'')}</p>`:''}<strong>正解：</strong>${iftyCgE(q.answer||'')}${q.explanation?`<p>${iftyCgE(q.explanation)}</p>`:''}${s.soloJudgement?.reason?`<p class="cg-note">${iftyCgE(s.soloJudgement.reason)}</p>`:''}</div>`;
+  html+='</div>';
+ }else if(s.mode==='wordwolf'){
+  html+=`<div class="cg-panel"><h2>🐺 3人ワードウルフ（あなた＋ALLIA A・B）</h2>${!finished?`<p class="cg-note">お題を直接言わず、ALLIAの2人と会話して少数派を探しましょう。</p><p>あなたにだけ見えるお題：</p><div class="cg-question">${iftyCgE(s.privateWord||'開始すると表示されます')}</div>`:''}`;
+  if(playing){html+=`<div class="cg-history">${(s.messages||[]).map(m=>`<div><strong>${iftyCgE(m.username)}：</strong>${iftyCgE(m.text)}</div>`).join('')||'<p class="cg-note">最初の質問やヒントを話しかけましょう。</p>'}</div><label class="cg-label" for="cgSoloTalk">あなたの発言</label><textarea id="cgSoloTalk" rows="2" maxlength="350" placeholder="例：日常生活でよく使いますか？"></textarea><div class="cg-row"><button class="cg-main" onclick="iftyCgSoloTalk()">送信して2人の返事を聞く</button></div><h3 style="margin-top:16px">誰が少数派？</h3><div class="cg-row"><button onclick="iftyCgSoloVote('ALLIA')">ALLIA A に投票</button><button onclick="iftyCgSoloVote('ALLIA_2')">ALLIA B に投票</button><button onclick="iftyCgSoloVote('${iftyCgE(s.selfId)}')">自分が少数派</button></div>`;}
+  if(finished&&s.wordwolfResult){const r=s.wordwolfResult;html+=`<div class="cg-answer">多数派：${iftyCgE(r.majority)} ／ 少数派：${iftyCgE(r.minority)}<p>少数派：${(r.minorityIds||[]).map(x=>iftyCgE(iftyCgName(s,x))).join('、')}</p>${s.soloJudgement?`<p>${s.soloJudgement.correct?'✓ 少数派を当てました！':'惜しい！ 少数派を外しました。'}</p>`:''}</div>`;}
+  html+='</div>';
+ }else{
+  html+=`<div class="cg-panel"><h2>${iftyCgE(label)} — 対戦</h2>${s.settings.theme?`<p class="cg-note">テーマ：${iftyCgE(s.settings.theme)}</p>`:''}${s.mode==='shiritori'?`<p class="cg-note">負け文字：${iftyCgE(s.settings.shiritoriLose||'なし')} ／ 使用済み ${(s.used||[]).length}語</p>`:''}`;
+  if(s.soloLast)html+=`<div class="cg-grid"><div class="cg-question"><span class="cg-note">あなた</span><div>${iftyCgE(s.soloLast.human)}</div></div><div class="cg-question"><span class="cg-note">🤖 ALLIA</span><div>${iftyCgE(s.soloLast.ai)}</div></div></div>`;
+  if(playing)html+=`<label class="cg-label" for="cgSoloWord">あなたの言葉</label><input id="cgSoloWord" maxlength="180" placeholder="言葉を入力" onkeydown="if(event.key==='Enter'){event.preventDefault();iftyCgSoloWord()}"><div class="cg-row"><button class="cg-main" onclick="iftyCgSoloWord()">送信 → ALLIAの番</button></div>`;
+  if((s.used||[]).length)html+=`<details><summary>使用した言葉（${s.used.length}件）</summary><div class="cg-history">${s.used.map((w,i)=>`<div>${i%2===0?'あなた':'ALLIA'}：${iftyCgE(w)}</div>`).join('')}</div></details>`;
+  html+='</div>';
+ }
+ if(s.scores&&Object.keys(s.scores).length)html+=`<div class="cg-panel"><h2>🏆 得点</h2>${Object.entries(s.scores).map(([id,score])=>`<div class="cg-player"><strong>${iftyCgE(id===s.selfId?'あなた':iftyCgName(s,id))}</strong><span>${Number(score)||0}点</span><input id="cgScore_${iftyCgE(id)}" type="number" value="${Number(score)||0}" style="width:90px!important"><button onclick="iftyCgChangeScore('${iftyCgE(id)}')">修正</button></div>`).join('')}</div>`;
+ if(finished)html+='<div class="cg-panel"><h2>おつかれさま！</h2><p>このゲームは終了しました。新しいゲームは「ゲーム一覧」から作成できます。</p></div>';
+ root.innerHTML=html;
+}
+
+// In-app page trail: the two fixed arrows move between IFTY screens, not quiz rounds.
+(function installIfty129Nav(){
+ const entries=[], MAX=60;let pointer=-1,restoring=false;
+ const known={
+  home:()=>window.openIftyHome?.(),settings:()=>window.openIftySettings?.(),classes:()=>window.openIftyClassesPage?.(),friends:()=>window.openIftyFriendsPage?.(),
+  years:()=>window.openIftyYears?.(),pronunciation:()=>window.openIftyPronunciation?.(),ancient:()=>window.openIftySubject?.('ANCIENT'),kanbun:()=>window.openIftySubject?.('KANBUN'),
+  stats:()=>window.openIftyLearningStats?.(),examples:()=>window.openIftyExampleBank?.(),basic_sentences:()=>window.openIftyBasicSentences?.(),
+  'social-practice':()=>window.openIftySocialPractice?.(),'science-practice':()=>window.openIftySciencePractice?.(),
+  'mp-bank':()=>window.openIftyMpQuestionBank?.(),multiplayer:()=>window.openIftyMultiplayerClass?.(iftyMpClassId),
+  'mp-room':()=>window.openIftyMpRoom?.(iftyMpRoomId),
+  'chat-game':()=>window.openIftyChatGamesClass?.(iftyCgClassId),'chat-game-room':()=>window.openIftyCgRoom?.(iftyCgRoomId,{solo:iftyCgSoloRoomActive}),
+  'solo-game':()=>window.openIftySoloChatGames?.()
+ };
+ function navRoute(page,html){
+  const subject=String(currentIftySubject||'ENGLISH');
+  const mode=String(page||'home');
+  let key=mode;
+  if(mode==='subject')key+=':'+subject;
+  if(mode==='chat-game')key+=':'+iftyCgClassId;
+  if(mode==='chat-game-room'||mode==='solo-game-room')key+=':'+iftyCgRoomId;
+  if(mode==='multiplayer')key+=':'+iftyMpClassId;
+  if(mode==='mp-room')key+=':'+iftyMpRoomId;
+  const go=mode==='subject'?()=>window.openIftySubject?.(subject):mode==='solo-game-room'?()=>window.openIftyCgRoom?.(key.split(':').slice(1).join(':'),{solo:true}):mode==='chat-game-room'?()=>window.openIftyCgRoom?.(key.split(':').slice(1).join(':'),{solo:false}):mode==='chat-game'?()=>window.openIftyChatGamesClass?.(key.split(':').slice(1).join(':')):mode==='multiplayer'?()=>window.openIftyMultiplayerClass?.(key.split(':').slice(1).join(':')):mode==='mp-room'?()=>window.openIftyMpRoom?.(key.split(':').slice(1).join(':')):known[mode];
+  return {key,go:go||(()=>{showIftyHubContent(html,mode);}),mode};
+ }
+ function update(){const node=document.getElementById('ifty129Nav');if(!node)return;const back=node.querySelector('#ifty129Back'),next=node.querySelector('#ifty129Next');back.disabled=pointer<=0;next.disabled=pointer>=entries.length-1;}
+ window.ifty129NavRecord=(page,html)=>{
+  if(restoring){restoring=false;update();return;}
+  const entry=navRoute(page,html);
+  if(pointer>=0&&entries[pointer]?.key===entry.key){entries[pointer]=entry;update();return;}
+  entries.splice(pointer+1);entries.push(entry);if(entries.length>MAX)entries.shift();pointer=entries.length-1;update();
+ };
+ window.ifty129Navigate=function(delta){
+  const idx=pointer+delta;if(idx<0||idx>=entries.length)return;
+  const item=entries[idx];pointer=idx;restoring=true;
+  try{item.go();setTimeout(()=>{if(restoring){restoring=false;update();}},1500);}catch(e){restoring=false;pointer-=delta;update();console.warn('IFTY page navigation failed',e);}
+  update();
+ };
+ function mount(){if(document.getElementById('ifty129Nav'))return;
+  const st=document.createElement('style');st.textContent='#ifty129Nav{position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:10900;display:flex;gap:6px;padding:5px;border:1px solid #64748b;border-radius:14px;background:rgba(15,23,42,.92);box-shadow:0 3px 15px #0006;backdrop-filter:blur(9px)}#ifty129Nav button{display:grid;place-items:center;width:44px;height:44px;min-width:44px;min-height:44px;background:#2563eb;color:#fff;border:1px solid #60a5fa;border-radius:10px;font-size:27px;line-height:1;font-weight:900;cursor:pointer}#ifty129Nav button:disabled{background:#334155;border-color:#475569;color:#94a3b8;opacity:.55;cursor:default}#ifty129Nav button:focus-visible{outline:3px solid #facc15;outline-offset:2px}@media(max-width:450px){#ifty129Nav{left:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));gap:4px;padding:4px}}';document.head.appendChild(st);
+  const nav=document.createElement('div');nav.id='ifty129Nav';nav.setAttribute('role','navigation');nav.setAttribute('aria-label','IFTY画面移動');nav.innerHTML='<button type="button" id="ifty129Back" aria-label="前のページに戻る" title="前のページに戻る" onclick="ifty129Navigate(-1)">〈</button><button type="button" id="ifty129Next" aria-label="次のページに進む" title="次のページに進む" onclick="ifty129Navigate(1)">〉</button>';document.body.appendChild(nav);update();
+  // Existing standard vocabulary and ALLIA chat pages do not use showIftyHubContent.
+  for(const [fn,key] of [['switchToChatView','chat'],['switchToVocabView','vocab']]){
+   const old=window[fn];if(typeof old!=='function')continue;
+   window[fn]=function(...args){const value=old.apply(this,args);window.ifty129NavRecord?.(key,'');return value;};
+   known[key]=()=>window[fn]();
+  }
+  const hub=document.getElementById('iftyHubPage');
+  const mode=String(iftyPortalPage||'home');
+  if(mode==='chat'||mode==='vocab')window.ifty129NavRecord(mode,'');
+  else if(hub&&hub.style.display!=='none')window.ifty129NavRecord(mode,hub.innerHTML);
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
+})();
+
+
+// STEP130: ALLIA画像添付の表示・画像内語彙の登録導線。既存HTMLを編集せず補強する。
+(function iftyAlliaImageControls() {
+  let busy = false;
+  function mount() {
+    if (busy) return;
+    const file = document.getElementById('imageInput');
+    const chat = document.getElementById('chatInput');
+    if (!file || !chat) return;
+    busy = true;
+    try {
+      file.accept = 'image/png,image/jpeg,image/webp,image/gif';
+      file.removeAttribute('capture'); // カメラ撮影限定と誤解させない
+      if (!file.dataset.ifty130Wired) {
+        file.addEventListener('change', e => {
+          if (typeof window.handleImageSelect === 'function' && !file.getAttribute('onchange')) window.handleImageSelect(e);
+        });
+        file.dataset.ifty130Wired = '1';
+      }
+      const parent = file.parentElement;
+      if (!parent) return;
+      // 既存のカメラ絵文字を「画像を選択」に変更（他のカメラ用途は触らない）。
+      for (const btn of parent.querySelectorAll('button,label')) {
+        const action = (btn.getAttribute('onclick')||'') + ' ' + (btn.getAttribute('for')||'');
+        if (action.includes('imageInput') || btn.contains(file)) {
+          if (/📷|📸|📹|カメラ/.test(btn.textContent||'')) btn.textContent = '🖼 画像を選択';
+          btn.title = '端末に保存した画像を選択してALLIAへ送ります';
+        }
+      }
+      if (!document.getElementById('ifty130ExtractWords')) {
+        const btn = document.createElement('button');
+        btn.type='button'; btn.id='ifty130ExtractWords';
+        btn.textContent='画像の単語を追加';
+        btn.style.cssText='padding:9px 12px;border:1px solid #0891b2;border-radius:9px;background:#164e63;color:white;font-weight:800;cursor:pointer;max-width:100%;';
+        btn.title='画像を選択した後、登録先フォルダを指定してALLIAに単語登録を依頼します';
+        btn.addEventListener('click',()=>{
+          if (!selectedImageBase64) { alert('先に「画像を選択」から画像を添付してください。'); file.click(); return; }
+          const options=(typeof folders!=='undefined'&&Array.isArray(folders))?folders:[];
+          const names=options.map(f=>f.name).filter(Boolean);
+          const destination=prompt('登録先フォルダ名を入力してください。\n'+(names.length?'既存: '+names.slice(0,20).join(' / '):'先に単語帳でフォルダを作成してください。'),names[0]||'');
+          if(destination===null)return;
+          const target=destination.trim();
+          if(!target){alert('登録先フォルダを入力してください。');return;}
+          if(!names.includes(target)){alert('登録先フォルダが見つかりません。既存フォルダ名を正確に入力してください。');return;}
+          chat.value='添付画像に実際に書かれている単語だけを読み取り、重複を除いて「'+target+'」フォルダに追加してください。読み取れない文字は推測で登録せず、追加結果と失敗した単語を報告してください。';
+          chat.focus();
+        });
+        const holder=document.createElement('div');holder.id='ifty130ImageActions';
+        holder.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;';
+        holder.appendChild(btn);
+        (chat.closest('form')||chat.parentElement||parent).appendChild(holder);
+      }
+    } finally { busy=false; }
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount);else mount();
+  const observer=new MutationObserver(()=>mount());
+  observer.observe(document.documentElement,{childList:true,subtree:true});
 })();
