@@ -1,3 +1,4 @@
+// ★★★ IFTY STEP135：フォルダテーマの生成文脈適用 ★★★
 // ★★★ IFTY STEP131 2026-10-19：フォルダ内同一語句の確認 + 編集後のスクロール位置維持 ★★★
 // ★★★ IFTY STEP129 2026-10-15：CHAT GAME SOLO ALLIA + PAGE HISTORY ARROWS ★★★
 // ★★★ IFTY STEP127: CHAT GAME (2026-10-14) ★★★
@@ -4872,6 +4873,7 @@ function normalizeIftyPronunciationFolder(value, index = 0) {
   return {
     id: String(source.id || makeId('pronfolder')),
     name: String(source.name || `発音 ${index + 1}`).trim().slice(0, 80) || `発音 ${index + 1}`,
+    theme: ifty135CleanTheme(source.theme),
     collapsed: !!source.collapsed,
     sourceFolderId: String(source.sourceFolderId || ''),
     createdAt: Math.max(0, Number(source.createdAt || Date.now())),
@@ -5034,7 +5036,7 @@ function renderIftyPronunciationFolder(folder) {
           <div style="font-size:.73em;color:#64748b;margin-top:2px;">${folder.items.length}件${folder.sourceFolderId ? ' ・ LANGUAGESからimport' : ''}</div>
         </button>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button type="button" onclick="renameIftyPronunciationFolder('${safe}')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:7px;padding:7px 9px;font-weight:800;cursor:pointer;">名前変更</button>
+          ${ifty135ThemeButton('PRONUNCIATION',folder)}<button type="button" onclick="renameIftyPronunciationFolder('${safe}')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:7px;padding:7px 9px;font-weight:800;cursor:pointer;">名前変更</button>
           <button type="button" onclick="deleteIftyPronunciationFolder('${safe}')" style="border:1px solid #fecdd3;background:white;color:#be123c;border-radius:7px;padding:7px 9px;font-weight:800;cursor:pointer;">削除</button>
         </div>
       </div>
@@ -5462,6 +5464,7 @@ function normalizeIftyCollectionFolder(folder, prefix = 'collection_folder', def
   return {
     id: String(source.id || makeId(prefix)),
     name: String(source.name || defaultName).trim() || defaultName,
+    theme: ifty135CleanTheme(source.theme),
     collapsed: !!source.collapsed,
     order: Number.isFinite(Number(source.order)) ? Number(source.order) : index,
     createdAt: Math.max(0, Number(source.createdAt) || Date.now())
@@ -5730,7 +5733,7 @@ function renderIftyYearEntries() {
           <button type="button" ${folderIndex <= 0 ? 'disabled' : ''} onclick="moveIftyYearFolder('${escapeHtml(folder.id)}',-1)" style="background:#e2e8f0;color:#334155;">↑</button>
           <button type="button" ${folderIndex >= folders.length - 1 ? 'disabled' : ''} onclick="moveIftyYearFolder('${escapeHtml(folder.id)}',1)" style="background:#e2e8f0;color:#334155;">↓</button>
           ${ifty132RegenerateFolderButton('YEARS',folder.id,entries.length)}
-          <button type="button" onclick="renameIftyYearFolder('${escapeHtml(folder.id)}')" style="background:#f59e0b;color:#111827;">名前変更</button>
+          ${ifty135ThemeButton('YEARS',folder)}<button type="button" onclick="renameIftyYearFolder('${escapeHtml(folder.id)}')" style="background:#f59e0b;color:#111827;">名前変更</button>
           <button type="button" onclick="deleteIftyYearFolder('${escapeHtml(folder.id)}')" style="background:#ef4444;color:white;">削除</button>
         </div>
       </div>
@@ -5863,11 +5866,11 @@ window.openIftyYears = function() {
   setTimeout(() => document.getElementById('iftyYearInput')?.focus({ preventScroll: true }), 0);
 };
 
-async function requestIftyYearLookup(era, year) {
+async function requestIftyYearLookup(era, year, folderId = '') {
   const response = await iftyAlliaFetch(WORKER_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 'year_lookup', era, year, subject: 'SOCIAL STUDIES', order: getIftySubjectOrder('SOCIAL STUDIES') })
+    body: JSON.stringify({ type: 'year_lookup', era, year, subject: 'SOCIAL STUDIES', order: ifty135ThemeOrder('YEARS',folderId,'SOCIAL STUDIES') })
   });
   const data = await response.json();
   if (!response.ok) throw alliaHttpError(response, data, '年号データの生成に失敗しました。');
@@ -5910,7 +5913,7 @@ window.lookupIftyYear = async function(forcedEra = '', forcedYear = null, forced
   if (status) status.textContent = `${requestLabel}をALLIAが整理中…（生成中 ${iftyYearLookupPending}件）`;
 
   try {
-    const data = await requestIftyYearLookup(parsed.era, parsed.year);
+    const data = await requestIftyYearLookup(parsed.era, parsed.year, forcedFolderId || folderSelect?.value || iftyYearActiveFolderId);
     const entries = getIftyYearEntries();
     const existingIndex = entries.findIndex(entry => String(entry.folderId || '') === folderId && normalizeIftyYearEra(entry.era) === parsed.era && Number(entry.year) === parsed.year);
     const existing = existingIndex >= 0 ? entries[existingIndex] : null;
@@ -6261,7 +6264,7 @@ window.regenerateIftySocialItem = async function(folderId, itemId) {
         topic,
         image: item.imageData || '',
         subjects: Array.isArray(folder.subjects) ? [...folder.subjects] : [],
-        order: getIftySubjectOrder('SOCIAL STUDIES'),
+        order: ifty135ThemeOrder('SOCIAL STUDIES',folderId),
         carefulRegenerate: true,
         regenerationRequest,
         previousData
@@ -6449,7 +6452,7 @@ function renderIftySocialFolder(folder) {
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
 ${ifty132RegenerateFolderButton('SOCIAL STUDIES',folder.id,(folder.items||[]).length)}
-        <button type="button" onclick="renameIftySocialFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">名前変更</button>
+        ${ifty135ThemeButton('SOCIAL STUDIES',folder)}<button type="button" onclick="renameIftySocialFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">名前変更</button>
         <button type="button" onclick="deleteIftySocialFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">フォルダ削除</button>
       </div>
     </div>
@@ -6779,7 +6782,7 @@ window.generateIftySocialItem = async function(folderId, options = {}) {
         image: imageDraft?.aiDataUrl || '',
         subjects: requestSubjects,
         subject: 'SOCIAL STUDIES',
-        order: getIftySubjectOrder('SOCIAL STUDIES')
+        order: ifty135ThemeOrder('SOCIAL STUDIES',folderId)
       })
     });
     const data = await response.json();
@@ -7685,7 +7688,7 @@ window.startIftySocialPractice = async function(mode) {
           items: serializeIftySocialPracticeItems(items),
           subjects,
           subject: 'SOCIAL STUDIES',
-          order: getIftyPracticeOrder('SOCIAL STUDIES')
+          order: ifty135PracticeThemeOrder('SOCIAL STUDIES',selectedFolders)
         })
       });
       const data = await response.json();
@@ -8382,7 +8385,7 @@ const item = ref.item;
         topic,
         image: item.imageData || '',
         subjects: Array.isArray(folder.subjects) ? [...folder.subjects] : [],
-        order: getIftySubjectOrder('SCIENCE'),
+        order: ifty135ThemeOrder('SCIENCE',folderId),
         carefulRegenerate: true,
         regenerationRequest,
         previousData
@@ -8573,7 +8576,7 @@ function renderIftyScienceFolder(folder) {
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
 ${ifty132RegenerateFolderButton('SCIENCE',folder.id,(folder.items||[]).length)}
-        <button type="button" onclick="renameIftyScienceFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">名前変更</button>
+        ${ifty135ThemeButton('SCIENCE',folder)}<button type="button" onclick="renameIftyScienceFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">名前変更</button>
         <button type="button" onclick="deleteIftyScienceFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">フォルダ削除</button>
       </div>
     </div>
@@ -8903,7 +8906,7 @@ window.generateIftyScienceItem = async function(folderId, options = {}) {
         image: imageDraft?.aiDataUrl || '',
         subjects: requestSubjects,
         subject: 'SCIENCE',
-        order: getIftySubjectOrder('SCIENCE')
+        order: ifty135ThemeOrder('SCIENCE',folderId)
       })
     });
     const data = await response.json();
@@ -9812,7 +9815,7 @@ window.startIftySciencePractice = async function(mode) {
           items: serializeIftySciencePracticeItems(items),
           subjects,
           subject: 'SCIENCE',
-          order: getIftyPracticeOrder('SCIENCE')
+          order: ifty135PracticeThemeOrder('SCIENCE',selectedFolders)
         })
       });
       const data = await response.json();
@@ -10300,7 +10303,7 @@ function renderIftyAncientFolder(folder, folderIndex) {
         <button type="button" onclick="moveIftyAncientFolder(${folderIndex},-1)" ${folderIndex <= 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">↑</button>
         <button type="button" onclick="moveIftyAncientFolder(${folderIndex},1)" ${folderIndex >= getIftyAncientModule().folders.length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">↓</button>
 ${ifty132RegenerateFolderButton('ANCIENT',folder.id,(folder.items||[]).length)}
-        <button type="button" onclick="renameIftyAncientFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">✏️ 名前変更</button>
+        ${ifty135ThemeButton('ANCIENT',folder)}<button type="button" onclick="renameIftyAncientFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">✏️ 名前変更</button>
         <button type="button" onclick="deleteIftyAncientFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">削除</button>
       </div>
     </div>
@@ -10471,7 +10474,7 @@ window.regenerateIftyAncientItem = async function(folderId, itemId) {
       body: JSON.stringify({
         type: 'ancient_word_generate',
         word,
-        order: getIftySubjectOrder('ANCIENT'),
+        order: ifty135ThemeOrder('ANCIENT',folderId),
         carefulRegenerate: true,
         regenerationRequest,
         previousData
@@ -10586,7 +10589,7 @@ window.generateIftyAncientWord = async function(folderId, options = {}) {
       body: JSON.stringify({
         type: 'ancient_word_generate',
         word,
-        order: getIftySubjectOrder('ANCIENT')
+        order: ifty135ThemeOrder('ANCIENT',folderId)
       })
     });
     const data = await response.json().catch(() => ({}));
@@ -11630,7 +11633,7 @@ function renderIftyKanbunFolder(folder, folderIndex) {
         <button type="button" onclick="moveIftyKanbunFolder(${folderIndex},-1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;cursor:pointer;">↑</button>
         <button type="button" onclick="moveIftyKanbunFolder(${folderIndex},1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;cursor:pointer;">↓</button>
 ${ifty132RegenerateFolderButton('KANBUN',folder.id,(folder.items||[]).length)}
-        <button type="button" onclick="renameIftyKanbunFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;cursor:pointer;">✏️ 名前変更</button>
+        ${ifty135ThemeButton('KANBUN',folder)}<button type="button" onclick="renameIftyKanbunFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;cursor:pointer;">✏️ 名前変更</button>
         <button type="button" onclick="deleteIftyKanbunFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 8px;cursor:pointer;">削除</button>
       </div>
     </div>
@@ -11781,7 +11784,7 @@ window.generateIftyKanbunItem = async function(folderId, options = {}) {
   const setStatus = message => { const el=document.getElementById(`iftyKanbunPending_${folderId}`); if(el){el.textContent=message || (iftyKanbunGenerationPending[folderId] ? `ALLIA生成中… ${iftyKanbunGenerationPending[folderId]}件` : ''); el.style.color=message?'#dc2626':'#7c3aed';} };
   setStatus('');
   try {
-    const response = await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_generate',originalText,inputKind:detectIftyKanbunInputKind(originalText),userReturnMarks,userOkurigana,order:getIftySubjectOrder('KANBUN')})});
+    const response = await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_generate',originalText,inputKind:detectIftyKanbunInputKind(originalText),userReturnMarks,userOkurigana,order:ifty135ThemeOrder('KANBUN',folderId)})});
     const data = await response.json().catch(()=>({}));
     if(!response.ok||data.error) throw new Error(data.error||`HTTP ${response.status}`);
     const latest = getIftyKanbunFolder(folderId); if(!latest)return;
@@ -11813,7 +11816,7 @@ window.generateIftyKanbunExamples = async function(folderId,itemId) {
       userReturnMarks:normalizeIftyKanbunReturnMarks(item.returnMarks,item.originalText),
       userOkurigana:normalizeIftyKanbunOkurigana(item.okurigana,item.originalText),
       desiredCount:/[ABCXY〜～ー]/u.test(item.originalText)?2:2,
-      order:getIftySubjectOrder('KANBUN')
+      order:ifty135ThemeOrder('KANBUN',folderId)
     })});
     const data=await response.json().catch(()=>({})); if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);
     const examples=Array.isArray(data.examples)?data.examples.map(ex=>({original:String(ex?.original||'').trim(),kundoku:String(ex?.kundoku||'').trim(),translation:String(ex?.translation||'').trim(),point:String(ex?.point||'').trim()})).filter(ex=>ex.original||ex.kundoku||ex.translation||ex.point).slice(0,4):[];
@@ -11829,7 +11832,7 @@ window.regenerateIftyKanbunItem = async function(folderId,itemId) {
   setIftyRegenerateButtonState(`iftyRegenKanbun_${item.id}`,true);
   try {
     const preserveKunten=item.kuntenEditedByUser===true;
-    const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_generate',originalText:item.originalText,inputKind:item.inputKind || detectIftyKanbunInputKind(item.originalText),userReturnMarks:preserveKunten?normalizeIftyKanbunReturnMarks(item.returnMarks,item.originalText):[],userOkurigana:preserveKunten?normalizeIftyKanbunOkurigana(item.okurigana,item.originalText):[],order:getIftySubjectOrder('KANBUN'),carefulRegenerate:true,regenerationRequest,previousData:{kundoku:item.kundoku,translation:item.translation,returnMarks:item.returnMarks,okurigana:item.okurigana,grammarPoints:item.grammarPoints,examples:item.examples,keyPoints:item.keyPoints}})});
+    const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_generate',originalText:item.originalText,inputKind:item.inputKind || detectIftyKanbunInputKind(item.originalText),userReturnMarks:preserveKunten?normalizeIftyKanbunReturnMarks(item.returnMarks,item.originalText):[],userOkurigana:preserveKunten?normalizeIftyKanbunOkurigana(item.okurigana,item.originalText):[],order:ifty135ThemeOrder('KANBUN',folderId),carefulRegenerate:true,regenerationRequest,previousData:{kundoku:item.kundoku,translation:item.translation,returnMarks:item.returnMarks,okurigana:item.okurigana,grammarPoints:item.grammarPoints,examples:item.examples,keyPoints:item.keyPoints}})});
     const data=await response.json().catch(()=>({})); if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);
     recordUndoState('漢文再生成');
     const next=normalizeIftyKanbunItem({...item,...data,originalText:item.originalText,id:item.id,source:'ALLIA',updatedAt:Date.now(),regeneratedAt:Date.now()});
@@ -15690,7 +15693,7 @@ function renderIftyKanjiPage(options={}){
           <button type="button" onclick="moveIftyKanjiFolder(${folderIndex},-1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;">↑</button>
           <button type="button" onclick="moveIftyKanjiFolder(${folderIndex},1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;">↓</button>
 ${ifty132RegenerateFolderButton('KANJI',folder.id,(folder.items||[]).length)}
-          <button type="button" onclick="renameIftyKanjiFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">名前変更</button>
+          ${ifty135ThemeButton('KANJI',folder)}<button type="button" onclick="renameIftyKanjiFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">名前変更</button>
           <button type="button" onclick="deleteIftyKanjiFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">削除</button>
         </div>
       </div>
@@ -15849,7 +15852,7 @@ window.generateIftyKanjiItem=async function(folderId,itemId='',regenOptions={}){
   updateIftyKanjiPendingStatus(folderId);
 
   try{
-    const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanji_generate',term,subject:'KANJI',order:getIftySubjectOrder('KANJI'),...(itemId?{carefulRegenerate:true,regenerationRequest:String(regenOptions.regenerationRequest||''),previousData:existing}: {})})});
+    const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanji_generate',term,subject:'KANJI',order:ifty135ThemeOrder('KANJI',folderId),...(itemId?{carefulRegenerate:true,regenerationRequest:String(regenOptions.regenerationRequest||''),previousData:existing}: {})})});
     const data=await response.json().catch(()=>({}));if(!response.ok)throw alliaHttpError(response,data,'KANJI生成に失敗しました。');
     const current=getIftyKanjiFolder(folderId);if(!current)return;
     const generated=normalizeIftyKanjiItem({...data,term,source:'ALLIA'});
@@ -16029,7 +16032,7 @@ function renderIftyOthersItemCard(folder,item){
 function renderIftyOthersPage(options={}){
   const y=options.preserveScroll?ifty132EditorY(window.scrollY):0; currentIftySubject='OTHERS'; const module=getIftyOthersModule();
   const rows=module.folders.map(folder=>`<section style="margin-top:14px;border:1px solid #cbd5e1;border-radius:11px;background:white;padding:13px;">
-    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start;"><div style="min-width:0;flex:1;"><button type="button" onclick="toggleIftyOthersFolder('${folder.id}')" style="border:none;background:transparent;padding:0;font-weight:900;color:#0f172a;font-size:1.02em;cursor:pointer;">${folder.collapsed?'▶':'▼'} 📁 ${escapeHtml(folder.name)} (${(folder.items||[]).length}件)</button><div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">${folder.tags.map(t=>`<span style="padding:3px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.72em;font-weight:900;">${escapeHtml(t)}</span>`).join('')||'<span style="font-size:.75em;color:#94a3b8;">教科タグ未設定</span>'}</div></div><div style="display:flex;gap:5px;flex-wrap:wrap;">${ifty132RegenerateFolderButton('OTHERS',folder.id,(folder.items||[]).length)}<button onclick="renameIftyOthersFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">名前変更</button><button onclick="editIftyOthersFolderTags('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">教科タグ変更</button><button onclick="deleteIftyOthersFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">フォルダ削除</button></div></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start;"><div style="min-width:0;flex:1;"><button type="button" onclick="toggleIftyOthersFolder('${folder.id}')" style="border:none;background:transparent;padding:0;font-weight:900;color:#0f172a;font-size:1.02em;cursor:pointer;">${folder.collapsed?'▶':'▼'} 📁 ${escapeHtml(folder.name)} (${(folder.items||[]).length}件)</button><div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">${folder.tags.map(t=>`<span style="padding:3px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.72em;font-weight:900;">${escapeHtml(t)}</span>`).join('')||'<span style="font-size:.75em;color:#94a3b8;">教科タグ未設定</span>'}</div></div><div style="display:flex;gap:5px;flex-wrap:wrap;">${ifty132RegenerateFolderButton('OTHERS',folder.id,(folder.items||[]).length)}${ifty135ThemeButton('OTHERS',folder)}<button onclick="renameIftyOthersFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">名前変更</button><button onclick="editIftyOthersFolderTags('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">教科タグ変更</button><button onclick="deleteIftyOthersFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">フォルダ削除</button></div></div>
     ${folder.collapsed?'':`<div style="margin-top:11px;"><div style="display:flex;gap:7px;flex-wrap:wrap;"><input id="iftyOthersTopic_${folder.id}" value="${escapeHtml(iftyOthersTopicDrafts[folder.id]||'')}" placeholder="用語・概念・人物など" oninput="iftyOthersTopicDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftyOthersItem('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}))}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;"><button onclick="generateIftyOthersItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">＋ 追加（ALLIA）</button><button onclick="addBlankIftyOthersItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;">白紙</button></div><div id="iftyOthersPending_${folder.id}" style="margin-top:6px;color:#64748b;font-size:.76em;">${Number(iftyOthersGenerationPending[folder.id]||0)>0?`ALLIA生成中… ${Number(iftyOthersGenerationPending[folder.id]||0)}件`:''}</div><div id="iftyOthersItems_${folder.id}">${(folder.items||[]).map(item=>renderIftyOthersItemCard(folder,item)).join('')||'<div style="padding:18px;text-align:center;color:#94a3b8;">まだ項目がありません。</div>'}</div></div>`}
   </section>`).join('');
   showIftyHubContent(`<section class="ifty-portal-shell"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;"><div><h1 class="ifty-portal-title">OTHERS</h1><div class="ifty-portal-subtitle">保健・情報など、専用教科がない内容を自由な教科タグで管理。</div></div>${renderIftySubjectHeaderActions('OTHERS')}</div><div style="margin-top:14px;padding:13px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-weight:900;color:#0c4a6e;">新しいOTHERSフォルダ</div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;"><input id="iftyOthersFolderName" placeholder="例：保健 / 情報I" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><input id="iftyOthersFolderTags" placeholder="教科タグ（例：保健, 情報）" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><button onclick="createIftyOthersFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">作成</button></div><div style="font-size:.75em;color:#64748b;margin-top:6px;">タグ名は自由に変更できます。「世界史 / 日本史」のような固定候補にはしません。</div></div>${renderIftySubjectSelectionToolbar('OTHERS')}<div id="iftyOthersReviewPanelWrap">${renderIftySubjectReviewPanel('OTHERS')}</div>${rows||'<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">OTHERSフォルダを作成してください。</div>'}</section>`,'subject');
@@ -16061,7 +16064,7 @@ window.regenerateIftyOthersItem = async function(folderId,itemId) {
   if(regenerationRequest===null)return;
   if(!ensureIftyOnline('OTHERSの再生成'))return;
   try {
-    const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'others_generate',topic,tags:[...(ref.folder.tags||[])],order:getIftySubjectOrder('OTHERS'),carefulRegenerate:true,regenerationRequest,previousData:{title:item.title,memoryText:item.memoryText,keyPoints:item.keyPoints,aliases:item.aliases}})});
+    const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'others_generate',topic,tags:[...(ref.folder.tags||[])],order:ifty135ThemeOrder('OTHERS',folderId),carefulRegenerate:true,regenerationRequest,previousData:{title:item.title,memoryText:item.memoryText,keyPoints:item.keyPoints,aliases:item.aliases}})});
     const data=await response.json().catch(()=>({}));
     if(!response.ok||data.error)throw alliaHttpError(response,data,'再生成に失敗しました。');
     recordUndoState('OTHERS再生成');
@@ -16084,7 +16087,7 @@ window.generateIftyOthersItem=async function(folderId){
   keepIftyOthersTopicFocused(folderId);
   iftyOthersGenerationPending[folderId]=Number(iftyOthersGenerationPending[folderId]||0)+1;updateIftyOthersPendingStatus(folderId);
   try{
-    const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'others_generate',topic,tags,subject:'OTHERS',order:getIftySubjectOrder('OTHERS')})});
+    const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'others_generate',topic,tags,subject:'OTHERS',order:ifty135ThemeOrder('OTHERS',folderId)})});
     const data=await response.json().catch(()=>({}));if(!response.ok)throw alliaHttpError(response,data,'OTHERS生成に失敗しました。');
     const current=getIftyOthersFolder(folderId);if(current){current.items.push(normalizeIftyOthersItem({...data,topic,tags:current.tags,source:'ALLIA'}));savePracticeData();refreshIftyOthersFolderDynamic(folderId);}
   }catch(e){
@@ -18095,7 +18098,7 @@ function renderIftyBasicSentenceList() {
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
           <button type="button" ${folderIndex <= 0 ? 'disabled' : ''} onclick="moveIftyBasicSentenceFolder('${escapeHtml(folder.id)}',-1)" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:6px 9px;font-weight:800;">↑</button>
           <button type="button" ${folderIndex >= folders.length - 1 ? 'disabled' : ''} onclick="moveIftyBasicSentenceFolder('${escapeHtml(folder.id)}',1)" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:6px 9px;font-weight:800;">↓</button>
-          <button type="button" onclick="renameIftyBasicSentenceFolder('${escapeHtml(folder.id)}')" style="border:none;background:#f59e0b;color:#111827;border-radius:7px;padding:6px 9px;font-weight:800;">名前変更</button>
+          ${ifty135ThemeButton('BASIC SENTENCES',folder)}<button type="button" onclick="renameIftyBasicSentenceFolder('${escapeHtml(folder.id)}')" style="border:none;background:#f59e0b;color:#111827;border-radius:7px;padding:6px 9px;font-weight:800;">名前変更</button>
           <button type="button" onclick="deleteIftyBasicSentenceFolder('${escapeHtml(folder.id)}')" style="border:none;background:#ef4444;color:white;border-radius:7px;padding:6px 9px;font-weight:800;">削除</button>
         </div>
       </div>
@@ -18718,11 +18721,84 @@ window.startIftyDueReviewQuiz = function() {
   startQuizSet(set.id, true, false);
 };
 
+// ★★★ IFTY STEP135: フォルダ単位の学習テーマ（各教科共通） ★★★
+// テーマは生成時の文脈指示。既存レコードの本文や復習履歴を自動変更しない。
+function ifty135CleanTheme(raw) {
+  return String(raw == null ? '' : raw).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 200);
+}
+function ifty135Folder(subject, folderId) {
+  const key = String(subject || '').toUpperCase();
+  const id = String(folderId ?? '');
+  if (key === 'ENGLISH') return folders.find(f => String(f.id) === id) || null;
+  const moduleName = {
+    'SOCIAL STUDIES':'socialStudies', SCIENCE:'science', ANCIENT:'ancient',
+    KANBUN:'kanbun', KANJI:'kanji', OTHERS:'others',
+    'BASIC SENTENCES':'basicSentences', YEARS:'years', PRONUNCIATION:'pronunciation'
+  }[key];
+  if (!moduleName) return null;
+  const list = practiceData && practiceData.modules && practiceData.modules[moduleName] && practiceData.modules[moduleName].folders;
+  return Array.isArray(list) ? list.find(f => String(f.id) === id) || null : null;
+}
+function ifty135GetFolderTheme(subject, folderId) {
+  return ifty135CleanTheme(ifty135Folder(subject,folderId)?.theme);
+}
+function ifty135ThemeOrder(subject, folderId, orderSubject = subject) {
+  const base = String(getIftySubjectOrder(orderSubject) || '').trim();
+  const theme = ifty135GetFolderTheme(subject, folderId);
+  if (!theme) return base;
+  // 生成キャッシュはORDERをキーに使用する。テーマ込みにして異なるフォルダの説明を流用させない。
+  const instruction = `【このフォルダ専用の最優先文脈・テーマ】${theme}\n`+
+    `このフォルダでは、生成する意味・説明・関連知識・例文・暗記ポイントをできる限り「${theme}」の観点に合わせて具体的に説明してください。`+
+    `社会科で「ギリシャ」ならギリシャ史・地域・時代との関係を重視してください。`+
+    `ただし史実・科学的事実や原義を優先し、関連しない場合は無理にこじつけずその旨を明示してください。`+
+    `既存のユーザー指定ORDERと両立させてください。`;
+  // Worker側の既存ORDER受信処理を使用。既存Workerの変更は不要。
+  return [instruction, base].filter(Boolean).join('\n\n');
+}
+function ifty135PracticeThemeOrder(subject, chosenFolders) {
+  const base = String(getIftyPracticeOrder(subject) || '').trim();
+  const themes = [...new Set((Array.isArray(chosenFolders) ? chosenFolders : [])
+    .map(f => ifty135CleanTheme(f?.theme)).filter(Boolean))];
+  if (!themes.length) return base;
+  const addition = `【選択フォルダの学習テーマ】${themes.join(' / ')}。問題文・解説では該当フォルダのテーマを優先して出題する。`+
+    `事実関係の正確さと各項目固有の意味は維持し、無理に関連付けない。`;
+  return [addition,base].filter(Boolean).join('\n\n');
+}
+function ifty135ThemeButton(subject, folder) {
+  const theme = ifty135CleanTheme(folder && folder.theme);
+  const id = String(folder?.id || '');
+  const key = encodeURIComponent(String(subject||''));
+  const safeId = encodeURIComponent(id);
+  const label = theme ? `🎯 ${theme}` : '🎯 テーマ';
+  return `<button type="button" data-ifty135-theme="${escapeHtml(String(subject||''))}:${escapeHtml(id)}" onclick="ifty135EditFolderTheme(decodeURIComponent('${key}'),decodeURIComponent('${safeId}'))" title="テーマを設定・編集（空欄で解除）" style="border:1px solid #a78bfa;background:${theme?'#ede9fe':'#f5f3ff'};color:#5b21b6;border-radius:7px;padding:7px 10px;font-weight:900;font-size:.8em;max-width:min(76vw,330px);overflow-wrap:anywhere;min-height:35px;cursor:pointer;">${escapeHtml(label)}</button>`;
+}
+window.ifty135EditFolderTheme = function(subject, folderId) {
+  const folder = ifty135Folder(subject, folderId);
+  if (!folder) return;
+  const previous = ifty135CleanTheme(folder.theme);
+  const input = prompt('フォルダの学習テーマを入力してください。\n例：ギリシャ／ギリシャ史／細胞分裂\n空欄で解除。既存の説明は自動で書き換えません。', previous);
+  if (input === null) return;
+  const next = ifty135CleanTheme(input);
+  if (previous === next) return;
+  if (typeof recordUndoState === 'function') recordUndoState('フォルダテーマ変更');
+  folder.theme = next;
+  if (String(subject).toUpperCase() === 'ENGLISH') saveUserData();
+  else savePracticeData();
+  // ページ全体の再描画はしない。元のスクロール位置・追加欄・検索欄を守る。
+  const lookup = `${String(subject||'')}:${String(folderId||'')}`;
+  for (const button of document.querySelectorAll('button[data-ifty135-theme]')) {
+    if (button.getAttribute('data-ifty135-theme') === lookup) {
+      button.outerHTML = ifty135ThemeButton(subject,{id:folderId,theme:next});
+    }
+  }
+};
+
 function normalizeFoldersData() {
   if (!Array.isArray(folders)) folders = [];
 
   folders.forEach(folder => {
     if (!folder.id) folder.id = makeId('folder');
+    folder.theme = ifty135CleanTheme(folder.theme);
     if (!Array.isArray(folder.words)) folder.words = [];
     folder.words.forEach(word => {
       if (!word.id) word.id = makeId('word');
@@ -19183,6 +19259,7 @@ function normalizePracticeData() {
     return {
       id: source.id || makeId('socialfolder'),
       name: String(source.name || '社会').trim() || '社会',
+      theme: ifty135CleanTheme(source.theme),
       subjects: normalizedSubjects.length ? normalizedSubjects : ['WORLD_HISTORY'],
       collapsed: !!source.collapsed,
       items: Array.isArray(source.items) ? source.items.map(normalizeIftySocialItem).filter(Boolean) : []
@@ -19206,6 +19283,7 @@ function normalizePracticeData() {
     return {
       id: source.id || makeId('sciencefolder'),
       name: String(source.name || '理科').trim() || '理科',
+      theme: ifty135CleanTheme(source.theme),
       subjects: normalizedSubjects.length ? normalizedSubjects : ['PHYSICS'],
       collapsed: !!source.collapsed,
       items: Array.isArray(source.items) ? source.items.map(normalizeIftyScienceItem).filter(Boolean) : []
@@ -19228,6 +19306,7 @@ function normalizePracticeData() {
     return {
       id: source.id || makeId('ancientfolder'),
       name: String(source.name || '古文単語').trim() || '古文単語',
+      theme: ifty135CleanTheme(source.theme),
       collapsed: !!source.collapsed,
       items: Array.isArray(source.items) ? source.items.map(normalizeIftyAncientItem).filter(Boolean) : []
     };
@@ -19246,6 +19325,7 @@ function normalizePracticeData() {
     return {
       id: source.id || makeId('kanbunfolder'),
       name: String(source.name || '漢文').trim() || '漢文',
+      theme: ifty135CleanTheme(source.theme),
       collapsed: !!source.collapsed,
       items: Array.isArray(source.items) ? source.items.map(normalizeIftyKanbunItem).filter(Boolean) : []
     };
@@ -19262,6 +19342,7 @@ function normalizePracticeData() {
     return {
       id:String(source.id || makeId('kanjifolder')),
       name:String(source.name || '漢字・熟語').trim() || '漢字・熟語',
+      theme: ifty135CleanTheme(source.theme),
       collapsed:!!source.collapsed,
       items:Array.isArray(source.items) ? source.items.map(normalizeIftyKanjiItem).filter(Boolean) : []
     };
@@ -19278,6 +19359,7 @@ function normalizePracticeData() {
     return {
       id: String(source.id || makeId('othersfolder')),
       name: String(source.name || 'その他').trim() || 'その他',
+      theme: ifty135CleanTheme(source.theme),
       tags: normalizeIftyOthersTags(source.tags),
       collapsed: !!source.collapsed,
       items: Array.isArray(source.items) ? source.items.map(normalizeIftyOthersItem).filter(Boolean) : []
@@ -19444,7 +19526,7 @@ function renderFolders() {
         </div>
         <div class="ifty-folder-actions" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
           <button onclick="selectAllWordsInFolder('${folder.id}')" title="フォルダ内全選択" style="background:${allWordsSelected ? '#10b981' : '#e2e8f0'};color:${allWordsSelected ? 'white' : '#334155'};border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:.75em;">全選択</button>
-          <button onclick="renameIftyVocabularyFolder('${folder.id}')" title="フォルダ名を変更" style="background:#64748b;color:white;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:.75em;font-weight:800;">名前変更</button>
+          ${ifty135ThemeButton('ENGLISH',folder)}<button onclick="renameIftyVocabularyFolder('${folder.id}')" title="フォルダ名を変更" style="background:#64748b;color:white;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:.75em;font-weight:800;">名前変更</button>
           <button onclick="moveFolder(${fIndex}, -1)" title="上に移動" style="background:#e2e8f0;border:none;padding:2px 6px;border-radius:4px;cursor:pointer;font-size:.8em;">⬆️</button>
           <button onclick="moveFolder(${fIndex}, 1)" title="下に移動" style="background:#e2e8f0;border:none;padding:2px 6px;border-radius:4px;cursor:pointer;font-size:.8em;">⬇️</button>
           ${ifty132RegenerateFolderButton('ENGLISH',folder.id,words.length)}
@@ -20122,7 +20204,7 @@ window.addWordToFolder = async function(folderId) {
     return;
   }
 
-  const englishOrder = getIftySubjectOrder('ENGLISH');
+  const englishOrder = ifty135ThemeOrder('ENGLISH', folderId);
 
   // STEP18：同じ単語 + 同じENGLISH ORDERの生成済みデータが端末にあれば、
   // スペル確認も単語生成もALLIAを呼ばず、そのデータをそのまま再利用する。
@@ -20227,7 +20309,7 @@ async function generateAndAddWord(folderId, wordText, duplicateApproved = false)
   if (!folder) return;
   if (!folder.words) folder.words = [];
 
-  const englishOrder = getIftySubjectOrder('ENGLISH');
+  const englishOrder = ifty135ThemeOrder('ENGLISH', folderId);
 
   // acceptSpellingSuggestion / keepOriginalSpelling から直接来た場合にも再利用を確認する。
   const reusable = await resolveIftyReusableWordData(wordText, 'ENGLISH', englishOrder);
@@ -20360,7 +20442,7 @@ window.regenerateIftyVocabularyWord = async function(folderId, wordId) {
     derivatives: wordObj.derivatives,
     details: wordObj.details
   };
-  const order = getIftySubjectOrder('ENGLISH');
+  const order = ifty135ThemeOrder('ENGLISH',folderId);
 
   try {
     const response = await iftyAlliaFetch(WORKER_URL, {
@@ -20387,6 +20469,7 @@ window.regenerateIftyVocabularyWord = async function(folderId, wordId) {
     if (review) wordObj.review = review;
     if (mastery) wordObj.mastery = mastery;
     wordObj.regeneratedAt = Date.now();
+    wordObj.generationMeta = {subject:'ENGLISH',order,source:'ALLIA',generatedAt:Date.now()};
 
     saveUserData();
     await saveIftyGeneratedWordCache(headword, data, 'ENGLISH', order);
@@ -27919,7 +28002,7 @@ function iftyCgRenderRoom(s){
 // ===========================================================================
 // IFTY STEP128: 全教科 フォルダ「追加 / 検索」共通入力欄
 // - STEP127のデータ構造、生成関数、検索関数、CRUDは変更しない。
-// - 入力中の追加ドラフトと検索文字は別々に保持する。
+// - STEP136：追加と検索の文字・内部下書きをモード切替ごとに破棄する。
 // - 検索時に既存の追加処理（Enterキー含む）を動かさない。
 // - 旧画像クイズ・旧メニューの表示だけ廃止。画像データは消去しない。
 // ===========================================================================
@@ -28079,56 +28162,54 @@ function iftyCgRenderRoom(s){
     const action=document.createElement('button');action.type='button';action.className='ifty128-main-action';action.textContent='＋ 追加';action.onclick=()=>addFn?.();row.appendChild(action);
     const clear=document.createElement('button');clear.type='button';clear.className='ifty128-clear';clear.textContent='クリア';clear.onclick=()=>{input.value='';search(subject,id,'');input.focus({preventScroll:true});};row.appendChild(clear);
     const count=document.createElement('span');count.className='ifty128-result-count';count.id='ifty128-count-'+subject.replace(/\W+/g,'_')+'-'+id;row.appendChild(count);
-    const useSearch=document.createElement('button');useSearch.type='button';useSearch.className='ifty128-main-action';useSearch.style.display='none';useSearch.textContent='＋ この語を追加';useSearch.title='検索した語をそのまま追加欄に移す';row.appendChild(useSearch);
     const {tabs,add,lookup}=makeTabs(subject,id,row);
-    // The original renderer is authoritative after save/regeneration: do not revive cleared drafts.
-    if(!drafts.has(k))drafts.set(k,input.value);
-    const savedDraft=drafts.get(k)??input.value;
+    // STEP136: 追加/検索は互いの入力とフィルターに一切干渉させない。
     let active='';
-    input.addEventListener('input',()=>{if(active==='add')drafts.set(k,input.value);else if(active==='search')queries.set(k,input.value);if(active==='search')updateSearchToAdd();});
-    const updateSearchToAdd=()=>{
-      const term=String(input.value||'').trim();
-      if(active!=='search'||!term){useSearch.style.display='none';return;}
-      let items=[];
-      try{items=subject==='ENGLISH'?(folders.find(f=>String(f.id)===String(id))?.words||[]):subject==='PRONUNCIATION'?folderItems(subject,id):(getIftySubjectFoldersForBulk(subject).find(f=>String(f.id)===String(id))?.items||[]);}catch(_){items=[];}
-      const needle=qText(term);
-      const matched=items.some(item=>qText([item.word,item.title,item.term,item.text,item.topic,item.originalText,item.memoryText,item.description,item.explanation,item.reading,item.meaning,...(Array.isArray(item.aliases)?item.aliases:[]),...(Array.isArray(item.meanings)?item.meanings:[])].filter(Boolean).join(' ')).includes(needle));
-      useSearch.style.display=matched?'none':'';
-    };
     const set=(mode)=>{
       if(active===mode)return;
-      if(active==='add')drafts.set(k,input.value);
-      if(active==='search')queries.set(k,input.value);
-      active=mode;modes.set(k,mode);
+      const switching=!!active;
+      active=mode;
+      modes.set(k,mode);
       const isSearch=mode==='search';
-      add.setAttribute('aria-pressed',String(!isSearch));lookup.setAttribute('aria-pressed',String(isSearch));
-      // Search and add keep independent drafts. Switching to add must clear the active filter.
-      if(!isSearch){const remembered=queries.get(k)||'';search(subject,id,'');queries.set(k,remembered);}
-      input.value=isSearch?currentQuery(subject,id,searchInput):(drafts.get(k)??savedDraft);
+      add.setAttribute('aria-pressed',String(!isSearch));
+      lookup.setAttribute('aria-pressed',String(isSearch));
+
+      // 切り替え時は「表示上の値」だけでなく、教科固有の追加下書きも消す。
+      // 元の oninput を一時的に復元し、空入力を通知してから検索用へ切り替える。
+      if(originalHandlers.oninput!==null)input.setAttribute('oninput',originalHandlers.oninput);
+      else input.oninput=null;
+      if(switching){
+        input.value='';
+        input.dispatchEvent(new Event('input',{bubbles:false}));
+      }else if(isSearch){
+        // 検索タブで再描画されても以前の追加文字を流用しない。
+        input.value='';
+      }
+      drafts.delete(k);
+      queries.delete(k);
+      // 各教科の元の検索状態も消去し、追加モードの一覧を全件表示へ戻す。
+      search(subject,id,'');
+
       input.placeholder=isSearch?'このフォルダ内を検索':originalHandlers.placeholder;
       if(title)title.textContent=isSearch?'🔎 フォルダ内を検索':'＋ '+({ENGLISH:'単語を追加',ANCIENT:'古文単語を追加',KANBUN:'漢文本文を追加',KANJI:'漢字・熟語を追加',SCIENCE:'用語・概念を追加','SOCIAL STUDIES':'人物・出来事などを追加',OTHERS:'項目を追加',PRONUNCIATION:'発音練習を追加'}[subject]||'追加');
       if(isSearch){
         input.oninput=()=>search(subject,id,input.value);
         input.onkeydown=(e)=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();e.stopPropagation();}};
-        search(subject,id,input.value);
-        updateSearchToAdd();
       }else{
-        if(originalHandlers.oninput!==null)input.setAttribute('oninput',originalHandlers.oninput);else input.oninput=null;
-        if(originalHandlers.onkeydown!==null)input.setAttribute('onkeydown',originalHandlers.onkeydown);else input.onkeydown=null;
-        useSearch.style.display='none';
+        if(originalHandlers.onkeydown!==null)input.setAttribute('onkeydown',originalHandlers.onkeydown);
+        else input.onkeydown=null;
       }
       buttons.forEach(b=>{b.style.display=(isSearch||b.dataset.ifty128RetiredAction==='1')?'none':'';});
       action.style.display=isSearch?'none':'';
       clear.style.display=isSearch?'':'none';
       count.style.display=isSearch?'':'none';
-      // In pronunciation, the language code is only needed when adding.
       if(subject==='PRONUNCIATION'){
         const l=document.getElementById('iftyPronLang_'+id);if(l)l.style.display=isSearch?'none':'';
       }
       input.setAttribute('aria-label',isSearch?'フォルダ内検索':'フォルダに追加');
     };
-    add.onclick=()=>set('add');lookup.onclick=()=>set('search');
-    useSearch.onclick=()=>{const term=String(input.value||'').trim();if(!term)return;drafts.set(k,term);set('add');input.value=term;input.focus({preventScroll:true});};
+    add.onclick=()=>set('add');
+    lookup.onclick=()=>set('search');
     set(modes.get(k)==='search'?'search':'add');
   }
   function specialFolder(subject,id,section,itemsSelector){
@@ -28145,24 +28226,40 @@ function iftyCgRenderRoom(s){
     const submit=document.createElement('button');submit.type='button';submit.className='ifty128-main-action';submit.textContent='＋ 追加';
     const clear=document.createElement('button');clear.type='button';clear.className='ifty128-clear';clear.textContent='クリア';
     const count=document.createElement('span');count.className='ifty128-result-count';
-    const transfer=document.createElement('button');transfer.type='button';transfer.className='ifty128-main-action';transfer.textContent='＋ この語を追加';transfer.style.display='none';
-    row.append(field,submit,clear,count,transfer);block.append(tabs,row);header.after(block);
+    row.append(field,submit,clear,count);block.append(tabs,row);header.after(block);
     let current='';
-    const updateSpecialAction=()=>{if(current!=='search'||!field.value.trim()){transfer.style.display='none';return;}const noMatch=!filterRecords(subject,id,folderItems(subject,id)).length;transfer.style.display=noMatch?'':'none';};
-    transfer.onclick=()=>{const term=field.value.trim();if(!term)return;drafts.set(k,term);set('add');field.value=term;field.focus({preventScroll:true});};
-    const save=()=>{if(current==='add')drafts.set(k,field.value);else if(current==='search')queries.set(k,field.value);};
     const set=mode=>{
       if(current===mode)return;
-      save();current=mode;modes.set(k,mode);
-      const looking=mode==='search';add.setAttribute('aria-pressed',String(!looking));lookup.setAttribute('aria-pressed',String(looking));
-      field.value=looking?(queries.get(k)||''):(drafts.get(k)||'');
+      current=mode;
+      modes.set(k,mode);
+      const looking=mode==='search';
+      // BASIC SENTENCES/YEARSも毎回両方の入力と絞り込みをリセット。
+      drafts.delete(k);
+      queries.delete(k);
+      field.value='';
+      filterLocal(subject,id);
+      add.setAttribute('aria-pressed',String(!looking));
+      lookup.setAttribute('aria-pressed',String(looking));
       field.placeholder=looking?'このフォルダ内を検索':subject==='YEARS'?'年号を入力（例：1600）':'英文を入力';
-      submit.style.display=looking?'none':'';clear.style.display=looking?'':'none';count.style.display=looking?'':'none';
-      if(looking){count.textContent=filterLocal(subject,id);updateSpecialAction();}else{const remembered=queries.get(k)||'';queries.set(k,'');filterLocal(subject,id);queries.set(k,remembered);transfer.style.display='none';}
+      submit.style.display=looking?'none':'';
+      clear.style.display=looking?'':'none';
+      count.style.display=looking?'':'none';
+      if(looking)count.textContent=filterLocal(subject,id);
     };
-    add.onclick=()=>set('add');lookup.onclick=()=>set('search');
-    field.oninput=()=>{if(current==='search'){queries.set(k,field.value);count.textContent=filterLocal(subject,id);updateSpecialAction();}else{drafts.set(k,field.value);}};
-    clear.onclick=()=>{field.value='';queries.set(k,'');count.textContent=filterLocal(subject,id);updateSpecialAction();field.focus({preventScroll:true});};
+    add.onclick=()=>set('add');
+    lookup.onclick=()=>set('search');
+    field.oninput=()=>{
+      if(current==='search'){
+        queries.set(k,field.value);
+        count.textContent=filterLocal(subject,id);
+      }
+    };
+    clear.onclick=()=>{
+      field.value='';
+      queries.delete(k);
+      count.textContent=filterLocal(subject,id);
+      field.focus({preventScroll:true});
+    };
     submit.onclick=()=>{
       if(subject==='BASIC SENTENCES'){
         window.openIftyBasicSentenceEditor('',id);
