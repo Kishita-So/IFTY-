@@ -1,3 +1,4 @@
+// ★★★ IFTY STEP131 2026-10-19：フォルダ内同一語句の確認 + 編集後のスクロール位置維持 ★★★
 // ★★★ IFTY STEP129 2026-10-15：CHAT GAME SOLO ALLIA + PAGE HISTORY ARROWS ★★★
 // ★★★ IFTY STEP127: CHAT GAME (2026-10-14) ★★★
 // ★★★ IFTY STEP126 2026-10-14：LINE FOLDER LINKS / CLASS SHARED FOLDERS / OWNER-EDITOR-MEMBER ★★★
@@ -2824,6 +2825,7 @@ function iftyWordMatchesSearch(word, query) {
   if (Array.isArray(word.meanings)) meanings.push(...word.meanings);
   else if (word.meanings) meanings.push(word.meanings);
   if (word.meaning) meanings.push(word.meaning);
+  if (Array.isArray(word.aliases)) meanings.push(...word.aliases);
   if (word.quizAnswers && Array.isArray(word.quizAnswers.jp)) meanings.push(...word.quizAnswers.jp);
 
   return meanings.some(value => normalizeIftyVocabSearchText(value).includes(q));
@@ -4480,6 +4482,48 @@ function getIftyHomeStats() {
   };
 }
 
+
+// STEP132 viewport position of the underlying page. Modal inner scrolling is deliberately ignored.
+let ifty132EditorContext = null;
+function ifty132RememberViewport() {
+  const y = Number(window.scrollY || document.scrollingElement?.scrollTop || 0);
+  ifty132EditorContext = { y, at: Date.now(), page: iftyPortalPage, subject: currentIftySubject };
+}
+function ifty132EditorY(fallback) {
+  return ifty132EditorContext && Date.now()-ifty132EditorContext.at<120000
+    ? Math.max(0, ifty132EditorContext.y) : Math.max(0, Number(fallback)||0);
+}
+function ifty132RestoreEditorViewport() {
+  const ctx=ifty132EditorContext;
+  if (!ctx) return;
+  const pageNow=iftyPortalPage;
+  if (ctx.page!==pageNow || ctx.subject!==currentIftySubject) { ifty132EditorContext=null;return; }
+  const target=ctx.y;
+  const restore=()=>{
+    if (iftyPortalPage!==ctx.page || currentIftySubject!==ctx.subject) return;
+    try { window.scrollTo({left:0,top:target,behavior:'instant'}); }
+    catch(_){window.scrollTo(0,target);}
+  };
+  restore();requestAnimationFrame(restore);
+  requestAnimationFrame(()=>requestAnimationFrame(restore));
+  setTimeout(restore,60);setTimeout(restore,220);
+  ifty132EditorContext=null;
+}
+// Capture before onClick opens modal; and after close. Only recognized editor dialogs.
+const IFTY132_EDITOR_IDS=new Set(['iftySocialItemModal','iftyScienceItemModal','iftyAncientEditorModal','iftyKanbunEditorModal','iftyKanjiEditModal','editWordModal']);
+document.addEventListener('click',e=>{
+  const target=e.target?.closest?.('[onclick]');
+  const action=String(target?.getAttribute('onclick')||'');
+  if (/^(?:openIfty(?:Social|Science|Ancient|Kanbun)ItemEditor|editIftyKanjiItem|openEditWordModal|addBlankWordToFolder)\s*\(/.test(action)) {
+    ifty132RememberViewport();
+  }
+  if (/^(?:closeIfty(?:Social|Science)ItemEditor|saveIfty(?:Social|Science|Ancient|Kanbun)ItemEditor|saveIftyKanjiItemEdit|closeEditWordModal|saveEditedWord)\s*\(/.test(action) || (action.includes('EditorModal') && action.includes('.remove()'))) {
+    if (ifty132EditorContext && /^save/.test(action)) { window.__iftyPreserveHubViewport=true; window.__iftyPreserveHubViewportY=ifty132EditorContext.y; }
+    setTimeout(ifty132RestoreEditorViewport,0);
+    setTimeout(()=>{if(window.__iftyPreserveHubViewport && !ifty132EditorContext){window.__iftyPreserveHubViewport=false;window.__iftyPreserveHubViewportY=null;}},320);
+  }
+},true);
+
 function showIftyHubContent(html, pageName) {
   if (String(pageName || '') !== 'settings') stopIftyAdminUsageAutoRefresh();
   if (typeof window.closePracticeModal === 'function') window.closePracticeModal();
@@ -4499,15 +4543,16 @@ function showIftyHubContent(html, pageName) {
   if (aiChatPage) aiChatPage.style.display = 'none';
   if (btn) btn.textContent = '💬';
 
-  const preserveHubViewport = !!window.__iftyPreserveHubViewport;
+  const preserveHubViewport = !!window.__iftyPreserveHubViewport || !!(ifty132EditorContext && ifty132EditorContext.page === (pageName || 'home') && ifty132EditorContext.subject === currentIftySubject);
   const preservedHubY = Number.isFinite(Number(window.__iftyPreserveHubViewportY))
     ? Number(window.__iftyPreserveHubViewportY)
-    : Number(window.scrollY || document.scrollingElement?.scrollTop || 0);
+    : ifty132EditorY(Number(window.scrollY || document.scrollingElement?.scrollTop || 0));
 
   page.innerHTML = html;
   page.style.display = 'block';
   if (typeof window.ifty129NavRecord === 'function') window.ifty129NavRecord(pageName || 'home', html);
   if (typeof enhanceIftyStep114Ui === 'function') enhanceIftyStep114Ui();
+  requestAnimationFrame(ifty132UpdateSelectionDock);
 
   if (preserveHubViewport) {
     const restoreHubViewport = () => {
@@ -4807,6 +4852,7 @@ function normalizeIftyPronunciationItem(value, index = 0) {
   return {
     id: String(source.id || makeId('pronitem')),
     text,
+    aliases: ifty132Aliases(source.aliases),
     languageCode: code,
     languageLabel: String(source.languageLabel || source.language || inferred.label || '').trim().slice(0, 60),
     sourceType: String(source.sourceType || 'MANUAL').toUpperCase() === 'LANGUAGES' ? 'LANGUAGES' : 'MANUAL',
@@ -4952,6 +4998,7 @@ function renderIftyPronunciationItemCard(folder, item) {
             ${item.sourceKind === 'EXAMPLE' ? '<span style="padding:2px 7px;border-radius:999px;background:#f3e8ff;color:#7e22ce;font-size:.67em;font-weight:900;">例文</span>' : ''}
             ${score ? `<span style="padding:2px 7px;border-radius:999px;background:${score.bg};color:${score.fg};font-size:.67em;font-weight:900;">前回 ${last.overallScore} / 100</span>` : ''}
           </div>
+          ${ifty132AliasInfo(item)}
           ${item.guide ? (guideOpen ? '' : renderIftyPronunciationGuide(item, { compact:true })) : '<div style="margin-top:6px;color:#64748b;font-size:.74em;line-height:1.45;">録音前に「口・舌の使い方」を開くと、発音記号・強勢・口・舌・リズムを確認できます。</div>'}
           ${last && last.summary ? `<div style="margin-top:5px;color:#64748b;font-size:.76em;line-height:1.45;">前回：${escapeHtml(last.summary)}</div>` : ''}
         </div>
@@ -4959,12 +5006,23 @@ function renderIftyPronunciationItemCard(folder, item) {
           <button type="button" onclick="speakIftyPronunciationItem('${safeFolder}','${safeItem}')" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:8px 10px;font-weight:900;cursor:pointer;">🔊 聞く</button>
           <button type="button" ${guidePending ? 'disabled' : ''} onclick="toggleIftyPronunciationGuide('${safeFolder}','${safeItem}')" style="border:1px solid #a78bfa;background:#faf5ff;color:#5b21b6;border-radius:8px;padding:8px 10px;font-weight:900;cursor:${guidePending?'wait':'pointer'};">${guidePending ? '生成中…' : (item.guide ? (guideOpen ? '口・舌を閉じる' : '👄 口・舌の使い方') : '👄 発音ポイント')}</button>
           <button type="button" onclick="openIftyPronunciationPractice('${safeFolder}','${safeItem}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:8px 10px;font-weight:900;cursor:pointer;">🎙 練習</button>
+          <button type="button" onclick="ifty132EditPronunciationAliases('${safeFolder}','${safeItem}')" style="border:1px solid #94a3b8;background:#f8fafc;color:#334155;border-radius:8px;padding:8px;font-weight:900;">別名</button>
           <button type="button" onclick="deleteIftyPronunciationItem('${safeFolder}','${safeItem}')" style="border:none;background:#f1f5f9;color:#be123c;border-radius:8px;padding:8px 9px;font-weight:900;cursor:pointer;">削除</button>
         </div>
       </div>
       ${item.guide && guideOpen ? renderIftyPronunciationGuide(item) : ''}
     </div>`;
 }
+
+
+window.ifty132EditPronunciationAliases = function(folderId,itemId) {
+  const ref=getIftyPronunciationItem(folderId,itemId);if(!ref)return;
+  const next=prompt('別名・別表記（改行区切り）',ifty132Aliases(ref.item.aliases).join('\n'));
+  if(next===null)return;
+  recordUndoState('発音教材の別名編集');ref.item.aliases=ifty132Aliases(next);ref.item.updatedAt=Date.now();savePracticeData();
+  window.__iftyPreserveHubViewport=true;window.__iftyPreserveHubViewportY=window.scrollY;
+  window.openIftyPronunciation({preserveScroll:true});
+};
 
 function renderIftyPronunciationFolder(folder) {
   const safe = String(folder.id).replace(/'/g, "\\'");
@@ -5092,6 +5150,7 @@ window.addIftyPronunciationItem = function(folderId) {
   if (!text) return alert('練習する語句・英文を入力してください。');
   const inferred = inferIftyLanguageFromText(text);
   const code = normalizeIftyLanguageCode(String(langInput?.value || '').trim()) || inferred.code;
+  if (!ifty131ConfirmDuplicate(folder, text, 'text')) return;
   recordUndoState('発音教材追加');
   folder.items.push(normalizeIftyPronunciationItem({ text, languageCode: code, languageLabel: inferred.label, sourceType: 'MANUAL' }));
   savePracticeData();
@@ -5449,6 +5508,7 @@ function normalizeIftyYearEntry(value) {
   const year = Math.max(1, Math.abs(Number(source.year) || 0));
   return {
     ...source,
+    aliases: ifty132Aliases(source.aliases),
     id: String(source.id || makeId('yearentry')),
     folderId: String(source.folderId || ''),
     order: Number.isFinite(Number(source.order)) ? Number(source.order) : null,
@@ -5602,6 +5662,7 @@ function renderIftyYearEntryCard(entry, index, total) {
       <div class="ifty-year-head">
         <div>
           <div class="ifty-year-title">${escapeHtml(entry.yearLabel)}</div>
+          ${ifty132AliasInfo(entry)}
           ${entry.periodLabel ? `<div class="ifty-year-period">${escapeHtml(entry.periodLabel)}</div>` : ''}
         </div>
         <div class="ifty-year-actions">
@@ -5609,6 +5670,7 @@ function renderIftyYearEntryCard(entry, index, total) {
           <button type="button" ${index >= total - 1 ? 'disabled' : ''} onclick="moveIftyYearEntry('${escapeHtml(entry.id)}',1)" title="下へ">↓</button>
           <button id="iftyYearCollapseBtn_${escapeHtml(entry.id)}" class="ifty-year-collapse" type="button" aria-expanded="${collapsed ? 'false' : 'true'}" onclick="toggleIftyYearEntryCollapse('${escapeHtml(entry.id)}')">${collapsed ? '▼ 展開' : '▲ 折りたたむ'}</button>
           <button type="button" onclick="regenerateIftyYearEntry('${escapeHtml(entry.id)}')" style="background:#f59e0b;color:#111827;">再生成</button>
+          <button type="button" onclick="ifty132EditYearAliases('${escapeHtml(entry.id)}')">別名</button>
           <button type="button" onclick="deleteIftyYearEntry('${escapeHtml(entry.id)}')" style="background:#ef4444;color:white;">削除</button>
         </div>
       </div>
@@ -5667,6 +5729,7 @@ function renderIftyYearEntries() {
         <div class="ifty-year-folder-actions">
           <button type="button" ${folderIndex <= 0 ? 'disabled' : ''} onclick="moveIftyYearFolder('${escapeHtml(folder.id)}',-1)" style="background:#e2e8f0;color:#334155;">↑</button>
           <button type="button" ${folderIndex >= folders.length - 1 ? 'disabled' : ''} onclick="moveIftyYearFolder('${escapeHtml(folder.id)}',1)" style="background:#e2e8f0;color:#334155;">↓</button>
+          ${ifty132RegenerateFolderButton('YEARS',folder.id,entries.length)}
           <button type="button" onclick="renameIftyYearFolder('${escapeHtml(folder.id)}')" style="background:#f59e0b;color:#111827;">名前変更</button>
           <button type="button" onclick="deleteIftyYearFolder('${escapeHtml(folder.id)}')" style="background:#ef4444;color:white;">削除</button>
         </div>
@@ -5861,6 +5924,7 @@ window.lookupIftyYear = async function(forcedEra = '', forcedYear = null, forced
       year: parsed.year,
       yearLabel: data.yearLabel || requestLabel,
       mnemonic: existing?.mnemonic || data.mnemonic || '',
+      aliases: existing?.aliases || [],
       source: 'ALLIA',
       createdAt: existing?.createdAt || Date.now(),
       updatedAt: Date.now()
@@ -5905,6 +5969,16 @@ window.deleteIftyYearEntry = function(entryId) {
   entries.splice(index, 1);
   savePracticeData();
   renderIftyYearEntries();
+};
+
+
+window.ifty132EditYearAliases = function(entryId) {
+  const entry=getIftyYearEntries().find(x=>String(x.id)===String(entryId));if(!entry)return;
+  const v=prompt(`${entry.yearLabel}の別名・別表記（改行区切り）`,ifty132Aliases(entry.aliases).join('\n'));
+  if(v===null)return;
+  recordUndoState('年号の別名編集');entry.aliases=ifty132Aliases(v);entry.updatedAt=Date.now();
+  const y=window.scrollY;savePracticeData();renderIftyYearEntries();
+  requestAnimationFrame(()=>window.scrollTo(0,y));
 };
 
 window.editIftyYearMnemonic = function(entryId) {
@@ -5980,6 +6054,27 @@ function buildIftySocialLegacyMemoryText(value) {
   return sentences.join(' ').trim();
 }
 
+
+// IFTY STEP132：別名・別表記は既存の名称と独立保存する。
+function ifty132Aliases(value) {
+  const values = Array.isArray(value) ? value : String(value || '').split(/[\n、,，;；]+/);
+  const known = new Set();
+  return values.map(x => String(x || '').trim()).filter(x => {
+    const key = x.normalize('NFKC').toLowerCase();
+    if (!key || known.has(key)) return false;
+    known.add(key);return true;
+  }).slice(0, 24);
+}
+function ifty132AliasField(item, fieldId) {
+  return `<label style="display:block;margin:9px 0;color:#334155;font-weight:800;font-size:.85em;">別名・別表記（改行または読点区切り）
+    <textarea id="${fieldId}" rows="2" placeholder="例：ムセイオン、Mouseion" style="display:block;width:100%;box-sizing:border-box;padding:9px;border:1px solid #94a3b8;border-radius:7px;margin-top:5px;font:inherit;resize:vertical;">${escapeHtml(ifty132Aliases(item?.aliases).join('\n'))}</textarea>
+  </label>`;
+}
+function ifty132AliasInfo(item) {
+  const list = ifty132Aliases(item?.aliases);
+  return list.length ? `<div style="font-size:.82em;color:#475569;margin-top:4px;overflow-wrap:anywhere;"><b>別名：</b>${list.map(escapeHtml).join(' / ')}</div>` : '';
+}
+
 function normalizeIftySocialItem(value) {
   if (!value || typeof value !== 'object') return null;
   const text = field => String(value[field] || '').trim();
@@ -5992,6 +6087,7 @@ function normalizeIftySocialItem(value) {
     normalizedKeyPoints = normalizedKeyPoints.map(point => String(point).replace(/969年/g, '866年'));
   }
   return {
+    aliases: ifty132Aliases(value.aliases),
     id: value.id || makeId('socialitem'),
     topic: normalizedTopic,
     title: normalizedTitle,
@@ -6086,6 +6182,7 @@ function buildIftySocialSearchText(folder, item) {
     folder?.name,
     item?.title,
     item?.topic,
+    ...(Array.isArray(item?.aliases) ? item.aliases : []),
     item?.memoryText,
     item?.workTitle,
     item?.imageFocus,
@@ -6110,7 +6207,7 @@ function renderIftySocialItemCard(folder, item) {
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
           ${item.imageData ? '<span style="font-size:.68em;color:#7e22ce;font-weight:900;">IMAGE</span>' : ''}
           ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
-        </div>
+        </div>${ifty132AliasInfo(item)}
       </div>
       <div style="display:flex;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end;">
         <button id="iftyRegenSocial_${item.id}" type="button" onclick="regenerateIftySocialItem('${folder.id}','${item.id}')" title="事実関係・意味を最初から慎重に再検討する" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">再生成</button>
@@ -6351,9 +6448,8 @@ function renderIftySocialFolder(folder) {
         <div style="font-size:.72em;color:#64748b;margin-top:5px;">このフォルダでは複数科目を同時選択できます。ALLIA生成時には選択中の科目だけをコンテキストとして送ります。</div>
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
+${ifty132RegenerateFolderButton('SOCIAL STUDIES',folder.id,(folder.items||[]).length)}
         <button type="button" onclick="renameIftySocialFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">名前変更</button>
-        <button type="button" onclick="openIftySubjectSelectedMoveDialog('SOCIAL STUDIES')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">選択中を移動</button>
-        <button type="button" onclick="bulkDeleteIftySubjectSelectedItems('SOCIAL STUDIES')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">選択中を削除</button>
         <button type="button" onclick="deleteIftySocialFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">フォルダ削除</button>
       </div>
     </div>
@@ -6380,7 +6476,7 @@ function renderIftySocialFolder(folder) {
 
 function renderIftySocialStudiesPage(options = {}) {
   const preserveScroll = !!options.preserveScroll;
-  const preservedScrollY = preserveScroll ? window.scrollY : 0;
+  const preservedScrollY = preserveScroll ? ifty132EditorY(window.scrollY) : 0;
   currentIftySubject = 'SOCIAL STUDIES';
   const module = getIftySocialModule();
   showIftyHubContent(`
@@ -6632,6 +6728,7 @@ window.generateIftySocialItem = async function(folderId, options = {}) {
     }
     return;
   }
+  if (topic && !ifty131ConfirmDuplicate(folder, topic, 'topic')) return;
   if (!ensureIftyOnline('社会データ生成')) return;
 
   // 送信時点の科目設定を固定する。生成待ちの間にフォルダ設定が変わっても、
@@ -6830,6 +6927,7 @@ window.openIftySocialItemEditor = function(folderId, itemId) {
     </div>
     ${field('iftySocialEditTitle','タイトル',item.title)}
     ${field('iftySocialEditMemoryText','暗記用説明文（Who / When / Where / What / Why / Howを、必要な範囲で自然な文章として含める）',item.memoryText,7)}
+    ${ifty132AliasField(item, 'ifty132SocialAliases')}
     ${field('iftySocialEditKeyPoints','重要ポイント（1行1項目）',item.keyPoints.join('\n'),4)}
     <div style="margin-top:12px;padding:10px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:9px;">
       <div style="font-size:.8em;font-weight:900;color:#6b21a8;">画像資産</div>
@@ -6857,7 +6955,7 @@ window.openIftySocialItemEditor = function(folderId, itemId) {
     </div>`;
   modal.style.display = 'flex';
   renderIftySocialEditorImagePreview();
-  setTimeout(() => document.getElementById('iftySocialEditTitle')?.focus(), 0);
+  setTimeout(() => document.getElementById('iftySocialEditTitle')?.focus({preventScroll:true}), 0);
 };
 
 window.handleIftySocialEditorImageSelect = async function(event) {
@@ -6896,6 +6994,7 @@ window.closeIftySocialItemEditor = function() {
   const modal = document.getElementById('iftySocialItemModal');
   if (modal) modal.style.display = 'none';
   iftySocialEditorImageDraft = null;
+  ifty132RestoreEditorViewport();
 };
 
 window.saveIftySocialItemEditor = function(folderId, itemId) {
@@ -6905,6 +7004,7 @@ window.saveIftySocialItemEditor = function(folderId, itemId) {
   recordUndoState('社会項目編集');
   const val = id => String(document.getElementById(id)?.value || '').trim();
   item.title = val('iftySocialEditTitle');
+  item.aliases = ifty132Aliases(val('ifty132SocialAliases'));
   item.memoryText = val('iftySocialEditMemoryText');
   item.keyPoints = val('iftySocialEditKeyPoints').split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 12);
   item.imageData = normalizeIftySocialImageData(iftySocialEditorImageDraft?.imageData);
@@ -6921,7 +7021,7 @@ window.saveIftySocialItemEditor = function(folderId, itemId) {
   item.updatedAt = Date.now();
   savePracticeData();
   window.closeIftySocialItemEditor();
-  renderIftySocialStudiesPage();
+  renderIftySocialStudiesPage({preserveScroll:true});
 };
 
 window.deleteIftySocialItem = function(folderId, itemId) {
@@ -7979,6 +8079,7 @@ function normalizeIftyScienceItem(value) {
   if (!value || typeof value !== 'object') return null;
   const text = field => String(value[field] || '').trim();
   return {
+    aliases: ifty132Aliases(value.aliases),
     id: value.id || makeId('scienceitem'),
     topic: text('topic'),
     title: text('title') || text('topic'),
@@ -8189,6 +8290,7 @@ function buildIftyScienceSearchText(folder, item) {
     folder?.name,
     item?.title,
     item?.topic,
+    ...(Array.isArray(item?.aliases) ? item.aliases : []),
     item?.memoryText,
     item?.formula,
     item?.unit,
@@ -8216,7 +8318,7 @@ function renderIftyScienceItemCard(folder, item) {
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
           ${item.imageData ? '<span style="font-size:.68em;color:#7e22ce;font-weight:900;">IMAGE</span>' : ''}
           ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
-        </div>
+        </div>${ifty132AliasInfo(item)}
       </div>
       <div style="display:flex;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end;">
         <button id="iftyRegenScience_${item.id}" type="button" onclick="regenerateIftyScienceItem('${folder.id}','${item.id}')" title="意味・公式・単位・条件を最初から慎重に再検討する" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">再生成</button>
@@ -8468,9 +8570,8 @@ function renderIftyScienceFolder(folder) {
         <div style="font-size:.72em;color:#64748b;margin-top:5px;">このフォルダでは複数科目を同時選択できます。ALLIA生成時には選択中の科目だけをコンテキストとして送ります。</div>
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
+${ifty132RegenerateFolderButton('SCIENCE',folder.id,(folder.items||[]).length)}
         <button type="button" onclick="renameIftyScienceFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">名前変更</button>
-        <button type="button" onclick="openIftySubjectSelectedMoveDialog('SCIENCE')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">選択中を移動</button>
-        <button type="button" onclick="bulkDeleteIftySubjectSelectedItems('SCIENCE')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">選択中を削除</button>
         <button type="button" onclick="deleteIftyScienceFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">フォルダ削除</button>
       </div>
     </div>
@@ -8497,7 +8598,7 @@ function renderIftyScienceFolder(folder) {
 
 function renderIftySciencePage(options = {}) {
   const preserveScroll = !!options.preserveScroll;
-  const preservedScrollY = preserveScroll ? window.scrollY : 0;
+  const preservedScrollY = preserveScroll ? ifty132EditorY(window.scrollY) : 0;
   currentIftySubject = 'SCIENCE';
   const module = getIftyScienceModule();
   showIftyHubContent(`
@@ -8750,6 +8851,7 @@ window.generateIftyScienceItem = async function(folderId, options = {}) {
     }
     return;
   }
+  if (topic && !ifty131ConfirmDuplicate(folder, topic, 'topic')) return;
   if (!ensureIftyOnline('理科データ生成')) return;
 
   // 送信時点の科目設定を固定する。生成待ちの間にフォルダ設定が変わっても、
@@ -8948,6 +9050,7 @@ window.openIftyScienceItemEditor = function(folderId, itemId) {
     ${field('iftyScienceEditFormula','公式・関係式',item.formula)}
     ${field('iftyScienceEditUnit','単位',item.unit)}
     ${field('iftyScienceEditConditions','条件・適用範囲',item.conditions,3)}
+    ${ifty132AliasField(item, 'ifty132ScienceAliases')}
     ${field('iftyScienceEditKeyPoints','重要ポイント（1行1項目）',item.keyPoints.join('\n'),4)}
     <div style="margin-top:12px;padding:10px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:9px;">
       <div style="font-size:.8em;font-weight:900;color:#6b21a8;">画像資産</div>
@@ -8975,7 +9078,7 @@ window.openIftyScienceItemEditor = function(folderId, itemId) {
     </div>`;
   modal.style.display = 'flex';
   renderIftyScienceEditorImagePreview();
-  setTimeout(() => document.getElementById('iftyScienceEditTitle')?.focus(), 0);
+  setTimeout(() => document.getElementById('iftyScienceEditTitle')?.focus({preventScroll:true}), 0);
 };
 
 window.handleIftyScienceEditorImageSelect = async function(event) {
@@ -9014,6 +9117,7 @@ window.closeIftyScienceItemEditor = function() {
   const modal = document.getElementById('iftyScienceItemModal');
   if (modal) modal.style.display = 'none';
   iftyScienceEditorImageDraft = null;
+  ifty132RestoreEditorViewport();
 };
 
 window.saveIftyScienceItemEditor = function(folderId, itemId) {
@@ -9023,6 +9127,7 @@ window.saveIftyScienceItemEditor = function(folderId, itemId) {
   recordUndoState('理科項目編集');
   const val = id => String(document.getElementById(id)?.value || '').trim();
   item.title = val('iftyScienceEditTitle');
+  item.aliases = ifty132Aliases(val('ifty132ScienceAliases'));
   item.memoryText = val('iftyScienceEditMemoryText');
   item.formula = val('iftyScienceEditFormula');
   item.unit = val('iftyScienceEditUnit');
@@ -9042,7 +9147,7 @@ window.saveIftyScienceItemEditor = function(folderId, itemId) {
   item.updatedAt = Date.now();
   savePracticeData();
   window.closeIftyScienceItemEditor();
-  renderIftySciencePage();
+  renderIftySciencePage({preserveScroll:true});
 };
 
 window.deleteIftyScienceItem = function(folderId, itemId) {
@@ -10068,7 +10173,7 @@ function renderIftyAncientItemCard(folder, item) {
           ${renderIftyLearningLevelInline('ANCIENT', item.id, item.level)}
           ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
           ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
-        </div>
+        </div>${ifty132AliasInfo(item)}
       </div>
 
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
@@ -10189,10 +10294,9 @@ function renderIftyAncientFolder(folder, folderIndex) {
         <button id="iftyAncientFolderTitle_${folder.id}" type="button" onclick="toggleIftyAncientFolderCollapse('${folder.id}')" style="border:none;background:transparent;padding:0;cursor:pointer;font-size:1.02em;font-weight:900;color:#0f172a;text-align:left;">${folder.collapsed ? '▶' : '▼'} 📁 ${escapeHtml(folder.name)} (${items.length}語)</button>
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
-        <button type="button" onclick="openIftySubjectSelectedMoveDialog('ANCIENT')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">選択中を移動</button>
-        <button type="button" onclick="bulkDeleteIftySubjectSelectedItems('ANCIENT')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">選択中を削除</button>
         <button type="button" onclick="moveIftyAncientFolder(${folderIndex},-1)" ${folderIndex <= 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">↑</button>
         <button type="button" onclick="moveIftyAncientFolder(${folderIndex},1)" ${folderIndex >= getIftyAncientModule().folders.length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">↓</button>
+${ifty132RegenerateFolderButton('ANCIENT',folder.id,(folder.items||[]).length)}
         <button type="button" onclick="renameIftyAncientFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">✏️ 名前変更</button>
         <button type="button" onclick="deleteIftyAncientFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">削除</button>
       </div>
@@ -10443,6 +10547,7 @@ window.generateIftyAncientWord = async function(folderId, options = {}) {
     input.focus();
     return;
   }
+  if (!ifty131ConfirmDuplicate(folder, word, 'word')) return;
   if (!ensureIftyOnline('古文単語生成')) return;
 
   if (options?.skipTermCheck !== true) {
@@ -10532,6 +10637,7 @@ window.openIftyAncientItemEditor = function(folderId, itemId) {
     </div>
     <div style="display:grid;gap:10px;margin-top:12px;">
       ${field('iftyAncientEditWord','単語',item.word)}
+      ${ifty132AliasField(item, 'ifty132AncientAliases')}
       ${field('iftyAncientEditReading','読み',item.reading)}
       ${field('iftyAncientEditPos','品詞',item.partOfSpeech)}
       ${field('iftyAncientEditMeanings','重要語義（1行1つ）',(item.meanings || []).join('\n'),4)}
@@ -10578,6 +10684,7 @@ window.saveIftyAncientItemEditor = function(folderId, itemId) {
   recordUndoState('古文単語編集');
   item.word = word;
   item.title = word;
+  item.aliases = ifty132Aliases(value('ifty132AncientAliases'));
   item.reading = value('iftyAncientEditReading');
   item.partOfSpeech = value('iftyAncientEditPos');
   item.meanings = value('iftyAncientEditMeanings').split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 8);
@@ -10894,6 +11001,7 @@ function normalizeIftyKanbunItem(value) {
     ? normalizeIftyKanbunOkurigana(value.okurigana, originalText)
     : convertIftyKanbunAnnotationsToOkurigana(value.annotations, originalText);
   return {
+    aliases: ifty132Aliases(value.aliases),
     id: value.id || makeId('kanbunitem'),
     title: String(value.title || originalText.slice(0, 36)).trim() || originalText.slice(0, 36),
     originalText,
@@ -10942,7 +11050,8 @@ function countIftyKanbunItems() {
 }
 
 function buildIftyKanbunSearchText(folder, item) {
-  return [folder?.name, item?.title, item?.originalText, item?.kundoku, item?.translation,
+  return [folder?.name,     item?.title,
+    ...(Array.isArray(item?.aliases) ? item.aliases : []), item?.originalText, item?.kundoku, item?.translation,
     ...(Array.isArray(item?.grammarPoints) ? item.grammarPoints : []),
     ...(Array.isArray(item?.examples) ? item.examples.flatMap(ex => [ex?.original, ex?.kundoku, ex?.translation, ex?.point]) : []),
     ...(Array.isArray(item?.keyPoints) ? item.keyPoints : [])]
@@ -11021,7 +11130,7 @@ function renderIftyKanbunItemCard(folder, item) {
           ${renderIftyLearningLevelInline('KANBUN', item.id, item.level)}
           ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
           ${isIftySubjectWeakItem(item) ? '<span style="font-size:.68em;color:#be123c;font-weight:900;background:#fff1f2;border-radius:999px;padding:2px 6px;">🎯 苦手</span>' : ''}
-        </div>
+        </div>${ifty132AliasInfo(item)}
         ${study && study.total ? `<div style="margin-top:4px;color:#64748b;font-size:.72em;">学習 ${study.total}回 ・ 正解 ${study.correct} ・ 不正解 ${study.wrong} ・ 正答率 ${Math.round(study.correct / study.total * 100)}%</div>` : ''}
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;max-width:100%;">
@@ -11516,6 +11625,7 @@ function renderIftyKanbunFolder(folder, folderIndex) {
         <button type="button" onclick="toggleIftySubjectFolderItemsSelection('KANBUN','${folder.id}')" style="border:none;background:${allSelected ? '#dbeafe' : '#f1f5f9'};color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">${allSelected ? '選択解除' : '全選択'}</button>
         <button type="button" onclick="moveIftyKanbunFolder(${folderIndex},-1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;cursor:pointer;">↑</button>
         <button type="button" onclick="moveIftyKanbunFolder(${folderIndex},1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;cursor:pointer;">↓</button>
+${ifty132RegenerateFolderButton('KANBUN',folder.id,(folder.items||[]).length)}
         <button type="button" onclick="renameIftyKanbunFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;cursor:pointer;">✏️ 名前変更</button>
         <button type="button" onclick="deleteIftyKanbunFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 8px;cursor:pointer;">削除</button>
       </div>
@@ -11638,6 +11748,7 @@ window.generateIftyKanbunItem = async function(folderId, options = {}) {
   if (!folder || !input) return;
   const originalText = String(options?.forcedText ?? input.value ?? '').trim();
   if (!originalText) { input.focus(); return; }
+  if (!ifty131ConfirmDuplicate(folder, originalText, 'originalText')) return;
   if (!ensureIftyOnline('漢文生成')) return;
 
   if (options?.skipTermCheck !== true) {
@@ -11735,14 +11846,14 @@ window.openIftyKanbunItemEditor = function(folderId,itemId){
     const tools=assist?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;"><button type="button" onclick="openIftyKanbunInputHandwriting('${id}','${folderId}')" style="border:none;background:#0f766e;color:white;border-radius:6px;padding:6px 8px;font-size:.76em;font-weight:900;">✍️ 手書き</button>${id==='iftyKanbunEditOriginal'?`<button type="button" onclick="openIftyKanbunItemEditorKunten('${folderId}','${itemId}')" style="border:none;background:#b91c1c;color:white;border-radius:6px;padding:6px 8px;font-size:.76em;font-weight:900;">訓点を編集</button>`:`<button type="button" onclick="openIftyKanbunReturnMarkInputPalette('${id}')" style="border:none;background:#b91c1c;color:white;border-radius:6px;padding:6px 8px;font-size:.76em;font-weight:900;">返点記号を入力</button>`}</div>${id==='iftyKanbunEditOriginal'?renderIftyKanbunPatternQuickButtons(id):''}`:'';
     return `<div><label style="font-size:.78em;font-weight:900;color:#334155;">${label}</label>${control}${tools}</div>`;
   };
-  modal.innerHTML=`<div style="width:min(720px,100%);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><h2 style="margin:0;font-size:1.2em;">漢文を編集</h2><button type="button" onclick="document.getElementById('iftyKanbunEditorModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="display:grid;gap:10px;margin-top:12px;">${field('iftyKanbunEditTitle','題名',item.title)}${field('iftyKanbunEditOriginal','原文',item.originalText,4,true)}${field('iftyKanbunEditKundoku','書き下し文',item.kundoku,4,true)}${field('iftyKanbunEditTranslation','現代語訳',item.translation,4,true)}${field('iftyKanbunEditGrammar','句法・文法（1行1つ）',(item.grammarPoints||[]).join('\n'),4,true)}${field('iftyKanbunEditExamples','例文（1行＝原文｜書き下し｜現代語訳｜ポイント）',(item.examples||[]).map(ex=>[ex.original||'',ex.kundoku||'',ex.translation||'',ex.point||''].join('｜')).join('\n'),4,true)}${field('iftyKanbunEditPoints','重要ポイント（1行1つ）',(item.keyPoints||[]).join('\n'),4,true)}<div style="font-size:.78em;color:#64748b;line-height:1.5;">原文の返点・送り仮名は「訓点を編集」で字ごとに設定し、原文の文字列とは別データで保存します。句法説明などでは「返点記号を入力」で記号そのものを挿入できます。</div></div><button type="button" onclick="saveIftyKanbunItemEditor('${folderId}','${itemId}')" style="width:100%;margin-top:14px;border:none;background:#0284c7;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">保存</button></div>`;
+  modal.innerHTML=`<div style="width:min(720px,100%);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><h2 style="margin:0;font-size:1.2em;">漢文を編集</h2><button type="button" onclick="document.getElementById('iftyKanbunEditorModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="display:grid;gap:10px;margin-top:12px;">${field('iftyKanbunEditTitle','題名',item.title)}${ifty132AliasField(item, 'ifty132KanbunAliases')}${field('iftyKanbunEditOriginal','原文',item.originalText,4,true)}${field('iftyKanbunEditKundoku','書き下し文',item.kundoku,4,true)}${field('iftyKanbunEditTranslation','現代語訳',item.translation,4,true)}${field('iftyKanbunEditGrammar','句法・文法（1行1つ）',(item.grammarPoints||[]).join('\n'),4,true)}${field('iftyKanbunEditExamples','例文（1行＝原文｜書き下し｜現代語訳｜ポイント）',(item.examples||[]).map(ex=>[ex.original||'',ex.kundoku||'',ex.translation||'',ex.point||''].join('｜')).join('\n'),4,true)}${field('iftyKanbunEditPoints','重要ポイント（1行1つ）',(item.keyPoints||[]).join('\n'),4,true)}<div style="font-size:.78em;color:#64748b;line-height:1.5;">原文の返点・送り仮名は「訓点を編集」で字ごとに設定し、原文の文字列とは別データで保存します。句法説明などでは「返点記号を入力」で記号そのものを挿入できます。</div></div><button type="button" onclick="saveIftyKanbunItemEditor('${folderId}','${itemId}')" style="width:100%;margin-top:14px;border:none;background:#0284c7;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">保存</button></div>`;
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});document.body.appendChild(modal);
 };
 
 window.saveIftyKanbunItemEditor = function(folderId,itemId){
   const ref=getIftyKanbunItemById(itemId);if(!ref?.item||String(ref.folder.id)!==String(folderId))return;const item=ref.item;const value=id=>String(document.getElementById(id)?.value||'').trim();const original=value('iftyKanbunEditOriginal');if(!original){alert('原文を入力してください。');return;}
   const previousOriginal=String(item.originalText||'');
-  recordUndoState('漢文編集');item.title=value('iftyKanbunEditTitle')||original.slice(0,36);item.originalText=original;item.kundoku=value('iftyKanbunEditKundoku');item.translation=value('iftyKanbunEditTranslation');
+  recordUndoState('漢文編集');item.aliases=ifty132Aliases(value('ifty132KanbunAliases'));item.title=value('iftyKanbunEditTitle')||original.slice(0,36);item.originalText=original;item.kundoku=value('iftyKanbunEditKundoku');item.translation=value('iftyKanbunEditTranslation');
   const draft=iftyKanbunItemEditorKuntenDraft;
   if(draft&&String(draft.itemId)===String(itemId)&&String(draft.text||'')===original){
     item.returnMarks=(draft.marks||[]).map((mark,index)=>normalizeIftyKanbunMark(mark)?{index,mark:normalizeIftyKanbunMark(mark)}:null).filter(Boolean);
@@ -15467,6 +15578,7 @@ function normalizeIftyKanjiItem(value) {
   if (!value || typeof value !== 'object') return null;
   const term = String(value.term || value.title || value.word || '').trim();
   return {
+    aliases: ifty132Aliases(value.aliases),
     id:String(value.id || makeId('kanjiitem')),
     term,
     title:term,
@@ -15511,7 +15623,7 @@ function getIftyKanjiPracticeModeMeta(mode){
 function iftyKanjiItemMatchesSearch(item,query){
   const q=String(query||'').normalize('NFKC').trim().toLowerCase();
   if(!q)return true;
-  return [item.term,...(item.readings||[]),...(item.meanings||[]),item.explanation,...(item.synonyms||[]),...(item.sameMeaning||[]),...(item.antonyms||[])].some(v=>String(v||'').normalize('NFKC').toLowerCase().includes(q));
+  return [item.term,...(item.aliases||[]),...(item.readings||[]),...(item.meanings||[]),item.explanation,...(item.synonyms||[]),...(item.sameMeaning||[]),...(item.antonyms||[])].some(v=>String(v||'').normalize('NFKC').toLowerCase().includes(q));
 }
 function renderIftyKanjiItemCard(folder,item,index){
   const study=normalizeIftySubjectStudyState(item), weak=isIftySubjectWeakItem(item);
@@ -15538,7 +15650,7 @@ function renderIftyKanjiItemCard(folder,item,index){
         <button type="button" onclick="moveIftyKanjiItem('${folder.id}','${item.id}',1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:5px 7px;">↓</button>
         <button type="button" onclick="editIftyKanjiItem('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">編集</button>
         <button type="button" onclick="deleteIftyKanjiItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">削除</button>
-      </div>
+      </div>${ifty132AliasInfo(item)}
     </div>
     ${item.meanings?.length?`<div style="margin-top:9px;color:#0f172a;line-height:1.55;"><b>意味：</b>${item.meanings.map(escapeHtml).join(' / ')}</div>`:''}
     ${item.explanation?`<div style="margin-top:7px;color:#334155;line-height:1.55;white-space:pre-wrap;">${escapeHtml(item.explanation)}</div>`:''}
@@ -15549,7 +15661,7 @@ function renderIftyKanjiItemCard(folder,item,index){
   </article>`;
 }
 function renderIftyKanjiPage(options={}){
-  const y=options.preserveScroll?window.scrollY:0;
+  const y=options.preserveScroll?ifty132EditorY(window.scrollY):0;
   currentIftySubject='KANJI';
   const module=getIftyKanjiModule();
   const globalQ=String(iftyKanjiSearchQuery||'').trim();
@@ -15572,6 +15684,7 @@ function renderIftyKanjiPage(options={}){
           <button type="button" onclick="toggleIftyKanjiFolderSelection('${folder.id}',${allSelected?'false':'true'})" style="border:none;background:${allSelected?'#10b981':'#e2e8f0'};color:${allSelected?'white':'#334155'};border-radius:6px;padding:6px 8px;font-weight:800;">${allSelected?'全解除':'全選択'}</button>
           <button type="button" onclick="moveIftyKanjiFolder(${folderIndex},-1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;">↑</button>
           <button type="button" onclick="moveIftyKanjiFolder(${folderIndex},1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;">↓</button>
+${ifty132RegenerateFolderButton('KANJI',folder.id,(folder.items||[]).length)}
           <button type="button" onclick="renameIftyKanjiFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">名前変更</button>
           <button type="button" onclick="deleteIftyKanjiFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">削除</button>
         </div>
@@ -15681,6 +15794,7 @@ window.editIftyKanjiItem=function(folderId,itemId,isNew=false){
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h2 style="margin:0;color:#581c87;">漢字・熟語を編集</h2><button type="button" onclick="document.getElementById('iftyKanjiEditModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
     <div style="display:grid;gap:9px;margin-top:12px;">
       <div><b>漢字・熟語</b><div style="display:flex;gap:6px;margin-top:4px;"><input id="iftyKanjiEditTerm" value="${escapeHtml(item.term)}" style="flex:1;min-width:0;padding:9px;border:1px solid #c4b5fd;border-radius:7px;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.15em;"><button type="button" onclick="openIftyKanbunInputHandwriting('iftyKanjiEditTerm','${folderId}','KANJI')" style="border:none;background:#0f766e;color:white;border-radius:7px;padding:9px 11px;font-weight:900;">✍️</button></div></div>
+      ${ifty132AliasField(item, 'ifty132KanjiAliases')}
       <label><b>読み（、区切り）</b><input id="iftyKanjiEditReadings" value="${list(item.readings)}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></label>
       <label><b>意味（、区切り）</b><input id="iftyKanjiEditMeanings" value="${list(item.meanings)}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></label>
       <label><b>意味説明</b><textarea id="iftyKanjiEditExplanation" rows="3" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">${escapeHtml(item.explanation)}</textarea></label>
@@ -15691,7 +15805,7 @@ window.editIftyKanjiItem=function(folderId,itemId,isNew=false){
       <label><b>補足</b><textarea id="iftyKanjiEditNotes" rows="2" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">${escapeHtml(item.notes)}</textarea></label>
       <button type="button" onclick="saveIftyKanjiItemEdit('${folderId}','${itemId}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:11px;font-weight:900;">保存</button>
     </div></div>`;
-  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});document.body.appendChild(modal);setTimeout(()=>document.getElementById('iftyKanjiEditTerm')?.focus(),0);
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});document.body.appendChild(modal);setTimeout(()=>document.getElementById('iftyKanjiEditTerm')?.focus({preventScroll:true}),0);
 };
 window.saveIftyKanjiItemEdit=function(folderId,itemId){
   const ref=getIftyKanjiItemById(itemId);if(!ref)return;
@@ -15707,6 +15821,7 @@ window.saveIftyKanjiItemEdit=function(folderId,itemId){
     examples:String(document.getElementById('iftyKanjiEditExamples')?.value||'').split(/\n+/).map(sentence=>({sentence})),
     notes:document.getElementById('iftyKanjiEditNotes')?.value||'',updatedAt:Date.now()
   }));
+  ref.item.aliases=ifty132Aliases(document.getElementById('ifty132KanjiAliases')?.value);
   savePracticeData();document.getElementById('iftyKanjiEditModal')?.remove();renderIftyKanjiPage({preserveScroll:true});
 };
 window.generateIftyKanjiItem=async function(folderId,itemId='',regenOptions={}){
@@ -15715,6 +15830,7 @@ window.generateIftyKanjiItem=async function(folderId,itemId='',regenOptions={}){
   const existing=itemId?getIftyKanjiItemById(itemId)?.item:null;
   const term=String(existing?.term||input?.value||iftyKanjiTermDrafts[folderId]||'').trim();
   if(!term){if(!itemId){keepIftyKanjiTermFocused(folderId);}return alert('漢字・熟語を入力してください。');}
+  if(!itemId && !ifty131ConfirmDuplicate(f, term, 'term'))return;
   if(!ensureIftyOnline('KANJIのALLIA生成')){if(!itemId)keepIftyKanjiTermFocused(folderId);return;}
 
   // STEP100: 入力DOMを再描画しない。Enter直後に空欄＋同じ入力欄へ残るので連続送信できる。
@@ -15898,7 +16014,7 @@ function renderIftyOthersItemCard(folder,item){
   return `<div style="margin-top:9px;border:1px solid #dbeafe;background:#fff;border-radius:10px;padding:11px;">
     <div style="display:flex;gap:8px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;">
       <label style="display:flex;gap:7px;align-items:flex-start;min-width:0;flex:1;"><input type="checkbox" ${iftyOthersSelectedItemIds.has(String(item.id))?'checked':''} onchange="toggleIftySubjectItemSelection('OTHERS','${item.id}',this.checked)" style="width:18px;height:18px;margin-top:2px;"><span style="min-width:0;"><b style="color:#0f172a;font-size:1.02em;">${escapeHtml(item.title||item.topic)}</b><span style="margin-left:6px;">${renderIftyLearningLevelInline('OTHERS', item.id, item.level)}</span>${item.tags?.length?`<span style="display:block;margin-top:4px;">${item.tags.map(t=>`<span style="display:inline-block;margin-right:4px;padding:2px 6px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.7em;font-weight:900;">${escapeHtml(t)}</span>`).join('')}</span>`:''}</span></label>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;"><button type="button" onclick="toggleIftySubjectItemReview('OTHERS','${folder.id}','${item.id}')" style="border:none;background:#f59e0b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${isIftyReviewTagged(item)?'🔁 復習中':'🔁 復習'}</button><button type="button" onclick="regenerateIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">再生成</button><button type="button" onclick="editIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">編集</button><button type="button" onclick="deleteIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">削除</button></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;"><button type="button" onclick="toggleIftySubjectItemReview('OTHERS','${folder.id}','${item.id}')" style="border:none;background:#f59e0b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${isIftyReviewTagged(item)?'🔁 復習中':'🔁 復習'}</button><button type="button" onclick="regenerateIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">再生成</button><button type="button" onclick="editIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">編集</button><button type="button" onclick="deleteIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">削除</button></div>${ifty132AliasInfo(item)}
     </div>
     ${item.memoryText?`<div style="margin-top:8px;line-height:1.6;color:#334155;white-space:pre-wrap;">${escapeHtml(item.memoryText)}</div>`:''}
     ${item.keyPoints?.length?`<div style="margin-top:7px;color:#475569;font-size:.85em;">${item.keyPoints.map(x=>`• ${escapeHtml(x)}`).join('<br>')}</div>`:''}
@@ -15906,9 +16022,9 @@ function renderIftyOthersItemCard(folder,item){
   </div>`;
 }
 function renderIftyOthersPage(options={}){
-  const y=options.preserveScroll?window.scrollY:0; currentIftySubject='OTHERS'; const module=getIftyOthersModule();
+  const y=options.preserveScroll?ifty132EditorY(window.scrollY):0; currentIftySubject='OTHERS'; const module=getIftyOthersModule();
   const rows=module.folders.map(folder=>`<section style="margin-top:14px;border:1px solid #cbd5e1;border-radius:11px;background:white;padding:13px;">
-    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start;"><div style="min-width:0;flex:1;"><button type="button" onclick="toggleIftyOthersFolder('${folder.id}')" style="border:none;background:transparent;padding:0;font-weight:900;color:#0f172a;font-size:1.02em;cursor:pointer;">${folder.collapsed?'▶':'▼'} 📁 ${escapeHtml(folder.name)} (${(folder.items||[]).length}件)</button><div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">${folder.tags.map(t=>`<span style="padding:3px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.72em;font-weight:900;">${escapeHtml(t)}</span>`).join('')||'<span style="font-size:.75em;color:#94a3b8;">教科タグ未設定</span>'}</div></div><div style="display:flex;gap:5px;flex-wrap:wrap;"><button onclick="renameIftyOthersFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">名前変更</button><button onclick="editIftyOthersFolderTags('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">教科タグ変更</button><button onclick="deleteIftyOthersFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">フォルダ削除</button></div></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start;"><div style="min-width:0;flex:1;"><button type="button" onclick="toggleIftyOthersFolder('${folder.id}')" style="border:none;background:transparent;padding:0;font-weight:900;color:#0f172a;font-size:1.02em;cursor:pointer;">${folder.collapsed?'▶':'▼'} 📁 ${escapeHtml(folder.name)} (${(folder.items||[]).length}件)</button><div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">${folder.tags.map(t=>`<span style="padding:3px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.72em;font-weight:900;">${escapeHtml(t)}</span>`).join('')||'<span style="font-size:.75em;color:#94a3b8;">教科タグ未設定</span>'}</div></div><div style="display:flex;gap:5px;flex-wrap:wrap;">${ifty132RegenerateFolderButton('OTHERS',folder.id,(folder.items||[]).length)}<button onclick="renameIftyOthersFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">名前変更</button><button onclick="editIftyOthersFolderTags('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">教科タグ変更</button><button onclick="deleteIftyOthersFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">フォルダ削除</button></div></div>
     ${folder.collapsed?'':`<div style="margin-top:11px;"><div style="display:flex;gap:7px;flex-wrap:wrap;"><input id="iftyOthersTopic_${folder.id}" value="${escapeHtml(iftyOthersTopicDrafts[folder.id]||'')}" placeholder="用語・概念・人物など" oninput="iftyOthersTopicDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftyOthersItem('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}))}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;"><button onclick="generateIftyOthersItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">＋ 追加（ALLIA）</button><button onclick="addBlankIftyOthersItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;">白紙</button></div><div id="iftyOthersPending_${folder.id}" style="margin-top:6px;color:#64748b;font-size:.76em;">${Number(iftyOthersGenerationPending[folder.id]||0)>0?`ALLIA生成中… ${Number(iftyOthersGenerationPending[folder.id]||0)}件`:''}</div><div id="iftyOthersItems_${folder.id}">${(folder.items||[]).map(item=>renderIftyOthersItemCard(folder,item)).join('')||'<div style="padding:18px;text-align:center;color:#94a3b8;">まだ項目がありません。</div>'}</div></div>`}
   </section>`).join('');
   showIftyHubContent(`<section class="ifty-portal-shell"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;"><div><h1 class="ifty-portal-title">OTHERS</h1><div class="ifty-portal-subtitle">保健・情報など、専用教科がない内容を自由な教科タグで管理。</div></div>${renderIftySubjectHeaderActions('OTHERS')}</div><div style="margin-top:14px;padding:13px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-weight:900;color:#0c4a6e;">新しいOTHERSフォルダ</div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;"><input id="iftyOthersFolderName" placeholder="例：保健 / 情報I" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><input id="iftyOthersFolderTags" placeholder="教科タグ（例：保健, 情報）" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><button onclick="createIftyOthersFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">作成</button></div><div style="font-size:.75em;color:#64748b;margin-top:6px;">タグ名は自由に変更できます。「世界史 / 日本史」のような固定候補にはしません。</div></div>${renderIftySubjectSelectionToolbar('OTHERS')}<div id="iftyOthersReviewPanelWrap">${renderIftySubjectReviewPanel('OTHERS')}</div>${rows||'<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">OTHERSフォルダを作成してください。</div>'}</section>`,'subject');
@@ -15927,8 +16043,8 @@ window.renameIftyOthersFolder=function(id){
 };
 window.editIftyOthersFolderTags=function(id){const f=getIftyOthersFolder(id);if(!f)return;const v=prompt('教科タグをカンマ区切りで入力',f.tags.join(', '));if(v===null)return;recordUndoState('OTHERS教科タグ変更');f.tags=normalizeIftyOthersTags(v);savePracticeData();renderIftyOthersPage({preserveScroll:true});};
 window.deleteIftyOthersFolder=function(id){const m=getIftyOthersModule(),f=getIftyOthersFolder(id);if(!f||!confirm(`「${f.name}」を削除しますか？`))return;recordUndoState('OTHERSフォルダ削除');m.folders=m.folders.filter(x=>x.id!==id);savePracticeData();renderIftyOthersPage();};
-window.addBlankIftyOthersItem=function(folderId){const f=getIftyOthersFolder(folderId);if(!f)return;const title=prompt('用語・項目名');if(title===null||!String(title).trim())return;const memoryText=prompt('説明', '')??'';recordUndoState('OTHERS項目追加');f.items.push(normalizeIftyOthersItem({title:String(title).trim(),memoryText,tags:f.tags,source:'MANUAL'}));savePracticeData();renderIftyOthersPage({preserveScroll:true});};
-window.editIftyOthersItem=function(folderId,itemId){const ref=getIftyOthersItemById(itemId);if(!ref)return;const t=prompt('用語・項目名',ref.item.title||'');if(t===null)return;const d=prompt('説明',ref.item.memoryText||'');if(d===null)return;const k=prompt('要点（改行区切り）',(ref.item.keyPoints||[]).join('\n'));if(k===null)return;recordUndoState('OTHERS項目編集');ref.item.title=String(t).trim();ref.item.topic=ref.item.title;ref.item.memoryText=String(d).trim();ref.item.keyPoints=String(k).split(/\n+/).map(x=>x.trim()).filter(Boolean).slice(0,8);ref.item.updatedAt=Date.now();savePracticeData();renderIftyOthersPage({preserveScroll:true});};
+window.addBlankIftyOthersItem=function(folderId){const f=getIftyOthersFolder(folderId);if(!f)return;const title=prompt('用語・項目名');if(title===null||!String(title).trim())return;const memoryText=prompt('説明', '')??'';if(!ifty131ConfirmDuplicate(f,String(title).trim(),'topic'))return;recordUndoState('OTHERS項目追加');f.items.push(normalizeIftyOthersItem({title:String(title).trim(),memoryText,tags:f.tags,source:'MANUAL'}));savePracticeData();renderIftyOthersPage({preserveScroll:true});};
+window.editIftyOthersItem=function(folderId,itemId){const ref=getIftyOthersItemById(itemId);if(!ref)return;const t=prompt('用語・項目名',ref.item.title||'');if(t===null)return;if(ifty131DuplicateKey(t)!==ifty131DuplicateKey(ref.item.title)&&!ifty131ConfirmDuplicate(ref.folder,t,'topic',itemId))return;const d=prompt('説明',ref.item.memoryText||'');if(d===null)return;const k=prompt('要点（改行区切り）',(ref.item.keyPoints||[]).join('\n'));if(k===null)return;const a=prompt('別名・別表記（改行区切り）',(ref.item.aliases||[]).join('\n'));if(a===null)return;recordUndoState('OTHERS項目編集');ref.item.aliases=ifty132Aliases(a);ref.item.title=String(t).trim();ref.item.topic=ref.item.title;ref.item.memoryText=String(d).trim();ref.item.keyPoints=String(k).split(/\n+/).map(x=>x.trim()).filter(Boolean).slice(0,8);ref.item.updatedAt=Date.now();savePracticeData();renderIftyOthersPage({preserveScroll:true});};
 window.deleteIftyOthersItem=function(folderId,itemId){const f=getIftyOthersFolder(folderId);if(!f)return;const i=f.items.findIndex(x=>String(x.id)===String(itemId));if(i<0)return;if(!confirm('この項目を削除しますか？'))return;recordUndoState('OTHERS項目削除');f.items.splice(i,1);iftyOthersSelectedItemIds.delete(String(itemId));savePracticeData();renderIftyOthersPage({preserveScroll:true});};
 window.regenerateIftyOthersItem = async function(folderId,itemId) {
   const ref=getIftyOthersItemById(itemId);
@@ -15955,6 +16071,7 @@ window.generateIftyOthersItem=async function(folderId){
   const f=getIftyOthersFolder(folderId);if(!f)return;
   const input=document.getElementById(`iftyOthersTopic_${folderId}`);const topic=String(input?.value||iftyOthersTopicDrafts[folderId]||'').trim();
   if(!topic){keepIftyOthersTopicFocused(folderId);return alert('用語・概念を入力してください。');}
+  if(!ifty131ConfirmDuplicate(f, topic, 'topic'))return;
   if(!ensureIftyOnline('OTHERSのALLIA生成')){keepIftyOthersTopicFocused(folderId);return;}
   const tags=[...(f.tags||[])];
   if(String(iftyOthersTopicDrafts[folderId]||'').trim()===topic)iftyOthersTopicDrafts[folderId]='';
@@ -17600,6 +17717,7 @@ function normalizeIftyBasicSentenceItem(item) {
     order: Number.isFinite(Number(item.order)) ? Number(item.order) : null,
     en,
     ja,
+    aliases: ifty132Aliases(item.aliases),
     note,
     source: item.source && typeof item.source === 'object' ? { ...item.source } : { type: 'manual' },
     level: normalizeIftyLearningLevel(item.level),
@@ -17738,6 +17856,7 @@ window.openIftyBasicSentenceEditor = function(sentenceId = '', preferredFolderId
         </label>
         <label style="display:grid;gap:5px;font-weight:800;color:#334155;">英文<textarea id="iftyBasicSentenceEn" rows="3" placeholder="English sentence" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.en : '')}</textarea></label>
         <label style="display:grid;gap:5px;font-weight:800;color:#334155;">和訳<textarea id="iftyBasicSentenceJa" rows="3" placeholder="日本語訳" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.ja : '')}</textarea></label>
+        ${ifty132AliasField(item, 'ifty132BasicAliases')}
         <label style="display:grid;gap:5px;font-weight:800;color:#334155;">メモ<textarea id="iftyBasicSentenceNote" rows="2" placeholder="文法・語法・覚え方など（任意）" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.note : '')}</textarea></label>
       </div>
       <div id="iftyBasicSentenceSaveStatus" style="min-height:1.2em;margin-top:10px;color:#047857;font-size:.8em;font-weight:800;"></div>
@@ -17763,6 +17882,7 @@ window.saveIftyBasicSentenceEditor = function() {
   const en = String(document.getElementById('iftyBasicSentenceEn')?.value || '').trim();
   const ja = String(document.getElementById('iftyBasicSentenceJa')?.value || '').trim();
   const note = String(document.getElementById('iftyBasicSentenceNote')?.value || '').trim();
+  const aliases = ifty132Aliases(document.getElementById('ifty132BasicAliases')?.value);
   let folderId = String(document.getElementById('iftyBasicSentenceFolder')?.value || getIftyBasicSentenceDefaultFolderId());
   if (!getIftyBasicSentenceFolderById(folderId)) folderId = getIftyBasicSentenceDefaultFolderId();
   if (!en) {
@@ -17783,12 +17903,13 @@ window.saveIftyBasicSentenceEditor = function() {
     current.en = en;
     current.ja = ja;
     current.note = note;
+    current.aliases = aliases;
     current.folderId = folderId;
     if (moved) current.order = getIftyNextBasicSentenceOrder(folderId);
     current.updatedAt = now;
   } else {
     getIftyBasicSentenceItems().push(normalizeIftyBasicSentenceItem({
-      id: makeId('basic_sentence'), folderId, order: getIftyNextBasicSentenceOrder(folderId), en, ja, note,
+      id: makeId('basic_sentence'), folderId, order: getIftyNextBasicSentenceOrder(folderId), en, ja, note, aliases,
       source: { type: 'manual' }, createdAt: now, updatedAt: now, study: {}
     }));
   }
@@ -17807,6 +17928,7 @@ window.saveIftyBasicSentenceEditor = function() {
   if (enInput) enInput.value = '';
   if (jaInput) jaInput.value = '';
   if (noteInput) noteInput.value = '';
+  const aliasInput = document.getElementById('ifty132BasicAliases');if (aliasInput)aliasInput.value='';
   const status = document.getElementById('iftyBasicSentenceSaveStatus');
   if (status) status.textContent = '保存しました。続けて次の英文を入力できます。';
   setTimeout(() => enInput?.focus(), 0);
@@ -18801,6 +18923,7 @@ function normalizeIftyAncientItem(value) {
     : [];
 
   return {
+    aliases: ifty132Aliases(value.aliases),
     id: value.id || makeId('ancientword'),
     title: word,
     word,
@@ -18850,6 +18973,7 @@ function buildIftyAncientSearchText(folder, item) {
   return [
     folder?.name,
     item?.word,
+    ...(Array.isArray(item?.aliases) ? item.aliases : []),
     item?.reading,
     item?.partOfSpeech,
     ...(Array.isArray(item?.meanings) ? item.meanings : []),
@@ -19270,16 +19394,8 @@ function renderFolders() {
   const reviewFolder = renderIftyReviewFolder();
   const weakFolder = renderIftyWeakFolder();
 
-  const selectionToolbar = `
-    <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:10px;margin-bottom:12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-      <b style="color:#334155;margin-right:4px;">選択: ${selectedCount}語</b>
-      <button onclick="selectAllWords()" style="background:#334155;color:white;border:none;border-radius:5px;padding:6px 9px;cursor:pointer;">全フォルダから全選択</button>
-      <button onclick="clearAllSelections()" style="background:#e2e8f0;color:#334155;border:none;border-radius:5px;padding:6px 9px;cursor:pointer;">選択全解除</button>
-      <button onclick="bulkDeleteSelectedWords()" ${selectedCount ? '' : 'disabled'} style="background:#ef4444;color:white;border:none;border-radius:5px;padding:6px 9px;cursor:${selectedCount ? 'pointer' : 'default'};opacity:${selectedCount ? '1' : '.45'};">選択中を削除</button>
-      <select id="bulkMoveFolderSelect" ${selectedCount ? '' : 'disabled'} style="padding:6px;border:1px solid #cbd5e1;border-radius:5px;">${folderOptions}</select>
-      <button onclick="bulkMoveSelectedWords()" ${selectedCount ? '' : 'disabled'} style="background:#0284c7;color:white;border:none;border-radius:5px;padding:6px 9px;cursor:${selectedCount ? 'pointer' : 'default'};opacity:${selectedCount ? '1' : '.45'};">選択中を移動</button>
-    </div>
-  `;
+  const selectionToolbar = `<div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:10px;margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <b style="color:#334155;">選択 ${selectedCount}語</b><button type="button" onclick="ifty132OpenSelectionActions('ENGLISH')" style="border:0;border-radius:7px;background:#0369a1;color:white;padding:9px 12px;font-weight:900;min-height:42px;">選択操作 ▾</button></div>`;
 
   if (folders.length === 0) {
     container.innerHTML = reviewFolder + weakFolder + selectionToolbar + `
@@ -19326,6 +19442,7 @@ function renderFolders() {
           <button onclick="renameIftyVocabularyFolder('${folder.id}')" title="フォルダ名を変更" style="background:#64748b;color:white;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:.75em;font-weight:800;">名前変更</button>
           <button onclick="moveFolder(${fIndex}, -1)" title="上に移動" style="background:#e2e8f0;border:none;padding:2px 6px;border-radius:4px;cursor:pointer;font-size:.8em;">⬆️</button>
           <button onclick="moveFolder(${fIndex}, 1)" title="下に移動" style="background:#e2e8f0;border:none;padding:2px 6px;border-radius:4px;cursor:pointer;font-size:.8em;">⬇️</button>
+          ${ifty132RegenerateFolderButton('ENGLISH',folder.id,words.length)}
           <button onclick="clearFolderWords('${folder.id}')" title="全消し" style="background:#f59e0b;color:white;border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:.75em;">全消し</button>
           <button onclick="deleteFolder('${folder.id}')" title="削除" style="background:#ef4444;color:white;border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:.75em;">削除</button>
         </div>
@@ -19717,7 +19834,68 @@ function confirmIftyCarefulRegeneration(label) {
   return confirm(`「${String(label || 'この項目')}」を慎重に再生成しますか？\n現在の生成内容は置き換わりますが、復習状態・並び順・画像は保持します。`);
 }
 // STEP124：再生成時の自由記述（空欄のままでも再生成可能）。キャンセルなら null。
+
+let ifty132BatchRegeneration=null;
+window.ifty132CancelBatchRegeneration=function(){if(ifty132BatchRegeneration)ifty132BatchRegeneration.cancelled=true;};
+function ifty132RegenerateFolderButton(subject, folderId, count) {
+  const safeSubject=String(subject).replace(/'/g,'&#39;');
+  return `<button type="button" onclick="ifty132RegenerateFolder('${safeSubject}','${escapeHtml(folderId)}')" title="フォルダ内の全項目を順番に再生成" style="border:1px solid #a78bfa;background:#f5f3ff;color:#6d28d9;border-radius:7px;padding:7px 9px;min-height:40px;font-weight:900;">↻ 全件再生成 (${count})</button>`;
+}
+window.ifty132RegenerateFolder=async function(subject, folderId){
+  const key=normalizeIftySubject(subject);
+  const folder=key==='ENGLISH'?folders.find(f=>String(f.id)===String(folderId)):(key==='YEARS'?getIftyYearFolderById(folderId):getIftySubjectFoldersForBulk(key).find(f=>String(f.id)===String(folderId)));
+  const items=key==='ENGLISH'?folder?.words:(key==='YEARS'?getIftyYearEntriesForFolder(folderId):folder?.items);
+  if(!folder||!Array.isArray(items)||!items.length)return alert('再生成する項目がありません。');
+  if(ifty132BatchRegeneration)return alert('別のフォルダで全件再生成中です。');
+  const label=String(folder.name||'このフォルダ');
+  if(!confirm(`「${label}」の${items.length}件をALLIAで順番に再生成しますか？\n\n内容は更新されますが、復習情報・別名・画像・並び順は維持します。AI利用枠を消費します。失敗時はその位置で停止し、完了済みの項目は保存されます。`))return;
+  const request=await requestIftyRegeneration124(`フォルダ「${label}」 全${items.length}件`);
+  if(request===null)return;
+  if(!ensureIftyOnline('フォルダの全件再生成'))return;
+  const ids=items.map(x=>String(x.id));
+  const st={key,folderId,cancelled:false,total:ids.length,done:0,failed:0,request,errors:[]};ifty132BatchRegeneration=st;
+  const box=document.createElement('div');box.id='ifty132BatchProgress';box.style.cssText='position:fixed;right:12px;bottom:calc(148px + env(safe-area-inset-bottom));z-index:13060;width:min(350px,calc(100vw - 24px));border:1px solid #c4b5fd;border-radius:12px;background:#fff;color:#0f172a;box-shadow:0 9px 30px #0004;padding:12px;box-sizing:border-box;';
+  box.innerHTML=`<b>↻ 全件再生成</b><div id="ifty132BatchLabel" role="status" aria-live="polite" style="margin-top:7px;font-size:.88em;"></div><progress id="ifty132BatchMeter" max="${ids.length}" value="0" style="width:100%;height:10px;margin-top:8px;"></progress><button type="button" onclick="ifty132CancelBatchRegeneration()" style="display:block;margin-top:9px;padding:8px 12px;border:0;border-radius:7px;background:#e2e8f0;color:#334155;font-weight:900;">残りを中止</button>`;
+  document.body.appendChild(box);
+  const funcs={'YEARS': async (fid,id)=>{const row=getIftyYearEntries().find(x=>String(x.id)===String(id));if(row)await lookupIftyYear(row.era,row.year,fid);},'ENGLISH':regenerateIftyVocabularyWord,'SCIENCE':regenerateIftyScienceItem,'SOCIAL STUDIES':regenerateIftySocialItem,'ANCIENT':regenerateIftyAncientItem,'KANBUN':regenerateIftyKanbunItem,'KANJI':regenerateIftyKanjiItem,'OTHERS':regenerateIftyOthersItem};
+  const func=funcs[key];
+  if(typeof func !== 'function') {ifty132BatchRegeneration=null;box.remove();return alert('この教科では全件再生成に対応していません。');}
+  // STEP132: normalizePracticeData() rebuilds folder/item objects. Never keep stale references between items.
+  const getFreshItem=id=>{
+    if(key==='YEARS')return getIftyYearEntries().find(x=>String(x.id)===id);
+    const latestFolder=key==='ENGLISH'?folders.find(f=>String(f.id)===String(folderId)):getIftySubjectFoldersForBulk(key).find(f=>String(f.id)===String(folderId));
+    return (key==='ENGLISH'?latestFolder?.words:latestFolder?.items)?.find(x=>String(x.id)===id);
+  };
+  try{
+    for(const id of ids){
+      if(st.cancelled)break;
+      const current=getFreshItem(id);
+      if(!current)continue;
+      const title=String(current.word||current.term||current.title||current.originalText||'');
+      document.getElementById('ifty132BatchLabel').textContent=`${st.done}/${st.total}件完了 — ${title}`;
+      const before=JSON.stringify(current);
+      const storedAliases=ifty132Aliases(current.aliases);
+      // Existing regenerators call requestIftyRegeneration124; use a single user request for this batch.
+      st.runningId=id;
+      try{
+        await func(folderId,id);
+        // User metadata is retained even when a generator replaces the item object.
+        const updated=getFreshItem(id);
+        if(!updated || JSON.stringify(updated)===before){st.failed++;st.errors.push(title);break;}
+        updated.aliases=storedAliases;
+        if(key==='ENGLISH')saveUserData();else savePracticeData();
+        st.done++;
+      }catch(e){st.failed++;st.errors.push(`${title}: ${String(e?.message||e)}`);break;}
+      document.getElementById('ifty132BatchMeter').value=st.done;
+    }
+  }finally{
+    ifty132BatchRegeneration=null;box.remove();
+    alert(`「${label}」の再生成：成功 ${st.done}/${st.total}件${st.cancelled?'（途中で中止）':''}${st.failed?'\n失敗した項目：'+st.errors.slice(0,3).join('、'):''}`);
+  }
+};
+
 function requestIftyRegeneration124(label) {
+  if (ifty132BatchRegeneration && ifty132BatchRegeneration.runningId) return Promise.resolve(ifty132BatchRegeneration.request);
   return new Promise(resolve => {
     const old = document.getElementById('iftyRegenerationRequest124');
     if (old) old.remove();
@@ -19816,6 +19994,7 @@ function renderWordItem(w, folderId, wIndex) {
 
           ${derivatives.length > 0 ? `<div style="margin-top: 7px; color: #475569; font-size: 0.82em;"><b>派生語：</b>${derivatives.map(d => escapeHtml(d)).join(' / ')}</div>` : ''}
 
+          ${ifty132AliasInfo(w)}
           ${w.details ? `<div style="font-size: 0.8em; color: #0284c7; margin-top: 6px; line-height: 1.35;">💡 ${escapeHtml(w.details)}</div>` : ''}
         </div>
 
@@ -19834,6 +20013,45 @@ function renderWordItem(w, folderId, wIndex) {
 }
 
 // 4. 単語追加・編集・移動
+// ★★★ STEP131：同じフォルダへの同一語句登録前の確認 ★★★
+// 表記の前後空白・連続空白・Unicode表現・英字の大小のみ正規化。
+// 語形や別表記まで同一扱いにはしない。フォルダをまたぐ重複も確認しない。
+function ifty131DuplicateKey(value) {
+  return String(value ?? '').normalize('NFC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase();
+}
+function ifty131DuplicateCount(folder, candidate, field = 'word', excludingId = '') {
+  const key = ifty131DuplicateKey(candidate);
+  if (!folder || !key) return 0;
+  const list = Array.isArray(folder.words) ? folder.words : (Array.isArray(folder.items) ? folder.items : []);
+  return list.filter(item => {
+    if (!item || (excludingId && String(item.id || '') === String(excludingId))) return false;
+    // 理科・社会・OTHERSは旧データのtopic/title双方に対応。
+    const oldText = field === 'topic' ? (item.topic || item.title) : item[field];
+    return ifty131DuplicateKey(oldText) === key;
+  }).length;
+}
+function ifty131ConfirmDuplicate(folder, candidate, field = 'word', excludingId = '') {
+  const count = ifty131DuplicateCount(folder, candidate, field, excludingId);
+  if (!count) return true;
+  const word = String(candidate ?? '').trim();
+  const name = String(folder?.name || 'このフォルダ');
+  return confirm(`「${name}」には「${word}」が既に${count}件登録されています。\n同じ語句をもう1件追加しますか？\n\nOK：重複を承知で追加 / キャンセル：追加しない`);
+}
+// 保存・閉じる操作でSafari/iPadのフォーカス解放と再描画が重なっても
+// 編集開始前の閲覧位置へ戻す。画面遷移そのものには使用しない。
+function ifty131RestoreEditorViewport(y) {
+  if (!Number.isFinite(y)) return;
+  const restore = () => {
+    if (document.getElementById('editWordModal')?.style.display === 'flex') return;
+    try { window.scrollTo({ top: Math.max(0, y), left: 0, behavior: 'auto' }); }
+    catch (_) { window.scrollTo(0, Math.max(0, y)); }
+  };
+  restore();
+  requestAnimationFrame(restore);
+  requestAnimationFrame(() => requestAnimationFrame(restore));
+  setTimeout(restore, 75);
+}
+
 let iftyEditWordModalState = null;
 let iftyEditWordModalKeyboardInstalled = false;
 
@@ -19892,6 +20110,12 @@ window.addWordToFolder = async function(folderId) {
   if (!folder) return;
   if (!folder.words) folder.words = [];
   if (!wordText) return;
+  const duplicateApproved = ifty131DuplicateCount(folder, wordText, 'word') > 0;
+  if (duplicateApproved && !ifty131ConfirmDuplicate(folder, wordText, 'word')) {
+    // キャンセルなら現在の入力内容・フォーカスを保持する。
+    keepWordInputFocused(folderId);
+    return;
+  }
 
   const englishOrder = getIftySubjectOrder('ENGLISH');
 
@@ -19903,7 +20127,7 @@ window.addWordToFolder = async function(folderId) {
     input.value = '';
     keepWordInputFocused(folderId);
     clearIftySpellingSuggestion(folderId);
-    await addWordFromReusableData(folderId, wordText, reusable.data, reusable.source, englishOrder);
+    await addWordFromReusableData(folderId, wordText, reusable.data, reusable.source, englishOrder, duplicateApproved);
     return;
   }
 
@@ -19949,13 +20173,21 @@ window.addWordToFolder = async function(folderId) {
     console.error("スペル確認エラー:", error);
   }
 
-  await generateAndAddWord(folderId, wordText);
+  await generateAndAddWord(folderId, wordText, duplicateApproved);
 };
 
-async function addWordFromReusableData(folderId, wordText, data, source, order) {
+async function addWordFromReusableData(folderId, wordText, data, source, order, duplicateApproved = false) {
   const folder = folders.find(f => f.id === folderId);
   if (!folder) return;
   if (!folder.words) folder.words = [];
+  if (!duplicateApproved && !ifty131ConfirmDuplicate(folder, wordText, 'word')) {
+    // 非同期のキャッシュ照会中に他の追加処理が先に完了した場合も、入力を復元する。
+    const input = document.getElementById(`wordInput_${folderId}`);
+    if (input && !String(input.value || '').trim()) input.value = wordText;
+    if (!String(wordInputDrafts[folderId] || '').trim()) wordInputDrafts[folderId] = wordText;
+    keepWordInputFocused(folderId);
+    return;
+  }
 
   recordUndoState('単語追加');
   const newWordObj = {
@@ -19985,7 +20217,7 @@ async function addWordFromReusableData(folderId, wordText, data, source, order) 
   setTimeout(() => speakWord(newWordObj.word || wordText, newWordObj.languageCode || ''), 150);
 }
 
-async function generateAndAddWord(folderId, wordText) {
+async function generateAndAddWord(folderId, wordText, duplicateApproved = false) {
   const folder = folders.find(f => f.id === folderId);
   if (!folder) return;
   if (!folder.words) folder.words = [];
@@ -19995,7 +20227,15 @@ async function generateAndAddWord(folderId, wordText) {
   // acceptSpellingSuggestion / keepOriginalSpelling から直接来た場合にも再利用を確認する。
   const reusable = await resolveIftyReusableWordData(wordText, 'ENGLISH', englishOrder);
   if (reusable && reusable.data) {
-    await addWordFromReusableData(folderId, wordText, reusable.data, reusable.source, englishOrder);
+    await addWordFromReusableData(folderId, wordText, reusable.data, reusable.source, englishOrder, duplicateApproved);
+    return;
+  }
+
+  if (!duplicateApproved && !ifty131ConfirmDuplicate(folder, wordText, 'word')) {
+    const input = document.getElementById(`wordInput_${folderId}`);
+    if (input && !String(input.value || '').trim()) input.value = wordText;
+    if (!String(wordInputDrafts[folderId] || '').trim()) wordInputDrafts[folderId] = wordText;
+    keepWordInputFocused(folderId);
     return;
   }
 
@@ -20233,7 +20473,8 @@ window.openEditWordModal = function(folderId, wordIndex, options = {}) {
     wordId: String(options.wordId || w.id || ''),
     isNewBlank: !!options.isNewBlank,
     undoDepthBefore: Number.isInteger(options.undoDepthBefore) ? options.undoDepthBefore : null,
-    saved: false
+    saved: false,
+    viewportY: Number(window.scrollY || document.scrollingElement?.scrollTop || 0)
   };
 
   const meaningsStr = Array.isArray(w.meanings) ? w.meanings.join('\n') : (w.meanings || '');
@@ -20264,6 +20505,7 @@ window.openEditWordModal = function(folderId, wordIndex, options = {}) {
             <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">言語</label><input id="editLanguageText" value="${escapeHtml(getIftyWordLanguageInfo(w).label)}" placeholder="英語 / フランス語 / 日本語 など" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:4px;box-sizing:border-box;"></div>
             <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">言語コード</label><input id="editLanguageCodeText" value="${escapeHtml(getIftyWordLanguageInfo(w).code)}" placeholder="en / fr / ja" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:4px;box-sizing:border-box;"></div>
           </div>
+          ${ifty132AliasField(w, 'ifty132EditWordAliases')}
           <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">発音・読み</label><input id="editPronunciationText" value="${escapeHtml(w.pronunciation || '')}" placeholder="IPA / ピンイン / かな読みなど" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;"></div>
           <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">品詞</label><input id="editPartOfSpeechText" value="${escapeHtml(w.partOfSpeech || '')}" placeholder="動詞・名詞など" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;"></div>
           <div><label style="font-size: 0.85em; font-weight: bold; color: #475569;">自他動詞・可算不可算</label><input id="editUsageText" value="${escapeHtml([w.transitivity, w.countability].filter(Boolean).join(' / '))}" placeholder="他動詞 / 可算" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;"></div>
@@ -20373,6 +20615,10 @@ window.saveEditedWord = function(folderId, wordIndex, createNextBlank = false) {
     if (field) field.focus();
     return;
   }
+  // 既存項目を編集しただけなら自分自身を重複と数えない。
+  const editingWord = folder.words[wordIndex];
+  if (ifty131DuplicateKey(editingWord.word) !== ifty131DuplicateKey(wordVal)
+      && !ifty131ConfirmDuplicate(folder, wordVal, 'word', editingWord.id)) return;
   showIftyEditWordValidation('');
 
   const newExamples = examplesRaw.map(line => {
@@ -20393,6 +20639,7 @@ window.saveEditedWord = function(folderId, wordIndex, createNextBlank = false) {
 
   const word = folder.words[wordIndex];
   word.word = wordVal;
+  word.aliases = ifty132Aliases(document.getElementById('ifty132EditWordAliases')?.value);
   word.language = languageVal || inferIftyLanguageFromText(wordVal).label;
   word.languageCode = languageCodeVal || inferIftyLanguageFromText(wordVal).code;
   word.pronunciation = pronunciationVal;
@@ -20416,7 +20663,8 @@ window.saveEditedWord = function(folderId, wordIndex, createNextBlank = false) {
   if (state) state.saved = true;
 
   saveUserData();
-  renderFolders();
+  // フォルダ全体を再生成するとスクロール位置が失われるため、単語一覧だけ更新。
+  refreshFolderWordArea(folderId);
   closeEditWordModal({ keepNewBlank: true });
 
   if (createNextBlank) {
@@ -20443,11 +20691,12 @@ window.closeEditWordModal = function(options = {}) {
     }
 
     saveUserData();
-    renderFolders();
+    refreshFolderWordArea(state.folderId);
   }
 
   if (modal) modal.style.display = "none";
   iftyEditWordModalState = null;
+  if (state) ifty131RestoreEditorViewport(state.viewportY);
 };
 
 function generateSmartWordData(word) {
@@ -20552,6 +20801,23 @@ window.bulkMoveSelectedWords = function() {
   if (!select || !select.value) return;
   const destination = folders.find(f => f.id === select.value);
   if (!destination) return;
+
+  // 移動も移動先フォルダへの登録となるため、既存との同一語をまとめて確認。
+  const incomingWords = folders
+    .filter(folder => folder.id !== destination.id)
+    .flatMap(folder => (folder.words || []).filter(word => selectedWordIds.has(word.id)));
+  const incomingKeys = new Set();
+  const conflicts = incomingWords.filter(word => {
+    const key = ifty131DuplicateKey(word.word);
+    if (!key) return false;
+    const duplicate = ifty131DuplicateCount(destination, word.word, 'word') > 0 || incomingKeys.has(key);
+    incomingKeys.add(key);
+    return duplicate;
+  });
+  if (conflicts.length) {
+    const preview = [...new Set(conflicts.map(word => String(word.word || ''))) ].slice(0, 6).join('、');
+    if (!confirm(`移動先「${destination.name}」に、既に登録済みまたは移動対象内で同一の単語が${conflicts.length}語あります。\n${preview}${conflicts.length > 6 ? ' ほか' : ''}\n\n重複を許可してすべて移動しますか？\nキャンセルすると移動しません。`)) return;
+  }
 
   recordUndoState('選択語の一斉移動');
   const moving = [];
@@ -20903,19 +21169,78 @@ window.moveIftySubjectSelectedItemsTo = function(subject, destinationId) {
   else if (key === 'OTHERS') renderIftyOthersPage({ preserveScroll: true });
 };
 
-function renderIftySubjectSelectionToolbar(subject) {
-  const key = normalizeIftySubject(subject);
-  const selection = cleanIftySubjectSelection(key);
-  const folders = getIftySubjectFoldersForBulk(key);
-  const noun = getIftySubjectBulkLabel(key);
-  const safeKey = String(key).replace(/'/g, "\\'");
 
-  return `<div id="iftySubjectSelectionToolbar_${key.replace(/\s+/g,'_')}" style="margin-top:12px;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
-    <b style="color:#334155;">選択：${selection.size}${noun}</b>
-    <button type="button" onclick="clearIftySubjectItemSelections('${safeKey}')" ${selection.size ? '' : 'disabled'} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 9px;font-weight:900;cursor:${selection.size ? 'pointer' : 'default'};opacity:${selection.size ? '1' : '.45'};">選択解除</button>
-    <button type="button" onclick="openIftySubjectSelectedMoveDialog('${safeKey}')" ${selection.size && folders.length > 1 ? '' : 'disabled'} style="border:none;background:#0284c7;color:white;border-radius:6px;padding:7px 9px;font-weight:900;cursor:${selection.size && folders.length > 1 ? 'pointer' : 'default'};opacity:${selection.size && folders.length > 1 ? '1' : '.45'};">選択中を移動</button>
-    <button type="button" onclick="bulkDeleteIftySubjectSelectedItems('${safeKey}')" ${selection.size ? '' : 'disabled'} style="border:none;background:#ef4444;color:white;border-radius:6px;padding:7px 9px;font-weight:900;cursor:${selection.size ? 'pointer' : 'default'};opacity:${selection.size ? '1' : '.45'};">選択中を削除</button>
-  </div>`;
+// STEP132：選択操作を一つのメニューに集約。固定ボタンは選択中のみ表示。
+function ifty132SelectionCount(subject) {
+  return subject === 'ENGLISH' ? selectedWordIds.size : cleanIftySubjectSelection(subject).size;
+}
+window.ifty132OpenSelectionActions = function(subject) {
+  const key=normalizeIftySubject(subject);
+  const count=ifty132SelectionCount(key);
+  const hasItems = key === 'ENGLISH' ? folders.some(f=>(f.words||[]).length) : getIftySubjectFoldersForBulk(key).some(f=>(f.items||[]).length);
+  const moveAllowed=key==='ENGLISH'?folders.length>1:getIftySubjectFoldersForBulk(key).length>1;
+  document.getElementById('ifty132SelectionModal')?.remove();
+  const mask=document.createElement('div');mask.id='ifty132SelectionModal';
+  mask.style.cssText='position:fixed;inset:0;z-index:13090;background:rgba(15,23,42,.66);display:flex;align-items:flex-end;justify-content:center;padding:10px;box-sizing:border-box;';
+  const folderOptions=key==='ENGLISH'? folders.map(f=>`<option value="${escapeHtml(f.id)}">${escapeHtml(f.name)}</option>`).join('') : '';
+  mask.innerHTML=`<div role="dialog" aria-modal="true" aria-label="選択した項目の操作" style="width:min(520px,100%);max-height:85vh;overflow:auto;background:#fff;color:#0f172a;border-radius:14px;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom));box-sizing:border-box;box-shadow:0 16px 46px #0005;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><b>選択した項目の操作（${count}件）</b><button type="button" onclick="document.getElementById('ifty132SelectionModal')?.remove()" style="padding:8px;border:0;border-radius:8px;background:#e2e8f0;">閉じる ✕</button></div>
+  ${key==='ENGLISH'?`<label style="display:block;margin-top:12px;">移動先<select id="ifty132MoveTo" style="display:block;width:100%;padding:10px;border:1px solid #94a3b8;border-radius:8px;margin-top:5px;">${folderOptions}</select></label>`:''}
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px;">
+  <button type="button" data-a="move" ${!count||!moveAllowed?'disabled':''} style="padding:12px;border:0;border-radius:9px;background:#0284c7;color:white;font-weight:800;">移動</button>
+  <button type="button" data-a="delete" ${!count?'disabled':''} style="padding:12px;border:0;border-radius:9px;background:#dc2626;color:white;font-weight:800;">削除</button>
+  <button type="button" data-a="all" ${!hasItems?'disabled':''} style="padding:12px;border:1px solid #94a3b8;border-radius:9px;background:#f1f5f9;color:#0f172a;font-weight:800;">全選択</button>
+  <button type="button" data-a="clear" ${!count?'disabled':''} style="padding:12px;border:1px solid #94a3b8;border-radius:9px;background:#f1f5f9;color:#0f172a;font-weight:800;">選択解除</button>
+  </div><p style="font-size:.78em;color:#64748b;margin:12px 0 0;">この画面は下から開きます。キャンセルしても選択状態は保持されます。</p></div>`;
+  document.body.appendChild(mask);
+  mask.onclick=e=>{
+    if(e.target===mask){mask.remove();return;}
+    const btn=e.target.closest('[data-a]');if(!btn||btn.disabled)return;
+    const action=btn.dataset.a;
+    if(action==='move'){
+      if(key==='ENGLISH'){
+        let old=document.getElementById('bulkMoveFolderSelect');
+        if(!old){old=document.createElement('select');old.id='bulkMoveFolderSelect';old.hidden=true;document.body.appendChild(old);}
+        const to=document.getElementById('ifty132MoveTo');old.innerHTML=folderOptions;old.value=to?.value||'';
+        mask.remove();bulkMoveSelectedWords();
+      }else{mask.remove();openIftySubjectSelectedMoveDialog(key);}
+      return;
+    }
+    mask.remove();
+    if(action==='delete')key==='ENGLISH'?bulkDeleteSelectedWords():bulkDeleteIftySubjectSelectedItems(key);
+    else if(action==='clear')key==='ENGLISH'?clearAllSelections():clearIftySubjectItemSelections(key);
+    else if(action==='all') {
+      if(key==='ENGLISH')selectAllWords();
+      else {
+        const selection=getIftySubjectSelectionSet(key);
+        getIftySubjectFoldersForBulk(key).forEach(folder=>(folder.items||[]).forEach(item=>selection.add(String(item.id))));
+        const rerender={ 'SCIENCE':renderIftySciencePage,'SOCIAL STUDIES':renderIftySocialStudiesPage,'ANCIENT':renderIftyAncientPage,'KANBUN':renderIftyKanbunPage,'KANJI':renderIftyKanjiPage,'OTHERS':renderIftyOthersPage }[key];
+        if(rerender){window.__iftyPreserveHubViewport=true; window.__iftyPreserveHubViewportY=window.scrollY;rerender({preserveScroll:true});}
+      }
+    }
+    ifty132UpdateSelectionDock();
+  };
+};
+function ifty132UpdateSelectionDock(){
+  let dock=document.getElementById('ifty132SelectionDock');
+  const key=iftyPortalPage==='subject'?currentIftySubject:(currentView==='vocab'&&iftyPortalPage==='vocab'?'ENGLISH':null);
+  const normalized=key?normalizeIftySubject(key):null;
+  const count=normalized?ifty132SelectionCount(normalized):0;
+  if(!count){dock?.remove();return;}
+  if(!dock){dock=document.createElement('button');dock.id='ifty132SelectionDock';dock.type='button';dock.style.cssText='position:fixed;right:12px;bottom:calc(88px + env(safe-area-inset-bottom));z-index:9970;background:#0369a1;color:white;border:1px solid #7dd3fc;border-radius:999px;box-shadow:0 5px 18px #0004;padding:10px 14px;font-weight:900;min-height:44px;max-width:calc(100vw - 24px);';document.body.appendChild(dock);}
+  dock.textContent=`☑ 選択操作 ${count}件 ▾`;
+  dock.onclick=()=>ifty132OpenSelectionActions(normalized);
+}
+// No polling; update on relevant checkbox click and when the hub view changes.
+document.addEventListener('change',e=>{
+  if(e.target?.matches?.('input[type="checkbox"]'))setTimeout(ifty132UpdateSelectionDock,0);
+},true);
+
+function renderIftySubjectSelectionToolbar(subject) {
+  const key=normalizeIftySubject(subject);
+  const count=cleanIftySubjectSelection(key).size;
+  return `<div id="iftySubjectSelectionToolbar_${key.replace(/\s+/g,'_')}" style="margin-top:12px;padding:10px;border:1px solid #cbd5e1;border-radius:9px;background:#f8fafc;display:flex;gap:9px;align-items:center;flex-wrap:wrap;">
+  <b style="color:#334155;">選択 ${count}件</b><button type="button" onclick="ifty132OpenSelectionActions('${key}')" style="border:0;border-radius:7px;background:#0369a1;color:white;padding:9px 13px;font-weight:900;min-height:42px;">選択操作 ▾</button></div>`;
 }
 
 function refreshIftySubjectSelectionToolbar(subject) {
@@ -20927,6 +21252,7 @@ function refreshIftySubjectSelectionToolbar(subject) {
   wrap.innerHTML = renderIftySubjectSelectionToolbar(key);
   const next = wrap.firstElementChild;
   if (next) old.replaceWith(next);
+  ifty132UpdateSelectionDock();
 }
 
 window.toggleIftySubjectItemSelection = function(subject, itemId, checked) {
