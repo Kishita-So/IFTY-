@@ -30041,3 +30041,197 @@ window.ifty145NextEnglishQuiz=function(setId){
   // Legacy Skip advances without registering an incorrect answer.
   window.skipQuizQuestion(setId);
 };
+
+
+// ============================================================================
+// IFTY STEP148: Jump from a search match to its original folder position.
+// Isolated UI enhancement: no changes to saved folders/cards or search matching.
+// Search/add remain independent; when jumping, search is cleared before scroll.
+// ============================================================================
+(function installIfty148SearchResultJump(){
+  'use strict';
+  const globalInputs={
+    'ENGLISH':'iftyGlobalVocabSearchInput',
+    'ANCIENT':'iftyAncientSearchInput',
+    'KANBUN':'iftyKanbunSearchInput',
+    'KANJI':'iftyKanjiGlobalSearchInput',
+    'SCIENCE':'iftyScienceSearchInput',
+    'SOCIAL STUDIES':'iftySocialSearchInput',
+    'BASIC SENTENCES':'iftyBasicSentenceSearchInput'
+  };
+  const globalClear={
+    'ENGLISH':'clearIftyGlobalVocabSearch',
+    'ANCIENT':'applyIftyAncientSearch',
+    'KANBUN':'applyIftyKanbunSearch',
+    'KANJI':'setIftyKanjiGlobalSearch',
+    'SCIENCE':'applyIftyScienceSearch',
+    'SOCIAL STUDIES':'applyIftySocialSearch',
+    'BASIC SENTENCES':'setIftyBasicSentenceSearch'
+  };
+  const folderAddIds={
+    'ENGLISH':'wordInput_', 'ANCIENT':'iftyAncientWord_',
+    'KANBUN':'iftyKanbunText_', 'KANJI':'iftyKanjiTerm_',
+    'SCIENCE':'iftyScienceTopic_', 'SOCIAL STUDIES':'iftySocialTopic_',
+    'OTHERS':'iftyOthersTopic_', 'PRONUNCIATION':'iftyPronText_'
+  };
+  let pending=false;
+  let searchingForJump=false;
+  let flashTimer=0;
+  function style(){
+    if(document.getElementById('ifty148JumpStyle'))return;
+    const el=document.createElement('style');el.id='ifty148JumpStyle';
+    el.textContent=`
+      .ifty148-jump{display:inline-flex;align-items:center;justify-content:center;gap:4px;
+        margin:7px 0 9px;padding:7px 11px;min-height:36px;max-width:100%;box-sizing:border-box;
+        border:1px solid #38bdf8;border-radius:8px;background:#075985;color:#fff;
+        font-size:.82em;font-weight:850;cursor:pointer;touch-action:manipulation}
+      .ifty148-jump:focus-visible{outline:3px solid #38bdf8;outline-offset:2px}
+      [data-ifty139-item].ifty148-target{outline:3px solid #0ea5e9!important;outline-offset:4px;
+        box-shadow:0 0 0 6px rgba(14,165,233,.19)!important;border-radius:8px;
+        transition:outline-color .2s,box-shadow .2s}
+      @media(max-width:620px){.ifty148-jump{font-size:.79em;min-height:40px}}
+    `;document.head.appendChild(el);
+  }
+  function findCard(subject,folderId,itemId){
+    return Array.from(document.querySelectorAll('[data-ifty139-item="1"]')).find(el=>
+      el.dataset.ifty139Subject===subject && el.dataset.ifty139Folder===folderId && el.dataset.ifty139Id===itemId
+    )||null;
+  }
+  function folderTabs(subject,folderId,card){
+    const id=folderAddIds[subject];
+    if(id){
+      const input=document.getElementById(id+folderId);
+      const row=input?.closest('.ifty128-unified-row');
+      const tabs=row?.previousElementSibling;
+      if(tabs?.classList?.contains('ifty128-mode-tabs'))return tabs;
+    }
+    // YEARS / BASIC SENTENCES use a self-contained folder-specific input panel.
+    let parent=card;
+    while(parent && parent!==document.body){
+      if(parent.classList?.contains('ifty-year-folder') ||
+         parent.dataset?.iftyBasicFolder ||
+         (parent.tagName==='SECTION' && parent.querySelector('[data-ifty128-special="1"]'))){
+        const tabs=parent.querySelector('[data-ifty128-special="1"] .ifty128-mode-tabs');
+        if(tabs)return tabs;
+      }
+      parent=parent.parentElement;
+    }
+    // Fallback: search only the smallest section with the item and one tab group.
+    parent=card.closest('section');
+    if(parent){const groups=parent.querySelectorAll('.ifty128-mode-tabs');if(groups.length===1)return groups[0];}
+    return null;
+  }
+  function searchActive(card){
+    const subject=card.dataset.ifty139Subject,folder=card.dataset.ifty139Folder;
+    const global=document.getElementById(globalInputs[subject]||'');
+    if(global && String(global.value||'').trim())return true;
+    const tabs=folderTabs(subject,folder,card);
+    if(!tabs)return false;
+    const lookup=Array.from(tabs.querySelectorAll('button')).find(b=>b.textContent.includes('検索'));
+    if(!lookup || lookup.getAttribute('aria-pressed')!=='true')return false;
+    const row=tabs.nextElementSibling;
+    // In ordinary folders the search input has a separate node. In YEARS / BASIC,
+    // search and add share a display position but still reset on every toggle.
+    const input=row?.querySelector('input.ifty138-search-input') ||
+      row?.querySelector('input.ifty128-unified-input') ||
+      tabs.parentElement?.querySelector('input.ifty128-unified-input');
+    return !!String(input?.value||'').trim();
+  }
+  function eligible(card){
+    return card.isConnected && card.getClientRects().length>0 && searchActive(card);
+  }
+  function update(){
+    pending=false;
+    if(searchingForJump)return;
+    const cards=document.querySelectorAll('[data-ifty139-item="1"]');
+    for(const card of cards){
+      const action=card.querySelector(':scope > .ifty148-jump, :scope > div > .ifty148-jump');
+      if(!eligible(card)){
+        if(action)action.remove();
+        continue;
+      }
+      if(action)continue;
+      const subject=card.dataset.ifty139Subject;
+      const btn=document.createElement('button');
+      btn.type='button';btn.className='ifty148-jump';
+      let position='';
+      try{
+        const records=typeof ifty139FolderItems==='function'?ifty139FolderItems(subject,card.dataset.ifty139Folder):null;
+        const index=(records?.items||[]).findIndex(item=>String(item.id)===card.dataset.ifty139Id);
+        if(index>=0)position='（'+(index+1)+'件目）';
+      }catch(_){}
+      btn.textContent='↗ 元の位置へ'+position;
+      btn.setAttribute('aria-label','検索を解除し、この項目のフォルダ内の位置へ移動');
+      const container=subject==='ENGLISH' && card.lastElementChild?.tagName==='DIV'
+        ?card.lastElementChild:card;
+      container.appendChild(btn);
+    }
+  }
+  function schedule(){
+    if(pending)return;
+    pending=true;
+    requestAnimationFrame(update);
+  }
+  function ensureSearchCleared(subject,folderId,card){
+    // Always turn off the per-folder filter first. Its existing tab implementation
+    // clears the legacy filter and both input drafts without altering saved words.
+    let tabs=folderTabs(subject,folderId,card);
+    if(tabs){
+      const add=Array.from(tabs.querySelectorAll('button')).find(b=>b.textContent.includes('追加'));
+      if(add && add.getAttribute('aria-pressed')==='false')add.click();
+    }
+    // A global search may additionally be active; clear that filter as well.
+    const global=document.getElementById(globalInputs[subject]||'');
+    if(global && String(global.value||'').trim()){
+      global.value='';
+      const handler=window[globalClear[subject]];
+      if(typeof handler==='function'){
+        if(subject==='ENGLISH')handler(); else handler('');
+      }else global.dispatchEvent(new Event('input',{bubbles:true}));
+    }
+  }
+  function go(subject,folderId,itemId){
+    if(searchingForJump)return;
+    searchingForJump=true;
+    const original=findCard(subject,folderId,itemId);
+    if(!original){searchingForJump=false;return;}
+    // Searching by unique IDs avoids mis-targeting duplicate word spellings.
+    try{ensureSearchCleared(subject,folderId,original);}
+    catch(e){console.warn('IFTY STEP148: could not clear search',e);}
+    let count=0;
+    function finish(){
+      const card=findCard(subject,folderId,itemId);
+      if(!card||!card.isConnected||card.getClientRects().length===0){
+        if(++count<12){setTimeout(finish,45);return;}
+        searchingForJump=false;schedule();return;
+      }
+      if(flashTimer)clearTimeout(flashTimer);
+      document.querySelectorAll('[data-ifty139-item].ifty148-target').forEach(x=>x.classList.remove('ifty148-target'));
+      card.classList.add('ifty148-target');
+      card.setAttribute('tabindex','-1');
+      // Do not focus an input: preventScroll avoids Safari unexpectedly jumping.
+      try{card.scrollIntoView({behavior:'smooth',block:'center',inline:'nearest'});}catch(_){card.scrollIntoView();}
+      flashTimer=setTimeout(()=>{card.classList.remove('ifty148-target');},2800);
+      searchingForJump=false;schedule();
+    }
+    // Wait for existing list redraw / viewport restore callbacks to finish.
+    setTimeout(finish,110);
+  }
+  document.addEventListener('click',event=>{
+    const btn=event.target?.closest?.('.ifty148-jump');
+    if(!btn)return;
+    event.preventDefault();event.stopPropagation();
+    const card=btn.closest('[data-ifty139-item="1"]');
+    if(card)go(card.dataset.ifty139Subject,card.dataset.ifty139Folder,card.dataset.ifty139Id);
+  },true);
+  document.addEventListener('input',schedule,true);
+  document.addEventListener('click',schedule,true);
+  const start=()=>{
+    style();
+    const observer=new MutationObserver(schedule);
+    observer.observe(document.body,{childList:true,subtree:true});
+    schedule();
+  };
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});
+  else start();
+})();
