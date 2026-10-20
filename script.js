@@ -7153,6 +7153,80 @@ function getIftySocialVisualQuizCandidates(folderId, mode) {
   return (folder.items || []).filter(item => !!item.imageData && !!String(item.title || '').trim());
 }
 
+
+// ★★★ IFTY STEP147: 4択の誤答候補は同じ系統を優先（保存済みデータのみ） ★★★
+// 共通の関連度順位付け。学習データのタグ・分野・品詞・時代・フォルダテーマを用いる。
+// 関連候補が3件未満の場合は他の候補で補い、候補を捏造しない。
+function ifty147Token(value) {
+  return String(value == null ? '' : value).normalize('NFKC').trim().toLowerCase().replace(/[\s　・／/、，,。.「」『』（）()]+/g, '');
+}
+function ifty147Values(value) {
+  const values = Array.isArray(value) ? value : value == null ? [] : [value];
+  return values.flatMap(v => typeof v === 'string' ? v.split(/[、,／/|]+/) : [v])
+    .map(ifty147Token).filter(Boolean);
+}
+function ifty147Overlap(a, b) {
+  if (!a.length || !b.length) return false;
+  const keys = new Set(a);
+  return b.some(v => keys.has(v));
+}
+function ifty147Group(item) {
+  const title = String(item?.title || item?.topic || item?.term || item?.word || item?.originalText || '').trim();
+  const defined = ifty147Token(item?.category || item?.kind || item?.type || '');
+  if (defined && !['unknown','other','others','その他','未分類'].includes(defined)) return defined;
+  const patterns = [
+    ['conflict',/(?:戦争|の戦い|の戦|の乱|の変|の役|の戦役|攻防戦|反乱|内乱|会戦|事変)$/],
+    ['law',/(?:憲法|法典|法令|法律|条例|法|令|勅令|条約|協定|勅書|宣言)$/],
+    ['dynasty',/(?:王朝|帝国|王国|共和国|公国|政権|朝)$/],
+    ['movement',/(?:革命|改革|運動|蜂起|政変|クーデター)$/],
+    ['organization',/(?:同盟|連合|組合|政党|協会|教団|修道会|会社)$/],
+    ['location',/(?:都市|城|遺跡|山脈|平野|海峡|半島|川|河|湖|湾)$/],
+    ['book',/(?:物語|日記|史記|年代記|叙事詩|論語|経典|聖典|文書|著作)$/]
+  ];
+  const hit = patterns.find(([, pattern]) => pattern.test(title));
+  if (hit) return hit[0];
+  // 説明の冒頭だけを利用し、関係ない本文中の語から分類を誤認しない。
+  const intro = String(item?.summary || item?.what || item?.memoryText || item?.explanation || '').slice(0, 95);
+  if (/(?:哲学者|思想家|政治家|学者|皇帝|君主|国王|女王|将軍|詩人|作家|人物|僧侶|科学者|数学者|探検家|指導者)/.test(intro)) return 'person';
+  if (/(?:研究所|図書館|神殿|寺院|施設|建築物|建物)/.test(intro)) return 'facility';
+  return '';
+}
+function ifty147Century(text) {
+  const found = String(text || '').match(/(?:紀元前|前)?\s*(\d{1,2})\s*世紀/);
+  if (found) return (String(text).includes('紀元前') || /^前\s*/.test(String(text)) ? 'BCE:' : 'CE:') + found[1];
+  const year = String(text || '').match(/(?:紀元前|前)?\s*(\d{3,4})\s*年/);
+  if (!year) return '';
+  return (String(text).includes('紀元前') || /^前\s*/.test(String(text)) ? 'BCE:' : 'CE:') + Math.ceil(Number(year[1]) / 100);
+}
+function ifty147Score(targetRef, candidateRef) {
+  const a = targetRef?.item || targetRef?.word || targetRef || {};
+  const b = candidateRef?.item || candidateRef?.word || candidateRef || {};
+  const af = targetRef?.folder || {};
+  const bf = candidateRef?.folder || {};
+  let score = 0;
+  const aGroup = ifty147Group(a), bGroup = ifty147Group(b);
+  if (aGroup && bGroup) score += aGroup === bGroup ? 105 : -25;
+  const aPos = ifty147Token(a.partOfSpeech), bPos = ifty147Token(b.partOfSpeech);
+  if (aPos && bPos) score += aPos === bPos ? 100 : -35;
+  if (ifty147Overlap(ifty147Values(a.subjects || a.subject), ifty147Values(b.subjects || b.subject))) score += 85;
+  if (ifty147Overlap(ifty147Values(a.tags), ifty147Values(b.tags))) score += 70;
+  if (String(af.id || a.folderId || '') && String(af.id || a.folderId) === String(bf.id || b.folderId || '')) score += 48;
+  if (ifty147Token(af.theme) && ifty147Token(af.theme) === ifty147Token(bf.theme)) score += 40;
+  if (ifty147Overlap(ifty147Values(af.tags), ifty147Values(bf.tags))) score += 30;
+  if (ifty147Token(a.periodLabel || a.period || a.era) && ifty147Token(a.periodLabel || a.period || a.era) === ifty147Token(b.periodLabel || b.period || b.era)) score += 55;
+  const aCentury = ifty147Century(a.when), bCentury = ifty147Century(b.when);
+  if (aCentury && aCentury === bCentury) score += 38;
+  if (ifty147Token(a.where) && ifty147Token(a.where) === ifty147Token(b.where)) score += 20;
+  const aLanguage = ifty147Token(a.languageCode || a.language), bLanguage = ifty147Token(b.languageCode || b.language);
+  if (aLanguage && bLanguage) score += aLanguage === bLanguage ? 45 : -80;
+  const aLevel = ifty147Token(a.level), bLevel = ifty147Token(b.level);
+  if (aLevel && bLevel && aLevel === bLevel) score += 6;
+  return score;
+}
+function ifty147RankRelated(targetRef, candidateRefs) {
+  return shuffleArray([...(candidateRefs || [])]).sort((a,b) => ifty147Score(targetRef,b) - ifty147Score(targetRef,a));
+}
+
 function buildIftySocialVisualOptionIds(folderId, targetId, mode) {
   const localFolder = getIftySocialFolder(folderId);
   let pool = [];
@@ -7173,7 +7247,7 @@ function buildIftySocialVisualOptionIds(folderId, targetId, mode) {
     ...pool.filter(item => !localFolder?.items?.some(local => String(local.id) === String(item.id)))
   ];
 
-  for (const item of shuffleArray(prioritized)) {
+  for (const item of ifty147RankRelated(getIftySocialItemById(targetId), prioritized.map(item => getIftySocialItemById(item.id) || {item})).map(ref => ref.item)) {
     if (String(item.id) === String(targetId)) continue;
     if (mode === 'text_to_image' && !item.imageData) continue;
     const label = String(item.title || '').trim();
@@ -7579,7 +7653,7 @@ function makeIftySocialPracticeSimpleQuestions(items, requestedCount) {
     const targetLabel = direction === 'term_to_description' ? target.memoryText : [String(target.title||'').trim(), ...ifty132Aliases(target.aliases),...ifty132Aliases(target.alternateSpellings)].filter(Boolean).join(' / ');
     const seen = new Set([String(targetLabel).trim().toLowerCase()]);
     const distractors = [];
-    for (const ref of shuffleArray(refs.filter(ref => String(ref.item.id) !== String(target.id)))) {
+    for (const ref of ifty147RankRelated(targetRef, refs.filter(ref => String(ref.item.id) !== String(target.id)))) {
       const label = direction === 'term_to_description' ? String(ref.item.memoryText || '').trim() : [String(ref.item.title||'').trim(), ...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)].filter(Boolean).join(' / ');
       const key = label.toLowerCase();
       if (!label || seen.has(key)) continue;
@@ -7637,7 +7711,7 @@ function makeIftySocialPracticeImageQuestions(items, requestedCount) {
     }
 
     const candidatePool = optionPool.some(ref => String(ref.item.id) === String(target.id)) ? optionPool : refs;
-    const others = shuffleArray(candidatePool.filter(ref => String(ref.item.id) !== String(target.id))).slice(0, 3);
+    const others = ifty147RankRelated(targetRef, candidatePool.filter(ref => String(ref.item.id) !== String(target.id))).slice(0, 3);
     const optionRefs = shuffleArray([targetRef, ...others]);
     return {
       id: `image_${index}_${String(target.id)}`,
@@ -9305,7 +9379,7 @@ function buildIftyScienceVisualOptionIds(folderId, targetId, mode) {
     ...pool.filter(item => !localFolder?.items?.some(local => String(local.id) === String(item.id)))
   ];
 
-  for (const item of shuffleArray(prioritized)) {
+  for (const item of ifty147RankRelated(getIftyScienceItemById(targetId), prioritized.map(item => getIftyScienceItemById(item.id) || {item})).map(ref => ref.item)) {
     if (String(item.id) === String(targetId)) continue;
     if (mode === 'text_to_image' && !item.imageData) continue;
     const label = String(item.title || '').trim();
@@ -9708,7 +9782,7 @@ function makeIftySciencePracticeSimpleQuestions(items, requestedCount) {
     const targetLabel = direction === 'term_to_description' ? target.memoryText : [String(target.title||'').trim(), ...ifty132Aliases(target.aliases),...ifty132Aliases(target.alternateSpellings)].filter(Boolean).join(' / ');
     const seen = new Set([String(targetLabel).trim().toLowerCase()]);
     const distractors = [];
-    for (const ref of shuffleArray(refs.filter(ref => String(ref.item.id) !== String(target.id)))) {
+    for (const ref of ifty147RankRelated(targetRef, refs.filter(ref => String(ref.item.id) !== String(target.id)))) {
       const label = direction === 'term_to_description' ? String(ref.item.memoryText || '').trim() : [String(ref.item.title||'').trim(), ...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)].filter(Boolean).join(' / ');
       const key = label.toLowerCase();
       if (!label || seen.has(key)) continue;
@@ -9766,7 +9840,7 @@ function makeIftySciencePracticeImageQuestions(items, requestedCount) {
     }
 
     const candidatePool = optionPool.some(ref => String(ref.item.id) === String(target.id)) ? optionPool : refs;
-    const others = shuffleArray(candidatePool.filter(ref => String(ref.item.id) !== String(target.id))).slice(0, 3);
+    const others = ifty147RankRelated(targetRef, candidatePool.filter(ref => String(ref.item.id) !== String(target.id))).slice(0, 3);
     const optionRefs = shuffleArray([targetRef, ...others]);
     return {
       id: `image_${index}_${String(target.id)}`,
@@ -12046,7 +12120,7 @@ function makeIftyKanbunPracticeSimpleQuestions(refs, requestedCount){
     const correctLabel=direction==='translation_to_original'?String(target.originalText||'').trim():String(target[answerField]||'').trim();
     const seen=new Set([correctLabel.toLowerCase()]);
     const distractors=[];
-    for(const ref of shuffleArray(usable.filter(row=>String(row.item.id)!==String(target.id)))){
+    for(const ref of ifty147RankRelated(targetRef, usable.filter(row=>String(row.item.id)!==String(target.id)))){
       const label=direction==='translation_to_original'?String(ref.item.originalText||'').trim():String(ref.item[answerField]||'').trim();
       const key=label.toLowerCase();
       if(!label||seen.has(key))continue;
@@ -13924,7 +13998,7 @@ function createLocalSelectionQuestion(set, word, direction) {
 
   if (direction === 'jp_to_en') {
     const promptMeaning = getLocalChoiceMeaning(word);
-    const distractors = shuffleArray(candidateRefs.map(ref => String(ref.word.word || '').trim()).filter(Boolean))
+    const distractors = ifty147RankRelated({word}, candidateRefs).map(ref => String(ref.word.word || '').trim()).filter(Boolean)
       .filter((value, index, arr) => value.toLowerCase() !== String(word.word || '').trim().toLowerCase() && arr.findIndex(x => x.toLowerCase() === value.toLowerCase()) === index)
       .slice(0, 3);
     if (!promptMeaning || distractors.length < 3) {
@@ -13942,11 +14016,11 @@ function createLocalSelectionQuestion(set, word, direction) {
   }
 
   const correctAnswer = getLocalChoiceMeaning(word);
-  const meaningPool = candidateRefs
+  const meaningPool = ifty147RankRelated({word}, candidateRefs)
     .map(ref => getLocalChoiceMeaning(ref.word))
     .map(value => String(value || '').trim())
     .filter(Boolean);
-  const distractors = shuffleArray(meaningPool)
+  const distractors = meaningPool
     .filter((value, index, arr) => value !== correctAnswer && arr.indexOf(value) === index)
     .slice(0, 3);
   if (!correctAnswer || distractors.length < 3) {
@@ -13996,11 +14070,8 @@ function createLocalListeningQuestion(set, word) {
 
   const availableModes = ['spelling'];
 
-  const wordDistractors = shuffleArray(
-    candidateRefs
-      .map(ref => String(ref.word.word || '').trim())
-      .filter(Boolean)
-  ).filter((value, index, arr) =>
+  const wordDistractors = ifty147RankRelated({word}, candidateRefs)
+    .map(ref => String(ref.word.word || '').trim()).filter(Boolean).filter((value, index, arr) =>
     value.toLowerCase() !== targetWord.toLowerCase() &&
     arr.findIndex(item => item.toLowerCase() === value.toLowerCase()) === index
   ).slice(0, 3);
@@ -14008,12 +14079,9 @@ function createLocalListeningQuestion(set, word) {
   if (wordDistractors.length >= 3) availableModes.push('word_choice');
 
   const correctMeaning = getLocalChoiceMeaning(word);
-  const meaningDistractors = shuffleArray(
-    candidateRefs
-      .map(ref => getLocalChoiceMeaning(ref.word))
-      .map(value => String(value || '').trim())
-      .filter(Boolean)
-  ).filter((value, index, arr) =>
+  const meaningDistractors = ifty147RankRelated({word}, candidateRefs)
+    .map(ref => getLocalChoiceMeaning(ref.word))
+    .map(value => String(value || '').trim()).filter(Boolean).filter((value, index, arr) =>
     value !== correctMeaning && arr.indexOf(value) === index
   ).slice(0, 3);
 
@@ -15993,18 +16061,18 @@ function buildIftyKanjiRelationQuestion(ref,refs){
   if(!pools.length)return null;
   const [relation,label,answers]=pools[Math.floor(Math.random()*pools.length)];
   const answer=answers[Math.floor(Math.random()*answers.length)];
-  const wrongPool=[...(ref.item.synonyms||[]),...(ref.item.sameMeaning||[]),...(ref.item.antonyms||[]),...refs.flatMap(x=>[x.item.term,...(x.item.synonyms||[]),...(x.item.sameMeaning||[]),...(x.item.antonyms||[])])].filter(v=>v&&v!==answer&&!answers.includes(v));
-  const options=shuffleArray([answer,...[...new Set(wrongPool)].slice(0,8)]).slice(0,4);
-  if(options.length<2)return null;
-  if(!options.includes(answer))options[0]=answer;
-  return {mode:'relations',targetItemId:ref.item.id,prompt:`「${ref.item.term}」の${label}として適切なものは？`,options:shuffleArray([...new Set(options)]).slice(0,4),answer,relation};
+  const related = ifty147RankRelated(ref, refs.filter(x=>String(x.item.id)!==String(ref.item.id)));
+  const wrongPool=[...related.flatMap(x=>[x.item.term,...(x.item.synonyms||[]),...(x.item.sameMeaning||[]),...(x.item.antonyms||[])]),...(ref.item.synonyms||[]),...(ref.item.sameMeaning||[]),...(ref.item.antonyms||[])].filter(v=>v&&v!==answer&&!answers.includes(v));
+  const distractors=[...new Set(wrongPool)].slice(0,3);
+  if(distractors.length<1)return null;
+  return {mode:'relations',targetItemId:ref.item.id,prompt:`「${ref.item.term}」の${label}として適切なものは？`,options:shuffleArray([answer,...distractors]),answer,relation};
 }
 function makeIftyKanjiPracticeQuestion(ref,mode,refs){
   const item=ref.item, meaning=item.meanings?.[0]||item.explanation||'', reading=item.readings?.[0]||'';
   if(mode==='simple_meaning'){
     if(!meaning)return null;
-    const distract=[...new Set(refs.filter(x=>x.item.id!==item.id).flatMap(x=>x.item.meanings||[]).filter(Boolean))];
-    const options=shuffleArray([meaning,...shuffleArray(distract).slice(0,3)]);
+    const distract=[...new Set(ifty147RankRelated(ref,refs.filter(x=>x.item.id!==item.id)).flatMap(x=>x.item.meanings||[]).filter(Boolean))];
+    const options=shuffleArray([meaning,...distract.filter(v=>ifty147Token(v)!==ifty147Token(meaning)).slice(0,3)]);
     if(options.length<2)return null;
     return {mode,targetItemId:item.id,prompt:`「${item.term}」の意味として最も適切なものは？`,options,answer:meaning};
   }
@@ -16203,7 +16271,7 @@ window.generateIftyOthersItem=async function(folderId){
 };
 
 function getIftyOthersPracticeRefs(){if(iftySubjectQuizRunOverride?.subject==='OTHERS'){const ids=new Set((iftySubjectQuizRunOverride.itemIds||[]).map(String));return getIftyOthersModule().folders.flatMap(folder=>(folder.items||[]).filter(item=>ids.has(String(item.id))).map(item=>({folder,item})));}return getIftyOthersModule().folders.flatMap(folder=>(folder.items||[]).map(item=>({folder,item})));}
-function buildIftyOthersPracticeQuestions(modes,count){const refs=shuffleArray(getIftyOthersPracticeRefs());const out=[];const usableModes=modes.length?modes:['simple'];for(let i=0;i<Math.min(count,refs.length);i++){const ref=refs[i];const mode=usableModes[i%usableModes.length];if(mode==='simple'){const distract=shuffleArray(refs.filter(x=>x.item.id!==ref.item.id)).slice(0,3).map(x=>x.item.title);const options=shuffleArray([ref.item.title,...distract]);if(options.length<2){out.push({mode:'term_write',targetItemId:ref.item.id,prompt:ref.item.memoryText||ref.item.title,answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});}else out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この説明に当てはまる用語は？',options,answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});}else if(mode==='term_write')out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この項目名を書いてください。',answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});else out.push({mode:'explanation',targetItemId:ref.item.id,prompt:`「${ref.item.title}」を簡潔に説明してください。`,referenceAnswer:ref.item.memoryText,keyPoints:ref.item.keyPoints||[]});}return out;}
+function buildIftyOthersPracticeQuestions(modes,count){const refs=shuffleArray(getIftyOthersPracticeRefs());const out=[];const usableModes=modes.length?modes:['simple'];for(let i=0;i<Math.min(count,refs.length);i++){const ref=refs[i];const mode=usableModes[i%usableModes.length];if(mode==='simple'){const distract=ifty147RankRelated(ref,refs.filter(x=>x.item.id!==ref.item.id)).slice(0,3).map(x=>x.item.title);const options=shuffleArray([ref.item.title,...distract]);if(options.length<2){out.push({mode:'term_write',targetItemId:ref.item.id,prompt:ref.item.memoryText||ref.item.title,answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});}else out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この説明に当てはまる用語は？',options,answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});}else if(mode==='term_write')out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この項目名を書いてください。',answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});else out.push({mode:'explanation',targetItemId:ref.item.id,prompt:`「${ref.item.title}」を簡潔に説明してください。`,referenceAnswer:ref.item.memoryText,keyPoints:ref.item.keyPoints||[]});}return out;}
 window.startIftyOthersPractice=async function(modes){const refs=getIftyOthersPracticeRefs();if(!refs.length)return alert('出題できるOTHERS項目がありません。');const ms=[...new Set((Array.isArray(modes)?modes:[modes]).filter(Boolean))];iftyOthersPracticeState={modes:ms,questions:buildIftyOthersPracticeQuestions(ms,iftyOthersPracticeQuestionCount),index:0,correct:0,wrong:0,answered:false,feedback:'',modelAnswer:'',last:null};closePracticeModal();renderIftyOthersPracticePlayer();};
 function renderIftyOthersPracticePlayer(){const st=iftyOthersPracticeState;if(!st)return;let modal=document.getElementById('practiceModal');if(!modal){modal=document.createElement('div');modal.id='practiceModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;justify-content:center;align-items:center;padding:18px;box-sizing:border-box;z-index:10030;';document.body.appendChild(modal);}modal.style.display='flex';if(st.index>=st.questions.length){setIftyPracticeQuestionActive(modal,false);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:22px;text-align:center;"><h2>OTHERS PRACTICE 完了</h2><div style="font-size:1.2em;font-weight:900;color:#0f766e;">正解 ${st.correct} / ${st.questions.length}</div><button onclick="openPracticeHome('OTHERS')" style="margin-top:14px;border:none;background:#334155;color:white;border-radius:8px;padding:10px 14px;font-weight:900;">PRACTICEへ戻る</button></div>`;return;}setIftyPracticeQuestionActive(modal,true);const q=st.questions[st.index],meta=getIftyOthersPracticeModeMeta(q.mode);const result=st.answered?`<div style="margin-top:12px;padding:10px;border-radius:8px;background:${st.last?.correct?'#f0fdf4':'#fef2f2'};color:${st.last?.correct?'#166534':'#991b1b'};"><b>${st.last?.correct?'⭕ 正解':'❌ 要復習'}</b>${st.feedback?`<div style="margin-top:5px;white-space:pre-wrap;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:6px;color:#475569;"><b>基準：</b>${escapeHtml(st.modelAnswer)}</div>`:''}<button onclick="nextIftyOthersPracticeQuestion()" style="width:100%;margin-top:10px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px;font-weight:900;">次へ</button></div>`:'';const answer=st.answered?'':(q.mode==='simple'?`<div style="display:grid;gap:8px;margin-top:12px;">${q.options.map(o=>`<button onclick="submitIftyOthersPracticeAnswer(${JSON.stringify(o).replace(/"/g,'&quot;')})" style="border:1px solid #cbd5e1;background:white;border-radius:8px;padding:10px;text-align:left;font-weight:800;">${escapeHtml(o)}</button>`).join('')}</div>`:`<textarea id="iftyOthersPracticeAnswer" rows="4" placeholder="回答を入力" style="width:100%;box-sizing:border-box;margin-top:12px;padding:10px;border:1px solid #c4b5fd;border-radius:8px;"></textarea><button onclick="submitIftyOthersPracticeAnswer()" style="width:100%;margin-top:8px;border:none;background:${meta.color};color:white;border-radius:8px;padding:10px;font-weight:900;">回答する</button>`);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(680px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><b style="color:${meta.color};">OTHERS ・ ${meta.title} ・ ${st.index+1}/${st.questions.length}</b><button onclick="openPracticeHome('OTHERS')" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;">終了</button></div><div style="margin-top:14px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:9px;line-height:1.65;white-space:pre-wrap;">${escapeHtml(q.prompt)}</div>${answer}${result}</div>`;}
 window.submitIftyOthersPracticeAnswer=async function(choice){const st=iftyOthersPracticeState;if(!st||st.answered)return;const q=st.questions[st.index];const ref=getIftyOthersItemById(q.targetItemId);if(!ref)return;const user=choice!==undefined?String(choice):String(document.getElementById('iftyOthersPracticeAnswer')?.value||'').trim();if(!user)return;let correct=false,feedback='',model=q.answer||q.referenceAnswer||'';if(q.mode==='simple'||q.mode==='term_write'){const accepted=[q.answer,...(q.aliases||[])].map(x=>String(x||'').trim().toLowerCase());correct=accepted.includes(user.trim().toLowerCase());feedback=correct?'登録内容と一致しました。':'登録内容とは一致しませんでした。';}else{if(!ensureIftyOnline('OTHERS記述採点'))return;try{const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_grade',quizType:'others_explanation',direction:'term_to_explanation',question:q.prompt,referenceAnswer:q.referenceAnswer||'',userAnswer:user,word:{word:ref.item.title,meanings:[ref.item.memoryText],details:(ref.item.keyPoints||[]).join(' / ')},subject:'OTHERS',order:getIftySubjectOrder('OTHERS')})});const data=await response.json().catch(()=>({}));if(!response.ok)throw alliaHttpError(response,data,'採点に失敗しました。');correct=data.correct===true;feedback=data.feedback||'';model=data.modelAnswer||model;}catch(e){return alert(String(e.message||e));}}st.answered=true;st.last={correct,userAnswer:user};st.feedback=feedback;st.modelAnswer=model;if(correct)st.correct++;else st.wrong++;recordIftySubjectStudyEvent('OTHERS',q.targetItemId,correct,`others_${q.mode}`);enrollIftyEntityReviewFromStudy(ref.item,correct);savePracticeData();renderIftyOthersPracticePlayer();};
@@ -22913,7 +22981,7 @@ function buildIftyAncientChoiceQuestion(target, refs) {
   const targetMeaning = String(target.item.meanings?.[0] || target.item.memoryText || '').trim();
 
   const pool = refs.filter(ref => String(ref.item.id) !== String(target.item.id));
-  const distractors = shuffleArray(pool).slice(0, Math.min(3, pool.length));
+  const distractors = ifty147RankRelated(target, pool).slice(0, Math.min(3, pool.length));
   const options = shuffleArray([target, ...distractors]).map(ref => ({
     id: String(ref.item.id),
     label: direction === 'word_to_meaning'
@@ -24361,7 +24429,7 @@ async function renderQuizPlayer(setId) {
         const data = createLocalInflectionQuestion(ref.word);
         p.currentQuestion={...data,quizType:type,direction:'inflection',wordId:ref.word.id};
       } else {
-        const candidateWords=shuffleArray((set.wordIds||[]).filter(id=>id!==ref.word.id)).slice(0,8).map(id=>{const x=getWordById(id);return x?x.word:null;}).filter(Boolean);
+        const candidateWords=ifty147RankRelated(ref,(set.wordIds||[]).filter(id=>id!==ref.word.id).map(id=>getWordById(id)).filter(Boolean)).slice(0,8).map(row=>row.word.word).filter(Boolean);
         const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_generate',quizType:type,direction,word:ref.word,candidateWords,subject:'ENGLISH',order:getIftyPracticeOrder('ENGLISH')})});
         const data=await response.json();
         if(!response.ok) throw alliaHttpError(response, data, '問題生成に失敗しました。');
@@ -29532,6 +29600,38 @@ window.ifty144RunYearPracticeSet=function(id){
   ifty144StartYearPractice(rows,set);
 };
 
+
+function ifty147RankYearChoices(mode, row, choices, rows) {
+  const targetYear = Number(row.year) || 0;
+  const era = normalizeIftyYearEra(row.era);
+  const targetSubjects = new Set((row.exactEvents || []).map(ev => getIftyYearSubjectLabel(ev.subject)));
+  const norm = value => ifty144SimpleNormalize(value);
+  const candidateInfo = new Map();
+  for (const candidate of rows) {
+    const label = candidate.yearLabel || formatIftyYearLabel(candidate.era, candidate.year);
+    const record = { year: Number(candidate.year), era:normalizeIftyYearEra(candidate.era), period:String(candidate.periodLabel||''), subjects: new Set((candidate.exactEvents||[]).map(ev=>getIftyYearSubjectLabel(ev.subject))) };
+    if (mode === 'event_year') candidateInfo.set(norm(label), record);
+    if (mode === 'year_event') for (const event of candidate.exactEvents || []) {
+      const title=ifty144EventTitle(event);
+      if (title && !candidateInfo.has(norm(title))) candidateInfo.set(norm(title), {...record,subjects:new Set([getIftyYearSubjectLabel(event.subject)])});
+    }
+    if (mode === 'year_period' && record.period && !candidateInfo.has(norm(record.period))) candidateInfo.set(norm(record.period), record);
+  }
+  return ifty144Shuffle(choices).sort((a,b) => {
+    const score = candidate => {
+      const other = candidateInfo.get(norm(candidate));
+      if (!other) return -100;
+      let n=0;
+      if (other.era===era) n+=45;
+      if (other.period && String(row.periodLabel||'') && other.period===String(row.periodLabel)) n+=50;
+      if ([...other.subjects].some(v=>targetSubjects.has(v))) n+=55;
+      if (other.era===era && targetYear && other.year) n+=Math.max(0,40-Math.log2(1+Math.abs(other.year-targetYear))*5);
+      return n;
+    };
+    return score(b)-score(a);
+  });
+}
+
 function ifty144YearQuestionBank(entries, modes,formats){
   const questionBank=[];
   const rows=(entries||[]).filter(e=>Number(e.year)>0);
@@ -29554,7 +29654,7 @@ function ifty144YearQuestionBank(entries, modes,formats){
     if(formats.includes('written'))questionBank.push({...base,format:'written'});
     if(formats.includes('choice')){
       const correct=uniqueAnswers[0];const extras=ifty144Unique(choices).filter(x=>!uniqueAnswers.some(a=>ifty144SimpleNormalize(a)===ifty144SimpleNormalize(x)));
-      if(extras.length>=3)questionBank.push({...base,format:'choice',options:ifty144Shuffle([correct,...ifty144Shuffle(extras).slice(0,3)]),answers:[correct]});
+      if(extras.length>=3)questionBank.push({...base,format:'choice',options:ifty144Shuffle([correct,...ifty147RankYearChoices(mode,row,extras,rows).slice(0,3)]),answers:[correct]});
     }
   }
   for(const row of rows){
