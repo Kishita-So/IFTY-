@@ -2936,26 +2936,9 @@ function ensureIftyUsabilityStyles() {
 }
 
 function ensureIftyScrollTopButton() {
+  // STEP142: one clear navigation dock replaces the old single "上へ" button.
   ensureIftyUsabilityStyles();
-  let btn = document.getElementById('iftyScrollTopBtn');
-  if (!btn) {
-    btn = document.createElement('button');
-    btn.id = 'iftyScrollTopBtn';
-    btn.type = 'button';
-    btn.setAttribute('aria-label','ページ上部へ戻る');
-    btn.innerHTML = '↑ <span>上へ</span>';
-    btn.onclick = () => {
-      try { window.scrollTo({top:0,left:0,behavior:'smooth'}); }
-      catch (_) { window.scrollTo(0,0); }
-    };
-    document.body.appendChild(btn);
-  }
-  const sync = () => btn.classList.toggle('ifty-visible', Number(window.scrollY || document.scrollingElement?.scrollTop || 0) > 420);
-  if (!window.__iftyScrollTopListenerInstalled) {
-    window.__iftyScrollTopListenerInstalled = true;
-    window.addEventListener('scroll', sync, {passive:true});
-  }
-  sync();
+  ensureIfty142JumpDock();
 }
 
 function enhanceIftyPracticeCloseButtons(root=document.getElementById('practiceModal')) {
@@ -6077,7 +6060,9 @@ function buildIftySocialLegacyMemoryText(value) {
 // IFTY STEP132：別名・別表記は既存の名称と独立保存する。
 
 function ifty139DragHandle(subject, folderId, itemId) {
-  return `<button type="button" class="ifty139-drag-handle" data-ifty139-handle="1" aria-label="長押しドラッグで並べ替え" title="長押しドラッグで並べ替え（選択中はまとめて移動）" onpointerdown="ifty139PointerDown(event)" oncontextmenu="event.preventDefault()" onkeydown="ifty139HandleKey(event)" style="flex:none;width:36px;height:40px;touch-action:none;user-select:none;border:1px solid #94a3b8;border-radius:8px;background:#eef2ff;color:#334155;font-size:22px;line-height:1;cursor:grab;">⠿</button>`;
+  // Avoid font-dependent Braille glyphs: they rendered as blank squares on some iPads.
+  // The six-dot SVG plus the visible "並替" label identifies the action on every platform.
+  return `<button type="button" class="ifty139-drag-handle" data-ifty139-handle="1" aria-label="単語を長押しして並べ替え。チェック済み項目もまとめて動きます" title="長押しで単語を並べ替え（選択中はまとめて移動）" onpointerdown="ifty139PointerDown(event)" oncontextmenu="event.preventDefault()" onkeydown="ifty139HandleKey(event)"><svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" focusable="false"><circle cx="5" cy="4" r="1.8"/><circle cx="13" cy="4" r="1.8"/><circle cx="5" cy="9" r="1.8"/><circle cx="13" cy="9" r="1.8"/><circle cx="5" cy="14" r="1.8"/><circle cx="13" cy="14" r="1.8"/></svg><span>並替</span></button>`;
 }
 
 // STEP139: automatically suggested exact-name aliases, never overwrite user-edited aliases.
@@ -12432,7 +12417,7 @@ window.nextIftyKanbunPracticeQuestion=function(){
 
 window.openIftyKanbunQuestionHelp=function(){const q=getCurrentIftyKanbunPracticeQuestion();if(!q)return;document.getElementById('iftyKanbunHelpModal')?.remove();const modal=document.createElement('div');modal.id='iftyKanbunHelpModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:12170;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';modal.innerHTML=`<div style="width:min(620px,100%);max-height:88vh;overflow:auto;background:white;border-radius:14px;padding:16px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b style="color:#6d28d9;">🤖 ALLIAに質問</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">今の漢文問題を開いたまま質問できます。</div></div><button type="button" onclick="document.getElementById('iftyKanbunHelpModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div><div id="iftyKanbunHelpHistory" style="margin-top:10px;display:grid;gap:7px;"></div><div style="display:flex;gap:7px;margin-top:10px;align-items:flex-end;"><textarea id="iftyKanbunHelpInput" rows="2" placeholder="例：この『未』はどう読む？／答えは言わずヒントだけ" style="flex:1;min-width:0;padding:9px;border:1px solid #c4b5fd;border-radius:8px;resize:vertical;"></textarea><button type="button" onclick="askIftyKanbunQuestionHelp()" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px 12px;font-weight:900;cursor:pointer;">送信</button></div><div id="iftyKanbunHelpStatus" style="margin-top:5px;font-size:.72em;color:#64748b;"></div></div>`;document.body.appendChild(modal);renderIftyKanbunHelpHistory();document.getElementById('iftyKanbunHelpInput')?.focus();};
 function renderIftyKanbunHelpHistory(){const wrap=document.getElementById('iftyKanbunHelpHistory');if(!wrap)return;wrap.innerHTML=iftyKanbunHelpHistory.map(row=>`<div style="padding:8px 10px;border-radius:8px;background:${row.role==='user'?'#f1f5f9':'#faf5ff'};color:#334155;white-space:pre-wrap;line-height:1.5;"><b style="font-size:.72em;color:${row.role==='user'?'#475569':'#6d28d9'};">${row.role==='user'?'自分':'ALLIA'}</b><div style="margin-top:3px;">${escapeHtml(row.text)}</div></div>`).join('');wrap.scrollTop=wrap.scrollHeight;}
-window.askIftyKanbunQuestionHelp=async function(){const q=getCurrentIftyKanbunPracticeQuestion();const input=document.getElementById('iftyKanbunHelpInput');const userQuestion=String(input?.value||'').trim();if(!q||!userQuestion)return;if(!ensureIftyOnline('ALLIA質問'))return;const history=iftyKanbunHelpHistory.slice(-8);iftyKanbunHelpHistory.push({role:'user',text:userQuestion});if(input)input.value='';renderIftyKanbunHelpHistory();const status=document.getElementById('iftyKanbunHelpStatus');if(status)status.textContent='ALLIAが考えています…';try{const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_help',quizType:`kanbun_${getCurrentIftyKanbunPracticeMode()}`,direction:'',question:[q.prompt?`問題：${q.prompt}`:'',`原文：${q.originalText}`,q.clozeText?`${q.clozeLabel||'穴埋め'}：${q.clozeText}`:'',q.sourceText?`提示文：${q.sourceText}`:''].filter(Boolean).join('\n'),instruction:getIftyKanbunPracticeModeMeta(getCurrentIftyKanbunPracticeMode()).description,userQuestion,options:[],history,subject:'KANBUN',order:getIftySubjectOrder('KANBUN')})});const data=await response.json().catch(()=>({}));if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);iftyKanbunHelpHistory.push({role:'assistant',text:String(data.answer||'説明を生成できませんでした。')});renderIftyKanbunHelpHistory();if(status)status.textContent='';}catch(error){if(status)status.textContent=String(error.message||error);}};
+window.askIftyKanbunQuestionHelp=async function(){const q=getCurrentIftyKanbunPracticeQuestion();const input=document.getElementById('iftyKanbunHelpInput');const userQuestion=String(input?.value||'').trim();if(!q||!userQuestion)return;if(!ensureIftyOnline('ALLIA質問'))return;const history=iftyKanbunHelpHistory.slice(-8);iftyKanbunHelpHistory.push({role:'user',text:userQuestion});if(input)input.value='';renderIftyKanbunHelpHistory();const status=document.getElementById('iftyKanbunHelpStatus');if(status)status.textContent='ALLIAが考えています…';try{const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_help',answerRevealed:!!iftyKanbunPracticeState?.answered,quizType:`kanbun_${getCurrentIftyKanbunPracticeMode()}`,direction:'',question:[q.prompt?`問題：${q.prompt}`:'',`原文：${q.originalText}`,q.clozeText?`${q.clozeLabel||'穴埋め'}：${q.clozeText}`:'',q.sourceText?`提示文：${q.sourceText}`:''].filter(Boolean).join('\n'),instruction:getIftyKanbunPracticeModeMeta(getCurrentIftyKanbunPracticeMode()).description,userQuestion,options:[],history,subject:'KANBUN',order:getIftySubjectOrder('KANBUN')})});const data=await response.json().catch(()=>({}));if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);iftyKanbunHelpHistory.push({role:'assistant',text:String(data.answer||'説明を生成できませんでした。')});renderIftyKanbunHelpHistory();if(status)status.textContent='';}catch(error){if(status)status.textContent=String(error.message||error);}};
 
 window.openIftySubject = function(subject) {
   const normalized = normalizeIftySubject(subject);
@@ -18701,6 +18686,7 @@ function renderIftyBasicPracticeQuestion() {
   else if(direction==='ja_to_en'){prompt=item.ja;label='英訳を入力';}
   else {prompt=item.en;label='和訳を入力';}
   const closeAction = st.setId ? `openIftyBasicPracticeSet('${st.setId}')` : `setIftyUnifiedPracticeSubject('BASIC SENTENCES')`;
+  st.ifty143Prompt=prompt;
   modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(700px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:10px;"><div style="font-weight:900;color:${st.mode==='cloze'?'#1d4ed8':'#5b21b6'};">${st.mode==='cloze'?'🧩 穴埋め':'✍️ 記述'}　${st.index+1}/${st.queue.length}</div><button onclick="${closeAction}" style="border:none;background:none;font-size:1.3em;color:#64748b;">✕</button></div><div style="margin-top:18px;padding:16px;border-radius:10px;background:#f8fafc;font-size:1.08em;line-height:1.7;white-space:pre-wrap;">${escapeHtml(prompt)}</div><label style="display:block;margin-top:14px;font-weight:800;color:#334155;">${label}<textarea id="iftyBasicPracticeAnswer" rows="3" style="width:100%;box-sizing:border-box;margin-top:7px;padding:11px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;"></textarea></label><button id="iftyBasicPracticeSubmit" onclick="submitIftyBasicPracticeAnswer()" style="width:100%;margin-top:11px;border:none;background:${st.mode==='cloze'?'#2563eb':'#7c3aed'};color:white;border-radius:8px;padding:11px;font-weight:900;">回答</button><div style="margin-top:8px;color:#64748b;font-size:.78em;">Enterで回答 / Shift+Enterで改行${st.mode==='cloze'?'。通常はALLIAを使用しません。':''}</div></div>`;
   const input=document.getElementById('iftyBasicPracticeAnswer');
   if(input){
@@ -24466,6 +24452,7 @@ window.sendIftyQuizAlliaQuestion = async function(setId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         type: 'question_help',
+        answerRevealed: !!document.getElementById('practiceModal')?.querySelector('h2'),
         quizType: context.question.quizType,
         direction: context.question.direction,
         question: context.question.question || '',
@@ -28963,3 +28950,354 @@ window.ifty139HandleKey = function(event) {
   `;
   document.head.appendChild(style);
 })();
+
+
+// ============================================================================
+// IFTY STEP142: Discoverable drag grip and four fixed scroll destinations.
+// Existing folders, item order, save routines and Worker API are unchanged.
+// ============================================================================
+function ifty142Visible(node) {
+  return !!(node && node.isConnected && node.getClientRects().length &&
+    node.getBoundingClientRect().height > 0 && getComputedStyle(node).visibility !== 'hidden');
+}
+function ifty142FolderNodes() {
+  // Re-read the DOM every time: folders are frequently redrawn by IFTY.
+  const nodes = [];
+  const add = node => { if (ifty142Visible(node) && !nodes.includes(node)) nodes.push(node); };
+  const vocab = document.getElementById('vocabPage');
+  const english = document.getElementById('folders');
+  if (ifty142Visible(vocab) && english) {
+    [...english.children].forEach(el => {
+      if (el.querySelector('.ifty-folder-header')) add(el);
+    });
+  }
+  const portal = document.querySelector('.ifty-portal-shell');
+  if (ifty142Visible(portal)) {
+    portal.querySelectorAll('[id^="iftySocialFolder_"], [id^="iftyScienceFolder_"], [id^="iftyAncientFolder_"], .ifty-kanji-folder-card, .ifty-year-folder, #iftyBasicSentenceList > section').forEach(add);
+    // These folder cards do not have stable IDs or class names in STEP141.
+    portal.querySelectorAll('button[onclick*="toggleIftyKanbunFolderCollapse("], button[onclick*="toggleIftyOthersFolder("], button[onclick*="toggleIftyPronunciationFolder("]').forEach(button => add(button.closest('section')));
+  }
+  return nodes.sort((a,b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+}
+function ifty142CurrentFolder() {
+  const candidates=ifty142FolderNodes();
+  if (!candidates.length) return null;
+  // Use the reading position (slightly above the viewport center) to choose
+  // the current folder, even if its header is far above the visible area.
+  const line=innerHeight*0.42;
+  return candidates.reduce((best, el) => {
+    const box=el.getBoundingClientRect();
+    const distance=box.top > line ? box.top-line : box.bottom < line ? line-box.bottom : 0;
+    if (!best || distance < best.distance) return {el,distance};
+    return best;
+  },null)?.el || null;
+}
+function ifty142ScrollTo(y) {
+  const height=Math.max(document.body?.scrollHeight||0, document.documentElement.scrollHeight||0);
+  const max=Math.max(0,height-innerHeight);
+  const target=Math.min(max,Math.max(0,Math.round(y)));
+  const reduced=!!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  try {window.scrollTo({left:0,top:target,behavior:reduced?'auto':'smooth'});}
+  catch (_) {window.scrollTo(0,target);}
+}
+function ifty142Go(destination) {
+  const folder = destination.startsWith('folder') ? ifty142CurrentFolder() : null;
+  if (destination.startsWith('folder') && !folder) {
+    // No actual folder on this page; never silently jump somewhere else.
+    const status=document.getElementById('ifty142JumpStatus');
+    if(status) status.textContent='この画面にフォルダはありません';
+    return;
+  }
+  if (destination==='pageTop') ifty142ScrollTo(0);
+  else if(destination==='pageBottom') ifty142ScrollTo(document.documentElement.scrollHeight);
+  else if(folder) {
+    const r=folder.getBoundingClientRect();
+    const start=r.top + window.scrollY;
+    if(destination==='folderTop') ifty142ScrollTo(start-12);
+    else if(destination==='folderBottom') {
+      // Short folders should not jump above their own header.
+      ifty142ScrollTo(Math.max(start-12, r.bottom+window.scrollY-innerHeight+12));
+    }
+  }
+}
+function ensureIfty142JumpDock() {
+  if (!document.body) {document.addEventListener('DOMContentLoaded',ensureIfty142JumpDock,{once:true});return;}
+  const old=document.getElementById('iftyScrollTopBtn');
+  if(old) old.remove();
+  if(document.getElementById('ifty142JumpDock')) return;
+  const style=document.createElement('style');
+  style.id='ifty142JumpStyle';
+  style.textContent=`
+    .ifty139-drag-handle {
+      display:inline-flex!important;flex:none!important;flex-direction:column!important;
+      align-items:center!important;justify-content:center!important;gap:1px!important;
+      box-sizing:border-box!important;width:48px!important;min-width:48px!important;
+      height:48px!important;min-height:44px!important;padding:4px 3px!important;
+      background:#243b53!important;color:#fff!important;
+      border:1px solid #64748b!important;border-radius:9px!important;
+      font-size:11px!important;font-weight:800!important;line-height:1.1!important;
+      cursor:grab!important;touch-action:none!important;-webkit-user-select:none!important;user-select:none!important;
+    }
+    .ifty139-drag-handle svg {fill:currentColor;display:block;flex:none;pointer-events:none;}
+    .ifty139-drag-handle span {font:inherit;pointer-events:none;white-space:nowrap;}
+    .ifty139-drag-handle:focus-visible {outline:3px solid #38bdf8;outline-offset:2px;}
+    .ifty139-drag-handle:active {cursor:grabbing!important;background:#075985!important;}
+    #ifty142JumpDock {
+      position:fixed;right:12px;bottom:calc(162px + env(safe-area-inset-bottom,0px));
+      z-index:11950;box-sizing:border-box;width:194px;max-width:calc(100vw - 24px);
+      border:1px solid #64748b;border-radius:13px;padding:7px;
+      background:rgba(15,23,42,.97);box-shadow:0 6px 20px rgba(0,0,0,.28);
+      color:#fff;font-family:system-ui,-apple-system,sans-serif;
+    }
+    #ifty142JumpDock .ifty142-nav-title {font-size:11px;font-weight:850;padding:0 3px 5px;color:#e2e8f0;}
+    #ifty142JumpDock .ifty142-nav-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;}
+    #ifty142JumpDock button {
+      min-width:0;min-height:43px;border:1px solid #64748b;border-radius:8px;
+      background:#263e59;color:#fff;padding:5px 3px;font-size:11px;
+      font-weight:800;line-height:1.25;text-align:center;cursor:pointer;touch-action:manipulation;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+    }
+    #ifty142JumpDock button span {display:block;white-space:nowrap;font-size:inherit;}
+    #ifty142JumpDock button:disabled {opacity:.45;cursor:default;}
+    #ifty142JumpDock button:focus-visible {outline:3px solid #38bdf8;}
+    #ifty142JumpStatus {font-size:10px;color:#fcd34d;min-height:0;text-align:center;}
+    @media(max-width:600px){
+      #ifty142JumpDock {right:8px;bottom:calc(144px + env(safe-area-inset-bottom,0px));width:170px;padding:6px;}
+      #ifty142JumpDock button {font-size:10px;min-height:38px;}
+    }
+  `;
+  document.head.appendChild(style);
+  const dock=document.createElement('nav');
+  dock.id='ifty142JumpDock';
+  dock.setAttribute('aria-label','ページ・フォルダ内の移動');
+  dock.innerHTML=`<div class="ifty142-nav-title">↕ 移動先</div>
+    <div class="ifty142-nav-grid">
+      <button type="button" data-ifty142-to="pageTop" title="ページの先頭へ" aria-label="ページの先頭へ"><span>ページ</span><span>↑ 先頭</span></button>
+      <button type="button" data-ifty142-to="pageBottom" title="ページの末尾へ" aria-label="ページの末尾へ"><span>ページ</span><span>↓ 末尾</span></button>
+      <button type="button" data-ifty142-to="folderTop" title="今いるフォルダの先頭へ" aria-label="今いるフォルダの先頭へ"><span>フォルダ</span><span>↑ 先頭</span></button>
+      <button type="button" data-ifty142-to="folderBottom" title="今いるフォルダの末尾へ" aria-label="今いるフォルダの末尾へ"><span>フォルダ</span><span>↓ 末尾</span></button>
+    </div><div id="ifty142JumpStatus" aria-live="polite"></div>`;
+  dock.addEventListener('click',e=>{
+    const btn=e.target.closest('button[data-ifty142-to]');if(!btn)return;
+    ifty142Go(btn.dataset.ifty142To);
+  });
+  document.body.appendChild(dock);
+  let queued=false;
+  const update=()=>{
+    queued=false;
+    if(!dock.isConnected)return;
+    const isVocab=ifty142Visible(document.getElementById('vocabPage'));
+    const isSubject=ifty142Visible(document.querySelector('.ifty-portal-shell'));
+    // Keep controls off sign-in and unrelated popup screens.
+    dock.hidden=!isVocab&&!isSubject;
+    dock.style.display=dock.hidden?'none':'';
+    if(dock.hidden)return;
+    const hasFolder=!!ifty142CurrentFolder();
+    dock.querySelectorAll('button[data-ifty142-to^="folder"]').forEach(b=>{b.disabled=!hasFolder;});
+  };
+  const schedule=()=>{if(!queued){queued=true;requestAnimationFrame(update);}};
+  window.addEventListener('scroll',schedule,{passive:true});
+  document.addEventListener('click',schedule,{passive:true});
+  // The subject page is reconstructed, but navigation remains mounted to body.
+  // Update after page changes, not for every item added.
+  window.addEventListener('popstate',schedule);
+  update();
+}
+
+// ==========================================
+// IFTY STEP143: 全教科PRACTICE スキップ / 解答前後ALLIA質問
+// STEP142の既存クイズ・採点ロジックはそのまま維持する。
+// ==========================================
+const IFTY143_HELP_MESSAGES = new Map();
+let ifty143HelpActive = null;
+
+function ifty143Context(kind) {
+  let st = null, q = null, subject = '', label = '';
+  if (kind === 'social') { st=iftySocialPracticeState; q=st?.questions?.[st.index]; subject='SOCIAL STUDIES'; label=st?.mode; }
+  else if (kind === 'science') { st=iftySciencePracticeState; q=st?.questions?.[st.index]; subject='SCIENCE'; label=st?.mode; }
+  else if (kind === 'ancient') { st=iftyAncientPracticeState; q=st?.questions?.[st.index]; subject='ANCIENT'; label=st?.mode; }
+  else if (kind === 'kanbun') { st=iftyKanbunPracticeState; q=st?.questions?.[st.index]; subject='KANBUN'; label=q?.mode||st?.mode; }
+  else if (kind === 'kanji') { st=iftyKanjiPracticeState; q=st?.questions?.[st.index]; subject='KANJI'; label=q?.mode; }
+  else if (kind === 'others') { st=iftyOthersPracticeState; q=st?.questions?.[st.index]; subject='OTHERS'; label=q?.mode; }
+  else if (kind === 'term') { st=iftySubjectTermWriteState; q=st?.queue?.[st.index]; subject=st?.subject; label='term_write'; }
+  else if (kind === 'basic') {
+    st=iftyBasicPracticeState;
+    if (st && st.index < (st.queue||[]).length) {
+      q={prompt:st.ifty143Prompt||'',mode:st.mode};
+      subject='BASIC SENTENCES';label=st.mode;
+    }
+  }
+  else if (kind === 'pronunciation') {
+    st=iftyPronunciationPracticeState;
+    const ref=st?getIftyPronunciationItem(st.folderId,st.itemId):null;
+    if(ref) {q={prompt:`「${ref.item.text}」の発音練習`,instruction:ref.item.guide||''};subject='PRONUNCIATION';label='pronunciation';}
+  }
+  if (!st || !q) return null;
+  let text=String(q.prompt||q.question||q.clozeText||q.originalText||'').trim();
+  if (kind==='kanbun') text=[q.prompt,q.originalText,q.clozeText,q.sourceText].map(x=>String(x||'').trim()).filter(Boolean).join('\n');
+  if ((kind==='social'||kind==='science')&&q.sourceText) text+='\n'+q.sourceText;
+  if (kind==='basic'&&!text) text='BASIC SENTENCES の練習問題';
+  if (!text) text=String(q.sourceText||q.title||'現在の練習問題');
+  const options=Array.isArray(q.options)?q.options.map(x=>String(typeof x==='string'?x:(x?.label||x?.text||''))).filter(Boolean).slice(0,8):[];
+  if (Array.isArray(q.events)) options.push(...q.events.slice(0,8).map(x=>String(x.text||'')));
+  const answered=!!st.answered || (kind==='pronunciation'&&!!st.result);
+  const extra=answered?String(st.modelAnswer||st.feedback||q.explanation||'').slice(0,1800):'';
+  if(!st.ifty143SessionId)st.ifty143SessionId='q'+Date.now().toString(36)+Math.random().toString(36).slice(2);
+  const key=[kind,subject,st.ifty143SessionId,String(st.index??st.itemId??''),text].join('\u241f');
+  return {kind,st,q,subject,label,question:text,options,answered,extra,key};
+}
+
+function ifty143Toolbar(kind, options={}) {
+  const ctx=ifty143Context(kind);
+  if (!ctx) return;
+  let panel=null;
+  if (options.modal) {
+    const root=document.getElementById(options.modal);
+    if (!root || root.style.display==='none') return;
+    panel=root.firstElementChild;
+  } else panel=document.querySelector('.ifty-portal-shell');
+  if (kind==='term' && ctx.answered && panel?.firstElementChild)panel=panel.firstElementChild;
+  if (!panel || panel.querySelector('[data-ifty143-toolbar]')) return;
+  const row=document.createElement('div');
+  row.dataset.ifty143Toolbar=kind;
+  row.style.cssText='display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 6px;max-width:100%;';
+  if(!ctx.answered && !options.noSkip){
+    const skip=document.createElement('button');skip.type='button';skip.textContent='⏭ スキップ';
+    skip.style.cssText='border:1px solid #94a3b8;color:#334155;background:#f1f5f9;border-radius:9px;min-height:42px;padding:10px 13px;font-weight:800;cursor:pointer;touch-action:manipulation;';
+    skip.onclick=()=>window.ifty143Skip(kind);row.appendChild(skip);
+  }
+  if(!options.noHelp){
+    const ask=document.createElement('button');ask.type='button';ask.textContent='💬 ALLIAに質問';
+    ask.style.cssText='border:1px solid #c4b5fd;color:#5b21b6;background:#faf5ff;border-radius:9px;min-height:42px;padding:10px 13px;font-weight:800;cursor:pointer;touch-action:manipulation;';
+    ask.onclick=()=>window.ifty143OpenHelp(kind);row.appendChild(ask);
+  }
+  if(!row.childElementCount)return;
+  const anchor=panel.firstElementChild;
+  // 画面上部の現在問題の見出しの直後に配置。解答欄や採点を動かさない。
+  if(anchor?.nextSibling) panel.insertBefore(row,anchor.nextSibling);
+  else panel.appendChild(row);
+}
+
+window.ifty143Skip=function(kind){
+  const ctx=ifty143Context(kind);if(!ctx || ctx.answered || ctx.st.grading || ctx.st.challengePending)return;
+  const st=ctx.st;
+  // 学習履歴への誤答登録や正答率への加算は行わない。
+  st.skipped=(Number(st.skipped)||0)+1;
+  if(kind==='social'||kind==='science') {
+    if(st.index+1>=st.questions.length && advanceIftySubjectQuizSequence124(ctx.subject,st))return;
+    st.index++;
+    if(kind==='social') {
+      resetIftySocialPracticeAnswerState();
+      if(st.mode==='order')st.orderIds=(st.questions[st.index]?.events||[]).map(e=>e.id);
+      renderIftySocialPracticePlayer();
+    }else{
+      resetIftySciencePracticeAnswerState();
+      if(st.mode==='order')st.orderIds=(st.questions[st.index]?.events||[]).map(e=>e.id);
+      renderIftySciencePracticePlayer();
+    }
+  } else if(kind==='ancient') {
+    if(st.index+1>=st.questions.length && advanceIftySubjectQuizSequence124('ANCIENT',st))return;
+    st.index++;st.answered=false;st.last=null;st.grading=false;renderIftyAncientPracticeQuestion();
+  } else if(kind==='kanbun') {
+    st.index++;st.answered=false;st.grading=false;st.challengePending=false;st.feedback='';st.modelAnswer='';st.correctLast=false;st.lastSubmission=null;
+    st.answerMarks=[];st.selectedMarkIndex=0;st.selectedOptionId='';st.selectedEquivalentIds=[];
+    resetIftyKanbunHandwriting();iftyKanbunHelpHistory=[];renderIftyKanbunPracticePlayer();
+  } else if(kind==='kanji'||kind==='others') {
+    st.index++;st.answered=false;st.grading=false;st.feedback='';st.modelAnswer='';st.last=null;
+    (kind==='kanji'?renderIftyKanjiPracticePlayer:renderIftyOthersPracticePlayer)();
+  } else if(kind==='term') {
+    if(st.index+1>=st.queue.length && advanceIftySubjectQuizSequence124(st.subject,st))return;
+    st.index++;st.answered=false;st.last=null;renderIftySubjectTermWriteQuestion();
+  } else if(kind==='basic') {
+    st.index++;st.answered=false;st.last=null;renderIftyBasicPracticeQuestion();
+  } else if(kind==='pronunciation') {
+    // 発音練習は1回1項目なので、スキップは採点せず閉じる。
+    window.closeIftyPronunciationPractice();
+  }
+};
+
+function ifty143RenderHelp(){
+  const active=ifty143HelpActive;if(!active)return;
+  const {kind,key}=active;
+  let modal=document.getElementById('ifty143AlliaHelpModal');
+  if(!modal){modal=document.createElement('div');modal.id='ifty143AlliaHelpModal';document.body.appendChild(modal);}
+  modal.style.cssText='position:fixed;inset:0;z-index:12500;background:rgba(15,23,42,.68);padding:12px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;';
+  const rows=IFTY143_HELP_MESSAGES.get(key)||[];
+  const messages=rows.length?rows.map(m=>`<div style="margin:8px 0;padding:10px 12px;background:${m.role==='user'?'#eff6ff':'#f5f3ff'};border-radius:9px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;color:#1e293b;"><b>${m.role==='user'?'自分':'ALLIA'}</b><div>${escapeHtml(m.text)}</div></div>`).join(''):'<div style="color:#64748b;font-size:.85em;">分からない部分、考え方、用語、文法などを質問できます。</div>';
+  modal.innerHTML=`<section role="dialog" aria-modal="true" aria-label="ALLIAへの質問" style="width:min(680px,100%);max-height:min(88vh,820px);min-width:0;background:white;color:#0f172a;border-radius:14px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 16px 50px #0004;">
+    <header style="padding:13px 15px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #e2e8f0;"><div><b style="color:#6d28d9;">💬 ALLIAに質問</b><div style="font-size:.73em;color:#64748b;">${active.answered?'採点後：答えを含む解説も質問可能':'回答前：答えを伏せたままヒント・解説'}</div></div><button type="button" onclick="ifty143CloseHelp()" style="background:#e2e8f0;border:0;border-radius:8px;padding:9px 13px;color:#334155;">閉じる</button></header>
+    <div style="padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;max-height:130px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.84em;line-height:1.6;">${escapeHtml(active.question)}</div>
+    <div id="ifty143HelpHistory" aria-live="polite" style="padding:14px;min-height:100px;overflow:auto;flex:1;">${messages}${active.loading?'<p style="color:#64748b;">ALLIAが考えています…</p>':''}</div>
+    <div style="padding:12px 14px;border-top:1px solid #e2e8f0;"><textarea id="ifty143HelpInput" rows="2" ${active.loading?'disabled':''} placeholder="例：この用語の背景を説明して／答えは言わずにヒントを" style="width:100%;font:inherit;box-sizing:border-box;resize:vertical;border:1px solid #c4b5fd;border-radius:9px;padding:10px;color:#0f172a;background:#fff;"></textarea><div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:8px;"><span style="font-size:.72em;color:#64748b;">⌘/Ctrl + Enter で送信</span><button id="ifty143HelpSend" type="button" ${active.loading?'disabled':''} onclick="ifty143SendHelp()" style="background:#7c3aed;color:white;border:0;border-radius:8px;padding:10px 18px;font-weight:800;">送信</button></div></div>
+  </section>`;
+  const input=document.getElementById('ifty143HelpInput');
+  if(input){
+    input.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)&&!e.isComposing){e.preventDefault();window.ifty143SendHelp();}});
+    if(!active.loading)input.focus({preventScroll:true});
+  }
+  const history=document.getElementById('ifty143HelpHistory');if(history)history.scrollTop=history.scrollHeight;
+};
+window.ifty143OpenHelp=function(kind){
+  const ctx=ifty143Context(kind);if(!ctx)return;
+  ifty143HelpActive={kind,key:ctx.key,question:ctx.question,answered:ctx.answered,loading:false};
+  ifty143RenderHelp();
+};
+window.ifty143CloseHelp=function(){ifty143HelpActive=null;document.getElementById('ifty143AlliaHelpModal')?.remove();};
+window.ifty143SendHelp=async function(){
+  const active=ifty143HelpActive;if(!active||active.loading)return;
+  const input=document.getElementById('ifty143HelpInput');const value=String(input?.value||'').trim();if(!value)return;
+  if(!ensureIftyOnline('PRACTICEのALLIA質問'))return;
+  const ctx=ifty143Context(active.kind);if(!ctx||ctx.key!==active.key){alert('問題が切り替わりました。');window.ifty143CloseHelp();return;}
+  const history=IFTY143_HELP_MESSAGES.get(active.key)||[];
+  const prev=history.slice(-8).map(x=>({role:x.role,text:x.text}));
+  history.push({role:'user',text:value});IFTY143_HELP_MESSAGES.set(active.key,history);
+  active.loading=true;ifty143RenderHelp();
+  try{
+    const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      type:'question_help',subject:ctx.subject,quizType:ctx.label||'',direction:'',question:ctx.question,
+      instruction:ctx.answered?`既に採点済み。必要なら模範・解説：${ctx.extra}`:'まだ解答前。答えそのものを示さず、考え方とヒントだけを説明してください。',
+      options:ctx.options,userQuestion:value,history:prev,answerRevealed:ctx.answered,
+      order:getIftyPracticeOrder(ctx.subject)||getIftySubjectOrder(ctx.subject)
+    })});
+    const data=await response.json().catch(()=>({}));if(!response.ok||data.error)throw alliaHttpError(response,data,'ALLIAへの質問に失敗しました。');
+    history.push({role:'assistant',text:String(data.answer||'回答を取得できませんでした。')});
+  }catch(error){history.push({role:'assistant',text:`質問に失敗しました：${String(error.message||error)}`});}
+  if(ifty143HelpActive===active){active.loading=false;ifty143RenderHelp();}
+};
+
+// 解答を飛ばした問題は採点しない。終了画面ではスキップ件数を別掲する。
+function ifty143ShowSkippedSummary(kind,opts={}){
+  const states={social:iftySocialPracticeState,science:iftySciencePracticeState,kanbun:iftyKanbunPracticeState,
+    ancient:iftyAncientPracticeState,kanji:iftyKanjiPracticeState,others:iftyOthersPracticeState,
+    term:iftySubjectTermWriteState,basic:iftyBasicPracticeState};
+  const st=states[kind];if(!st||!(st.skipped>0))return;
+  const count=Array.isArray(st.questions)?st.questions.length:Array.isArray(st.queue)?st.queue.length:0;
+  if(!count||st.index<count)return;
+  const root=opts.modal?document.getElementById(opts.modal)?.firstElementChild:document.querySelector('.ifty-portal-shell');
+  if(!root||root.querySelector('[data-ifty143-summary]'))return;
+  const line=document.createElement('p');line.dataset.ifty143Summary='1';
+  line.style.cssText='text-align:center;margin:10px auto;color:#64748b;font-size:.9em;font-weight:750;';
+  line.textContent=`スキップ ${st.skipped}件（正誤には含めません）`;
+  const first=root.querySelector('h2,h1');if(first?.parentElement)first.insertAdjacentElement('afterend',line);else root.appendChild(line);
+}
+// 既存の描画関数を包むだけ。クイズの採点・問題生成・回答入力は変更しない。
+function ifty143WrapRender(original,kind,opts){
+  return function(...args){
+    const output=original.apply(this,args);
+    ifty143Toolbar(kind,opts);
+    ifty143ShowSkippedSummary(kind,opts);
+    return output;
+  };
+}
+renderIftySocialPracticePlayer=ifty143WrapRender(renderIftySocialPracticePlayer,'social');
+renderIftySciencePracticePlayer=ifty143WrapRender(renderIftySciencePracticePlayer,'science');
+renderIftyKanbunPracticePlayer=ifty143WrapRender(renderIftyKanbunPracticePlayer,'kanbun',{noHelp:true});
+renderIftyAncientPracticeQuestion=ifty143WrapRender(renderIftyAncientPracticeQuestion,'ancient',{modal:'practiceModal'});
+renderIftyAncientPracticeFeedback=ifty143WrapRender(renderIftyAncientPracticeFeedback,'ancient',{modal:'practiceModal'});
+renderIftyKanjiPracticePlayer=ifty143WrapRender(renderIftyKanjiPracticePlayer,'kanji',{modal:'practiceModal'});
+renderIftyOthersPracticePlayer=ifty143WrapRender(renderIftyOthersPracticePlayer,'others',{modal:'practiceModal'});
+renderIftySubjectTermWriteQuestion=ifty143WrapRender(renderIftySubjectTermWriteQuestion,'term');
+renderIftySubjectTermWriteFeedback=ifty143WrapRender(renderIftySubjectTermWriteFeedback,'term');
+renderIftyBasicPracticeQuestion=ifty143WrapRender(renderIftyBasicPracticeQuestion,'basic',{modal:'practiceModal'});
+renderIftyBasicPracticeFeedback=ifty143WrapRender(renderIftyBasicPracticeFeedback,'basic',{modal:'practiceModal'});
+renderIftyPronunciationPracticeModal=ifty143WrapRender(renderIftyPronunciationPracticeModal,'pronunciation',{modal:'iftyPronPracticeModal'});
