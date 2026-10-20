@@ -5635,6 +5635,24 @@ function ensureIftyYearsStyles() {
     .ifty-year-mnemonic-head { display:flex; justify-content:space-between; gap:8px; align-items:center; font-size:.8rem; font-weight:900; color:#92400e; }
     .ifty-year-mnemonic-text { margin-top:5px; color:#78350f; line-height:1.55; }
     .ifty-year-mnemonic-edit { border:none; border-radius:7px; padding:5px 8px; background:#f59e0b; color:#111827; font-weight:900; cursor:pointer; }
+    body[data-ifty-theme="dark"] .ifty-years-form, body[data-ifty-theme="dark"] .ifty-year-folder,
+    body[data-ifty-theme="dark"] .ifty-year-card {background:#1e293b;color:#f8fafc;border-color:#64748b;}
+    body[data-ifty-theme="dark"] .ifty-year-folder-title, body[data-ifty-theme="dark"] .ifty-year-title {color:#f1f5f9;}
+    body[data-ifty-theme="dark"] .ifty-year-period, body[data-ifty-theme="dark"] .ifty-year-section-title,
+    body[data-ifty-theme="dark"] .ifty-year-event-text {color:#cbd5e1;}
+    body[data-ifty-theme="dark"] .ifty-year-event, body[data-ifty-theme="dark"] .ifty-year-mnemonic,
+    body[data-ifty-theme="dark"] .ifty-year-note {background:#0f172a;color:#e2e8f0;border-color:#475569;}
+    body[data-ifty-theme="dark"] .ifty-year-event-title, body[data-ifty-theme="dark"] .ifty-year-mnemonic-text {color:#f8fafc;}
+    body[data-ifty-theme="dark"] .ifty-years-status {color:#cbd5e1;}
+    .ifty-year-folder,.ifty-year-card {min-width:0;max-width:100%;box-sizing:border-box;}
+    .ifty-year-head > div:first-of-type {min-width:0;overflow-wrap:anywhere;flex:1;}
+    .ifty-year-folder-actions {max-width:100%;}
+    .ifty-year-folder-actions button, .ifty-year-actions button {min-height:37px;}
+    body[data-ifty-theme="dark"] .ifty-year-folder-actions button:disabled,
+    body[data-ifty-theme="dark"] .ifty-year-actions button:disabled {background:#334155!important;color:#cbd5e1!important;opacity:.5!important;}
+    body[data-ifty-theme="dark"] .ifty-year-folder-actions button:not([style]),
+    body[data-ifty-theme="dark"] .ifty-year-actions button:not([style]) {background:#334155;color:#fff;}
+    @media (max-width:600px) {.ifty-year-head {gap:6px;}.ifty-year-folder,.ifty-year-card{padding:10px;}.ifty-year-folder-actions button{font-size:.82rem;}}
     @media (max-width:760px) { .ifty-years-form-row { grid-template-columns:1fr; } }
   `;
   document.head.appendChild(style);
@@ -5659,7 +5677,7 @@ function renderIftyYearEntryCard(entry, index, total) {
   const collapsed = iftyCollapsedYearEntryIds.has(String(entry.id));
   return `
     <article class="ifty-year-card" data-ifty139-item="1" data-ifty139-subject="YEARS" data-ifty139-folder="${escapeHtml(String(entry.folderId))}" data-ifty139-id="${escapeHtml(String(entry.id))}" id="iftyYearEntry_${escapeHtml(entry.id)}">
-      <div class="ifty-year-head">${ifty139DragHandle('YEARS',entry.folderId,entry.id)}
+      <div class="ifty-year-head"><input type="checkbox" aria-label="${escapeHtml(entry.yearLabel)}を選択" ${ifty144SelectedYearIds.has(String(entry.id))?'checked':''} onchange="ifty144ToggleYearSelection('${escapeHtml(entry.id)}',this.checked)" style="width:20px;height:20px;flex:none;margin-top:11px;">${ifty139DragHandle('YEARS',entry.folderId,entry.id)}
         <div>
           <div class="ifty-year-title" style="display:inline;">${escapeHtml(entry.yearLabel)}</div>${ifty132AliasInfo(entry)}
           
@@ -5721,7 +5739,7 @@ function renderIftyYearEntries() {
   const folders = getIftySortedYearFolders();
   root.innerHTML = folders.map((folder, folderIndex) => {
     const entries = getIftyYearEntriesForFolder(folder.id);
-    return `<section class="ifty-year-folder">
+    return `<section class="ifty-year-folder" data-ifty144-year-folder="${escapeHtml(folder.id)}">
       <div class="ifty-year-folder-head">
         <button type="button" onclick="toggleIftyYearFolder('${escapeHtml(folder.id)}')" style="border:none;background:transparent;padding:0;cursor:pointer;text-align:left;">
           <span class="ifty-year-folder-title">${folder.collapsed ? '▶' : '▼'} 📁 ${escapeHtml(folder.name)} (${entries.length}件)</span>
@@ -5730,7 +5748,7 @@ function renderIftyYearEntries() {
           <button type="button" ${folderIndex <= 0 ? 'disabled' : ''} onclick="moveIftyYearFolder('${escapeHtml(folder.id)}',-1)" style="background:#e2e8f0;color:#334155;">↑</button>
           <button type="button" ${folderIndex >= folders.length - 1 ? 'disabled' : ''} onclick="moveIftyYearFolder('${escapeHtml(folder.id)}',1)" style="background:#e2e8f0;color:#334155;">↓</button>
           ${ifty132RegenerateFolderButton('YEARS',folder.id,entries.length)}
-          ${ifty135ThemeButton('YEARS',folder)}<button type="button" onclick="renameIftyYearFolder('${escapeHtml(folder.id)}')" style="background:#f59e0b;color:#111827;">名前変更</button>
+          ${ifty135ThemeButton('YEARS',folder)}<button type="button" onclick="ifty144SelectYearFolder('${escapeHtml(folder.id)}')" style="background:#e2e8f0;color:#334155;">全選択</button><button type="button" onclick="ifty144PracticeFolder('${escapeHtml(folder.id)}')" style="background:#7c3aed;color:white;">⚔️ PRACTICE</button><button type="button" onclick="renameIftyYearFolder('${escapeHtml(folder.id)}')" style="background:#f59e0b;color:#111827;">名前変更</button>
           <button type="button" onclick="deleteIftyYearFolder('${escapeHtml(folder.id)}')" style="background:#ef4444;color:white;">削除</button>
         </div>
       </div>
@@ -5837,11 +5855,12 @@ window.openIftyYears = function() {
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
         <div>
           <h1 class="ifty-portal-title">YEARS</h1>
-          <div class="ifty-portal-subtitle">年号をフォルダで整理できます。フォルダと年号は↑↓で並べ替えられます。</div>
+          <div class="ifty-portal-subtitle">年号をフォルダで整理し、PRACTICEの四択・記述で復習できます。</div>
         </div>
-        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" onclick="openPracticeHome('YEARS')" style="background:#7c3aed;color:#fff;border:0;border-radius:9px;padding:10px 15px;font-weight:850;">⚔️ PRACTICE</button><button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button></div>
       </div>
 
+      <details class="ifty-year-advanced" style="margin-top:12px;"><summary style="cursor:pointer;font-weight:800;padding:10px;">詳細な年号登録（西暦／紀元前）</summary>
       <form class="ifty-years-form" onsubmit="event.preventDefault(); lookupIftyYear();">
         <div class="ifty-years-form-row">
           <select id="iftyYearEra" aria-label="年代"><option value="CE">西暦</option><option value="BCE">紀元前</option></select>
@@ -5850,7 +5869,7 @@ window.openIftyYears = function() {
           <button id="iftyYearLookupBtn" class="ifty-years-primary" type="submit">ALLIAで調べる</button>
         </div>
         <div id="iftyYearStatus" class="ifty-years-status">Enterで連続入力できます。保存先フォルダも選べます。</div>
-      </form>
+      </form></details>
 
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px;">
         <div style="font-weight:900;color:#475569;">保存済み ${count}件</div>
@@ -5860,7 +5879,7 @@ window.openIftyYears = function() {
     </section>
   `, 'years');
   renderIftyYearEntries();
-  setTimeout(() => document.getElementById('iftyYearInput')?.focus({ preventScroll: true }), 0);
+  setTimeout(() => document.querySelector('#iftyYearList .ifty128-unified-input')?.focus({ preventScroll:true }), 0);
 };
 
 async function requestIftyYearLookup(era, year, folderId = '') {
@@ -5939,7 +5958,7 @@ window.lookupIftyYear = async function(forcedEra = '', forcedYear = null, forced
       const remaining = Math.max(0, iftyYearLookupPending - 1);
       status.textContent = remaining ? `${normalized.yearLabel}を保存しました。ほか ${remaining}件を生成中…` : `${normalized.yearLabel}を保存しました。続けて別の数字を入力できます。`;
     }
-    setTimeout(() => input?.focus({ preventScroll: true }), 0);
+    if (forcedYear === null || forcedYear === undefined) setTimeout(() => input?.focus({ preventScroll: true }), 0);
   } catch (error) {
     console.error('YEARS生成エラー:', error);
     if (status) status.textContent = `${requestLabel}: ${String(error.message || error)}`;
@@ -6286,10 +6305,10 @@ function renderIftySocialItemCard(folder, item) {
       </div>
       <div style="display:flex;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end;">
         <button id="iftyRegenSocial_${item.id}" type="button" onclick="regenerateIftySocialItem('${folder.id}','${item.id}')" title="事実関係・意味を最初から慎重に再検討する" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">再生成</button>
-        <button type="button" onclick="toggleIftySocialItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
+        <button type="button" onclick="openIftySocialItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
         <button type="button" onclick="moveIftySocialItem('${folder.id}','${item.id}',-1)" ${itemIndex <= 0 ? 'disabled' : ''} title="上へ" style="border:none;background:${itemIndex <= 0 ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex <= 0 ? 'not-allowed' : 'pointer'};font-weight:900;">↑</button>
         <button type="button" onclick="moveIftySocialItem('${folder.id}','${item.id}',1)" ${itemIndex >= lastIndex ? 'disabled' : ''} title="下へ" style="border:none;background:${itemIndex >= lastIndex ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex >= lastIndex ? 'not-allowed' : 'pointer'};font-weight:900;">↓</button>
-        <button type="button" onclick="openIftySocialItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
+        <button type="button" onclick="toggleIftySocialItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
         <button type="button" onclick="deleteIftySocialItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">削除</button>
       </div>
     </div>
@@ -8404,10 +8423,10 @@ function renderIftyScienceItemCard(folder, item) {
       </div>
       <div style="display:flex;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end;">
         <button id="iftyRegenScience_${item.id}" type="button" onclick="regenerateIftyScienceItem('${folder.id}','${item.id}')" title="意味・公式・単位・条件を最初から慎重に再検討する" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">再生成</button>
-        <button type="button" onclick="toggleIftyScienceItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
+        <button type="button" onclick="openIftyScienceItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
         <button type="button" onclick="moveIftyScienceItem('${folder.id}','${item.id}',-1)" ${itemIndex <= 0 ? 'disabled' : ''} title="上へ" style="border:none;background:${itemIndex <= 0 ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex <= 0 ? 'not-allowed' : 'pointer'};font-weight:900;">↑</button>
         <button type="button" onclick="moveIftyScienceItem('${folder.id}','${item.id}',1)" ${itemIndex >= lastIndex ? 'disabled' : ''} title="下へ" style="border:none;background:${itemIndex >= lastIndex ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex >= lastIndex ? 'not-allowed' : 'pointer'};font-weight:900;">↓</button>
-        <button type="button" onclick="openIftyScienceItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
+        <button type="button" onclick="toggleIftyScienceItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
         <button type="button" onclick="deleteIftyScienceItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">削除</button>
       </div>
     </div>
@@ -10262,10 +10281,10 @@ function renderIftyAncientItemCard(folder, item) {
 
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
         <button id="iftyRegenAncient_${item.id}" type="button" onclick="regenerateIftyAncientItem('${folder.id}','${item.id}')" title="語義・読み・品詞を最初から慎重に再検討する" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">再生成</button>
-        <button type="button" onclick="toggleIftyAncientItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
+        <button type="button" onclick="openIftyAncientItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
         <button type="button" onclick="moveIftyAncientItem('${folder.id}','${item.id}',-1)" ${itemIndex <= 0 ? 'disabled' : ''} title="上へ" style="border:none;background:${itemIndex <= 0 ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex <= 0 ? 'not-allowed' : 'pointer'};font-weight:900;">↑</button>
         <button type="button" onclick="moveIftyAncientItem('${folder.id}','${item.id}',1)" ${itemIndex >= lastIndex ? 'disabled' : ''} title="下へ" style="border:none;background:${itemIndex >= lastIndex ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex >= lastIndex ? 'not-allowed' : 'pointer'};font-weight:900;">↓</button>
-        <button type="button" onclick="openIftyAncientItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
+        <button type="button" onclick="toggleIftyAncientItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
         <button type="button" onclick="deleteIftyAncientItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">削除</button>
       </div>
     </div>
@@ -11226,10 +11245,10 @@ function renderIftyKanbunItemCard(folder, item) {
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;max-width:100%;">
         <button id="iftyRegenKanbun_${item.id}" type="button" onclick="regenerateIftyKanbunItem('${folder.id}','${item.id}')" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;font-weight:900;cursor:pointer;">再生成</button>
         <button type="button" onclick="openIftyKanbunReturnMarkEditor('${folder.id}','${item.id}')" style="border:none;background:#b91c1c;color:white;border-radius:6px;padding:5px 8px;font-weight:900;cursor:pointer;">訓点</button>
-        <button type="button" onclick="toggleIftyKanbunItemReview('${folder.id}','${item.id}')" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;font-weight:900;cursor:pointer;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
+        <button type="button" onclick="openIftyKanbunItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:800;cursor:pointer;">編集</button>
         <button type="button" onclick="moveIftyKanbunItem('${folder.id}','${item.id}',-1)" ${index <= 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:5px 8px;cursor:${index <= 0 ? 'not-allowed' : 'pointer'};">↑</button>
         <button type="button" onclick="moveIftyKanbunItem('${folder.id}','${item.id}',1)" ${index >= last ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:5px 8px;cursor:${index >= last ? 'not-allowed' : 'pointer'};">↓</button>
-        <button type="button" onclick="openIftyKanbunItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:800;cursor:pointer;">編集</button>
+        <button type="button" onclick="toggleIftyKanbunItemReview('${folder.id}','${item.id}')" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;font-weight:900;cursor:pointer;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
         <button type="button" onclick="deleteIftyKanbunItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:800;cursor:pointer;">削除</button>
       </div>
     </div>
@@ -15738,10 +15757,10 @@ function renderIftyKanjiItemCard(folder,item,index){
       </label>
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
         <button type="button" onclick="regenerateIftyKanjiItem('${folder.id}','${item.id}')" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">再生成</button>
-        <button type="button" onclick="toggleIftyKanjiItemReview('${folder.id}','${item.id}')" style="border:none;background:#f59e0b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${isIftyReviewTagged(item)?'🔁 復習中':'＋復習'}</button>
+        <button type="button" onclick="editIftyKanjiItem('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">編集</button>
         <button type="button" onclick="moveIftyKanjiItem('${folder.id}','${item.id}',-1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:5px 7px;">↑</button>
         <button type="button" onclick="moveIftyKanjiItem('${folder.id}','${item.id}',1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:5px 7px;">↓</button>
-        <button type="button" onclick="editIftyKanjiItem('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">編集</button>
+        <button type="button" onclick="toggleIftyKanjiItemReview('${folder.id}','${item.id}')" style="border:none;background:#f59e0b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${isIftyReviewTagged(item)?'🔁 復習中':'＋復習'}</button>
         <button type="button" onclick="deleteIftyKanjiItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">削除</button>
       </div>
     </div>
@@ -16109,7 +16128,7 @@ function renderIftyOthersItemCard(folder,item){
   return `<div data-ifty139-item="1" data-ifty139-subject="OTHERS" data-ifty139-folder="${escapeHtml(String(folder.id))}" data-ifty139-id="${escapeHtml(String(item.id))}" style="margin-top:9px;border:1px solid #dbeafe;background:#fff;border-radius:10px;padding:11px;">
     <div style="display:flex;gap:8px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;">
       ${ifty139DragHandle('OTHERS',folder.id,item.id)}<label style="display:flex;gap:7px;align-items:flex-start;min-width:0;flex:1;"><input type="checkbox" ${iftyOthersSelectedItemIds.has(String(item.id))?'checked':''} onchange="toggleIftySubjectItemSelection('OTHERS','${item.id}',this.checked)" style="width:18px;height:18px;margin-top:2px;"><span style="min-width:0;"><b style="color:#0f172a;font-size:1.02em;">${escapeHtml(item.title||item.topic)}</b>${ifty132AliasInfo(item)}<span style="margin-left:6px;">${renderIftyLearningLevelInline('OTHERS', item.id, item.level)}</span>${item.tags?.length?`<span style="display:block;margin-top:4px;">${item.tags.map(t=>`<span style="display:inline-block;margin-right:4px;padding:2px 6px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.7em;font-weight:900;">${escapeHtml(t)}</span>`).join('')}</span>`:''}</span></label>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;"><button type="button" onclick="toggleIftySubjectItemReview('OTHERS','${folder.id}','${item.id}')" style="border:none;background:#f59e0b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${isIftyReviewTagged(item)?'🔁 復習中':'🔁 復習'}</button><button type="button" onclick="regenerateIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">再生成</button><button type="button" onclick="editIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">編集</button><button type="button" onclick="deleteIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">削除</button></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;"><button type="button" onclick="editIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">編集</button><button type="button" onclick="regenerateIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">再生成</button><button type="button" onclick="toggleIftySubjectItemReview('OTHERS','${folder.id}','${item.id}')" style="border:none;background:#f59e0b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${isIftyReviewTagged(item)?'🔁 復習中':'🔁 復習'}</button><button type="button" onclick="deleteIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">削除</button></div>
     </div>
     ${item.memoryText?`<div style="margin-top:8px;line-height:1.6;color:#334155;white-space:pre-wrap;">${escapeHtml(item.memoryText)}</div>`:''}
     ${item.keyPoints?.length?`<div style="margin-top:7px;color:#475569;font-size:.85em;">${item.keyPoints.map(x=>`• ${escapeHtml(x)}`).join('<br>')}</div>`:''}
@@ -20190,8 +20209,8 @@ function renderWordItem(w, folderId, wIndex) {
         <div class="ifty-word-card-actions" style="display: flex; gap: 3px; align-items: center; margin-left: 8px;">
           ${w.word ? `<button onclick="speakWord('${escapeHtml(String(w.word).replace(/'/g, "\\'"))}','${escapeHtml(getIftyWordLanguageInfo(w).code)}')" style="background: #0284c7; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="語彙を発音">🔊</button>` : ''}
           <button id="iftyRegenVocab_${w.id}" onclick="regenerateIftyVocabularyWord('${folderId}','${w.id}')" style="background:#7c3aed;color:white;border:none;padding:3px 6px;border-radius:4px;font-size:.75em;cursor:pointer;font-weight:800;" title="言語・意味・用法を最初から慎重に再検討する">再生成</button>
-          <button onclick="toggleIftyWordReview('${folderId}','${w.id}')" style="background:${isIftyReviewTagged(w) ? '#ea580c' : '#f59e0b'};color:white;border:none;padding:3px 6px;border-radius:4px;font-size:.75em;cursor:pointer;" title="${isIftyReviewTagged(w) ? '復習登録を解除' : 'この単語を復習に登録'}">${isIftyReviewTagged(w) ? '🔁 復習中' : '🔁 手動で復習登録'}</button>
           <button onclick="openEditWordModal('${folderId}', ${wIndex})" style="background: #64748b; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="編集">編集</button>
+          <button onclick="toggleIftyWordReview('${folderId}','${w.id}')" style="background:${isIftyReviewTagged(w) ? '#ea580c' : '#f59e0b'};color:white;border:none;padding:3px 6px;border-radius:4px;font-size:.75em;cursor:pointer;" title="${isIftyReviewTagged(w) ? '復習登録を解除' : 'この単語を復習に登録'}">${isIftyReviewTagged(w) ? '🔁 復習中' : '🔁 手動で復習登録'}</button>
           <button onclick="moveWordWithinFolder('${folderId}', ${wIndex}, -1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="上へ">⬆️</button>
           <button onclick="moveWordWithinFolder('${folderId}', ${wIndex}, 1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="下へ">⬇️</button>
           <button onclick="deleteWord('${folderId}', ${wIndex})" style="background: none; border: none; color: #ef4444; cursor: pointer; font-weight: bold; font-size: 1.1em;" title="削除">×</button>
@@ -24364,7 +24383,7 @@ async function renderQuizPlayer(setId) {
       ${q.instruction?`<div style="margin-top:7px;color:#64748b;font-size:.82em;">${escapeHtml(q.instruction)}</div>`:''}
       <div style="margin-top:9px;display:flex;justify-content:flex-end;"><button type="button" onclick="openIftyQuizAllia('${set.id}')" style="border:1px solid #c4b5fd;background:#faf5ff;color:#6d28d9;border-radius:8px;padding:8px 11px;font-weight:900;cursor:pointer;">🤖 ALLIA</button></div>
       ${Array.isArray(q.options)&&q.options.length?`<div id="quizChoiceArea" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;">${q.options.map((option,i)=>`<label style="display:flex;gap:8px;align-items:center;border:2px solid #ddd6fe;background:white;border-radius:8px;padding:10px;cursor:pointer;"><input type="radio" name="quizChoice" value="${escapeHtml(option)}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuizAnswer('${set.id}');}" style="accent-color:#7c3aed;"><span>${String.fromCharCode(65+i)}. ${escapeHtml(option)}</span></label>`).join('')}</div>`:(q.localAnswerMode==='spelling'?`<input id="quizAnswerInput" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="${q.quizType==='inflection'?'活用形を入力してEnter':'スペルを入力してEnter'}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1.05em;">`:`<textarea id="quizAnswerInput" rows="4" placeholder="答えを入力（Enterで確定 / Shift+Enterで改行）" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1em;resize:vertical;"></textarea>`)}
-      <div style="display:flex;gap:8px;margin-top:10px;"><button onclick="submitQuizAnswer('${set.id}')" style="flex:1;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${q.localGrade?'端末内で判定':(Array.isArray(q.options)&&q.options.length?'回答する':'ALLIAに判定してもらう')}</button><button onclick="skipQuizQuestion('${set.id}')" style="background:#e2e8f0;color:#475569;border:none;border-radius:7px;padding:11px;cursor:pointer;">スキップ</button></div>
+      <div style="display:flex;gap:8px;margin-top:10px;"><button onclick="submitQuizAnswer('${set.id}')" style="flex:1;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${q.localGrade?'端末内で判定':(Array.isArray(q.options)&&q.options.length?'回答する':'ALLIAに判定してもらう')}</button></div><button type="button" class="ifty145-unknown-btn ifty145-english-unknown" onclick="ifty145RevealEnglishQuiz('${set.id}')">？ 分からない（答えを見る）</button>
       <div style="margin-top:9px;color:#94a3b8;font-size:.78em;text-align:center;">「選択」「リスニング」「活用」は端末内で問題生成・採点するためALLIAを使いません。活用は語彙カードに保存済みの過去形・過去分詞・-ing・三単現から出題します。リスニングは各語彙の言語に合った音声で見出し語を再生し、語彙4択・意味4択・表記記述の3形式をランダム出題します。その他の記述回答はALLIAが表記ゆれ・複数の意味・自然さを含めて判定します。</div>
     </div>`;
   const input=document.getElementById('quizAnswerInput');
@@ -24452,7 +24471,7 @@ window.sendIftyQuizAlliaQuestion = async function(setId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         type: 'question_help',
-        answerRevealed: !!document.getElementById('practiceModal')?.querySelector('h2'),
+        answerRevealed: !!document.getElementById('practiceModal')?.querySelector('h2, .ifty145-reveal'),
         quizType: context.question.quizType,
         direction: context.question.direction,
         question: context.question.question || '',
@@ -28390,12 +28409,9 @@ function iftyCgRenderRoom(s){
           const en=document.getElementById('iftyBasicSentenceEn');if(en)en.value=field.value;
         }
       }else{
-        const year=String(field.value||'').trim();
-        if(!/^[0-9]{1,5}$/.test(year)){alert('年号を数字で入力してください。');field.focus();return;}
-        const yInput=document.getElementById('iftyYearInput'),ySelect=document.getElementById('iftyYearFolderSelect');
-        if(yInput)yInput.value=year;
-        if(ySelect){ySelect.value=id;iftyYearActiveFolderId=id;}
-        if(typeof lookupIftyYear==='function')lookupIftyYear();
+        const parsed=parseIftyYearInput(String(field.value||'').trim());
+        if(!parsed){alert('年号を入力してください（例：1600、紀元前300）。');field.focus({preventScroll:true});return;}
+        if(typeof lookupIftyYear==='function')lookupIftyYear(parsed.era,parsed.year,id);
       }
     };
     field.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();if(current==='add')submit.click();}};
@@ -29127,6 +29143,7 @@ function ifty143Context(kind) {
       subject='BASIC SENTENCES';label=st.mode;
     }
   }
+  else if (kind === 'years') { st=ifty144YearPracticeState; q=st?.questions?.[st.index]; subject='YEARS'; label=q?.mode; }
   else if (kind === 'pronunciation') {
     st=iftyPronunciationPracticeState;
     const ref=st?getIftyPronunciationItem(st.folderId,st.itemId):null;
@@ -29183,6 +29200,7 @@ window.ifty143Skip=function(kind){
   const st=ctx.st;
   // 学習履歴への誤答登録や正答率への加算は行わない。
   st.skipped=(Number(st.skipped)||0)+1;
+  if(kind==='years'){window.ifty144NextYearQuestion(false);return;}
   if(kind==='social'||kind==='science') {
     if(st.index+1>=st.questions.length && advanceIftySubjectQuizSequence124(ctx.subject,st))return;
     st.index++;
@@ -29277,7 +29295,7 @@ function ifty143ShowSkippedSummary(kind,opts={}){
   if(!root||root.querySelector('[data-ifty143-summary]'))return;
   const line=document.createElement('p');line.dataset.ifty143Summary='1';
   line.style.cssText='text-align:center;margin:10px auto;color:#64748b;font-size:.9em;font-weight:750;';
-  line.textContent=`スキップ ${st.skipped}件（正誤には含めません）`;
+  line.textContent=`分からない ${st.skipped}件（正誤には含めません）`;
   const first=root.querySelector('h2,h1');if(first?.parentElement)first.insertAdjacentElement('afterend',line);else root.appendChild(line);
 }
 // 既存の描画関数を包むだけ。クイズの採点・問題生成・回答入力は変更しない。
@@ -29301,3 +29319,625 @@ renderIftySubjectTermWriteFeedback=ifty143WrapRender(renderIftySubjectTermWriteF
 renderIftyBasicPracticeQuestion=ifty143WrapRender(renderIftyBasicPracticeQuestion,'basic',{modal:'practiceModal'});
 renderIftyBasicPracticeFeedback=ifty143WrapRender(renderIftyBasicPracticeFeedback,'basic',{modal:'practiceModal'});
 renderIftyPronunciationPracticeModal=ifty143WrapRender(renderIftyPronunciationPracticeModal,'pronunciation',{modal:'iftyPronPracticeModal'});
+
+
+// ==========================================
+// IFTY STEP144 — YEARS: common folder controls + PRACTICE
+// STEP143 remains the baseline. Unrelated subject content is unchanged.
+// ==========================================
+(function(){
+  if(document.getElementById('ifty144YearPracticeStyle'))return;
+  const node=document.createElement('style');node.id='ifty144YearPracticeStyle';
+  node.textContent=`
+    body:has(#practiceModal .ifty144-years-modal) #ifty142JumpDock,
+    body:has(#practiceModal .ifty144-years-modal) #ifty129Nav,
+    body:has(#practiceModal .ifty144-years-modal) #ifty132SelectionDock,
+    body:has(#practiceModal .ifty144-years-modal) #ifty144YearActionsDock {display:none !important;}
+    #practiceModal .ifty144-years-modal button {cursor:pointer;touch-action:manipulation;}
+    #practiceModal .ifty144-years-modal button:disabled {opacity:.5;cursor:not-allowed;}
+    #practiceModal .ifty144-years-modal input[type=checkbox] {width:18px;height:18px;accent-color:#0f766e;}
+    #practiceModal .ifty144-years-modal header button {white-space:nowrap;min-width:52px;}
+    @media(max-width:520px){#practiceModal .ifty144-years-modal{padding:13px!important;}}
+  `;
+  document.head.appendChild(node);
+})();
+const ifty144SelectedYearIds = new Set();
+let ifty144YearSelection = new Set();
+let ifty144YearSelectionInitialized = false;
+let ifty144YearPracticeState = null;
+let ifty144YearSetup = {formats:['choice','written'],modes:['event_year','year_event','year_period'],count:10,random:true};
+
+function ifty144YearModules(){return getIftyYearModule();}
+function ifty144YearSets(){const module=ifty144YearModules();if(!Array.isArray(module.practiceSets))module.practiceSets=[];return module.practiceSets;}
+function ifty144GetSet(id){return ifty144YearSets().find(s=>String(s.id)===String(id));}
+function ifty144SafeQuote(s){return escapeHtml(String(s||'')).replace(/'/g,'&#39;');}
+function ifty144SimpleNormalize(value){return String(value??'').normalize('NFKC').toLocaleLowerCase().replace(/[\s\u3000\-_・「」『』．。、,，.！!？?（）()]/g,'').trim();}
+function ifty144YearKey(row){return normalizeIftyYearEra(row.era)+':'+Number(row.year);}
+function ifty144EventTitle(v){return String(v?.title||'').trim();}
+function ifty144Unique(a){return [...new Set(a.filter(Boolean))];}
+function ifty144Shuffle(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];}return b;}
+function ifty144YearSelectedEntries(){
+  const folders=getIftySortedYearFolders().filter(f=>ifty144YearSelection.has(String(f.id)));
+  return folders.flatMap(f=>getIftyYearEntriesForFolder(f.id));
+}
+function ifty144RefreshYearSelectionDock(){
+  const old=document.getElementById('ifty144YearActionsDock');
+  const visible=!!document.getElementById('iftyYearList')?.getClientRects().length;
+  if(!visible){old?.remove();return;}
+  const dock=old||document.createElement('button');
+  dock.id='ifty144YearActionsDock';dock.type='button';
+  dock.textContent=`☑ 選択操作 ${ifty144SelectedYearIds.size}件 ▾`;
+  dock.setAttribute('aria-label',`年号の選択操作：${ifty144SelectedYearIds.size}件`);
+  dock.style.cssText='position:fixed;right:12px;top:50%;transform:translateY(-50%);z-index:9970;border:1px solid #7dd3fc;border-radius:12px;box-shadow:0 5px 18px #0004;background:#0369a1;color:white;padding:10px;font:800 12px system-ui;max-width:min(145px,37vw);cursor:pointer;';
+  dock.onclick=window.ifty144YearSelectionMenu;
+  if(!old)document.body.appendChild(dock);
+}
+window.ifty144ToggleYearSelection=function(id,checked){if(checked)ifty144SelectedYearIds.add(String(id));else ifty144SelectedYearIds.delete(String(id));ifty144RefreshYearSelectionDock();};
+window.ifty144SelectYearFolder=function(folderId){
+  getIftyYearEntriesForFolder(folderId).forEach(e=>ifty144SelectedYearIds.add(String(e.id)));
+  renderIftyYearEntries();ifty144RefreshYearSelectionDock();
+};
+window.ifty144YearSelectionMenu=function(){
+  document.getElementById('ifty144YearSelectionMenu')?.remove();
+  const node=document.createElement('div');node.id='ifty144YearSelectionMenu';
+  node.style.cssText='position:fixed;inset:0;z-index:14000;background:#0009;display:flex;align-items:center;justify-content:center;padding:14px;';
+  const folders=getIftySortedYearFolders();
+  node.innerHTML=`<section role="dialog" aria-modal="true" aria-label="年号の選択操作" style="width:min(440px,100%);background:#fff;border-radius:14px;padding:18px;color:#0f172a;box-sizing:border-box;">
+    <div style="display:flex;justify-content:space-between;gap:10px;"><strong>選択操作（${ifty144SelectedYearIds.size}件）</strong><button type="button" data-a="close">閉じる</button></div>
+    <label style="display:block;margin-top:14px;">移動先<select id="ifty144YearMoveTarget" style="width:100%;padding:10px;margin-top:5px;">${folders.map(f=>`<option value="${ifty144SafeQuote(f.id)}">${escapeHtml(f.name)}</option>`).join('')}</select></label>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px;">
+      <button type="button" data-a="move" ${!ifty144SelectedYearIds.size?'disabled':''}>移動</button>
+      <button type="button" data-a="delete" ${!ifty144SelectedYearIds.size?'disabled':''}>削除</button>
+      <button type="button" data-a="all">全選択</button><button type="button" data-a="clear">選択解除</button>
+    </div></section>`;
+  node.querySelectorAll('[data-a]').forEach(btn=>btn.style.cssText='min-height:42px;padding:10px;border:1px solid #94a3b8;border-radius:8px;cursor:pointer;background:#e2e8f0;color:#0f172a;font-weight:750;');
+  node.onclick=e=>{
+    if(e.target===node){node.remove();return;}
+    const action=e.target?.closest?.('[data-a]')?.dataset?.a;if(!action)return;
+    if(action==='move'||action==='delete'){
+      if(!ifty144SelectedYearIds.size)return;
+      const rows=getIftyYearEntries();const targets=rows.filter(row=>ifty144SelectedYearIds.has(String(row.id)));
+      if(action==='delete'&&!confirm(`${targets.length}件の年号を削除しますか？`))return;
+      recordUndoState(action==='move'?'年号一括移動':'年号一括削除');
+      if(action==='move'){
+        const target=document.getElementById('ifty144YearMoveTarget')?.value;
+        if(!getIftyYearFolderById(target))return;
+        let order=getIftyNextYearOrder(target);
+        targets.forEach(row=>{row.folderId=target;row.order=order++;});
+      }else{
+        for(let i=rows.length-1;i>=0;i--)if(ifty144SelectedYearIds.has(String(rows[i].id)))rows.splice(i,1);
+      }
+      ifty144SelectedYearIds.clear();savePracticeData();renderIftyYearEntries();
+    } else if(action==='all')getIftyYearEntries().forEach(row=>ifty144SelectedYearIds.add(String(row.id)));
+    else if(action==='clear')ifty144SelectedYearIds.clear();
+    node.remove();
+    renderIftyYearEntries();ifty144RefreshYearSelectionDock();
+  };
+  document.body.appendChild(node);
+};
+
+// Keep the normal YEARS page and update only its extra dock after rendering.
+const ifty144OriginalRenderYearEntries=renderIftyYearEntries;
+renderIftyYearEntries=function(...args){
+  const result=ifty144OriginalRenderYearEntries(...args);
+  ifty144RefreshYearSelectionDock();
+  return result;
+};
+
+// YEAR practice is routed through the same PRACTICE modal as other subjects.
+const ifty144OriginalOpenPracticeHome=window.openPracticeHome;
+window.openPracticeHome=function(subject){
+  if(String(subject||'').toUpperCase()==='YEARS'){
+    ifty144OriginalOpenPracticeHome('ENGLISH');
+    iftyUnifiedPracticeSubject='YEARS';renderPracticeHome();return;
+  }
+  return ifty144OriginalOpenPracticeHome(subject);
+};
+const ifty144OriginalSetPracticeSubject=window.setIftyUnifiedPracticeSubject;
+window.setIftyUnifiedPracticeSubject=function(subject){
+  if(String(subject||'').toUpperCase()==='YEARS'){
+    iftyUnifiedPracticeSubject='YEARS';renderPracticeHome();return;
+  }
+  return ifty144OriginalSetPracticeSubject(subject);
+};
+const ifty144OriginalRenderPracticeHome=renderPracticeHome;
+renderPracticeHome=function(){
+  if(iftyUnifiedPracticeSubject==='YEARS')return ifty144RenderYearPracticeHome();
+  const out=ifty144OriginalRenderPracticeHome();
+  const modal=document.getElementById('practiceModal');
+  const row=modal?.querySelector('button[onclick*="setIftyUnifiedPracticeSubject"]')?.parentElement;
+  if(row && !row.querySelector('[data-ifty144-years-tab]')){
+    const b=document.createElement('button');b.type='button';b.dataset.ifty144YearsTab='1';b.textContent='YEARS';
+    b.style.cssText='border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;';
+    b.onclick=()=>window.setIftyUnifiedPracticeSubject('YEARS');row.appendChild(b);
+  }
+  return out;
+};
+window.ifty144PracticeFolder=function(id){
+  ifty144YearSelectionInitialized=true;ifty144YearSelection=new Set([String(id)]);
+  window.openPracticeHome('YEARS');
+};
+function ifty144YearEnsureSelection(){
+  const folders=getIftySortedYearFolders().filter(f=>getIftyYearEntriesForFolder(f.id).length);
+  const valid=new Set(folders.map(f=>String(f.id)));
+  ifty144YearSelection=new Set([...ifty144YearSelection].filter(id=>valid.has(id)));
+  if(!ifty144YearSelectionInitialized){folders.forEach(f=>ifty144YearSelection.add(String(f.id)));ifty144YearSelectionInitialized=true;}
+}
+window.ifty144YearToggleFolder=function(id,checked){ifty144YearSelectionInitialized=true;if(checked)ifty144YearSelection.add(String(id));else ifty144YearSelection.delete(String(id));ifty144RenderYearPracticeHome();};
+window.ifty144YearSetConfig=function(prop,value){
+  if(prop==='count')ifty144YearSetup.count=Math.min(30,Math.max(1,Number(value)||10));
+  else if(prop==='random')ifty144YearSetup.random=!!value;
+  ifty144RenderYearPracticeHome();
+};
+window.ifty144YearToggleMode=function(kind,value,checked){
+  const list=kind==='formats'?ifty144YearSetup.formats:ifty144YearSetup.modes;
+  if(checked&&!list.includes(value))list.push(value);
+  else if(!checked)list.splice(list.indexOf(value),list.includes(value)?1:0);
+  ifty144RenderYearPracticeHome();
+};
+function ifty144YearTabButtons(){
+  const tabs=['ENGLISH','ANCIENT','KANBUN','KANJI','SOCIAL STUDIES','SCIENCE','OTHERS','BASIC SENTENCES','YEARS'];
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px;">${tabs.map(k=>`<button type="button" onclick="setIftyUnifiedPracticeSubject('${k}')" style="border:${k==='YEARS'?'0':'1px solid #cbd5e1'};background:${k==='YEARS'?'#0f766e':'#fff'};color:${k==='YEARS'?'#fff':'#334155'};border-radius:999px;padding:8px 12px;font-weight:800;">${k==='ENGLISH'?'LANGUAGES':k}</button>`).join('')}</div>`;
+}
+function ifty144RenderYearPracticeHome(){
+  const modal=document.getElementById('practiceModal');if(!modal)return;
+  ifty144YearEnsureSelection();
+  const folders=getIftySortedYearFolders().filter(f=>getIftyYearEntriesForFolder(f.id).length);
+  const selected=ifty144YearSelectedEntries();
+  const sets=ifty144YearSets();
+  modal.innerHTML=`<section class="ifty144-years-modal" style="background:#fff;color:#0f172a;border-radius:14px;width:min(820px,100%);max-height:92dvh;overflow:auto;padding:18px;box-sizing:border-box;min-width:0;box-shadow:0 15px 45px #0004;">
+    <header style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><h2 style="margin:0;font-size:1.35em;">⚔️ PRACTICE / YEARS</h2><small>保存済みの年号・出来事から四択／記述を作成します。</small></div><button type="button" onclick="closePracticeModal()" aria-label="閉じる" style="padding:8px 11px;border-radius:8px;">✕</button></header>
+    ${ifty144YearTabButtons()}
+    <div style="border:1px solid #c4b5fd;border-radius:11px;padding:14px;background:#faf5ff;">
+      <h3 style="margin:0 0 8px;color:#4c1d95;">📁 出題フォルダ</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">${folders.length?folders.map(f=>`<label style="border:1px solid #c4b5fd;padding:9px;border-radius:9px;background:#fff;"><input type="checkbox" ${ifty144YearSelection.has(String(f.id))?'checked':''} onchange="ifty144YearToggleFolder('${ifty144SafeQuote(f.id)}',this.checked)"> ${escapeHtml(f.name)} <small>(${getIftyYearEntriesForFolder(f.id).length}件)</small></label>`).join(''):'<p>年号のあるフォルダがありません。先に年号を登録してください。</p>'}</div>
+      <p style="font-size:.84em;margin-bottom:0;">選択中：${selected.length}年号／他教科と同じように複数フォルダを指定できます。</p>
+    </div>
+    <div style="border:1px solid #cbd5e1;border-radius:11px;padding:14px;margin-top:12px;background:#f8fafc;">
+      <h3 style="margin:0 0 8px;color:#334155;">❓ 問題の設定</h3>
+      <fieldset style="border:0;padding:0;margin:0 0 12px;"><legend><b>出題方向</b></legend>
+        ${[['event_year','出来事 → 年号'],['year_event','年号 → 出来事'],['year_period','年号 → 時代区分']].map(([key,label])=>`<label style="display:inline-flex;gap:5px;align-items:center;margin:5px 12px 5px 0;"><input type="checkbox" onchange="ifty144YearToggleMode('modes','${key}',this.checked)" ${ifty144YearSetup.modes.includes(key)?'checked':''}>${label}</label>`).join('')}
+      </fieldset>
+      <fieldset style="border:0;padding:0;margin:0 0 12px;"><legend><b>回答方式</b></legend>
+        ${[['choice','四択'],['written','記述']].map(([key,label])=>`<label style="display:inline-flex;gap:5px;align-items:center;margin:5px 15px 5px 0;"><input type="checkbox" onchange="ifty144YearToggleMode('formats','${key}',this.checked)" ${ifty144YearSetup.formats.includes(key)?'checked':''}>${label}</label>`).join('')}
+      </fieldset>
+      <label>問題数 <select onchange="ifty144YearSetConfig('count',this.value)" style="padding:8px;border-radius:8px;min-height:40px;">${[5,10,15,20,25,30].map(n=>`<option value="${n}" ${ifty144YearSetup.count===n?'selected':''}>${n}問</option>`).join('')}</select></label>
+      <label style="margin-left:14px;"><input type="checkbox" ${ifty144YearSetup.random?'checked':''} onchange="ifty144YearSetConfig('random',this.checked)">ランダム出題</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;"><button type="button" onclick="ifty144StartYearPractice()" ${!selected.length||!ifty144YearSetup.modes.length||!ifty144YearSetup.formats.length?'disabled':''} style="background:#7c3aed;color:white;border:0;border-radius:8px;padding:12px 19px;font-weight:900;">▶ 練習開始</button><button type="button" onclick="ifty144SaveYearPracticeSet()" ${!selected.length?'disabled':''} style="background:#0f766e;color:#fff;border:0;border-radius:8px;padding:12px;">設定をクイズフォルダとして保存</button></div>
+    </div>
+    <div style="margin-top:12px;border:1px solid #ddd6fe;border-radius:11px;padding:14px;"><h3 style="margin:0 0 9px;">📚 保存済みクイズフォルダ</h3>
+      ${sets.length?sets.map(set=>`<div style="border:1px solid #e2e8f0;padding:10px;border-radius:8px;margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between;"><button type="button" style="background:transparent;border:0;text-align:left;color:#1e293b;font-weight:800;flex:1;" onclick="ifty144LoadYearPracticeSet('${ifty144SafeQuote(set.id)}')">${escapeHtml(set.name)} <small>(${set.itemIds?.length||0}件)</small></button><button type="button" onclick="ifty144RunYearPracticeSet('${ifty144SafeQuote(set.id)}')">▶ 実行</button><button type="button" onclick="ifty144DeleteYearPracticeSet('${ifty144SafeQuote(set.id)}')">削除</button></div>`).join(''):'<p style="color:#64748b;">まだ保存されていません。</p>'}
+    </div>
+  </section>`;
+}
+window.ifty144SaveYearPracticeSet=function(){
+  const selected=ifty144YearSelectedEntries();if(!selected.length)return;
+  const name=prompt('クイズフォルダ名','YEARS 練習');if(name===null||!name.trim())return;
+  recordUndoState('YEARS クイズフォルダを保存');
+  ifty144YearSets().push({id:makeId('yearquiz'),name:name.trim(),itemIds:selected.map(r=>String(r.id)),formats:[...ifty144YearSetup.formats],modes:[...ifty144YearSetup.modes],count:ifty144YearSetup.count,random:ifty144YearSetup.random});
+  savePracticeData();ifty144RenderYearPracticeHome();
+};
+window.ifty144DeleteYearPracticeSet=function(id){const set=ifty144GetSet(id);if(!set||!confirm(`「${set.name}」を削除しますか？`))return;recordUndoState('YEARS クイズフォルダを削除');ifty144YearModules().practiceSets=ifty144YearSets().filter(s=>String(s.id)!==String(id));savePracticeData();ifty144RenderYearPracticeHome();};
+window.ifty144LoadYearPracticeSet=function(id){
+  const set=ifty144GetSet(id);if(!set)return;
+  const ids=new Set(set.itemIds||[]);
+  ifty144YearSelectionInitialized=true;ifty144YearSelection=new Set(getIftySortedYearFolders().filter(f=>getIftyYearEntriesForFolder(f.id).some(e=>ids.has(String(e.id)))).map(f=>String(f.id)));
+  ifty144YearSetup={formats:(set.formats||['written']).filter(x=>['choice','written'].includes(x)),modes:(set.modes||['event_year']).filter(x=>['event_year','year_event','year_period'].includes(x)),count:Number(set.count)||10,random:set.random!==false};
+  ifty144RenderYearPracticeHome();
+};
+window.ifty144RunYearPracticeSet=function(id){
+  const set=ifty144GetSet(id);if(!set)return;
+  const ids=new Set(set.itemIds||[]);
+  const rows=getIftyYearEntries().filter(e=>ids.has(String(e.id)));
+  ifty144StartYearPractice(rows,set);
+};
+
+function ifty144YearQuestionBank(entries, modes,formats){
+  const questionBank=[];
+  const rows=(entries||[]).filter(e=>Number(e.year)>0);
+  // duplicate event names across multiple distinct years make a year question ambiguous
+  const titleToDates=new Map();
+  for(const row of rows)for(const ev of row.exactEvents||[]){
+    const norm=ifty144SimpleNormalize(ifty144EventTitle(ev));if(!norm)continue;
+    if(!titleToDates.has(norm))titleToDates.set(norm,new Set());titleToDates.get(norm).add(ifty144YearKey(row));
+  }
+  const perYear=new Map();
+  for(const row of rows){const key=ifty144YearKey(row)+'|'+(row.periodLabel||'');
+    if(!perYear.has(key))perYear.set(key,[]);perYear.get(key).push(row);
+  }
+  const allYearLabels=ifty144Unique(rows.map(r=>r.yearLabel||formatIftyYearLabel(r.era,r.year)));
+  const allPeriods=ifty144Unique(rows.map(r=>String(r.periodLabel||'').trim()));
+  const allTitles=ifty144Unique(rows.flatMap(r=>(r.exactEvents||[]).map(ev=>ifty144EventTitle(ev))));
+  function add(mode,row,prompt,answers,choices,explanation){
+    const uniqueAnswers=ifty144Unique(answers.map(a=>String(a||'').trim()));if(!uniqueAnswers.length)return;
+    const base={mode,prompt,answers:uniqueAnswers,explanation,entryId:String(row.id),sourceLabel:row.yearLabel||formatIftyYearLabel(row.era,row.year)};
+    if(formats.includes('written'))questionBank.push({...base,format:'written'});
+    if(formats.includes('choice')){
+      const correct=uniqueAnswers[0];const extras=ifty144Unique(choices).filter(x=>!uniqueAnswers.some(a=>ifty144SimpleNormalize(a)===ifty144SimpleNormalize(x)));
+      if(extras.length>=3)questionBank.push({...base,format:'choice',options:ifty144Shuffle([correct,...ifty144Shuffle(extras).slice(0,3)]),answers:[correct]});
+    }
+  }
+  for(const row of rows){
+    const label=row.yearLabel||formatIftyYearLabel(row.era,row.year);
+    const titles=ifty144Unique((row.exactEvents||[]).map(ev=>ifty144EventTitle(ev)));
+    if(modes.includes('event_year'))for(const title of titles){
+      if(titleToDates.get(ifty144SimpleNormalize(title))?.size!==1)continue;
+      add('event_year',row,`「${title}」が起きた年を答えなさい。`,[label],allYearLabels,`${label}：${title}`);
+    }
+    if(modes.includes('year_event')&&titles.length){
+      const sameYear=rows.filter(r=>ifty144YearKey(r)===ifty144YearKey(row));
+      const subjects=ifty144Unique((row.exactEvents||[]).map(ev=>getIftyYearSubjectLabel(ev.subject)));
+      const desc=subjects.length===1?`（${subjects[0]}）`:'';
+      const allowed=ifty144Unique(sameYear.flatMap(r=>(r.exactEvents||[]).filter(ev=>!desc||getIftyYearSubjectLabel(ev.subject)===subjects[0]).map(ev=>ifty144EventTitle(ev))));
+      const answerChoices=allTitles.filter(t=>!allowed.some(a=>ifty144SimpleNormalize(a)===ifty144SimpleNormalize(t)));
+      add('year_event',row,`${label}${desc}に起きた出来事を答えなさい。`,allowed,answerChoices,`${label}：${allowed.join('／')}`);
+    }
+    const period=String(row.periodLabel||'').trim();
+    if(modes.includes('year_period')&&period){
+      add('year_period',row,`${label}の登録されている時代区分を答えなさい。`,[period],allPeriods,`${label}：${period}`);
+    }
+  }
+  return questionBank;
+}
+window.ifty144StartYearPractice=function(givenRows=null,givenSettings=null){
+  const config=givenSettings||ifty144YearSetup;
+  const rows=Array.isArray(givenRows)?givenRows:ifty144YearSelectedEntries();
+  const pool=ifty144YearQuestionBank(rows,config.modes||[],config.formats||[]);
+  if(!pool.length){alert('出題可能な問題がありません。出来事や時代区分を保存するか、問題形式を変更してください。四択には正解以外の候補が3件必要です。');return;}
+  let seq=config.random!==false?ifty144Shuffle(pool):pool;
+  const count=Math.max(1,Math.min(30,Number(config.count)||10));
+  // Do not repeat a question; only use the available count.
+  seq=seq.slice(0,count);
+  ifty144YearPracticeState={questions:seq,index:0,correct:0,wrong:0,skipped:0,answered:false,grading:false,last:null,ifty143SessionId:makeId('yearsquiz')};
+  ifty144RenderYearQuestion();
+};
+function ifty144YearNumberAnswer(v){const parsed=parseIftyYearInput(String(v||''));return parsed?normalizeIftyYearEra(parsed.era)+':'+parsed.year:'';}
+function ifty144IsCorrectYearAnswer(q,v){
+  if(q.mode==='event_year'){
+    const value=ifty144YearNumberAnswer(v);return !!value&&q.answers.some(a=>value===ifty144YearNumberAnswer(a));
+  }
+  const answer=ifty144SimpleNormalize(v);
+  return !!answer&&q.answers.some(a=>answer===ifty144SimpleNormalize(a));
+}
+function ifty144YearAnswerHtml(q){
+  if(q.format==='choice')return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;">${q.options.map((opt,i)=>`<button type="button" onclick="ifty144GradeYearAnswer(${i})" style="background:#eff6ff;color:#0f172a;border:1px solid #93c5fd;border-radius:9px;text-align:left;min-height:50px;padding:11px;overflow-wrap:anywhere;">${escapeHtml(opt)}</button>`).join('')}</div>`;
+  return `<form onsubmit="event.preventDefault();ifty144GradeYearAnswer()" style="display:grid;gap:9px;"><label style="font-weight:850;">回答を入力<input id="ifty144YearAnswer" style="display:block;margin-top:5px;width:100%;box-sizing:border-box;border:1px solid #94a3b8;border-radius:9px;padding:11px;min-height:47px;color:#0f172a;background:#fff;font:inherit;" placeholder="${q.mode==='event_year'?'例：1582 / 紀元前300':'出来事・時代区分'}" autocomplete="off"></label><button type="submit" style="border:0;border-radius:9px;padding:13px;background:#2563eb;color:#fff;font-weight:900;">回答する</button></form>`;
+}
+function ifty144RenderYearQuestion(){
+  const modal=document.getElementById('practiceModal');const st=ifty144YearPracticeState;
+  if(!modal||!st)return;
+  const q=st.questions[st.index];
+  const done=!q;
+  modal.style.display='flex';
+  modal.innerHTML=`<section class="ifty144-years-modal" style="background:white;color:#0f172a;border-radius:14px;width:min(710px,100%);max-height:92dvh;overflow:auto;padding:18px;box-sizing:border-box;box-shadow:0 16px 55px #0004;">
+    ${done?`<h2>YEARS PRACTICE 結果</h2><p>正解 ${st.correct}問／不正解 ${st.wrong}問／分からない ${st.skipped}問</p><button type="button" onclick="ifty144YearPracticeBack()" style="padding:12px;border:0;border-radius:9px;background:#0f766e;color:white;">PRACTICEへ戻る</button>`:
+    `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;"><div><h2 style="margin:0;">📅 YEARS / PRACTICE</h2><small>${st.index+1} / ${st.questions.length} ・${q.format==='choice'?'四択':'記述'}・正解${st.correct}／不正解${st.wrong}／分からない${st.skipped}</small></div><button type="button" onclick="ifty144YearPracticeBack()" style="padding:9px;border:1px solid #cbd5e1;border-radius:9px;">終了</button></div>
+    <div style="margin:14px 0;padding:15px;border:1px solid #7dd3fc;background:#f0f9ff;border-radius:11px;line-height:1.65;font-weight:800;overflow-wrap:anywhere;">${escapeHtml(q.prompt)}</div>
+    ${st.answered?`<h2 style="color:${st.last.correct?'#059669':'#dc2626'};">${st.last.correct?'⭕ 正解':'❌ 不正解'}</h2><p>あなたの回答：${escapeHtml(st.last.answer)}</p><p>正答例：${escapeHtml(q.answers.join(' ／ '))}</p><div style="padding:10px;background:#f8fafc;border-radius:9px;">${escapeHtml(q.explanation)}</div><button type="button" onclick="ifty144NextYearQuestion(false)" style="width:100%;margin-top:14px;background:#2563eb;color:#fff;border:0;border-radius:9px;padding:13px;">次へ</button>`:ifty144YearAnswerHtml(q)}
+    <div id="ifty144YearsTools" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>`}
+  </section>`;
+  if(!done){
+    ifty143Toolbar('years',{modal:'practiceModal'});
+    if(!st.answered)document.getElementById('ifty144YearAnswer')?.focus({preventScroll:true});
+  }
+}
+window.ifty144GradeYearAnswer=function(optionIndex){
+  const st=ifty144YearPracticeState;const q=st?.questions?.[st.index];if(!q||st.answered||st.grading)return;
+  const answer=q.format==='choice'?q.options?.[optionIndex]:document.getElementById('ifty144YearAnswer')?.value;
+  if(!String(answer||'').trim())return;
+  const correct=ifty144IsCorrectYearAnswer(q,answer);
+  st.answered=true;st.last={answer:String(answer),correct};if(correct)st.correct++;else st.wrong++;
+  ifty144RenderYearQuestion();
+};
+window.ifty144NextYearQuestion=function(skip){
+  const st=ifty144YearPracticeState;const q=st?.questions?.[st.index];if(!q)return;
+  if(skip){if(st.answered)return;st.skipped++;}
+  st.index++;st.answered=false;st.last=null;ifty144RenderYearQuestion();
+};
+window.ifty144YearPracticeBack=function(){
+  ifty144YearPracticeState=null;window.ifty143CloseHelp?.();iftyUnifiedPracticeSubject='YEARS';ifty144RenderYearPracticeHome();
+};
+
+
+// ============================================================================
+// IFTY STEP145 — dark YEARS, answer-reveal "分からない", viewport preservation
+// Based on STEP144. Existing grading, question generation, storage and Worker
+// remain unchanged. An unanswered question is revealed without marking wrong.
+// ============================================================================
+(function ifty145InstallDarkStyles(){
+  if (document.getElementById('ifty145-dark-style')) return;
+  const style=document.createElement('style');style.id='ifty145-dark-style';
+  style.textContent=`
+    body[data-ifty-theme="dark"] .ifty-year-folder,
+    body[data-ifty-theme="dark"] .ifty-year-card,
+    body[data-ifty-theme="dark"] .ifty-years-form,
+    body[data-ifty-theme="dark"] .ifty144-years-modal,
+    body.ifty-dark .ifty-year-folder,body.ifty-dark .ifty-year-card,
+    body.ifty-dark .ifty144-years-modal {
+      background:#1c293d!important;color:#e8f0fa!important;border-color:#536680!important;
+    }
+    body[data-ifty-theme="dark"] .ifty-year-event,
+    body[data-ifty-theme="dark"] .ifty-year-mnemonic,
+    body[data-ifty-theme="dark"] .ifty-year-note,
+    body.ifty-dark .ifty-year-event,body.ifty-dark .ifty-year-mnemonic,
+    body.ifty-dark .ifty-year-note {
+      background:#101b2e!important;color:#e2e8f0!important;border-color:#475569!important;
+    }
+    body[data-ifty-theme="dark"] .ifty-year-title,
+    body[data-ifty-theme="dark"] .ifty-year-folder-title,
+    body[data-ifty-theme="dark"] .ifty-year-event-title,
+    body[data-ifty-theme="dark"] .ifty-year-event-text,
+    body[data-ifty-theme="dark"] .ifty-year-mnemonic-text,
+    body[data-ifty-theme="dark"] .ifty-year-period,
+    body[data-ifty-theme="dark"] .ifty-year-section-title,
+    body[data-ifty-theme="dark"] .ifty-year-mnemonic-head,
+    body[data-ifty-theme="dark"] .ifty-year-nearby-year,
+    body.ifty-dark .ifty-year-event-title,body.ifty-dark .ifty-year-event-text {
+      color:#e2e8f0!important;
+    }
+    body[data-ifty-theme="dark"] .ifty-year-badge {background:#123653!important;color:#a7e4ff!important;}
+    body[data-ifty-theme="dark"] .ifty144-years-modal :is(div,section,article,label,p)[style*="background:#fff"],
+    body[data-ifty-theme="dark"] .ifty144-years-modal :is(div,section,article,label,p)[style*="background: #fff"],
+    body[data-ifty-theme="dark"] .ifty144-years-modal :is(div,section,article,label,p)[style*="background:#f8fafc"],
+    body[data-ifty-theme="dark"] .ifty144-years-modal :is(div,section,article,label,p)[style*="background:#faf5ff"],
+    body[data-ifty-theme="dark"] .ifty144-years-modal :is(div,section,article,label,p)[style*="background:#f0f9ff"],
+    body.ifty-dark .ifty144-years-modal :is(div,section,article,label,p)[style*="background:#fff"] {
+      background:#24354a!important;color:#e2e8f0!important;border-color:#536680!important;
+    }
+    body[data-ifty-theme="dark"] .ifty144-years-modal :is(h1,h2,h3,h4,b,legend,label,small,p)[style*="color:#"],
+    body[data-ifty-theme="dark"] .ifty144-years-modal :is(span,strong)[style*="color:#0f172a"],
+    body[data-ifty-theme="dark"] .ifty144-years-modal button[style*="color:#0f172a"],
+    body.ifty-dark .ifty144-years-modal :is(h1,h2,h3,label,small,p)[style*="color:#"] {
+      color:#e2e8f0!important;
+    }
+    body[data-ifty-theme="dark"] .ifty144-years-modal :is(input,select,textarea),
+    body.ifty-dark .ifty144-years-modal :is(input,select,textarea) {
+      background:#0e192c!important;color:#f8fafc!important;border-color:#72849c!important;
+    }
+    body[data-ifty-theme="dark"] .ifty144-years-modal input::placeholder {color:#aabbd0!important;}
+    body[data-ifty-theme="dark"] .ifty144-years-modal button:not([style*="background:#2563eb"]):not([style*="background:#7c3aed"]):not([style*="background:#0f766e"]):not([style*="background:#dc2626"]) {
+      border-color:#718096;
+    }
+    .ifty145-unknown-btn {display:block;min-height:44px;width:100%;padding:11px 14px;border-radius:10px;
+      border:1px solid #eab308;background:#fff7db;color:#713f12;font-weight:850;cursor:pointer;
+      margin:8px 0 0;touch-action:manipulation;box-sizing:border-box;}
+    .ifty145-reveal {padding:14px;border:1px solid #eab308;background:#fffbeb;color:#713f12;
+      border-radius:10px;margin-top:10px;line-height:1.65;overflow-wrap:anywhere;}
+    .ifty145-reveal strong {display:block;margin-bottom:5px;}
+    .ifty145-reveal p {margin:5px 0 0;white-space:pre-wrap;}
+    .ifty145-next {background:#2563eb;color:white;border:0;border-radius:9px;font-weight:850;
+      width:100%;padding:12px;min-height:44px;margin-top:12px;cursor:pointer;}
+    body[data-ifty-theme="dark"] .ifty145-reveal {background:#342b21!important;color:#fef3c7!important;border-color:#eab308!important;}
+    body[data-ifty-theme="dark"] .ifty145-unknown-btn {background:#273648;color:#fef3c7;border-color:#d4a735;}
+    @media(max-width:600px){.ifty144-years-modal{padding:12px!important;}}
+  `;
+  document.head.appendChild(style);
+})();
+
+// The original STEP143 code advances immediately on Skip. STEP145 defers that
+// call until the displayed solution has been read; no grade is recorded.
+const ifty145AdvanceWithoutGrade = window.ifty143Skip;
+const ifty145BaseContext = ifty143Context;
+ifty143Context=function(kind){
+  const ctx=ifty145BaseContext(kind);
+  if (ctx && ctx.st.ifty145UnknownKey===ctx.key) {
+    ctx.answered=true;
+    ctx.extra=ifty145Answer(ctx);
+  }
+  return ctx;
+};
+function ifty145Answer(ctx){
+  const q=ctx.q||{}, st=ctx.st||{};
+  const list=[];
+  const add=v=>{
+    if(v===undefined||v===null)return;
+    if(Array.isArray(v)){v.forEach(add);return;}
+    if(typeof v==='object'){if(v.label||v.text||v.title)add(v.label||v.text||v.title);return;}
+    const s=String(v).trim();if(s && !list.includes(s))list.push(s);
+  };
+  if(ctx.kind==='years')add(q.answers);
+  else if(ctx.kind==='social'||ctx.kind==='science'){
+    if(q.correctOrder?.length){
+      const map=new Map((q.events||[]).map(e=>[String(e.id),e.text||e.label||e.title]));
+      add(q.correctOrder.map(id=>map.get(String(id))).filter(Boolean).map((v,i)=>`${i+1}. ${v}`).join(' → '));
+    }else if(q.correctIds?.length){
+      add((q.options||[]).filter(o=>q.correctIds.some(id=>String(id)===String(o.id))).map(o=>o.label||o.text));
+    }
+    add(q.referenceAnswer);add(st.modelAnswer);add(q.modelAnswer);
+  }else if(ctx.kind==='ancient'){
+    add(q.modelAnswer);add(q.answer);add(q.answers);
+    const option=(q.options||[]).find(o=>String(o.id)===String(q.correctId));
+    if(option)add(option.label);
+  }else if(ctx.kind==='kanbun'){
+    const mode=String(q.mode||st.mode||'');
+    if(mode==='simple')add((q.options||[]).filter(o=>String(o.id)===String(q.correctOptionId)).map(o=>o.label));
+    else if(mode==='same_meaning')add((q.options||[]).filter(o=>(q.correctOptionIds||[]).some(id=>String(id)===String(o.id))).map(o=>o.label));
+    else if(mode==='kaeriten'){
+      const marks=(q.returnMarks||[]).map(x=>`${Number(x.index)+1}文字目：${x.mark}`).join(' ／ ');
+      add(marks || '正しい返点は解説中の訓点を確認してください。');
+    }
+    add(q.clozeAnswer);add(q.kundoku);add(q.translation);add(q.answer);
+  }else if(ctx.kind==='basic'){
+    const item=findIftyBasicSentenceById(st.queue?.[st.index]);
+    if(st.mode==='cloze')add(st.cloze?.answer);
+    else if(item)add(st.currentDirection==='ja_to_en'?item.en:item.ja);
+  }else if(ctx.kind==='pronunciation'){
+    add('この練習では発音例・読み方を確認してください。');
+    add(q.instruction);
+  }else {add(q.answer);add(q.answers);add(q.modelAnswer);add(q.referenceAnswer);add(q.correctAnswer);add(q.correct);
+    if(ctx.kind==='term')add(q.answer);
+    if(ctx.kind==='kanji'){
+      const option=(q.options||[]).find(o=>String(o.id)===String(q.correctId));if(option)add(option.label);
+    }
+  }
+  if(!list.length){
+    add(q.explanation);
+    if(!list.length)add('この問題には保存済みの模範解答がありません。解説や登録カードを確認してください。');
+  }
+  return list.slice(0,12).join(' ／ ');
+}
+function ifty145Root(kind,options){
+  if(options?.modal){const modal=document.getElementById(options.modal);return modal&&modal.style.display!=='none'?modal.firstElementChild:null;}
+  return document.querySelector('.ifty-portal-shell');
+}
+function ifty145AnswerPlace(root,kind){
+  // Written form has one clear submit. Insert after its enclosing form, never
+  // inside a form where pressing Enter could submit the "分からない" action.
+  const buttons=[...root.querySelectorAll('button')];
+  const submit=buttons.filter(b=>{
+    const t=b.textContent.trim();
+    return /^(回答|回答する|採点する|答える|回答を送信)$/.test(t)&&!b.closest('[data-ifty143-toolbar]');
+  }).pop();
+  if(submit){
+    if(submit.closest('form'))return submit.closest('form');
+    return submit;
+  }
+  if(kind==='years')return root.querySelector('form')||[...root.querySelectorAll('div')].find(el=>el.style.gridTemplateColumns?.includes('repeat(2'))||root;
+  // Multiple-choice: place below the final grid of answer buttons.
+  const opts=buttons.filter(b=>/answerIfty|submitIfty|ifty144GradeYearAnswer|toggleIfty|ifty144GradeYearAnswer/.test(b.getAttribute('onclick')||''));
+  if(opts.length){const last=opts[opts.length-1];return last.closest('[style*="display:grid"]')||last.closest('[style*="display: grid"]')||last;}
+  // Some subject modes use handcrafted controls. Keep the button under content.
+  return root.lastElementChild||root;
+}
+function ifty145DisableAnswers(root){
+  root.querySelectorAll('textarea,input:not([type="hidden"]),select').forEach(el=>{
+    if(!el.closest('[data-ifty143-toolbar]') && !el.closest('.ifty145-reveal'))el.disabled=true;
+  });
+  root.querySelectorAll('button').forEach(b=>{
+    const onclick=b.getAttribute('onclick')||'';
+    if(/answerIfty|submitIfty|ifty144GradeYearAnswer|toggleIfty.*Choice|moveIfty.*PracticeOrder|chooseIftyKanbunPracticeMark/.test(onclick))b.disabled=true;
+  });
+}
+function ifty145InstallUnknown(kind,options){
+  const ctx=ifty143Context(kind);const root=ifty145Root(kind,options);
+  if(!ctx||!root)return;
+  // A question already submitted normally still uses the original result UI.
+  if(ctx.answered&&ctx.st.ifty145UnknownKey!==ctx.key)return;
+  const insertAfter=ifty145AnswerPlace(root,kind);
+  if(!insertAfter)return;
+  if(ctx.st.ifty145UnknownKey===ctx.key){
+    root.querySelectorAll('.ifty145-unknown-btn').forEach(el=>el.remove());
+    if(root.querySelector('.ifty145-reveal'))return;
+    const card=document.createElement('div');card.className='ifty145-reveal';
+    card.innerHTML=`<strong>💡 正答・解答例</strong><p>${escapeHtml(ifty145Answer(ctx))}</p>`;
+    const next=document.createElement('button');next.type='button';next.className='ifty145-next';next.textContent='次へ';
+    next.onclick=()=>window.ifty145NextUnknown(kind);
+    card.appendChild(next);
+    insertAfter.insertAdjacentElement('afterend',card);
+    ifty145DisableAnswers(root);
+  }else{
+    if(root.querySelector('.ifty145-unknown-btn'))return;
+    const btn=document.createElement('button');btn.type='button';btn.className='ifty145-unknown-btn';
+    btn.textContent='？ 分からない（答えを見る）';btn.onclick=()=>window.ifty145RevealUnknown(kind);
+    insertAfter.insertAdjacentElement('afterend',btn);
+  }
+}
+window.ifty145RevealUnknown=function(kind){
+  const ctx=ifty145BaseContext(kind);
+  if(!ctx||ctx.answered||ctx.st.grading||ctx.st.challengePending)return;
+  ctx.st.ifty145UnknownKey=ctx.key;
+  // Do not run grading, study-history or the old skip function here.
+  const opt={modal:['ancient','kanji','others','basic','years'].includes(kind)?'practiceModal':kind==='pronunciation'?'iftyPronPracticeModal':undefined};
+  ifty145InstallUnknown(kind,opt);
+  // Existing generic toolbar no longer needs a Skip button here.
+  const row=ifty145Root(kind,opt)?.querySelector('[data-ifty143-toolbar]');
+  row?.querySelectorAll('button').forEach(b=>{if(b.textContent.includes('スキップ'))b.remove();});
+};
+window.ifty145NextUnknown=function(kind){
+  const ctx=ifty145BaseContext(kind);
+  if(!ctx||ctx.st.ifty145UnknownKey!==ctx.key)return;
+  ctx.st.ifty145UnknownKey=null;
+  ifty145AdvanceWithoutGrade(kind);
+};
+// STEP143 wrappers reference this function by its name on each render.
+const ifty145FormerToolbar=ifty143Toolbar;
+ifty143Toolbar=function(kind,options={}){
+  ifty145FormerToolbar(kind,{...options,noSkip:true});
+  ifty145InstallUnknown(kind,options);
+};
+
+// Restore the reading position for same-page folder operations. The existing
+// STEP138 guard handles immediate redrawing; this one also covers asynchronous
+// movement/deletion and scroll resets occurring after a prompt/confirmation.
+(function ifty145KeepFolderViewport(){
+  let active=null, token=0;
+  const readY=()=>Number(window.scrollY||document.scrollingElement?.scrollTop||0);
+  function pageKey(){
+    const visibleHub=document.getElementById('iftyHubPage');
+    if(visibleHub&&getComputedStyle(visibleHub).display!=='none')return 'hub:'+String(iftyPortalPage)+':'+String(currentIftySubject);
+    const vocab=document.getElementById('vocabPage');
+    if(vocab&&getComputedStyle(vocab).display!=='none')return 'vocab';
+    return 'other';
+  }
+  const intentional=/\b(?:scroll|navigate|openPractice|openIftyHome|openIftySubject|setIftyUnifiedPracticeSubject|ifty142Go|ifty129Navigate|switchTo|showIftyHubContent)\s*\(/i;
+  function begin(event){
+    if(!event.isTrusted || !event.target?.closest)return;
+    const el=event.target.closest('button,[onclick],input[type="checkbox"]');if(!el)return;
+    const root=el.closest('#iftyHubPage,#vocabPage');if(!root)return;
+    // Ignore quiz navigation, top/bottom jump controls and regular page links.
+    const action=String(el.getAttribute('onclick')||'');
+    if(intentional.test(action)||el.closest('#ifty142ScrollPanel,#ifty129NavControls'))return;
+    const folderRelated=!!el.closest('.ifty-portal-shell,#folders,.ifty-year-folder,#iftyBasicSentenceList') &&
+      (/move|delete|remove|edit|rename|save|toggle|select|regenerate|collapse|folder|item|ifty14[0-9]/i.test(action)||
+        /^(↑|↓|削除|編集|保存|移動|選択|折りたたむ|名前変更)/.test(el.textContent.trim())||el.matches('input[type="checkbox"]'));
+    if(!folderRelated)return;
+    const key=pageKey();if(key==='other')return;
+    const y=readY();if(y<1)return;
+    const saved=[];
+    for(let p=el.parentElement;p&&p!==document.body;p=p.parentElement){
+      if(p.scrollHeight>p.clientHeight+8&&/auto|scroll/.test(getComputedStyle(p).overflowY)) saved.push({node:p,y:p.scrollTop});
+    }
+    const snap={id:++token,key,y,saved,abort:false,start:Date.now()};active=snap;
+    if(key.startsWith('hub:')){
+      window.__iftyPreserveHubViewport=true;
+      window.__iftyPreserveHubViewportY=y;
+    }
+    const restore=()=>{
+      if(active!==snap||snap.abort||pageKey()!==snap.key)return;
+      const max=Math.max(0,document.documentElement.scrollHeight-innerHeight);
+      const target=Math.min(max,snap.y);
+      if(Math.abs(readY()-target)>1)try{window.scrollTo({top:target,left:0,behavior:'instant'});}catch(_){window.scrollTo(0,target);}
+      snap.saved.forEach(o=>{if(o.node?.isConnected)o.node.scrollTop=Math.min(o.y,Math.max(0,o.node.scrollHeight-o.node.clientHeight));});
+    };
+    // Do not monopolize scroll or fight user's next gesture.
+    [0,80,190,360,650,950].forEach(ms=>setTimeout(restore,ms));
+    setTimeout(()=>{if(active===snap){active=null;window.__iftyPreserveHubViewport=false;window.__iftyPreserveHubViewportY=null;}},1050);
+  }
+  document.addEventListener('click',begin,true);
+  document.addEventListener('change',begin,true);
+  const stop=()=>{if(active){active.abort=true;window.__iftyPreserveHubViewport=false;window.__iftyPreserveHubViewportY=null;}};
+  window.addEventListener('touchmove',stop,{capture:true,passive:true});
+  window.addEventListener('wheel',stop,{capture:true,passive:true});
+  document.addEventListener('keydown',e=>{if(['PageDown','PageUp','Home','End','ArrowDown','ArrowUp',' '].includes(e.key))stop();},true);
+})();
+
+// LANGUAGE quiz sets use a separate player. Give them the same answer-reveal
+// flow, leaving the existing scoring / saved question intact until "次へ".
+window.ifty145RevealEnglishQuiz=function(setId){
+  const set=getQuizSet(setId), q=set?.progress?.currentQuestion;
+  const modal=document.getElementById('practiceModal');
+  if(!set||!q||!modal||modal.querySelector('.ifty145-reveal'))return;
+  const ref=q.wordId?getWordById(q.wordId):null;
+  const hints=[q.referenceAnswer,q.localCorrectAnswer,q.correctAnswer,q.answer];
+  if(Array.isArray(q.localCorrectAnswers))hints.push(...q.localCorrectAnswers);
+  let answer=hints.filter(v=>typeof v==='string'&&v.trim()).join(' ／ ');
+  if(!answer&&ref?.word){
+    answer=q.direction==='jp_to_en'?String(ref.word.word||''):
+      (Array.isArray(ref.word.meanings)?ref.word.meanings.join(' ／ '):String(ref.word.word||''));
+  }
+  if(!answer)answer='保存済みのカードに解答例がありません。登録カードをご確認ください。';
+  const card=document.createElement('div');card.className='ifty145-reveal';
+  card.innerHTML=`<strong>💡 正答・解答例</strong><p>${escapeHtml(answer)}</p>`;
+  const btn=document.createElement('button');btn.type='button';btn.className='ifty145-next';btn.textContent='次へ';
+  btn.onclick=()=>window.ifty145NextEnglishQuiz(setId);
+  card.appendChild(btn);
+  const trigger=modal.querySelector('.ifty145-english-unknown');
+  trigger?.insertAdjacentElement('afterend',card);
+  trigger?.remove();
+  modal.querySelectorAll('#quizAnswerInput,input[name="quizChoice"]').forEach(x=>x.disabled=true);
+  modal.querySelectorAll('button[onclick^="submitQuizAnswer("]').forEach(x=>x.disabled=true);
+};
+window.ifty145NextEnglishQuiz=function(setId){
+  // Legacy Skip advances without registering an incorrect answer.
+  window.skipQuizQuestion(setId);
+};
