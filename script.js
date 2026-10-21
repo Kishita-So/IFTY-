@@ -19308,7 +19308,7 @@ function ifty149Queue(ids,required,count,random){
   return [...mandatory,...ordered.slice(0,Math.max(0,count-mandatory.length))];
 }
 function ifty149ConfigPanel(subject,set,rows,allowedModes){
-  const key=String(subject), isEnglish=key==='ENGLISH';
+  const key=String(subject);
   const required=new Set(ifty149ForceIds(set.forcedIds));
   const chosen=ifty149ModeMap(set.itemModes);
   const fixable=new Set(['derived','term_write','simple','choice','simple_meaning','write_typing','reading_write','meaning_write','explanation','meaning_explain','grammar_explain']);
@@ -19316,27 +19316,48 @@ function ifty149ConfigPanel(subject,set,rows,allowedModes){
   const allModes=[['','自動（フォルダ設定）'],...safeModes];
   const showDerived=key!=='BASIC SENTENCES'&&key!=='YEARS';
   const esc=escapeHtml;
-  const safe=(v)=>String(v).replace(/'/g,'');
+  const safe=v=>String(v).replace(/'/g,'');
   const modeOptions=id=>allModes.map(([value,label])=>`<option value="${esc(value)}" ${chosen[id]===value||(!value&&!chosen[id])?'selected':''}>${esc(label)}</option>`).join('');
-  return `<section style="margin-top:12px;padding:13px;border:1px solid #a5b4fc;border-radius:10px;background:#eef2ff;color:#1e293b;">
-   <h3 style="margin:0 0 9px;font-size:1em;color:#312e81;">難易度・派生記述・単語別ルール</h3>
-   <label style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-weight:800;">難易度
-   <select onchange="ifty149Config('${safe(key)}','${safe(set.id)}','difficulty',this.value)" style="padding:9px;border-radius:8px;border:1px solid #a5b4fc;">${IFTY149_DIFFICULTIES.map(d=>`<option value="${d}" ${ifty149Difficulty(set.difficulty)===d?'selected':''}>${d.toUpperCase()}</option>`).join('')}</select></label>
-   <p style="font-size:.8em;line-height:1.5;margin:8px 0;color:#475569;">EASY: 基礎の確認／NORMAL: 標準／HARD: 理由や関連知識／EXTREME: 比較・因果関係・複数条件。生成問題に適用します。</p>
-   ${showDerived?`<fieldset style="padding:8px;border:1px solid #c7d2fe;border-radius:8px;"><legend style="font-weight:800;">派生記述の方向（ALLIA）</legend>
-   ${[['achievement','人物の功績・役割'],['cause','出来事の背景・発生経緯'],['comparison','類似用語との違い']].map(([v,label])=>`<label style="display:inline-flex;align-items:center;gap:5px;margin:4px 10px 4px 0;"><input type="checkbox" ${ifty149DerivedKinds(set.derivedKinds).includes(v)?'checked':''} onchange="ifty149Config('${safe(key)}','${safe(set.id)}','derivedKind:${v}',this.checked)">${label}</label>`).join('')}
+  // STEP150: Scoped colors avoid collisions with global dark-mode overrides. 
+  // Ordinary word-selection checkboxes are deliberately NOT used for the must-ask control.
+  const styles=`<style>
+    .ifty150-config{--qbg:#f8fafc;--qinner:#fff;--qrow:#fff;--qfg:#0f172a;--qmuted:#334155;--qborder:#94a3b8;--qinput:#fff;--qhover:#e2e8f0;--qstar:#92400e;--qstarbg:#fffbeb;--qstarbd:#d97706;--qsetbg:#fef3c7;color:var(--qfg)!important;background:var(--qbg)!important;border-color:var(--qborder)!important;}
+    body[data-ifty-theme="dark"] .ifty150-config{--qbg:#1e293b;--qinner:#111c2f;--qrow:#18263b;--qfg:#f8fafc;--qmuted:#dbeafe;--qborder:#7587a5;--qinput:#101a2e;--qhover:#34445e;--qstar:#fde68a;--qstarbg:#3b2a17;--qstarbd:#fbbf24;--qsetbg:#594015;}
+    .ifty150-config .ifty150-heading,.ifty150-config .ifty150-label,.ifty150-config .ifty150-name,.ifty150-config legend{color:var(--qfg)!important;opacity:1!important;}
+    .ifty150-config .ifty150-help{color:var(--qmuted)!important;opacity:1!important;line-height:1.65;}
+    .ifty150-config .ifty150-inner{background:var(--qinner)!important;border:1px solid var(--qborder)!important;border-radius:10px;}
+    .ifty150-config .ifty150-row{background:var(--qrow)!important;border-bottom:1px solid var(--qborder)!important;color:var(--qfg)!important;}
+    .ifty150-config select{background:var(--qinput)!important;color:var(--qfg)!important;border:1px solid var(--qborder)!important;min-height:42px;}
+    .ifty150-config select option{background:var(--qinput);color:var(--qfg);}
+    .ifty150-config .ifty150-star{border:2px solid var(--qstarbd);background:var(--qstarbg)!important;color:var(--qstar)!important;border-radius:999px;padding:8px 12px;min-height:42px;font:inherit;font-weight:800;white-space:nowrap;cursor:pointer;flex:none;}
+    .ifty150-config .ifty150-star[aria-pressed="true"]{background:var(--qsetbg)!important;box-shadow:0 0 0 1px var(--qstarbd) inset;}
+    .ifty150-config .ifty150-star:focus-visible{outline:3px solid #38bdf8;outline-offset:2px;}
+    .ifty150-config .ifty150-row select{flex:0 1 215px;min-width:0;max-width:100%;}
+    .ifty150-config .ifty150-kinds label{color:var(--qfg)!important;font-weight:650;}
+    .ifty150-config .ifty150-kinds input{accent-color:#38a7ed;inline-size:19px;block-size:19px;flex:none;}
+    @media(max-width:520px){.ifty150-config{padding:12px!important}.ifty150-config .ifty150-row select{flex:1 1 100%;width:100%;}.ifty150-config .ifty150-row{gap:9px!important}.ifty150-config .ifty150-name{flex:1 1 135px!important;}}
+  </style>`;
+  return `${styles}<section class="ifty150-config" style="margin-top:12px;padding:14px;border:1px solid;border-radius:12px;box-sizing:border-box;">
+   <h3 class="ifty150-heading" style="margin:0 0 11px;font-size:1.08em;font-weight:900;">難易度・派生記述・単語別ルール</h3>
+   <label class="ifty150-label" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-weight:800;">難易度
+   <select aria-label="クイズの難易度" onchange="ifty149Config('${safe(key)}','${safe(set.id)}','difficulty',this.value)" style="padding:9px;border-radius:8px;font:inherit;font-weight:800;">${IFTY149_DIFFICULTIES.map(d=>`<option value="${d}" ${ifty149Difficulty(set.difficulty)===d?'selected':''}>${d.toUpperCase()}</option>`).join('')}</select></label>
+   <p class="ifty150-help" style="font-size:.88em;margin:9px 0;">EASY：基礎確認／NORMAL：標準／HARD：理由・関連知識／EXTREME：比較・因果関係・複数条件。AI生成問題で適用します。</p>
+   ${showDerived?`<fieldset class="ifty150-inner ifty150-kinds" style="padding:10px 12px;margin:10px 0;">
+     <legend class="ifty150-label" style="font-weight:850;padding:0 6px;">派生記述の方向（ALLIA）</legend>
+     ${[['achievement','人物の功績・役割'],['cause','出来事の背景・発生経緯'],['comparison','類似用語との違い']].map(([v,label])=>`<label style="display:inline-flex;align-items:center;gap:7px;margin:5px 14px 5px 0;cursor:pointer;"><input type="checkbox" ${ifty149DerivedKinds(set.derivedKinds).includes(v)?'checked':''} onchange="ifty149Config('${safe(key)}','${safe(set.id)}','derivedKind:${v}',this.checked)">${label}</label>`).join('')}
    </fieldset>`:''}
-   <p style="font-size:.8em;color:#475569;margin:8px 0;">★必出は問題数以内で必ず出題。形式の「固定」はその項目だけに適用します。クイズフォルダ内で設定できます。</p>
-   <div style="max-height:310px;overflow:auto;border:1px solid #c7d2fe;border-radius:8px;background:white;">
-    ${rows.map(row=>{const id=String(row.id);return `<div style="padding:9px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
-      <label style="display:flex;align-items:center;gap:4px;color:#1e293b;"><input type="checkbox" ${required.has(id)?'checked':''} onchange="ifty149Config('${safe(key)}','${safe(set.id)}','forced:${safe(id)}',this.checked)">★必出</label>
-      <span style="flex:1 1 160px;min-width:0;overflow-wrap:anywhere;font-weight:700;">${esc(row.name)}</span>
-      <select aria-label="${esc(row.name)}の固定出題形式" onchange="ifty149Config('${safe(key)}','${safe(set.id)}','mode:${safe(id)}',this.value)" style="max-width:100%;min-width:145px;padding:7px;border-radius:7px;border:1px solid #cbd5e1;">${modeOptions(id)}</select>
-     </div>`;}).join('')||'<div style="padding:12px;color:#64748b;">出題する単語を先に追加してください。</div>'}
+   <p class="ifty150-help" style="font-size:.86em;margin:9px 0;">「★ 必ず出す」は通常の選択チェックとは別の指定です。黄色のボタンが有効なら、問題数以内で優先出題します。</p>
+   <p class="ifty150-help" style="font-size:.8em;margin:6px 0 12px;">※画像・並べ替えなどの専用形式は、従来のクイズとして開始します。派生記述と混在させた場合、対応形式だけを詳細設定付きで実行します。</p>
+   <div class="ifty150-inner" style="max-height:310px;overflow:auto;overscroll-behavior:contain;">
+    ${rows.map(row=>{const id=String(row.id),must=required.has(id);return `<div class="ifty150-row" style="padding:10px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
+      <button type="button" class="ifty150-star" aria-label="${esc(row.name)}を必ず出す" aria-pressed="${must?'true':'false'}" onclick="ifty149Config('${safe(key)}','${safe(set.id)}','forced:${safe(id)}',this.getAttribute('aria-pressed')!=='true',this)">${must?'★ 必出中':'☆ 必ず出す'}</button>
+      <span class="ifty150-name" style="flex:1 1 150px;min-width:0;overflow-wrap:anywhere;font-weight:800;">${esc(row.name)}</span>
+      <select aria-label="${esc(row.name)}の固定出題形式" onchange="ifty149Config('${safe(key)}','${safe(set.id)}','mode:${safe(id)}',this.value)" style="padding:8px;border-radius:8px;font:inherit;">${modeOptions(id)}</select>
+     </div>`;}).join('')||'<div class="ifty150-help" style="padding:14px;">出題する単語を先に追加してください。</div>'}
    </div>
   </section>`;
 }
-window.ifty149Config=function(subject,setId,field,value){
+window.ifty149Config=function(subject,setId,field,value,sourceEl){
   const key=String(subject);
   const set=key==='ENGLISH'?getQuizSet(setId):key==='BASIC SENTENCES'?getIftyBasicPracticeSet(setId):key==='YEARS'?ifty144GetSet(setId):getIftySubjectQuizSet(key,setId);
   if(!set)return;
@@ -19357,6 +19378,10 @@ window.ifty149Config=function(subject,setId,field,value){
     const values=new Set(ifty149DerivedKinds(set.derivedKinds));if(value)values.add(kind);else values.delete(kind);
     if(values.size===0){alert('派生記述の種類を少なくとも1つ選択してください。');return;}
     set.derivedKinds=[...values];
+  }
+  if(field.startsWith('forced:') && sourceEl instanceof HTMLElement && sourceEl.classList.contains('ifty150-star')){
+    sourceEl.setAttribute('aria-pressed',value?'true':'false');
+    sourceEl.textContent=value?'★ 必出中':'☆ 必ず出す';
   }
   set.updatedAt=Date.now();savePracticeData();
 };
@@ -22090,10 +22115,15 @@ window.startIftySubjectQuizSet = async function(subject,setId){
   if(forced.length>Number(set.questionCount||5)){alert('必出指定が問題数を超えています。');return;}
   const enhanced=modes.includes('derived')||forced.length||Object.keys(overrides).some(id=>ids.includes(id))||ifty149Difficulty(set.difficulty)!=='normal';
   const specialModes=new Set(['image','write_handwriting','kaeriten','order','era','formula','relations','same_meaning','grammar_table']);
-  if(enhanced && modes.some(mode=>specialModes.has(mode))){alert('この特殊形式は従来の専用クイズ画面で出題されます。必出指定・個別固定・派生記述を使う場合は、記述または選択などの形式へ切り替えてください。');return;}
-  if(enhanced){
-    await ifty149StartManagedSubject(key,set,ids,modes);return;
+  // STEP150: Special-mode quizzes must not be blocked by an unrelated difficulty setting.
+  // Preserve the legacy engine whenever only special formats can be used.
+  const compatibleModes=modes.filter(mode=>!specialModes.has(mode));
+  const needsItemRules=modes.includes('derived')||forced.length>0||Object.keys(overrides).some(id=>ids.includes(id));
+  if(enhanced && compatibleModes.length && (!modes.some(mode=>specialModes.has(mode)) || needsItemRules)){
+    await ifty149StartManagedSubject(key,set,ids,compatibleModes);return;
   }
+  // In special-only and difficulty-only mixed sets, the legacy dedicated player runs.
+  // This keeps image/order/handwriting/etc. available and never changes their judging rules.
   iftySubjectQuizRunOverride={subject:key,itemIds:ids,setId:String(set.id)};
   if (['SOCIAL STUDIES','SCIENCE','ANCIENT'].includes(key) && modes.length > 1) {
     iftySubjectQuizSequence124 = {subject:key,modes:[...modes],position:0,total:Math.max(Number(set.questionCount)||5,modes.length),correct:0,wrong:0};
