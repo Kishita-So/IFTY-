@@ -1,0 +1,119 @@
+{
+  "original_sha256": "8d1f191b2c0f0b22f71e9f60f0a56d747a1a4300fe65c85795ddf7ad4bf44bca",
+  "parts": [
+    {
+      "file": "01_class-chat.js",
+      "start_line": 1,
+      "end_line": 1595,
+      "bytes": 136725
+    },
+    {
+      "file": "02_allia.js",
+      "start_line": 1596,
+      "end_line": 3090,
+      "bytes": 70003
+    },
+    {
+      "file": "03_kanbun.js",
+      "start_line": 3091,
+      "end_line": 4471,
+      "bytes": 80133
+    },
+    {
+      "file": "04_kanbun.js",
+      "start_line": 4472,
+      "end_line": 6017,
+      "bytes": 96351
+    },
+    {
+      "file": "05_folders.js",
+      "start_line": 6018,
+      "end_line": 7398,
+      "bytes": 80252
+    },
+    {
+      "file": "06_quiz.js",
+      "start_line": 7399,
+      "end_line": 9530,
+      "bytes": 118692
+    },
+    {
+      "file": "07_quiz.js",
+      "start_line": 9531,
+      "end_line": 10978,
+      "bytes": 83836
+    },
+    {
+      "file": "08_kanbun.js",
+      "start_line": 10979,
+      "end_line": 12872,
+      "bytes": 156538
+    },
+    {
+      "file": "09_quiz.js",
+      "start_line": 12873,
+      "end_line": 14480,
+      "bytes": 73814
+    },
+    {
+      "file": "10_core.js",
+      "start_line": 14481,
+      "end_line": 16153,
+      "bytes": 108289
+    },
+    {
+      "file": "11_allia.js",
+      "start_line": 16154,
+      "end_line": 17701,
+      "bytes": 96188
+    },
+    {
+      "file": "12_allia.js",
+      "start_line": 17702,
+      "end_line": 19287,
+      "bytes": 92276
+    },
+    {
+      "file": "13_years.js",
+      "start_line": 19288,
+      "end_line": 20416,
+      "bytes": 72488
+    },
+    {
+      "file": "14_quiz.js",
+      "start_line": 20417,
+      "end_line": 22048,
+      "bytes": 90343
+    },
+    {
+      "file": "15_quiz.js",
+      "start_line": 22049,
+      "end_line": 23648,
+      "bytes": 89885
+    },
+    {
+      "file": "16_folders.js",
+      "start_line": 23649,
+      "end_line": 25248,
+      "bytes": 104635
+    },
+    {
+      "file": "17_allia.js",
+      "start_line": 25249,
+      "end_line": 26848,
+      "bytes": 100010
+    },
+    {
+      "file": "18_core.js",
+      "start_line": 26849,
+      "end_line": 28411,
+      "bytes": 149904
+    },
+    {
+      "file": "19_kanbun.js",
+      "start_line": 28412,
+      "end_line": 30487,
+      "bytes": 144873
+    }
+  ]
+}
