@@ -1,3 +1,5 @@
+// ★★★ IFTY STEP160 2026-10-24：PRACTICEの独立した正誤パネルを撤去（既存クイズフォルダへ統一） ★★★
+// ★★★ IFTY STEP158 2026-10-22：PATCH NOTES + OPENCHAT QR / LINK ★★★
 // ★★★ IFTY Q3 STEP154 2026-10-21：SOCIAL STUDIES 年号記述クイズ + ALLIA利用バロメータ ★★★
 // ★★★ IFTY STEP135：フォルダテーマの生成文脈適用 ★★★
 // ★★★ IFTY STEP131 2026-10-19：フォルダ内同一語句の確認 + 編集後のスクロール位置維持 ★★★
@@ -22,7 +24,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 154;
+const IFTY_APP_STEP = 158;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -338,6 +340,7 @@ window.copyIftyBugReport = async function() {
 // ★★★ IFTY Q3 STEP91 2026-10-05：TOOLS 発音添削（録音・比較・採点・改善 / LANGUAGES import） ★★★
 // ★★★ IFTY Q3 STEP90 2026-10-05：無料の復旧コード方式（メール不要） ★★★
 // ★★★ IFTY Q3 STEP89 2026-10-04：KANJI新教科（漢字・熟語 / 手書き / 6種PRACTICE） ★★★
+// ★★★ IFTY Q3 STEP159 2026-10-22：ALLIA制限の種類・案内を正確化 ★★★
 // ★★★ IFTY Q3 STEP88 2026-10-04：ALLIA上限警告 + バックアップ重複増殖修正 ★★★
 // ★★★ IFTY Q3 STEP86 2026-10-02：復習日付判定 + 社会年号検証 + 教科別クイズフォルダ化 + 社会編集保存修正 ★★★
 // ★★★ IFTY Q3 STEP84 2026-10-01：KANBUN訓点エディタ文字移動を完全修正 ★★★
@@ -1542,6 +1545,7 @@ function renderIftySideMenu() {
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyFriendsPage();">👥 ${escapeHtml(getIftySideMenuDisplayText('friends'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyClassesPage();">🏫 ${escapeHtml(getIftySideMenuDisplayText('classes'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyFolderImportPicker();">📦 ${escapeHtml(getIftySideMenuDisplayText('importFolder'))}</button>
+      <button class="ifty-side-menu-item" type="button" onclick="openIftyPatchNotes();">📰 ${escapeHtml(getIftySideMenuDisplayText('patchNotes'))}</button>
 
       <div class="ifty-side-menu-separator"></div>
       <button class="ifty-side-menu-item" type="button" onclick="openIftySettings()">⚙️ ${escapeHtml(getIftySideMenuDisplayText('settings'))}</button>
@@ -1590,6 +1594,177 @@ window.toggleIftySideMenu = function(event) {
   } else {
     window.openIftySideMenu();
   }
+};
+
+// ==========================================
+// STEP158：パッチノート / LINEオープンチャット
+// 既存機能には触れず、左サイドメニューから独立した画面を開く。
+// GitHubの公開ルートに patch-notes.json / openchat-qr.png を置く。
+// 招待URLを設定する場合は openchat-link.txt に https://line.me/ti/g2/... を1行で記入する。
+// ==========================================
+const IFTY_PATCH_NOTES_FALLBACK = [
+  { step:159, date:'2026-10-22', title:'ALLIA利用制限の誤判定を修正', changes:['429を日次上限と断定しないようWorkerと画面表示を改善','制限の種類と再試行目安を表示し、成功時に警告を解除','旧バージョンの誤警告・推定値を安全に再判定'] },
+  { step:158, date:'2026-10-22', title:'パッチノート・オープンチャット', changes:['左メニューにパッチノートを追加','更新履歴の閲覧とオープンチャットの案内を追加'] },
+  { step:157, date:'2026-10-22', title:'スクロール操作の改善', changes:['タッチスクロールの引っかかりや画面位置の競合を軽減'] },
+  { step:156, date:'2026-10-22', title:'画面の視認性とALLIA使用状況', changes:['ダークモードの文字のコントラスト改善','IFTY ID切り替え時の端末内ALLIA使用回数の引き継ぎ'] },
+  { step:155, date:'2026-10-22', title:'ALLIAリセットのカウントダウン', changes:['日本時間9:00を目安とするカウントダウンを表示（実際のAPIリセット時刻は保証しません）'] },
+  { step:154, date:'2026-10-21', title:'年号記述クイズ・ALLIAバロメータ', changes:['社会科クイズに年号記述形式を追加','ALLIA使用状況を時間軸からバロメータへ変更'] },
+  { step:153, date:'2026-10-21', title:'MANUAL更新', changes:['最近の追加機能の説明を拡充','ALLIA警告とMANUALの重なりを改善'] },
+  { step:152, date:'2026-10-21', title:'検索順位の改善', changes:['用語名の完全一致を検索結果の上位に表示'] },
+  { step:151, date:'2026-10-21', title:'正誤・訂正問題', changes:['実践に正誤判定と訂正入力を追加'] }
+];
+
+function ensureIftyPatchNotesStyles() {
+  if (document.getElementById('iftyPatchNotesStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'iftyPatchNotesStyles';
+  style.textContent = `
+    #iftyPatchNotesOverlay {
+      position:fixed; inset:0; z-index:13120; box-sizing:border-box;
+      display:flex; justify-content:center; align-items:center;
+      padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));
+      background:rgba(2,6,23,.8); color:#f8fafc;
+    }
+    #iftyPatchNotesPanel {
+      width:min(700px,100%); max-height:min(92vh,92dvh); overflow:auto;
+      -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
+      box-sizing:border-box; background:#111b2c; color:#f8fafc;
+      border:1px solid #52647f; border-radius:18px;
+      box-shadow:0 22px 60px rgba(0,0,0,.48);
+      padding:clamp(14px,3vw,24px);
+    }
+    .ifty-patch-header {display:flex;align-items:flex-start;gap:12px;justify-content:space-between;}
+    .ifty-patch-title {font-size:clamp(1.35rem,3.3vw,1.75rem);font-weight:900;line-height:1.3;}
+    .ifty-patch-subtitle {color:#b9c9e1;font-size:.85rem;margin-top:4px;line-height:1.5;}
+    .ifty-patch-close {flex:0 0 auto; width:42px;height:42px; border-radius:11px;border:1px solid #64748b;background:#26374f;color:#fff;font-size:1.5rem;cursor:pointer;}
+    .ifty-patch-heading {font-size:1.02rem;font-weight:900;margin:20px 0 10px;}
+    .ifty-patch-entry {background:#1b2a40;border:1px solid #465c78;border-radius:13px;padding:13px 14px;margin-bottom:10px;}
+    .ifty-patch-entry-head {display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .ifty-patch-step {border-radius:7px;padding:3px 8px;background:#1d4ed8;color:white;font-weight:900;font-size:.76rem;}
+    .ifty-patch-entry-title {font-weight:850;overflow-wrap:anywhere;}
+    .ifty-patch-date {font-size:.78rem;color:#cbd5e1;margin-left:auto;}
+    .ifty-patch-entry ul {padding-left:1.3em;margin:9px 0 0;color:#e2e8f0;line-height:1.7;font-size:.88rem;}
+    .ifty-patch-openchat {background:#1b2a40;border:1px solid #465c78;border-radius:14px;padding:15px;margin-top:16px;}
+    .ifty-patch-qr {width:min(230px,100%);aspect-ratio:1/1;object-fit:contain;background:#fff;border:9px solid #fff;border-radius:11px;box-sizing:border-box;display:block;margin:12px auto;}
+    .ifty-patch-message {font-size:.85rem;color:#cbd5e1;line-height:1.6;text-align:center;overflow-wrap:anywhere;}
+    .ifty-patch-openchat-link {display:block;box-sizing:border-box;text-align:center;text-decoration:none;color:#fff !important;background:#0f766e;border:1px solid #5eead4;font-size:1rem;font-weight:900;border-radius:10px;padding:13px 12px;margin:12px 0;}
+    .ifty-patch-openchat-link[hidden] {display:none !important;}
+    .ifty-patch-openchat-link:focus-visible,.ifty-patch-close:focus-visible {outline:3px solid #7dd3fc;outline-offset:2px;}
+    @media (max-width:480px) {
+      #iftyPatchNotesOverlay {padding:9px;align-items:center;}
+      #iftyPatchNotesPanel {max-height:calc(100dvh - 18px);border-radius:14px;padding:14px;}
+      .ifty-patch-date {margin-left:0;}
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function iftyPatchValidOpenChatUrl(value) {
+  const raw = String(value || '').trim();
+  if (!/^https:\/\//i.test(raw)) return '';
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase();
+    if (url.protocol !== 'https:' || (host !== 'line.me' && host !== 'openchat.line.me')) return '';
+    return url.href;
+  } catch (_) { return ''; }
+}
+
+function iftyPatchSetOpenChatLink(value) {
+  const safe = iftyPatchValidOpenChatUrl(value);
+  if (!safe) return false;
+  const a = document.getElementById('iftyPatchOpenChatLink');
+  if (!a) return false;
+  a.href = safe;
+  a.hidden = false;
+  const message = document.getElementById('iftyPatchOpenChatMessage');
+  if (message) message.textContent = '上のQRコードを読み取るか、こちらのボタンから直接開けます。';
+  return true;
+}
+
+window.iftyPatchQrLoaded = function() {
+  const message = document.getElementById('iftyPatchOpenChatMessage');
+  if (message && document.getElementById('iftyPatchOpenChatLink')?.hidden) {
+    message.textContent = 'QRコードを読み取って参加できます。同じ端末から直接開くには招待リンクを設定してください。';
+  }
+};
+window.iftyPatchQrMissing = function(image) {
+  if (image) image.style.display = 'none';
+  const message = document.getElementById('iftyPatchOpenChatMessage');
+  if (message) message.textContent = 'QRコード画像が未登録です。GitHubのルートに openchat-qr.png を追加してください。';
+};
+
+function iftyPatchRenderItems(data) {
+  const items = Array.isArray(data) ? data : [];
+  const safeItems = items.filter(v => v && typeof v === 'object' && Number.isInteger(Number(v.step)))
+    .sort((a,b) => Number(b.step)-Number(a.step)).slice(0,80);
+  return safeItems.map(item => {
+    const changes = Array.isArray(item.changes) ? item.changes.slice(0,15) : [];
+    return `<article class="ifty-patch-entry">
+      <div class="ifty-patch-entry-head">
+        <span class="ifty-patch-step">STEP ${escapeHtml(String(item.step).slice(0,8))}</span>
+        <span class="ifty-patch-entry-title">${escapeHtml(String(item.title || '更新').slice(0,160))}</span>
+        <span class="ifty-patch-date">${escapeHtml(String(item.date || '').slice(0,24))}</span>
+      </div>
+      <ul>${changes.map(v => `<li>${escapeHtml(String(v).slice(0,400))}</li>`).join('')}</ul>
+    </article>`;
+  }).join('');
+}
+
+window.closeIftyPatchNotes = function() {
+  document.getElementById('iftyPatchNotesOverlay')?.remove();
+};
+
+window.openIftyPatchNotes = function() {
+  window.closeIftySideMenu?.();
+  document.getElementById('iftyPatchNotesOverlay')?.remove();
+  ensureIftyPatchNotesStyles();
+  const overlay = document.createElement('div');
+  overlay.id = 'iftyPatchNotesOverlay';
+  overlay.tabIndex = -1;
+  overlay.setAttribute('role','presentation');
+  overlay.innerHTML = `
+    <section id="iftyPatchNotesPanel" role="dialog" aria-modal="true" aria-label="IFTY パッチノート">
+      <div class="ifty-patch-header">
+        <div>
+          <div class="ifty-patch-title">📰 パッチノート</div>
+          <div class="ifty-patch-subtitle">IFTYの更新履歴・追加機能・改善内容</div>
+        </div>
+        <button class="ifty-patch-close" type="button" aria-label="閉じる" onclick="closeIftyPatchNotes()">×</button>
+      </div>
+      <div class="ifty-patch-heading">更新履歴</div>
+      <div id="iftyPatchNotesList">${iftyPatchRenderItems(IFTY_PATCH_NOTES_FALLBACK)}</div>
+      <section class="ifty-patch-openchat" aria-label="IFTYオープンチャット">
+        <div class="ifty-patch-heading" style="margin:0 0 6px;">💬 オープンチャット</div>
+        <div style="color:#d6e2f3;font-size:.85rem;line-height:1.6;">IFTYに関する情報交換・更新のお知らせはこちら。</div>
+        <img class="ifty-patch-qr" id="iftyPatchQrImage" src="openchat-qr.png" alt="オープンチャット参加用QRコード" loading="lazy" onload="iftyPatchQrLoaded()" onerror="iftyPatchQrMissing(this)">
+        <p id="iftyPatchOpenChatMessage" class="ifty-patch-message" aria-live="polite">QRコードを読み込み中…</p>
+        <a id="iftyPatchOpenChatLink" class="ifty-patch-openchat-link" href="#" target="_blank" rel="noopener noreferrer" hidden>LINEオープンチャットを開く ↗</a>
+      </section>
+    </section>`;
+  overlay.addEventListener('click', event => {
+    if (event.target === overlay) window.closeIftyPatchNotes();
+  });
+  overlay.addEventListener('keydown', event => {
+    if (event.key === 'Escape') window.closeIftyPatchNotes();
+  });
+  document.body.appendChild(overlay);
+  overlay.focus({preventScroll:true});
+  // 更新履歴と招待リンクはscript.jsと独立して更新できる。無い場合でも画面自体は使用可能。
+  Promise.allSettled([
+    fetch('patch-notes.json', {cache:'no-store'}).then(async response => {
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!Array.isArray(data) || !data.length) return;
+      const list = document.getElementById('iftyPatchNotesList');
+      if (list && document.getElementById('iftyPatchNotesOverlay') === overlay) list.innerHTML = iftyPatchRenderItems(data);
+    }),
+    fetch('openchat-link.txt', {cache:'no-store'}).then(async response => {
+      if (!response.ok) return;
+      const value = (await response.text()).trim().split(/\r?\n/)[0];
+      if (document.getElementById('iftyPatchNotesOverlay') === overlay) iftyPatchSetOpenChatLink(value);
+    })
+  ]).catch(() => {});
 };
 
 // ==========================================
@@ -1707,14 +1882,83 @@ function getIftyAlliaUsageDayKey(now = new Date()) {
 }
 
 
+// STEP156: ALLIAのAI利用枠は同じ端末のIFTY ID切替で初期化してはならない。
+// 認証や学習記録は引き続きユーザー別。ALLIA表示用のカウントと状態のみ端末共通にする。
+// 古いID別キーは削除せず、初回だけ現在の利用日に合算・移行する。
+const IFTY_ALLIA_DEVICE_USAGE_PREFIX = 'ifty_allia_device_usage_v1_';
+const IFTY_ALLIA_DEVICE_STATE_PREFIX = 'ifty_allia_device_limit_state_v1_';
+const IFTY_ALLIA_DEVICE_LEARNED_KEY = 'ifty_allia_device_limit_learned_v1';
+// STEP159: 旧バージョンの「429=日次上限」誤判定による学習値は引き継がない。
+// 旧データは削除せず、確認できた日次上限からのみ新しい学習値を作る。
+const IFTY_ALLIA_CONFIRMED_LEARNED_KEY = 'ifty_allia_device_confirmed_daily_limit_v2';
+
+function ifty156LegacyKeys(prefix, dayKey = null) {
+  const keys = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix) && (dayKey === null || key.endsWith('_' + dayKey))) keys.push(key);
+    }
+  } catch (_) {}
+  return keys;
+}
+
+function ifty156MigrateUsage(dayKey) {
+  const dest = `${IFTY_ALLIA_DEVICE_USAGE_PREFIX}${dayKey}`;
+  try {
+    if (localStorage.getItem(dest) !== null) return;
+    const sum = { dayKey, total:0, failed:0, byHour:{}, byType:{} };
+    let found = false;
+    for (const key of ifty156LegacyKeys(IFTY_ALLIA_USAGE_STORAGE_PREFIX, dayKey)) {
+      let old;
+      try { old = JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { continue; }
+      if (!old || typeof old !== 'object') continue;
+      found = true;
+      sum.total += Math.max(0, Number(old.total) || 0);
+      sum.failed += Math.max(0, Number(old.failed) || 0);
+      for (const field of ['byHour','byType']) {
+        if (!old[field] || typeof old[field] !== 'object' || Array.isArray(old[field])) continue;
+        for (const [name,value] of Object.entries(old[field])) {
+          sum[field][name] = (Number(sum[field][name]) || 0) + Math.max(0, Number(value) || 0);
+        }
+      }
+    }
+    if (found) localStorage.setItem(dest, JSON.stringify(sum));
+  } catch (_) { /* storage unavailable: previous fallback remains */ }
+}
+
+function ifty156MigrateLimitState(dayKey) {
+  const dest = `${IFTY_ALLIA_DEVICE_STATE_PREFIX}${dayKey}`;
+  try {
+    if (localStorage.getItem(dest) !== null) return;
+    let latest = null;
+    for (const key of ifty156LegacyKeys(IFTY_ALLIA_LIMIT_STATE_PREFIX, dayKey)) {
+      let old;
+      try { old = JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { continue; }
+      if (!old || typeof old !== 'object' || !['normal','near','reached','rate_limited','unknown'].includes(old.status)) continue;
+      if (!latest || (Number(old.updatedAt) || 0) > (Number(latest.updatedAt) || 0)) latest = old;
+    }
+    if (latest) localStorage.setItem(dest, JSON.stringify(latest));
+  } catch (_) {}
+}
+
+function ifty156MigrateLearnedLimit() {
+  try {
+    if (localStorage.getItem(IFTY_ALLIA_DEVICE_LEARNED_KEY) !== null) return;
+    const learned = ifty156LegacyKeys(IFTY_ALLIA_LIMIT_LEARNED_PREFIX)
+      .map(key => Number(localStorage.getItem(key)))
+      .filter(value => Number.isFinite(value) && value >= 2);
+    if (learned.length) localStorage.setItem(IFTY_ALLIA_DEVICE_LEARNED_KEY, String(Math.min(...learned)));
+  } catch (_) {}
+}
+
 function getIftyAlliaLimitStateStorageKey(dayKey = getIftyAlliaUsageDayKey()) {
-  const username = getIftyCurrentUsernameForLocalKeys();
-  return `${IFTY_ALLIA_LIMIT_STATE_PREFIX}${String(username || 'default_user')}_${dayKey}`;
+  ifty156MigrateLimitState(dayKey);
+  return `${IFTY_ALLIA_DEVICE_STATE_PREFIX}${dayKey}`;
 }
 
 function getIftyAlliaLimitLearnedStorageKey() {
-  const username = getIftyCurrentUsernameForLocalKeys();
-  return `${IFTY_ALLIA_LIMIT_LEARNED_PREFIX}${String(username || 'default_user')}`;
+  return IFTY_ALLIA_CONFIRMED_LEARNED_KEY;
 }
 
 function loadIftyAlliaLimitState() {
@@ -1722,11 +1966,17 @@ function loadIftyAlliaLimitState() {
     const raw = JSON.parse(localStorage.getItem(getIftyAlliaLimitStateStorageKey()) || '{}');
     return {
       dayKey: getIftyAlliaUsageDayKey(),
-      status: ['normal','near','reached','rate_limited'].includes(raw.status) ? raw.status : 'unknown',
-      remaining: Number.isFinite(Number(raw.remaining)) ? Number(raw.remaining) : null,
-      limit: Number.isFinite(Number(raw.limit)) ? Number(raw.limit) : null,
-      retryAt: Number(raw.retryAt) || 0,
-      message: String(raw.message || ''),
+      // STEP159: 古い「reached」は429の誤判定で保存された可能性がある。
+      // 新版で日次と確認したもの（limitKind=daily）以外は日次上限にしない。
+      status: raw.status === 'reached' && raw.limitKind !== 'daily' ? 'rate_limited' :
+        (['normal','near','reached','rate_limited'].includes(raw.status) ? raw.status : 'unknown'),
+      remaining: raw.remaining !== null && raw.remaining !== undefined && Number.isFinite(Number(raw.remaining)) ? Number(raw.remaining) : null,
+      limit: raw.limit !== null && raw.limit !== undefined && Number.isFinite(Number(raw.limit)) ? Number(raw.limit) : null,
+      retryAt: raw.status === 'reached' && raw.limitKind !== 'daily' ? 0 : Number(raw.retryAt) || 0,
+      limitKind: ['daily','temporary','unconfirmed'].includes(raw.limitKind) ? raw.limitKind : 'unconfirmed',
+      message: raw.status === 'reached' && raw.limitKind !== 'daily'
+        ? '以前の上限警告は種類を確認できないため、再試行して確認してください。'
+        : String(raw.message || ''),
       updatedAt: Number(raw.updatedAt) || 0
     };
   } catch (_) {
@@ -1776,6 +2026,15 @@ function getNextIftyAlliaResetAt() {
   return nextResetJstMs - 9 * 60 * 60 * 1000;
 }
 
+// STEP159: 数値・HTTP-date・WorkerがJSONで伝えたRetry-Afterに対応する。
+function ifty159GetRetryAt(response, data) {
+  const candidate = data?.retryAfterSeconds ?? response?.headers?.get('retry-after');
+  if (candidate === null || candidate === undefined || candidate === '') return 0;
+  const numeric = Number(candidate);
+  const seconds = Number.isFinite(numeric) ? numeric : (Date.parse(String(candidate)) - Date.now()) / 1000;
+  return Number.isFinite(seconds) && seconds > 0 ? Date.now() + Math.min(604800, seconds) * 1000 : 0;
+}
+
 async function inspectIftyAlliaLimitResponse(response, type) {
   if (!response) return;
 
@@ -1797,57 +2056,69 @@ async function inspectIftyAlliaLimitResponse(response, type) {
   ]);
 
   let data = null;
-  if (!response.ok || response.status === 429) {
+  if (!response.ok) {
     try { data = await response.clone().json(); } catch (_) {}
   }
 
   const details = `${data?.error || ''} ${data?.details || ''} ${data?.message || ''} ${data?.code || ''}`.toLowerCase();
-  const quotaReached = data?.code === 'ALLIA_QUOTA_LIMIT'
-    || /daily.*(?:limit|quota)|quota.*(?:reached|exceeded)|neuron.*(?:limit|quota)|resource exhausted/.test(details);
+  // 古いWorkerのALLIA_QUOTA_LIMITは日次・一時両方に使われていたため証拠にしない。
+  const dailyConfirmed = data?.code === 'ALLIA_DAILY_QUOTA_LIMIT' ||
+    (data?.limitKind === 'daily' && response.status === 429);
 
-  if (quotaReached) {
+  if (dailyConfirmed && response.status === 429) {
     learnIftyAlliaReachedCount();
     saveIftyAlliaLimitState({
-      status: 'reached',
-      remaining: 0,
-      limit,
-      retryAt: getNextIftyAlliaResetAt(),
-      message: 'ALLIAの本日の利用上限に達しました。'
+      status: 'reached', limitKind: 'daily',
+      remaining: 0, limit,
+      retryAt: ifty159GetRetryAt(response, data),
+      message: 'AIサービスから日次上限が報告されました。解除時刻は未確認です。'
     });
     refreshIftyAlliaUsageDisplays();
     return;
   }
 
   if (response.status === 429) {
-    const retryAfterRaw = response.headers?.get('retry-after');
-    const retrySeconds = Number(retryAfterRaw);
+    const kind = data?.code === 'ALLIA_RATE_LIMIT' || data?.limitKind === 'temporary'
+      ? 'temporary' : 'unconfirmed';
     saveIftyAlliaLimitState({
-      status: 'rate_limited',
-      remaining,
-      limit,
-      retryAt: Number.isFinite(retrySeconds) ? Date.now() + Math.max(1, retrySeconds) * 1000 : 0,
-      message: 'ALLIAが一時的な利用制限に達しています。'
+      status: 'rate_limited', limitKind: kind,
+      remaining: null, limit: null,
+      retryAt: ifty159GetRetryAt(response, data),
+      message: kind === 'temporary'
+        ? 'AIサービスで一時的な制限が発生しています。'
+        : 'AIサービスの制限を検出しました。日次か一時的かは未確認です。'
     });
     refreshIftyAlliaUsageDisplays();
     return;
   }
 
-  if (remaining !== null) {
-    const ratio = limit && limit > 0 ? remaining / limit : null;
-    const near = (ratio !== null && ratio <= IFTY_ALLIA_NEAR_RATIO) || (limit === null && remaining <= 3);
-    saveIftyAlliaLimitState({
-      status: near ? 'near' : 'normal',
-      remaining,
-      limit,
-      retryAt: 0,
-      message: near ? 'ALLIAの利用上限が近づいています。' : ''
-    });
+  // 成功すれば以前の429警告を必ず解除する（残量ヘッダーがなくても）。
+  if (response.ok) {
+    const current = loadIftyAlliaLimitState();
+    if (remaining !== null) {
+      const ratio = limit && limit > 0 ? remaining / limit : null;
+      const near = (ratio !== null && ratio <= IFTY_ALLIA_NEAR_RATIO) || (limit === null && remaining <= 3);
+      saveIftyAlliaLimitState({
+        status: near ? 'near' : 'normal', limitKind: 'unconfirmed',
+        remaining, limit, retryAt: 0,
+        message: near ? 'APIから返された残量が少なくなっています（対象期間は未確認）。' : ''
+      });
+    } else if (['reached','rate_limited','near'].includes(current.status)) {
+      saveIftyAlliaLimitState({status:'unknown', limitKind:'unconfirmed',
+        remaining:null, limit:null, retryAt:0, message:''});
+    }
     refreshIftyAlliaUsageDisplays();
   }
 }
 
 function getIftyAlliaEffectiveLimitState() {
   const state = loadIftyAlliaLimitState();
+  // Retry-Afterの期限後や、期限不明で5分経過した警告は「要再確認」へ移す。
+  // 実際に利用枠が回復したと断定せず、次のリクエスト結果で確定する。
+  if (state.status === 'rate_limited' && (
+    (state.retryAt > 0 && Date.now() >= state.retryAt) ||
+    (!state.retryAt && state.updatedAt > 0 && Date.now() - state.updatedAt >= 300000)
+  )) return {...state, status:'unknown', estimated:false, message:'前回の制限は再確認が必要です。'};
   if (state.status === 'reached' || state.status === 'near' || state.status === 'rate_limited') return { ...state, estimated:false };
 
   const learned = loadIftyAlliaLearnedLimit();
@@ -1886,7 +2157,8 @@ function updateIftyAlliaLimitBadge() {
     badge.style.color = '#fff';
     badge.style.display = 'block';
   } else if (state.status === 'rate_limited') {
-    badge.textContent = '⏳ ALLIA 一時的に制限中';
+    badge.textContent = state.limitKind === 'temporary'
+      ? '⏳ ALLIA 一時的に制限中' : '⏳ ALLIA 利用制限中（種類未確認）';
     badge.style.background = '#c2410c';
     badge.style.color = '#fff';
     badge.style.display = 'block';
@@ -1904,8 +2176,8 @@ function updateIftyAlliaLimitBadge() {
 
 
 function getIftyAlliaUsageStorageKey(dayKey = getIftyAlliaUsageDayKey()) {
-  const username = getIftyCurrentUsernameForLocalKeys();
-  return `${IFTY_ALLIA_USAGE_STORAGE_PREFIX}${String(username || 'default_user')}_${dayKey}`;
+  ifty156MigrateUsage(dayKey);
+  return `${IFTY_ALLIA_DEVICE_USAGE_PREFIX}${dayKey}`;
 }
 
 function loadIftyAlliaUsage() {
@@ -1962,6 +2234,42 @@ async function iftyAlliaFetch(input, init) {
   }
 }
 
+// STEP155: ALLIAの想定日次切替（日本時間09:00）までのカウントダウン。
+// UTC基準で計算するため、端末のタイムゾーン設定に依存しない。
+function getIftyAlliaResetCountdown(nowMs = Date.now()) {
+  const jstMs = nowMs + 9 * 60 * 60 * 1000;
+  const jstDayStart = Math.floor(jstMs / 86400000) * 86400000;
+  let nextResetJstMs = jstDayStart + IFTY_ALLIA_USAGE_RESET_HOUR_JST * 3600000;
+  if (nextResetJstMs <= jstMs) nextResetJstMs += 86400000;
+  const seconds = Math.max(0, Math.ceil((nextResetJstMs - jstMs) / 1000));
+  const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
+  const m = String(Math.floor(seconds % 3600 / 60)).padStart(2, '0');
+  const s = String(seconds % 60).padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+
+function updateIftyAlliaResetCountdownDisplays() {
+  const countdown = getIftyAlliaResetCountdown();
+  document.querySelectorAll('[data-ifty-allia-reset-countdown]').forEach(node => {
+    if (node.textContent !== countdown) node.textContent = countdown;
+  });
+  // 切り替わった警告の表示を定期的に同期する。既存のDOMは必要時のみ再描画。
+  const state = loadIftyAlliaLimitState();
+  const elapsed = state.status === 'rate_limited' && (
+    (state.retryAt > 0 && Date.now() >= state.retryAt) ||
+    (!state.retryAt && state.updatedAt > 0 && Date.now() - state.updatedAt >= 300000)
+  );
+  if (elapsed && document.getElementById('iftyAlliaLimitBadge')?.style.display !== 'none') {
+    refreshIftyAlliaUsageDisplays();
+  }
+}
+
+// 表示中のみDOMの文字列を更新。既存の使用状況やフォームを再描画しない。
+if (!window.__iftyAlliaResetCountdownTimer) {
+  window.__iftyAlliaResetCountdownTimer = setInterval(updateIftyAlliaResetCountdownDisplays, 1000);
+  document.addEventListener('visibilitychange', updateIftyAlliaResetCountdownDisplays);
+}
+
 // STEP154: 時刻ごとの棒グラフではなく、分母の根拠を明示した残量バロメータに変更する。
 // Workers AIの処理量はリクエストごとに異なるため、根拠がない場合は割合を捏造しない。
 function renderIftyAlliaUsageBarHtml(compact = false) {
@@ -1970,7 +2278,7 @@ function renderIftyAlliaUsageBarHtml(compact = false) {
   const direct = state.status !== 'unknown' && Number.isFinite(state.limit) && state.limit > 0 &&
     Number.isFinite(state.remaining) && state.remaining >= 0 && state.remaining <= state.limit;
   const learned = Number(state.learnedLimit || loadIftyAlliaLearnedLimit()) || 0;
-  const estimated = !direct && learned >= 2;
+  const estimated = !direct && learned >= 2 && state.status !== 'rate_limited';
   const known = direct || estimated || state.status === 'reached';
   let ratio = state.status === 'reached' ? 1 : direct ? (state.limit-state.remaining)/state.limit :
     estimated ? usage.total/learned : 0;
@@ -1983,9 +2291,15 @@ function renderIftyAlliaUsageBarHtml(compact = false) {
   const mainColor = reached ? '#dc2626' : limited ? '#ea580c' : near ? '#eab308' : '#2563eb';
   const border = reached ? '#fca5a5' : limited ? '#fdba74' : near ? '#fcd34d' : '#94a3b8';
   const background = reached ? '#35171d' : limited ? '#3c261d' : near ? '#342a16' : '#16253b';
-  const headline = reached ? '⛔ ALLIA 本日の上限に到達' : limited ? '⏳ ALLIA 一時的に利用制限中' :
+  const headline = reached ? '⛔ ALLIA 日次利用枠の上限' : limited ?
+    (state.limitKind === 'temporary' ? '⏳ ALLIA 一時的に利用制限中' : '⏳ ALLIA 利用制限中（種類未確認）') :
     near ? (state.estimated?'⚠️ ALLIA 上限が近い可能性':'⚠️ ALLIA 上限が近い') : '🤖 ALLIA 使用状況';
-  const resetText = reached ? '日本時間9:00頃にリセット' : '';
+  const resetText = reached ? (state.retryAt > Date.now()
+      ? `API指定の再試行目安まで約${Math.ceil((state.retryAt-Date.now())/60000)}分`
+      : 'AI利用枠の解除時刻は未確認') :
+    limited ? (state.retryAt > Date.now()
+      ? `API指定の再試行目安まで約${Math.ceil((state.retryAt-Date.now())/60000)}分`
+      : '解除時刻は未確認。後で再試行してください') : '';
   const label = known ? (direct ? `使用 ${usedPercent}% ・ 残り ${remainingPercent}%` :
     reached ? '上限到達（残量0）' : `推定使用 ${usedPercent}%`) : '上限データ未取得（残量不明）';
   const foot = direct ? `APIが返した残量 ${state.remaining} / ${state.limit}` :
@@ -2002,7 +2316,11 @@ function renderIftyAlliaUsageBarHtml(compact = false) {
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px;font-size:.74em;color:#cbd5e1;">
       <span>${escapeHtml(foot)}</span><span>${escapeHtml(resetText||`今日 ${usage.total}回${usage.failed?` ・ 失敗 ${usage.failed}`:''}`)}</span>
     </div>
-    ${limited?'<p style="font-size:.72em;color:#fed7aa;margin:5px 0 0;">一時制限は日次上限とは限りません。</p>':''}
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:9px;padding-top:8px;border-top:1px solid #475569;">
+      <span style="font-size:.75em;color:#cbd5e1;">端末の使用回数集計切替まで（日本時間 9:00・APIの解除時刻ではありません）</span>
+      <strong data-ifty-allia-reset-countdown aria-label="使用回数の集計切替までの残り時間" style="font-size:${compact?'1em':'1.15em'};font-variant-numeric:tabular-nums;letter-spacing:.04em;color:#f8fafc;">${getIftyAlliaResetCountdown()}</strong>
+    </div>
+    ${limited?'<p style="font-size:.72em;color:#fed7aa;margin:5px 0 0;">429エラーは日次上限とは限りません。制限解除を試すためにログイン情報を切り替える必要はありません。</p>':''}
   </div>`;
 }
 
@@ -4696,6 +5014,7 @@ function getIftySideMenuDisplayText(key) {
     friends: 'フレンド',
     classes: 'クラス',
     importFolder: 'フォルダを受け取る',
+    patchNotes: 'パッチノート',
     settings: '設定',
     logout: 'ログアウト'
 };
@@ -4712,6 +5031,7 @@ function getIftySideMenuDisplayText(key) {
     friends: 'FRIENDS',
     classes: 'CLASSES',
     importFolder: 'IMPORT FOLDER',
+    patchNotes: 'PATCH NOTES',
     settings: 'SETTINGS',
     logout: 'LOG OUT'
   };
@@ -12441,6 +12761,7 @@ function renderIftyKanbunPracticePlayer(){
   const currentMode=String(q?.mode||st.mode||'simple');
   const meta=getIftyKanbunPracticeModeMeta(currentMode);
   if(!q){
+    if(advanceIftySubjectQuizSequence124('KANBUN',st))return;
     showIftyHubContent(`
       <section class="ifty-portal-shell">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
@@ -14040,13 +14361,19 @@ async function registerIftyServiceWorker() {
 }
 
 function isAlliaQuotaError(response, data) {
-  const text = `${data && data.error ? data.error : ''} ${data && data.details ? data.details : ''} ${data && data.message ? data.message : ''}`.toLowerCase();
-  return response && response.status === 429 || /quota|limit|rate limit|neuron|daily.*limit|exceeded|resource exhausted|usage limit/.test(text);
+  if (response && response.status === 429) return true;
+  return ['ALLIA_DAILY_QUOTA_LIMIT','ALLIA_RATE_LIMIT','ALLIA_LIMIT_UNCONFIRMED','ALLIA_QUOTA_LIMIT'].includes(data?.code);
 }
 
 function alliaHttpError(response, data, fallback) {
   if (isAlliaQuotaError(response, data)) {
-    return new Error('本日のALLIA利用上限に達した可能性があります。Cloudflare Workers AIの無料枠は日本時間9:00ごろにリセットされます。');
+    if (data?.code === 'ALLIA_DAILY_QUOTA_LIMIT') {
+      return new Error('ALLIAの日次利用枠に達しました。AIサービスの解除時刻は未確認です。');
+    }
+    if (data?.code === 'ALLIA_RATE_LIMIT' || data?.limitKind === 'temporary') {
+      return new Error('ALLIAが一時的な利用制限を受けました。時間をおいて再試行してください。');
+    }
+    return new Error('ALLIAで利用制限が発生しました。一時的な制限か日次上限かは未確認です。時間をおいて再試行してください。');
   }
   return new Error((data && (data.error || data.details || data.message)) || fallback || ('HTTP ' + (response ? response.status : 'error')));
 }
@@ -16194,7 +16521,7 @@ window.startIftyKanjiPractice=async function(modes){
 function renderIftyKanjiPracticePlayer(){
   const st=iftyKanjiPracticeState;if(!st)return;let modal=document.getElementById('practiceModal');
   if(!modal){modal=document.createElement('div');modal.id='practiceModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;justify-content:center;align-items:center;padding:18px;box-sizing:border-box;z-index:10030;';document.body.appendChild(modal);}modal.style.display='flex';
-  if(st.index>=st.questions.length){setIftyPracticeQuestionActive(modal,false);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h2 style="color:#581c87;">KANJI PRACTICE 完了</h2><div style="font-size:1.2em;font-weight:900;">正解 ${st.correct} / ${st.questions.length}</div><button onclick="openPracticeHome('KANJI')" style="margin-top:14px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px 14px;font-weight:900;">PRACTICEへ戻る</button></div>`;return;}
+  if(st.index>=st.questions.length){if(advanceIftySubjectQuizSequence124('KANJI',st))return;setIftyPracticeQuestionActive(modal,false);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h2 style="color:#581c87;">KANJI PRACTICE 完了</h2><div style="font-size:1.2em;font-weight:900;">正解 ${st.correct} / ${st.questions.length}</div><button onclick="openPracticeHome('KANJI')" style="margin-top:14px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px 14px;font-weight:900;">PRACTICEへ戻る</button></div>`;return;}
   setIftyPracticeQuestionActive(modal,true);
   const q=st.questions[st.index],meta=getIftyKanjiPracticeModeMeta(q.mode);
   let answerUi='';
@@ -16356,7 +16683,7 @@ window.generateIftyOthersItem=async function(folderId){
 function getIftyOthersPracticeRefs(){if(iftySubjectQuizRunOverride?.subject==='OTHERS'){const ids=new Set((iftySubjectQuizRunOverride.itemIds||[]).map(String));return getIftyOthersModule().folders.flatMap(folder=>(folder.items||[]).filter(item=>ids.has(String(item.id))).map(item=>({folder,item})));}return getIftyOthersModule().folders.flatMap(folder=>(folder.items||[]).map(item=>({folder,item})));}
 function buildIftyOthersPracticeQuestions(modes,count){const refs=shuffleArray(getIftyOthersPracticeRefs());const out=[];const usableModes=modes.length?modes:['simple'];for(let i=0;i<Math.min(count,refs.length);i++){const ref=refs[i];const mode=usableModes[i%usableModes.length];if(mode==='simple'){const distract=ifty147RankRelated(ref,refs.filter(x=>x.item.id!==ref.item.id)).slice(0,3).map(x=>x.item.title);const options=shuffleArray([ref.item.title,...distract]);if(options.length<2){out.push({mode:'term_write',targetItemId:ref.item.id,prompt:ref.item.memoryText||ref.item.title,answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});}else out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この説明に当てはまる用語は？',options,answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});}else if(mode==='term_write')out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この項目名を書いてください。',answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});else out.push({mode:'explanation',targetItemId:ref.item.id,prompt:`「${ref.item.title}」を簡潔に説明してください。`,referenceAnswer:ref.item.memoryText,keyPoints:ref.item.keyPoints||[]});}return out;}
 window.startIftyOthersPractice=async function(modes){const refs=getIftyOthersPracticeRefs();if(!refs.length)return alert('出題できるOTHERS項目がありません。');const ms=[...new Set((Array.isArray(modes)?modes:[modes]).filter(Boolean))];iftyOthersPracticeState={modes:ms,questions:buildIftyOthersPracticeQuestions(ms,iftyOthersPracticeQuestionCount),index:0,correct:0,wrong:0,answered:false,feedback:'',modelAnswer:'',last:null};closePracticeModal();renderIftyOthersPracticePlayer();};
-function renderIftyOthersPracticePlayer(){const st=iftyOthersPracticeState;if(!st)return;let modal=document.getElementById('practiceModal');if(!modal){modal=document.createElement('div');modal.id='practiceModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;justify-content:center;align-items:center;padding:18px;box-sizing:border-box;z-index:10030;';document.body.appendChild(modal);}modal.style.display='flex';if(st.index>=st.questions.length){setIftyPracticeQuestionActive(modal,false);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:22px;text-align:center;"><h2>OTHERS PRACTICE 完了</h2><div style="font-size:1.2em;font-weight:900;color:#0f766e;">正解 ${st.correct} / ${st.questions.length}</div><button onclick="openPracticeHome('OTHERS')" style="margin-top:14px;border:none;background:#334155;color:white;border-radius:8px;padding:10px 14px;font-weight:900;">PRACTICEへ戻る</button></div>`;return;}setIftyPracticeQuestionActive(modal,true);const q=st.questions[st.index],meta=getIftyOthersPracticeModeMeta(q.mode);const result=st.answered?`<div style="margin-top:12px;padding:10px;border-radius:8px;background:${st.last?.correct?'#f0fdf4':'#fef2f2'};color:${st.last?.correct?'#166534':'#991b1b'};"><b>${st.last?.correct?'⭕ 正解':'❌ 要復習'}</b>${st.feedback?`<div style="margin-top:5px;white-space:pre-wrap;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:6px;color:#475569;"><b>基準：</b>${escapeHtml(st.modelAnswer)}</div>`:''}<button onclick="nextIftyOthersPracticeQuestion()" style="width:100%;margin-top:10px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px;font-weight:900;">次へ</button></div>`:'';const answer=st.answered?'':(q.mode==='simple'?`<div style="display:grid;gap:8px;margin-top:12px;">${q.options.map(o=>`<button onclick="submitIftyOthersPracticeAnswer(${JSON.stringify(o).replace(/"/g,'&quot;')})" style="border:1px solid #cbd5e1;background:white;border-radius:8px;padding:10px;text-align:left;font-weight:800;">${escapeHtml(o)}</button>`).join('')}</div>`:`<textarea id="iftyOthersPracticeAnswer" rows="4" placeholder="回答を入力" style="width:100%;box-sizing:border-box;margin-top:12px;padding:10px;border:1px solid #c4b5fd;border-radius:8px;"></textarea><button onclick="submitIftyOthersPracticeAnswer()" style="width:100%;margin-top:8px;border:none;background:${meta.color};color:white;border-radius:8px;padding:10px;font-weight:900;">回答する</button>`);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(680px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><b style="color:${meta.color};">OTHERS ・ ${meta.title} ・ ${st.index+1}/${st.questions.length}</b><button onclick="openPracticeHome('OTHERS')" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;">終了</button></div><div style="margin-top:14px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:9px;line-height:1.65;white-space:pre-wrap;">${escapeHtml(q.prompt)}</div>${answer}${result}</div>`;}
+function renderIftyOthersPracticePlayer(){const st=iftyOthersPracticeState;if(!st)return;let modal=document.getElementById('practiceModal');if(!modal){modal=document.createElement('div');modal.id='practiceModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;justify-content:center;align-items:center;padding:18px;box-sizing:border-box;z-index:10030;';document.body.appendChild(modal);}modal.style.display='flex';if(st.index>=st.questions.length){if(advanceIftySubjectQuizSequence124('OTHERS',st))return;setIftyPracticeQuestionActive(modal,false);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:22px;text-align:center;"><h2>OTHERS PRACTICE 完了</h2><div style="font-size:1.2em;font-weight:900;color:#0f766e;">正解 ${st.correct} / ${st.questions.length}</div><button onclick="openPracticeHome('OTHERS')" style="margin-top:14px;border:none;background:#334155;color:white;border-radius:8px;padding:10px 14px;font-weight:900;">PRACTICEへ戻る</button></div>`;return;}setIftyPracticeQuestionActive(modal,true);const q=st.questions[st.index],meta=getIftyOthersPracticeModeMeta(q.mode);const result=st.answered?`<div style="margin-top:12px;padding:10px;border-radius:8px;background:${st.last?.correct?'#f0fdf4':'#fef2f2'};color:${st.last?.correct?'#166534':'#991b1b'};"><b>${st.last?.correct?'⭕ 正解':'❌ 要復習'}</b>${st.feedback?`<div style="margin-top:5px;white-space:pre-wrap;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:6px;color:#475569;"><b>基準：</b>${escapeHtml(st.modelAnswer)}</div>`:''}<button onclick="nextIftyOthersPracticeQuestion()" style="width:100%;margin-top:10px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px;font-weight:900;">次へ</button></div>`:'';const answer=st.answered?'':(q.mode==='simple'?`<div style="display:grid;gap:8px;margin-top:12px;">${q.options.map(o=>`<button onclick="submitIftyOthersPracticeAnswer(${JSON.stringify(o).replace(/"/g,'&quot;')})" style="border:1px solid #cbd5e1;background:white;border-radius:8px;padding:10px;text-align:left;font-weight:800;">${escapeHtml(o)}</button>`).join('')}</div>`:`<textarea id="iftyOthersPracticeAnswer" rows="4" placeholder="回答を入力" style="width:100%;box-sizing:border-box;margin-top:12px;padding:10px;border:1px solid #c4b5fd;border-radius:8px;"></textarea><button onclick="submitIftyOthersPracticeAnswer()" style="width:100%;margin-top:8px;border:none;background:${meta.color};color:white;border-radius:8px;padding:10px;font-weight:900;">回答する</button>`);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(680px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><b style="color:${meta.color};">OTHERS ・ ${meta.title} ・ ${st.index+1}/${st.questions.length}</b><button onclick="openPracticeHome('OTHERS')" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;">終了</button></div><div style="margin-top:14px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:9px;line-height:1.65;white-space:pre-wrap;">${escapeHtml(q.prompt)}</div>${answer}${result}</div>`;}
 window.submitIftyOthersPracticeAnswer=async function(choice){const st=iftyOthersPracticeState;if(!st||st.answered)return;const q=st.questions[st.index];const ref=getIftyOthersItemById(q.targetItemId);if(!ref)return;const user=choice!==undefined?String(choice):String(document.getElementById('iftyOthersPracticeAnswer')?.value||'').trim();if(!user)return;let correct=false,feedback='',model=q.answer||q.referenceAnswer||'';if(q.mode==='simple'||q.mode==='term_write'){const accepted=[q.answer,...(q.aliases||[])].map(x=>String(x||'').trim().toLowerCase());correct=accepted.includes(user.trim().toLowerCase());feedback=correct?'登録内容と一致しました。':'登録内容とは一致しませんでした。';}else{if(!ensureIftyOnline('OTHERS記述採点'))return;try{const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_grade',quizType:'others_explanation',direction:'term_to_explanation',question:q.prompt,referenceAnswer:q.referenceAnswer||'',userAnswer:user,word:{word:ref.item.title,meanings:[ref.item.memoryText],details:(ref.item.keyPoints||[]).join(' / ')},subject:'OTHERS',order:getIftySubjectOrder('OTHERS')})});const data=await response.json().catch(()=>({}));if(!response.ok)throw alliaHttpError(response,data,'採点に失敗しました。');correct=data.correct===true;feedback=data.feedback||'';model=data.modelAnswer||model;}catch(e){return alert(String(e.message||e));}}st.answered=true;st.last={correct,userAnswer:user};st.feedback=feedback;st.modelAnswer=model;if(correct)st.correct++;else st.wrong++;recordIftySubjectStudyEvent('OTHERS',q.targetItemId,correct,`others_${q.mode}`);enrollIftyEntityReviewFromStudy(ref.item,correct);savePracticeData();renderIftyOthersPracticePlayer();};
 window.nextIftyOthersPracticeQuestion=function(){const st=iftyOthersPracticeState;if(!st||!st.answered)return;st.index++;st.answered=false;st.feedback='';st.modelAnswer='';st.last=null;renderIftyOthersPracticePlayer();};
 
@@ -19925,7 +20252,7 @@ function renderFolders() {
     const visuallyCollapsed = folder.collapsed && !globalSearchActive;
 
     return `
-    <div style="background:white;border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin-bottom:12px;box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+    <div class="ifty156-english-folder" style="background:white;border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin-bottom:12px;box-shadow:0 2px 4px rgba(0,0,0,0.05);">
       <div class="ifty-folder-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${visuallyCollapsed ? '0' : '8px'};gap:8px;">
         <div class="ifty-folder-header-main" style="display:flex;align-items:center;gap:8px;min-width:0;">
           <input type="checkbox" ${folderChecked ? 'checked' : ''} onchange="toggleFolderSelection('${folder.id}', this.checked)" title="このフォルダを選択" style="width:18px;height:18px;flex:none;">
@@ -20434,11 +20761,11 @@ function renderWordItem(w, folderId, wIndex) {
   const forms = w.forms || {};
 
   return `
-    <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; font-size: 0.9em;">
+    <div class="ifty156-english-word" style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; font-size: 0.9em;">
       <div class="ifty-word-card-layout" style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div class="ifty-word-card-content" style="flex: 1; min-width: 0;">
           <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
-            <div style="font-size: 1.25em; font-weight: bold; color: #0f172a;">${escapeHtml(w.word || '')}</div>${ifty132AliasInfo(w)}
+            <div class="ifty156-english-word-title" style="font-size: 1.25em; font-weight: bold; color: #0f172a;">${escapeHtml(w.word || '')}</div>${ifty132AliasInfo(w)}
             ${(() => { const lang = getIftyWordLanguageInfo(w); return `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.68em;font-weight:900;">🌐 ${escapeHtml(lang.label)}</span>`; })()}
             ${renderIftyLearningLevelInline('ENGLISH', w.id, w.level)}
             ${isIftyReviewTagged(w) ? `<span style="display:inline-block;padding:2px 6px;border-radius:999px;background:${isIftyReviewDue(w) ? '#ffedd5' : '#fef3c7'};color:${isIftyReviewDue(w) ? '#c2410c' : '#a16207'};font-size:.68em;font-weight:900;">${isIftyReviewDue(w) ? '🔁 復習：今日' : `🔁 次回 ${escapeHtml(formatIftyReviewDate(w.review.nextReview))}`}</span>` : (w.review && Number(w.review.graduatedAt) > 0 ? '<span style="display:inline-block;padding:2px 6px;border-radius:999px;background:#dcfce7;color:#047857;font-size:.68em;font-weight:900;">✅ 復習卒業</span>' : '')}
@@ -22155,27 +22482,56 @@ let iftySubjectQuizSequence124 = null;
 function iftySubjectQuizSequenceCount124(seq) {
   return Math.floor(seq.total / seq.modes.length) + (seq.position < seq.total % seq.modes.length ? 1 : 0);
 }
+// STEP161: 出題形式が混在するときは、形式に応じて専用プレイヤーを切り替える。
+// 画像・並べ替え・手書き等の既存採点エンジンをAI記述プレイヤーへ流さない。
 async function startIftySubjectQuizSequencePart124() {
   const seq = iftySubjectQuizSequence124;
   if (!seq) return;
   const count = iftySubjectQuizSequenceCount124(seq);
   const mode = seq.modes[seq.position];
-  const getState = () => mode === 'term_write' && seq.subject !== 'ANCIENT'
-    ? iftySubjectTermWriteState
+  const managedModes = new Set(['truefalse','year_written','derived']);
+  const specialModes = new Set(['image','write_handwriting','kaeriten','order','era','formula','relations','same_meaning','grammar_table']);
+  const managed = managedModes.has(mode) || (seq.enhanced && !specialModes.has(mode));
+  const getState = () => managed ? ifty149Run
+    : mode === 'term_write' && ['SOCIAL STUDIES','SCIENCE'].includes(seq.subject) ? iftySubjectTermWriteState
     : seq.subject === 'SOCIAL STUDIES' ? iftySocialPracticeState
-    : seq.subject === 'SCIENCE' ? iftySciencePracticeState : iftyAncientPracticeState;
+    : seq.subject === 'SCIENCE' ? iftySciencePracticeState
+    : seq.subject === 'ANCIENT' ? iftyAncientPracticeState
+    : seq.subject === 'KANBUN' ? iftyKanbunPracticeState
+    : seq.subject === 'KANJI' ? iftyKanjiPracticeState : iftyOthersPracticeState;
   const previousState = getState();
-  if (seq.subject === 'SOCIAL STUDIES') {
-    iftySocialPracticeQuestionCount = count;
-    await startIftySocialPractice(mode);
-  } else if (seq.subject === 'SCIENCE') {
-    iftySciencePracticeQuestionCount = count;
-    await startIftySciencePractice(mode);
-  } else if (seq.subject === 'ANCIENT') {
-    iftyAncientPracticeQuestionCount = count;
-    await startIftyAncientPractice(mode);
+  const set = getIftySubjectQuizSet(seq.subject,seq.setId);
+  if (!set) { iftySubjectQuizSequence124 = null; return; }
+  // 他の形式に固定された項目は誤った形式で出題しない。
+  const fixed = ifty149ModeMap(set.itemModes);
+  const ids = seq.itemIds.filter(id => !fixed[id] || fixed[id] === mode);
+  // 固定指定で対象項目がない形式は、採点を行わず次の形式へ進む。
+  if (!ids.length) { advanceIftySubjectQuizSequence124(seq.subject,{correct:0,wrong:0}); return; }
+  if (managed) {
+    await ifty149StartManagedSubject(seq.subject,set,ids,[mode],count,true);
+  } else {
+    iftySubjectQuizRunOverride={subject:seq.subject,itemIds:ids,setId:seq.setId};
+    if (seq.subject === 'SOCIAL STUDIES') {
+      iftySocialPracticeQuestionCount = count;
+      await startIftySocialPractice(mode);
+    } else if (seq.subject === 'SCIENCE') {
+      iftySciencePracticeQuestionCount = count;
+      await startIftySciencePractice(mode);
+    } else if (seq.subject === 'ANCIENT') {
+      iftyAncientPracticeQuestionCount = count;
+      await startIftyAncientPractice(mode);
+    } else if (seq.subject === 'KANBUN') {
+      iftyKanbunPracticeQuestionCount = count;
+      await startIftyKanbunPractice([mode]);
+    } else if (seq.subject === 'KANJI') {
+      iftyKanjiPracticeQuestionCount = count;
+      await startIftyKanjiPractice([mode]);
+    } else if (seq.subject === 'OTHERS') {
+      iftyOthersPracticeQuestionCount = count;
+      await startIftyOthersPractice([mode]);
+    }
   }
-  // 形式に必要なデータがなければ、次の形式へ。既存の起動関数は警告を表示する。
+  // 形式に必要なデータがない場合だけ、残りの形式へ進む。
   if (iftySubjectQuizSequence124 === seq && getState() === previousState) {
     advanceIftySubjectQuizSequence124(seq.subject, {correct:0,wrong:0});
   }
@@ -22185,6 +22541,7 @@ function advanceIftySubjectQuizSequence124(subject, progress) {
   if (!seq || seq.subject !== subject || !progress) return false;
   seq.correct += Number(progress.correct || 0);
   seq.wrong += Number(progress.wrong || 0);
+  seq.unknown += Number(progress.unknown || 0);
   if (seq.position + 1 < seq.modes.length) {
     seq.position++;
     void startIftySubjectQuizSequencePart124().catch(error => {
@@ -22193,7 +22550,7 @@ function advanceIftySubjectQuizSequence124(subject, progress) {
       openPracticeHome(subject);
     });
   } else {
-    const total = seq.correct + seq.wrong;
+    const total = seq.correct + seq.wrong + seq.unknown;
     const rate = total ? Math.round(seq.correct / total * 100) : 0;
     const titles = seq.modes.map(mode => getIftySubjectQuizModeOptions(subject).find(row => row.mode === mode)?.title || mode).join(' ＋ ');
     iftySubjectQuizSequence124 = null;
@@ -22202,7 +22559,7 @@ function advanceIftySubjectQuizSequence124(subject, progress) {
     showIftyHubContent(`<section class="ifty-portal-shell" style="text-align:center;padding:30px 12px;">
       <h2 style="color:#581c87;">複数形式クイズ 完了</h2>
       <div style="color:#475569;overflow-wrap:anywhere;">${escapeHtml(titles)}</div>
-      <div style="font-weight:900;color:#0f172a;margin-top:15px;font-size:1.2em;">正解 ${seq.correct} / ${total}　正答率 ${rate}%</div>
+      <div style="font-weight:900;color:#0f172a;margin-top:15px;font-size:1.2em;">正解 ${seq.correct} / ${total}　不正解 ${seq.wrong}　分からない ${seq.unknown}　正答率 ${rate}%</div>
       <button type="button" onclick="openPracticeHome('${subject}')" style="margin-top:18px;background:#7c3aed;color:white;border:0;border-radius:8px;padding:11px 17px;font-weight:900;">PRACTICEへ戻る</button>
     </section>`, 'subject-quiz-result');
   }
@@ -22222,17 +22579,32 @@ window.startIftySubjectQuizSet = async function(subject,setId){
   // Preserve the legacy engine whenever only special formats can be used.
   const compatibleModes=modes.filter(mode=>!specialModes.has(mode));
   const needsItemRules=modes.includes('derived')||forced.length>0||Object.keys(overrides).some(id=>ids.includes(id));
-  if((modes.includes('truefalse') || modes.includes('year_written')) && modes.some(mode=>specialModes.has(mode))){
-    alert('正誤・訂正や年号記述を、画像・時代区分・並べ替えなどの専用形式と混ぜる場合は、別のクイズフォルダにしてください。専用形式の動作を保護するため開始を中止しました。');return;
+  // STEP161: 混合形式は専用エンジンを順次起動。混在を理由に開始を禁止しない。
+  // 同一形式だけの場合のルーティングは既存と同じままにする。
+  const requiresMixedEngine = modes.length > 1 && compatibleModes.length > 0
+    && modes.some(mode => specialModes.has(mode))
+    && (modes.includes('truefalse') || modes.includes('year_written') || needsItemRules);
+  if (requiresMixedEngine && ['SOCIAL STUDIES','SCIENCE','ANCIENT','KANBUN','KANJI','OTHERS'].includes(key)) {
+    ifty149Run = null;
+    iftySubjectQuizSequence124 = {
+      subject:key,setId:String(set.id),itemIds:ids,modes:[...modes],
+      position:0,total:Math.max(Number(set.questionCount)||5,modes.length),
+      correct:0,wrong:0,unknown:0,enhanced:enhanced
+    };
+    await startIftySubjectQuizSequencePart124();
+    return;
   }
   if((enhanced || modes.includes('truefalse')) && compatibleModes.length && (!modes.some(mode=>specialModes.has(mode)) || needsItemRules)){
     await ifty149StartManagedSubject(key,set,ids,compatibleModes);return;
   }
-  // In special-only and difficulty-only mixed sets, the legacy dedicated player runs.
-  // This keeps image/order/handwriting/etc. available and never changes their judging rules.
+  // 専用形式のみの複合クイズもSTEP124の従来の形式順プレイヤーを維持する。
   iftySubjectQuizRunOverride={subject:key,itemIds:ids,setId:String(set.id)};
   if (['SOCIAL STUDIES','SCIENCE','ANCIENT'].includes(key) && modes.length > 1) {
-    iftySubjectQuizSequence124 = {subject:key,modes:[...modes],position:0,total:Math.max(Number(set.questionCount)||5,modes.length),correct:0,wrong:0};
+    iftySubjectQuizSequence124 = {
+      subject:key,setId:String(set.id),itemIds:ids,modes:[...modes],
+      position:0,total:Math.max(Number(set.questionCount)||5,modes.length),
+      correct:0,wrong:0,unknown:0,enhanced:false
+    };
     await startIftySubjectQuizSequencePart124();
     return;
   }
@@ -22248,12 +22620,16 @@ window.startIftySubjectQuizSet = async function(subject,setId){
 // STEP149: 必出・単語別形式・難易度付きの教科別クイズ専用プレイヤー。
 // 未設定の旧クイズフォルダは従来のプレイヤーを使用する。
 let ifty149Run=null;
-async function ifty149StartManagedSubject(subject,set,ids,modes){
-  const questionCount=Math.min(Number(set.questionCount)||5,ids.length);
+async function ifty149StartManagedSubject(subject,set,ids,modes,countOverride=null,fromSequence=false){
+  const questionCount=Math.min(countOverride===null?(Number(set.questionCount)||5):countOverride,ids.length);
   const required=ifty149ForceIds(set.forcedIds).filter(id=>ids.includes(id));
   let queue;
-  try{queue=ifty149Queue(ids,required,questionCount,set.random!==false);}catch(error){alert(error.message);return;}
-  ifty149Run={subject,setId:String(set.id),queue,modes,index:0,correct:0,wrong:0,unknown:0,current:null,busy:false,answered:false,answer:'',feedback:'',modelAnswer:'',id:'run'+Date.now()};
+  try{
+    // 複数形式では必出指定を各パートで強制して割り当て超過にしない。
+    const must=fromSequence?required.slice(0,questionCount):required;
+    queue=ifty149Queue(ids,must,questionCount,set.random!==false);
+  }catch(error){alert(error.message);return;}
+  ifty149Run={subject,setId:String(set.id),queue,modes,fromSequence,index:0,correct:0,wrong:0,unknown:0,current:null,busy:false,answered:false,answer:'',feedback:'',modelAnswer:'',id:'run'+Date.now()};
   iftySubjectQuizRunOverride=null;
   closePracticeModal();
   await ifty149RenderManaged();
@@ -22263,7 +22639,8 @@ function ifty149CurrentMode(run,ref){
   const set=getIftySubjectQuizSet(run.subject,run.setId);
   const fixed=ifty149ModeMap(set?.itemModes)[String(ref.item.id)];
   const allowed=getIftySubjectQuizModeOptions(run.subject).map(row=>row.mode);
-  if(fixed && allowed.includes(fixed))return fixed;
+  // 混合クイズ中はパート外の固定形式に切り替えず、専用エンジンを保護する。
+  if(fixed && allowed.includes(fixed) && (!run.fromSequence || run.modes.includes(fixed)))return fixed;
   return run.modes[run.index % run.modes.length]||'derived';
 }
 function ifty149QuestionPanel(){
@@ -22284,6 +22661,11 @@ function ifty149QuestionPanel(){
 async function ifty149RenderManaged(){
  const st=ifty149Run;if(!st)return;
  if(st.index>=st.queue.length){
+  // 正誤・年号などのパート終了後は、同じクイズフォルダの次の形式へ。
+  if(st.fromSequence && iftySubjectQuizSequence124?.subject===st.subject){
+    ifty149Run=null;
+    if(advanceIftySubjectQuizSequence124(st.subject,st))return;
+  }
   showIftyHubContent(`<section class="ifty-portal-shell" style="max-width:720px;margin:auto;padding:25px;"><h2>練習完了</h2><p>正解 ${st.correct}・不正解 ${st.wrong}・分からない ${st.unknown}</p><button onclick="ifty149Exit()">PRACTICEに戻る</button></section>`,'ifty149-result');return;
  }
  const ref=ifty149QuizRef(st,st.queue[st.index]);if(!ref){alert('項目が見つからないため中止します。');window.ifty149Exit();return;}
@@ -25694,7 +26076,7 @@ window.sendChatMessage = async function() {
       }
     } else {
 replyText = isAlliaQuotaError(response, data)
-        ? '本日のALLIA利用上限に達した可能性があります。Cloudflare Workers AIの無料枠は日本時間9:00ごろにリセットされます。'
+        ? alliaHttpError(response, data, 'AIからの応答に失敗しました。').message
         : (data.error || data.details || "AIからの応答に失敗しました。");
     }
   } catch (e) {
@@ -26704,11 +27086,11 @@ window.logout = async function() {
           </details>
 
           <details>
-            <summary>⭕ 全教科PRACTICE：正誤・訂正</summary>
+            <summary>⭕ クイズフォルダ：正誤・訂正</summary>
             <div class="ifty-manual-guide-content">
               <p><strong>正誤・訂正</strong>では、保存済み教材を元にALLIAが作った文の正誤を判断します。LANGUAGES、BASIC SENTENCES、ANCIENT、KANBUN、KANJI、SOCIAL STUDIES、SCIENCE、OTHERS、YEARSに対応します。</p>
               <ol>
-                <li><strong>PRACTICE → 正誤・訂正</strong>を選び、出題フォルダ・問題数・難易度を設定します。対応する保存済みクイズフォルダから開始できる場合もあります。</li>
+                <li><strong>PRACTICE → クエスチョン → クイズフォルダ</strong>を開き、出題形式で<strong>正誤・訂正</strong>を選びます。各教科のクイズフォルダでも選択できます。問題数・難易度はクイズフォルダ内で設定します。</li>
                 <li>文が正しければ<strong>○ 正しい</strong>を選びます。</li>
                 <li>誤りがあれば<strong>✕ 誤りあり</strong>を選び、正しい内容に訂正します。修正後の全文でも、「aboutを削除」のような部分的な訂正でも構いません。</li>
                 <li>回答後に採点と模範解答・解説を確認します。</li>
@@ -26801,7 +27183,7 @@ window.logout = async function() {
             <div class="ifty-manual-guide-content">
               <ul>
                 <li>対応するALLIA画面では画像を添付して質問し、画像内の語句を教材登録につなげられる場合があります。</li>
-                <li>ALLIA使用状況はHOMEなどから確認できます。<strong>赤＝当日の上限</strong>、<strong>橙＝一時的な制限</strong>、<strong>黄＝上限が近い可能性</strong>を示します。</li>
+                <li>ALLIA使用状況はHOMEなどから確認できます。<strong>赤＝APIが確認した日次上限</strong>、<strong>橙＝一時的な制限または種類不明の制限</strong>、<strong>黄＝上限が近い可能性</strong>を示します。9:00のカウントダウンは端末の集計切替であり、APIの解除時刻ではありません。</li>
                 <li>残量表示が推定値の場合、処理量によって実際の利用可能回数は異なります。表示されるリセット時刻の案内も確認してください。</li>
               </ul>
             </div>
@@ -29303,6 +29685,7 @@ function iftyCgRenderSoloRoom(s,root){
   let current=null;
   const stopUser=()=>{if(current)current.aborted=true;};
   window.addEventListener('wheel',stopUser,{capture:true,passive:true});
+  window.addEventListener('touchstart',stopUser,{capture:true,passive:true});
   window.addEventListener('touchmove',stopUser,{capture:true,passive:true});
   document.addEventListener('keydown',e=>{if(['PageDown','PageUp','ArrowDown','ArrowUp','Home','End',' '].includes(e.key))stopUser();},true);
   function begin(event){
@@ -29350,11 +29733,11 @@ function iftyCgRenderSoloRoom(s,root){
     const area=document.getElementById('folders');
     const vocabPage=document.getElementById('vocabPage');
     const y=Number(window.scrollY||document.scrollingElement?.scrollTop||0);
-    const keep=!!(area?.firstElementChild&&vocabPage&&getComputedStyle(vocabPage).display!=='none'&&y>0);
+    const keep=!!(area?.firstElementChild&&vocabPage&&getComputedStyle(vocabPage).display!=='none'&&y>0 && !window.ifty157RecentlySwiped?.());
     const result=original.apply(this,args);
     if(keep&&vocabPage?.isConnected&&getComputedStyle(vocabPage).display!=='none'){
       const restore=()=>{
-        if(getComputedStyle(vocabPage).display==='none')return;
+        if(getComputedStyle(vocabPage).display==='none' || window.ifty157RecentlySwiped?.())return;
         const max=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
         const target=Math.min(y,max);
         if(Math.abs((window.scrollY||0)-target)>1){
@@ -30559,6 +30942,7 @@ ifty143Toolbar=function(kind,options={}){
   document.addEventListener('click',begin,true);
   document.addEventListener('change',begin,true);
   const stop=()=>{if(active){active.abort=true;window.__iftyPreserveHubViewport=false;window.__iftyPreserveHubViewportY=null;}};
+  window.addEventListener('touchstart',stop,{capture:true,passive:true});
   window.addEventListener('touchmove',stop,{capture:true,passive:true});
   window.addEventListener('wheel',stop,{capture:true,passive:true});
   document.addEventListener('keydown',e=>{if(['PageDown','PageUp','Home','End','ArrowDown','ArrowUp',' '].includes(e.key))stop();},true);
@@ -30972,19 +31356,95 @@ window.ifty151Next=function(){const st=ifty151Run;if(!st?.answered||st.busy)retu
 window.ifty151Retry=function(){if(!ifty151Run||ifty151Run.busy)return;ifty151Run.error='';void ifty151LoadQuestion();};
 window.ifty151Exit=function(){const subject=ifty151Run?.subject||ifty151Setup?.subject||'ENGLISH';ifty151Run=null;window.openPracticeHome(subject);};
 
-// Insert the universal entrance after the final STEP150 YEARS wrapper; no existing UI is replaced.
-const ifty151PreviousRenderPracticeHome=renderPracticeHome;
-renderPracticeHome=function(...args){
-  const result=ifty151PreviousRenderPracticeHome(...args);
-  const modal=document.getElementById('practiceModal');
-  const wrapper=modal?.firstElementChild;
-  if(!wrapper||wrapper.querySelector('[data-ifty151-entry]'))return result;
-  const tabButton=wrapper.querySelector('button[onclick*="setIftyUnifiedPracticeSubject"]');
-  const entry=document.createElement('div');entry.dataset.ifty151Entry='1';
-  entry.style.cssText='margin:0 0 14px;padding:12px;border:1px solid #86efac;border-radius:10px;background:#f0fdf4;color:#14532d;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;';
-  entry.innerHTML=`<div style="min-width:0;flex:1;"><b>⭕ 正誤・訂正</b><div style="color:#166534;font-size:.8rem;line-height:1.5;">全教科対応。正しい文章は○、誤りは訂正。</div></div><button type="button" style="flex:none;border:0;background:#0f766e;color:white;border-radius:8px;padding:11px 15px;font-size:.9rem;font-weight:900;cursor:pointer;">練習する →</button>`;
-  entry.querySelector('button').onclick=()=>window.ifty151OpenSetup(iftyUnifiedPracticeSubject);
-  if(tabButton?.parentElement)tabButton.parentElement.insertAdjacentElement('afterend',entry);
-  else wrapper.insertAdjacentElement('afterbegin',entry);
-  return result;
-};
+
+
+// ==========================================
+// STEP156: LANGUAGESのダークモード可読性修正
+// フォルダ背景と見出し、カード見出しの明暗を統一。その他の画面・ライトモードは変更しない。
+// ==========================================
+(function ifty156EnsureEnglishReadability() {
+  if (document.getElementById('ifty156EnglishReadability')) return;
+  const sheet = document.createElement('style');
+  sheet.id = 'ifty156EnglishReadability';
+  sheet.textContent = `
+    body[data-ifty-theme="dark"] #folders .ifty156-english-folder {
+      background:#1b2638 !important;
+      border-color:#71839a !important;
+      color:#f8fafc !important;
+    }
+    body[data-ifty-theme="dark"] #folders .ifty156-english-folder .ifty-folder-header h3 {
+      color:#f8fafc !important;
+      text-shadow:none !important;
+    }
+    body[data-ifty-theme="dark"] #folders .ifty156-english-word {
+      background:#223047 !important;
+      border-color:#60738b !important;
+      color:#e2e8f0 !important;
+    }
+    body[data-ifty-theme="dark"] #folders .ifty156-english-word .ifty156-english-word-title {
+      color:#f8fafc !important;
+      text-shadow:none !important;
+      overflow-wrap:anywhere;
+    }
+    @media(max-width:640px) {
+      body[data-ifty-theme="dark"] #folders .ifty156-english-folder { padding:12px !important; }
+      body[data-ifty-theme="dark"] #folders .ifty156-english-word-title { white-space:normal; }
+    }
+  `;
+  (document.head || document.documentElement).appendChild(sheet);
+})();
+
+
+// ============================================================================
+// IFTY STEP157 (2026-10-22): iOS / iPadOS / Android natural scrolling support.
+// Only touch scrolling / viewport guards are changed. Existing touch-drag grips,
+// handwriting canvases, saved data, Workers, and all other UI actions are intact.
+// ============================================================================
+(function installIfty157NaturalTouchScroll(){
+  'use strict';
+  if (window.__ifty157ScrollInstalled) return;
+  window.__ifty157ScrollInstalled = true;
+  let lastUserSwipeAt = -Infinity;
+  // The presence of a real swipe, not tapping a button, suppresses only
+  // transient STEP138 vocabulary scroll restoration while momentum continues.
+  const markSwipe = () => { lastUserSwipeAt = performance.now(); };
+  window.addEventListener('touchmove', markSwipe, {capture:true,passive:true});
+  window.addEventListener('wheel', markSwipe, {capture:true,passive:true});
+  window.ifty157RecentlySwiped = () => performance.now() - lastUserSwipeAt < 650;
+
+  const applyStyles = () => {
+    if (document.getElementById('ifty157TouchScrollStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'ifty157TouchScrollStyles';
+    style.textContent = `
+      /* Let nested question-selection lists hand off vertical swipes to the
+         main page at their ends instead of acting like a dead scroll zone. */
+      [id^="iftySubjectQuizList_"],
+      [id^="iftySubjectFlashList_"],
+      [id^="iftyPracticeWordList_"],
+      [id^="iftyQuizWordList_"],
+      [id^="iftyBasicPracticeSetList_"],
+      .ifty150-config > .ifty150-inner[style*="max-height"] {
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-y: auto !important;
+        touch-action: pan-y pinch-zoom;
+      }
+      /* Modal content and drawers should use the browser's native momentum
+         scrolling; no synthetic scroll-speed hacks that break iPad gestures. */
+      #iftySideMenuDrawer,
+      .ifty-manual-body,
+      #iftySocialItemModalCard,
+      #practiceModal > section[style*="overflow:auto"],
+      #iftyBasicSentenceModal > div[style*="overflow:auto"] {
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y pinch-zoom;
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyStyles, {once:true});
+  } else {
+    applyStyles();
+  }
+})();
