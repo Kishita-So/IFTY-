@@ -25,7 +25,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 168;
+const IFTY_APP_STEP = 170;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -1550,7 +1550,7 @@ function renderIftySideMenu() {
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPronunciation();">🗣 ${escapeHtml(getIftySideMenuDisplayText('pronunciation'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyBasicSentences();">📝 ${escapeHtml(getIftySideMenuDisplayText('basicSentences'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyYears();">📅 ${escapeHtml(getIftySideMenuDisplayText('years'))}</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPlaces();">🗺️ PLACES</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPlaces();">🗺️ ${escapeHtml(getIftyHomeSubjectNameMode()==='ja'?'地図・地名':'PLACES')}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openPracticeHome(currentIftySubject);">⚔️ ${escapeHtml(getIftySideMenuDisplayText('practice'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyFriendsPage();">👥 ${escapeHtml(getIftySideMenuDisplayText('friends'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyClassesPage();">🏫 ${escapeHtml(getIftySideMenuDisplayText('classes'))}</button>
@@ -1613,6 +1613,8 @@ window.toggleIftySideMenu = function(event) {
 // 招待URLを設定する場合は openchat-link.txt に https://line.me/ti/g2/... を1行で記入する。
 // ==========================================
 const IFTY_PATCH_NOTES_FALLBACK = [
+  { step:170, date:'2026-10-25', title:'選択した単語・項目の別フォルダ複製', changes:['LANGUAGES・社会・理科・古文・漢文・漢字・OTHERSの選択操作に複製を追加','元フォルダの内容は残して独立したIDで複製','複製先の重複を既定では回避し、必要なら許可できる'] },
+  { step:169, date:'2026-10-25', title:'PLACES 日英名称・タッチ地図・基準位置・操作改善', changes:['設定に連動する日本語/英語の表示名','地図を指で移動・2本指で拡大縮小','マーカーの位置を元に戻す・基準位置を再設定','地図移動と書き込み操作を分離'] },
   { step:168, date:'2026-10-25', title:'フラッシュカードの1枚戻しと周回表示', changes:['直前のカードに戻り、判定と学習・復習記録も取り消して回答し直せる','LANGUAGESと全教科のフラッシュカードセットで2周目以降の開始を大きく表示','通常フラッシュカードにも1枚戻すボタンを追加'] },
   { step:167, date:'2026-10-25', title:'YEARS Enter登録と語呂合わせの改善', changes:['年号のEnter/追加を共通処理に統一し連続入力時のフォーカスを保持','語呂合わせが単なる年号の説明にならないよう生成条件を改善','保存済みの語呂だけをALLIAで再生成・候補から選択'] },
   { step:166, date:'2026-10-25', title:'PLACES 国境線レイヤー', changes:['地図へ現代国境線を追加（オフライン表示）','国境線のON/OFFを地図ごとに保存','地図のPRACTICEにも国境線設定を引き継ぐ'] },
@@ -5172,7 +5174,7 @@ window.openIftyHome = function() {
         <button type="button" onclick="openIftyExampleBank()" style="background:#2563eb;color:white;">📚 例文資産 ${stats.examples}</button>
         <button type="button" onclick="openIftyBasicSentences()" style="background:#059669;color:white;">📝 BASIC SENTENCES ${stats.basicSentences}</button>
         <button type="button" onclick="openIftyYears()" style="background:#b45309;color:white;">📅 YEARS ${stats.years}</button>
-        <button type="button" onclick="openIftyPlaces()" style="background:#155e75;color:white;">🗺️ PLACES</button>
+        <button type="button" onclick="openIftyPlaces()" style="background:#155e75;color:white;">🗺️ ${escapeHtml(getIftyHomeSubjectNameMode()==='ja'?'地図・地名':'PLACES')}</button>
         <button type="button" onclick="openPracticeHome()" style="background:#7c3aed;color:white;">⚔️ 実践</button>
         <button type="button" onclick="openIftyLearningStats()" style="background:#0f766e;color:white;">📊 学習統計</button>
         <button type="button" onclick="openIftyFriendsPage()" style="background:#2563eb;color:white;">👥 フレンド</button>
@@ -22141,6 +22143,7 @@ window.ifty132OpenSelectionActions = function(subject) {
   ${key==='ENGLISH'?`<label style="display:block;margin-top:12px;">移動先<select id="ifty132MoveTo" style="display:block;width:100%;padding:10px;border:1px solid #94a3b8;border-radius:8px;margin-top:5px;">${folderOptions}</select></label>`:''}
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px;">
   <button type="button" data-a="move" ${!count||!moveAllowed?'disabled':''} style="padding:12px;border:0;border-radius:9px;background:#0284c7;color:white;font-weight:800;">移動</button>
+  <button type="button" data-a="copy" ${!count||!moveAllowed?'disabled':''} style="padding:12px;border:0;border-radius:9px;background:#0f766e;color:white;font-weight:800;">📋 複製</button>
   <button type="button" data-a="delete" ${!count?'disabled':''} style="padding:12px;border:0;border-radius:9px;background:#dc2626;color:white;font-weight:800;">削除</button>
   <button type="button" data-a="all" ${!hasItems?'disabled':''} style="padding:12px;border:1px solid #94a3b8;border-radius:9px;background:#f1f5f9;color:#0f172a;font-weight:800;">全選択</button>
   <button type="button" data-a="clear" ${!count?'disabled':''} style="padding:12px;border:1px solid #94a3b8;border-radius:9px;background:#f1f5f9;color:#0f172a;font-weight:800;">選択解除</button>
@@ -22150,6 +22153,11 @@ window.ifty132OpenSelectionActions = function(subject) {
     if(e.target===mask){mask.remove();return;}
     const btn=e.target.closest('[data-a]');if(!btn||btn.disabled)return;
     const action=btn.dataset.a;
+    if(action==='copy'){
+      mask.remove();
+      openIfty170CopySelectedDialog(key);
+      return;
+    }
     if(action==='move'){
       if(key==='ENGLISH'){
         let old=document.getElementById('bulkMoveFolderSelect');
@@ -22339,6 +22347,175 @@ window.bulkMoveIftySubjectSelectedItems = function(subject) {
   else if (key === 'OTHERS') renderIftyOthersPage({ preserveScroll: true });
 };
 
+
+// ==========================================
+// STEP170：チェックした単語・教科項目を別フォルダへ複製
+// 既存の「移動」は一切変更せず、データとIDを独立してコピーする。
+// ==========================================
+function ifty170FolderList(subject) {
+  return normalizeIftySubject(subject) === 'ENGLISH' ? folders : getIftySubjectFoldersForBulk(subject);
+}
+function ifty170Selection(subject) {
+  const key = normalizeIftySubject(subject);
+  return key === 'ENGLISH' ? selectedWordIds : cleanIftySubjectSelection(key);
+}
+function ifty170ItemName(subject, item) {
+  const key = normalizeIftySubject(subject);
+  const fields = key === 'ENGLISH' ? ['word']
+    : key === 'ANCIENT' ? ['word','title']
+    : key === 'KANBUN' ? ['originalText','title']
+    : key === 'KANJI' ? ['term','title']
+    : ['topic','title'];
+  for (const field of fields) {
+    const text = String(item?.[field] ?? '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+function ifty170CopyCandidates(subject, destinationId, allowDuplicates) {
+  const key = normalizeIftySubject(subject);
+  const listKey = key === 'ENGLISH' ? 'words' : 'items';
+  // Collect selections BEFORE reading the folder list: some subject getters normalize
+  // practiceData by replacing folder objects, which would stale the destination reference.
+  const selection = new Set([...ifty170Selection(key)].map(String));
+  const allFolders = ifty170FolderList(key);
+  const target = allFolders.find(f => String(f.id) === String(destinationId));
+  if (!target) return null;
+  const existingKeys = new Set((target[listKey] || [])
+    .map(item => ifty131DuplicateKey(ifty170ItemName(key, item))).filter(Boolean));
+  const incoming = [];
+  let skippedSameFolder = 0, skippedDuplicate = 0;
+  for (const folder of allFolders) {
+    for (const item of folder[listKey] || []) {
+      if (!selection.has(String(item.id))) continue;
+      if (String(folder.id) === String(target.id)) { skippedSameFolder++; continue; }
+      const duplicateKey = ifty131DuplicateKey(ifty170ItemName(key, item));
+      if (!allowDuplicates && duplicateKey && existingKeys.has(duplicateKey)) {
+        skippedDuplicate++;
+        continue;
+      }
+      incoming.push(item);
+      if (duplicateKey) existingKeys.add(duplicateKey);
+    }
+  }
+  return { target, incoming, skippedSameFolder, skippedDuplicate, listKey };
+}
+
+window.openIfty170CopySelectedDialog = function(subject) {
+  const key = normalizeIftySubject(subject);
+  if (!ifty170Selection(key).size) {
+    alert('先に複製する項目にチェックを入れてください。');
+    return;
+  }
+  const sourceFolders = ifty170FolderList(key);
+  if (sourceFolders.length < 2) {
+    alert('複製先にできる別のフォルダを作成してください。');
+    return;
+  }
+  document.getElementById('ifty170CopyModal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'ifty170CopyModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:13110;background:rgba(15,23,42,.66);display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';
+  modal.innerHTML = `<section role="dialog" aria-modal="true" aria-label="選択項目の複製" style="width:min(490px,100%);max-height:min(85vh,800px);overflow-y:auto;background:#fff;color:#0f172a;border-radius:14px;padding:18px;box-sizing:border-box;box-shadow:0 16px 40px #0005;">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+      <strong style="font-size:1.1em;">📋 別フォルダに複製</strong>
+      <button type="button" data-ifty170="cancel" style="min-width:44px;min-height:44px;border:0;border-radius:9px;background:#e2e8f0;color:#0f172a;">✕</button>
+    </div>
+    <p style="color:#475569;font-size:.86em;line-height:1.55;margin:8px 0 12px;">選択中 ${ifty170Selection(key).size}件。元のフォルダは変更せず、別のフォルダに複製します。コピー先と同じフォルダ内の項目は対象外です。</p>
+    <label style="display:block;font-weight:800;">複製先のフォルダ
+      <select id="ifty170CopyTarget" style="display:block;width:100%;min-height:46px;margin-top:6px;padding:10px;border:1px solid #94a3b8;border-radius:9px;background:white;color:#0f172a;font:inherit;box-sizing:border-box;">
+      ${sourceFolders.map(f=>`<option value="${escapeHtml(String(f.id))}">${escapeHtml(f.name)}</option>`).join('')}
+      </select>
+    </label>
+    <label style="display:flex;align-items:center;gap:9px;margin-top:14px;font-size:.9em;line-height:1.45;">
+      <input id="ifty170AllowDuplicate" type="checkbox" style="width:21px;height:21px;flex:none;" /> 複製先に同じ名前があっても複製する
+    </label>
+    <p id="ifty170CopyPreview" aria-live="polite" style="color:#475569;font-size:.85em;line-height:1.6;margin:12px 0;"></p>
+    <div style="display:flex;gap:9px;flex-wrap:wrap;">
+      <button type="button" data-ifty170="commit" style="flex:1;min-width:155px;min-height:46px;border:0;border-radius:9px;background:#0f766e;color:white;font-weight:900;font:inherit;">📋 複製する</button>
+      <button type="button" data-ifty170="cancel" style="min-height:46px;border:1px solid #cbd5e1;border-radius:9px;background:#f8fafc;color:#0f172a;font:inherit;">キャンセル</button>
+    </div>
+    <p style="font-size:.77em;color:#64748b;margin:12px 0 0;">同じ名前の項目は初期設定でスキップします。複製後もチェックは保持されるので、続けて別フォルダへ複製できます。</p>
+  </section>`;
+  document.body.appendChild(modal);
+  const target = modal.querySelector('#ifty170CopyTarget');
+  const allow = modal.querySelector('#ifty170AllowDuplicate');
+  const preview = modal.querySelector('#ifty170CopyPreview');
+  // 選択項目の入っていないフォルダを最初の候補にする。
+  const candidate = sourceFolders.find(f => {
+    const found = ifty170CopyCandidates(key, f.id, false);
+    return found && found.incoming.length > 0;
+  });
+  if (candidate) target.value = String(candidate.id);
+  const renderPreview = () => {
+    const result = ifty170CopyCandidates(key, target.value, allow.checked);
+    if (!result) { preview.textContent = '複製先を選択してください。'; return; }
+    preview.textContent = `複製予定：${result.incoming.length}件` +
+      (result.skippedDuplicate ? ` ／ 同名のため除外：${result.skippedDuplicate}件` : '') +
+      (result.skippedSameFolder ? ` ／ 既に複製先にある選択項目：${result.skippedSameFolder}件` : '');
+    modal.querySelector('[data-ifty170="commit"]').disabled = !result.incoming.length;
+  };
+  target.addEventListener('change', renderPreview);
+  allow.addEventListener('change', renderPreview);
+  renderPreview();
+  modal.addEventListener('click', event => {
+    if (event.target === modal || event.target.closest('[data-ifty170="cancel"]')) {
+      modal.remove(); return;
+    }
+    if (event.target.closest('[data-ifty170="commit"]')) {
+      if (ifty170CopySelectedTo(key, target.value, allow.checked)) modal.remove();
+    }
+  });
+};
+
+window.ifty170CopySelectedTo = function(subject, destinationId, allowDuplicates = false) {
+  const key = normalizeIftySubject(subject);
+  const result = ifty170CopyCandidates(key, destinationId, !!allowDuplicates);
+  if (!result) { alert('複製先が見つかりません。'); return false; }
+  const {target, incoming, skippedDuplicate, skippedSameFolder, listKey} = result;
+  if (!incoming.length) {
+    alert('複製する項目がありません。複製先や重複設定を確認してください。');
+    return false;
+  }
+  if (allowDuplicates) {
+    const existing = new Set((target[listKey]||[]).map(item=>ifty131DuplicateKey(ifty170ItemName(key,item))).filter(Boolean));
+    const overlaps = incoming.filter(item=>{
+      const k=ifty131DuplicateKey(ifty170ItemName(key,item));
+      if (!k) return false;
+      const had=existing.has(k);existing.add(k);return had;
+    });
+    if (overlaps.length && !confirm(`「${target.name}」に、同じ名前の項目が${overlaps.length}件重複します。\n本当に重複を許可して複製しますか？`)) return false;
+  }
+  // Undoは複製先への変更より先に記録し、元項目は変更しない。
+  recordUndoState(`${getIftySubjectDisplayName(key)} 選択項目の複製`);
+  if (!Array.isArray(target[listKey])) target[listKey] = [];
+  const idPrefix = key === 'ENGLISH' ? 'word' :
+    key === 'ANCIENT' ? 'ancientword' : key === 'KANBUN' ? 'kanbunitem' :
+    key === 'KANJI' ? 'kanjiitem' : key === 'OTHERS' ? 'othersitem' :
+    key === 'SCIENCE' ? 'scienceitem' : 'socialitem';
+  incoming.forEach(source => {
+    const clone = deepClone(source);
+    clone.id = makeId(idPrefix);
+    target[listKey].push(clone);
+  });
+  if (key === 'ENGLISH') {
+    saveUserData();
+    const position = window.scrollY;
+    renderFolders();
+    requestAnimationFrame(() => window.scrollTo({ top: position, behavior: 'auto' }));
+  } else {
+    savePracticeData();
+    const render = { 'SOCIAL STUDIES':renderIftySocialStudiesPage, 'SCIENCE':renderIftySciencePage,
+      'ANCIENT':renderIftyAncientPage, 'KANBUN':renderIftyKanbunPage,
+      'KANJI':renderIftyKanjiPage, 'OTHERS':renderIftyOthersPage }[key];
+    if (render) render({preserveScroll:true});
+  }
+  ifty132UpdateSelectionDock();
+  alert(`${incoming.length}件を「${target.name}」に複製しました。元の項目は残っています。` +
+    (skippedDuplicate ? `\n同名でスキップ：${skippedDuplicate}件` : '') +
+    (skippedSameFolder ? `\n元から複製先にある選択項目：${skippedSameFolder}件` : ''));
+  return true;
+};
 
 function getIftySubjectQuizModule(subject) {
   return getIftySubjectFlashcardModule(subject);
@@ -32105,15 +32282,51 @@ const REGIONS={
 const ICONS=['📍','⚔️','🏰','👑','🤝','🚩','🔥','⛵','🚢','📜','🏛️','⛪','🎓','🏭','🌋','🏔️','🌊','🌲','💎','⭐','🏺','🛤️'];
 const THEMES={point:'📍 地点・都市',line:'〰️ 河川・山脈・経路',area:'🟦 領土・砂漠・範囲',event:'⚔️ 歴史イベント'};
 let active=null,draw=[],quiz=null,selected=null,notice='',viewOverride=null,draft=null;
+let pl169Tool='move', pl169Gesture=null, pl169LastMove=null, pl169SettingsOpen=false;
 // STEP165: PLACES-only UI state; the existing subjects and quiz engines remain untouched.
 let lastScreen='',dragState=null,suppressMapClickUntil=0,aiPending=false,aiPendingKey='',aiLastCompleted='',aiStatus='',skipNextCapture=false;
 const POINT_TYPES=new Set(['point','event']);
+function displayLang(map){
+ const setting=map?.labelLanguage||'auto';
+ return setting==='ja'||setting==='en'?setting:(typeof getIftyHomeSubjectNameMode==='function'?getIftyHomeSubjectNameMode():'ja');
+}
+function itemName(item,map){return String((displayLang(map)==='ja'?item?.nameJa:item?.nameEn)||item?.name||item?.nameJa||item?.nameEn||'');}
+function mapName(map){return String((displayLang(map)==='ja'?map?.nameJa:map?.nameEn)||map?.name||'');}
+function copyCoords(coords){return (Array.isArray(coords)?coords:[]).map(p=>[Number(p[0]),Number(p[1])]);}
+function itemDefaultCoords(item){return copyCoords(item?.defaultCoords?.length?item.defaultCoords:item?.coords);}
+function pl169ClearGesture(){pl169Gesture=null;const g=document.getElementById('pl169Viewport');if(g)g.removeAttribute('transform');}
+function pl169MapForView(){const m=current();if(!m)return null;const q=quiz?.questions?.[quiz.index];return q?{...m,region:q.region,projection:q.projection}:m;}
+function pl169Bound(b){
+ let w=Math.min(360,Math.max(.08,b[2]-b[0])),h=Math.min(170,Math.max(.08,b[3]-b[1]));
+ let minX=clamp((b[0]+b[2]-w)/2,-180,180-w),minY=clamp((b[1]+b[3]-h)/2,-85,85-h);
+ return [minX,minY,minX+w,minY+h];
+}
+function pl169ApplyPan(start,end,b,map){
+ const previous=viewOverride;viewOverride=b;
+ const a=unproject(start[0],start[1],map),z=unproject(end[0],end[1],map);
+ viewOverride=previous;
+ if(!valid(a)||!valid(z))return b;
+ return pl169Bound([b[0]+a[0]-z[0],b[1]+a[1]-z[1],b[2]+a[0]-z[0],b[3]+a[1]-z[1]]);
+}
+function pl169ZoomBounds(factor,anchor,b,map){
+ factor=clamp(factor,.15,6);
+ const prev=viewOverride;viewOverride=b;
+ const before=unproject(anchor[0],anchor[1],map);
+ let result=pl169Bound([(b[0]+b[2])/2-(b[2]-b[0])*factor/2,(b[1]+b[3])/2-(b[3]-b[1])*factor/2,(b[0]+b[2])/2+(b[2]-b[0])*factor/2,(b[1]+b[3])/2+(b[3]-b[1])*factor/2]);
+ viewOverride=result;
+ const after=unproject(anchor[0],anchor[1],map);
+ viewOverride=prev;
+ if(valid(before)&&valid(after)){const dx=before[0]-after[0],dy=before[1]-after[1];result=pl169Bound([result[0]+dx,result[1]+dy,result[2]+dx,result[3]+dy]);}
+ return result;
+}
+function pl169RefreshView(){if(quiz)renderQuiz();else renderEditor();}
+
 const clamp=(value,min,max)=>Math.min(max,Math.max(min,value));
 const cleanCoords=p=>[Math.round(clamp(Number(p[0]),-180,180)*1e5)/1e5,Math.round(clamp(Number(p[1]),-85,85)*1e5)/1e5];
 function screenPosition(){return Math.max(0,Number(window.scrollY||document.scrollingElement?.scrollTop||0));}
 function screenRestore(y){const restore=()=>{try{window.scrollTo({top:y,left:0,behavior:'instant'});}catch(_){window.scrollTo(0,y)}const el=document.scrollingElement;if(el&&Math.abs(el.scrollTop-y)>2)el.scrollTop=y;};restore();requestAnimationFrame(restore);}
 
-function captureDraft(){if(skipNextCapture){skipNextCapture=false;return;}const ids=['pl164Kind','pl164Icon','pl164ItemName','pl164Color','pl164From','pl164To','pl164Desc'];const found=ids.map(k=>document.getElementById(k));if(found.some(Boolean))draft=Object.fromEntries(ids.map((k,i)=>[k,found[i]?.value??'']));}
+function captureDraft(){if(skipNextCapture){skipNextCapture=false;return;}const ids=['pl164Kind','pl164Icon','pl164ItemName','pl169NameJa','pl169NameEn','pl164Color','pl164From','pl164To','pl164Desc'];const found=ids.map(k=>document.getElementById(k));if(found.some(Boolean))draft=Object.fromEntries(ids.map((k,i)=>[k,found[i]?.value??'']));}
 function resetDraft(){draft=null;skipNextCapture=true;aiStatus='';aiLastCompleted='';const old=document.querySelector('.pl164');if(old)old.querySelectorAll('[id^=pl164]').forEach(x=>{if('value' in x)x.value=''})}
 const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -32125,6 +32338,16 @@ function current(){return load().find(x=>x.id===active)}
 function update(mutator){const all=load(),m=all.find(x=>x.id===active);if(!m)return false;mutator(m);m.updated=Date.now();return save(all)}
 function escJson(x){return h(JSON.stringify(x))}
 function setupStyle(){if(document.getElementById('iftyPlacesCSS164'))return;const css=document.createElement('style');css.id='iftyPlacesCSS164';css.textContent=`
+ .pl164 .pl169-toolbar{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:12px 0 8px;padding:10px;background:#20334f;border-radius:12px;border:1px solid #526b8d}
+ .pl164 .pl169-toolbar button{min-height:44px}
+ .pl164 .pl169-toolbar button[aria-pressed="true"]{background:#087e8b;border-color:#67e8f9;color:#fff;box-shadow:0 0 0 2px #22d3ee55}
+ .pl164 .pl169-settings-toggle{margin:8px 0}.pl164 .pl169-settings-toggle button{background:#334155;border-color:#64748b;width:100%}.pl164 .pl169-toolbar .pl169-tip{flex:1 1 180px;font-size:.83rem;color:#e2e8f0;line-height:1.45}
+ .pl164 #iftyPlacesSVG{touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;overscroll-behavior:contain}
+ .pl164 #iftyPlacesSVG:active{cursor:grabbing}
+ .pl164 .pl169-mini{font-size:.77rem;color:#fcd34d;margin:5px 0}
+ .pl164 .pl169-itemactions{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px}
+ .pl164 .pl169-itemactions button{font-size:.86rem}
+ @media(max-width:650px){.pl164 .pl169-toolbar button{flex:1 1 27%;padding:9px 5px;font-size:.88rem}.pl164 .pl169-toolbar .pl169-tip{flex:1 1 100%}}
  .pl164 .pl-ai-note{color:#dbeafe;border-left:3px solid #a78bfa;background:#293653;padding:9px;border-radius:8px;font-size:.86rem;line-height:1.55}
  .pl164 .marker.pl-draggable{cursor:grab}.pl164 .marker.pl-draggable:active{cursor:grabbing}.pl164 .pl-handle{cursor:crosshair;touch-action:none}.pl164 .pl-preview{pointer-events:none}.pl164 .pl-preview.pl-editable{pointer-events:visiblePainted;cursor:grab}.pl164 .pl-preview.pl-editable:active{cursor:grabbing}
  .pl164 #iftyPlacesSVG.pl-editor{touch-action:none;user-select:none;-webkit-user-select:none}.pl164 .pl-loading{opacity:.72}
@@ -32180,14 +32403,14 @@ function mapSvg(m,mode){
   const groupClass=isEdit?'marker pl-draggable':'marker';
   if(POINT_TYPES.has(item.kind)&&coords.length){
    const p=project(...coords[0],m);if(!valid(p))continue;
-   art+=`<g class="${groupClass}" data-pl-id="${h(item.id)}" ${events}>${svgIcon(item,p[0],p[1],sel)}${isEdit&&m.showLabels!==false?`<text x="${p[0]+22}" y="${p[1]-11}" font-size="17" fill="#0f172a" stroke="#fff" stroke-width="4" paint-order="stroke" style="pointer-events:none">${h(item.name)}</text>`:''}</g>`;
+   art+=`<g class="${groupClass}" data-pl-id="${h(item.id)}" ${events}>${svgIcon(item,p[0],p[1],sel)}${isEdit&&m.showLabels!==false?`<text x="${p[0]+22}" y="${p[1]-11}" font-size="17" fill="#0f172a" stroke="#fff" stroke-width="4" paint-order="stroke" style="pointer-events:none">${h(itemName(item,m))}</text>`:''}</g>`;
   }else if(coords.length>1){
    const d=path(coords,m,item.kind==='area');
    // Line/area icons are positioned at the visible geometry's center, not hidden in the item list.
    const projected=coords.map(p=>project(...p,m)).filter(valid);
    if(!projected.length)continue;
    const center=[projected.reduce((s,p)=>s+p[0],0)/projected.length,projected.reduce((s,p)=>s+p[1],0)/projected.length];
-   art+=`<g class="${groupClass}" data-pl-id="${h(item.id)}" ${events}><path d="${d}" fill="${item.kind==='area'?stroke:'none'}" fill-opacity="${item.kind==='area'?.25:0}" stroke="${stroke}" stroke-width="${sel?10:7}" stroke-linejoin="round" stroke-linecap="round"/>${svgIcon(item,center[0],center[1],sel)}${isEdit&&m.showLabels!==false?`<text x="${center[0]+23}" y="${center[1]-11}" font-size="17" fill="#0f172a" stroke="#fff" stroke-width="4" paint-order="stroke" style="pointer-events:none">${h(item.name)}</text>`:''}</g>`;
+   art+=`<g class="${groupClass}" data-pl-id="${h(item.id)}" ${events}><path d="${d}" fill="${item.kind==='area'?stroke:'none'}" fill-opacity="${item.kind==='area'?.25:0}" stroke="${stroke}" stroke-width="${sel?10:7}" stroke-linejoin="round" stroke-linecap="round"/>${svgIcon(item,center[0],center[1],sel)}${isEdit&&m.showLabels!==false?`<text x="${center[0]+23}" y="${center[1]-11}" font-size="17" fill="#0f172a" stroke="#fff" stroke-width="4" paint-order="stroke" style="pointer-events:none">${h(itemName(item,m))}</text>`:''}</g>`;
    if(sel&&isEdit){coords.forEach((v,i)=>{const p=project(...v,m);if(!valid(p))return;art+=`<circle class="pl-handle" data-pl-handle="${i}" cx="${p[0]}" cy="${p[1]}" r="10" fill="#fbbf24" stroke="#0f172a" stroke-width="2" onpointerdown="iftyPlacesPointerDown(event,'${h(item.id)}',${i})"/>`;});}
   }
  }
@@ -32207,22 +32430,28 @@ function mapSvg(m,mode){
    if(draw.length>1)preview+=draw.map((v,i)=>{const k=project(...v,m);return valid(k)?`<circle class="pl-handle" cx="${k[0]}" cy="${k[1]}" r="11" fill="#fbbf24" stroke="#0f172a" stroke-width="2" onpointerdown="iftyPlacesPointerDown(event,'__draft__',${i})"/>`:''}).join('');
   }
  }
- return `<div class="mapbox"><svg id="iftyPlacesSVG" class="${isEdit?'pl-editor':''}" viewBox="0 0 1000 600" role="img" aria-label="${h(m.name)} 地図" onclick="iftyPlacesMapClick(event)" onpointermove="iftyPlacesPointerMove(event)" onpointerup="iftyPlacesPointerUp(event)" onpointercancel="iftyPlacesPointerCancel(event)"><rect width="1000" height="600" fill="#dbeafe"/>${borders}${coast}${art}${preview}</svg><div class="maphint">${isEdit?'アイコンをドラッグして移動。線・面は選択後、黄色い頂点をドラッグして形を調整できます。空白をタップすると新しい位置を入力します。':'地図上の位置・範囲をタップして回答してください。'}</div></div>`;
+ return `<div class="mapbox"><svg id="iftyPlacesSVG" class="${isEdit?'pl-editor':''}" viewBox="0 0 1000 600" role="img" aria-label="${h(m.name)} 地図" onclick="iftyPlacesMapClick(event)" onpointerdown="iftyPlacesMapPointerDown(event)" onpointermove="iftyPlacesMapPointerMove(event);iftyPlacesPointerMove(event)" onpointerup="iftyPlacesMapPointerUp(event);iftyPlacesPointerUp(event)" onpointercancel="iftyPlacesMapPointerCancel(event);iftyPlacesPointerCancel(event)" onwheel="iftyPlacesWheel(event)"><rect width="1000" height="600" fill="#dbeafe"/><g id="pl169Viewport">${borders}${coast}${art}${preview}</g></svg><div class="maphint">${isEdit?pl169Tool==='place'?'配置モード：空白をタップして地点を追加。指でなぞると地図移動、2本指で拡大縮小。':'移動モード：指で地図を動かし、2本指で拡大縮小。アイコンを長く押さずにドラッグすると位置調整。書き込みには「配置」を選択。':'地図上の位置・範囲をタップして回答してください。'}</div></div>`;
 }
-function itemList(m){return `<div class="panel"><h3>書き込み ${m.items.length}件</h3><div class="buttons">${button('iftyPlacesStartQuiz()','⚔️ この地図をPRACTICE','')}</div>${m.items.map(it=>`<div class="item ${selected===it.id?'active':''}"><div><b>${h(it.icon||'📍')} ${h(it.name)}</b> <span class="muted">${h(THEMES[it.kind]||it.kind)} ${h(it.from||'')}${it.to?'〜'+h(it.to):''}</span></div><div class="buttons" style="margin-top:6px">${button(`iftyPlacesChoose('${h(it.id)}')`,'編集')}${button(`iftyPlacesDeleteItem('${h(it.id)}')`,'削除','danger')}</div></div>`).join('')||'<p class="muted">まだ書き込みがありません。</p>'}</div>`}
-function renderList(){active=null;selected=null;draw=[];quiz=null;viewOverride=null;resetDraft();const maps=load();shell(`<h1>🗺️ PLACES</h1><p class="muted">フォルダの代わりに地図を作成し、地名・河川・山脈・帝国領土・歴史イベントを記録。地図からそのまま練習できます。</p><div class="buttons">${button('iftyPlacesCreate()','＋ 新しい地図','')}${button('openIftyHome()','HOMEへ戻る')}</div><div class="maplist">${maps.map(m=>`<div class="panel"><h3>${h(m.name)}</h3><p class="muted">${h(REGIONS[m.region]?.label||'地域')} · ${m.items.length}件</p><div class="buttons">${button(`iftyPlacesOpen('${h(m.id)}')`,'地図を開く','')}${button(`iftyPlacesDeleteMap('${h(m.id)}')`,'削除','danger')}</div></div>`).join('')||'<p class="muted">地図はまだありません。「新しい地図」から始めてください。</p>'}</div><p class="muted">保存はこの端末・ブラウザのlocalStorageです。別端末への同期はまだありません。</p>`,'list')}
-function renderEditor(){captureDraft();const m=current();if(!m)return renderList();quiz=null;const opt=(items,value)=>items.map(([k,v])=>`<option value="${h(k)}" ${k===value?'selected':''}>${h(v)}</option>`).join('');const selItem=m.items.find(x=>x.id===selected);const val=(k,f)=>draft?.[k]??f;
- shell(`<div class="buttons">${button('openIftyPlaces()','← PLACES一覧')}${button('iftyPlacesStartQuiz()','⚔️ PRACTICE','')}</div><h1>🗺️ ${h(m.name)}</h1>${notice?`<p class="notice">${h(notice)}</p>`:''}
- <div class="panel"><div class="fields"><label>地図名<input id="pl164Name" value="${h(m.name)}" onchange="iftyPlacesSetting('name',this.value)"></label><label>表示地域<select onchange="iftyPlacesSetting('region',this.value)">${opt(Object.entries(REGIONS).map(([k,v])=>[k,v.label]),m.region)}</select></label><label>投影法<select onchange="iftyPlacesSetting('projection',this.value)">${opt([['equirect','正距円筒図法'],['mercator','メルカトル図法'],['azimuthal','正距方位図法（中心周辺）']],m.projection)}</select></label><label>表示年代（空欄で全時代）<input type="number" value="${h(m.filterYear??'')}" placeholder="例：1453" onchange="iftyPlacesSetting('filterYear',this.value)"></label></div><div class="buttons" style="margin-top:9px">${button('iftyPlacesZoom(0.7)','＋ 拡大')}${button('iftyPlacesZoom(1.4)','－ 縮小')}${button('iftyPlacesResetView()','表示を戻す')}${button('iftyPlacesToggleBorders()','🗺️ 国境線：'+(m.showBorders===false?'OFF':'ON'))}</div><p class="muted" style="margin:8px 0 0">国境線は参考用の現代国境です。歴史上の帝国・王国の領土や勢力圏とは異なります。</p></div>
+function itemList(m){return `<div class="panel"><h3>書き込み ${m.items.length}件</h3><div class="buttons">${button('iftyPlacesStartQuiz()','⚔️ この地図をPRACTICE','')}</div>${m.items.map(it=>`<div class="item ${selected===it.id?'active':''}"><div><b>${h(it.icon||'📍')} ${h(itemName(it,m))}</b> <span class="muted">${h(THEMES[it.kind]||it.kind)} ${h(it.from||'')}${it.to?'〜'+h(it.to):''}</span></div><div class="buttons" style="margin-top:6px">${button(`iftyPlacesChoose('${h(it.id)}')`,'編集')}${button(`iftyPlacesRestoreItem('${h(it.id)}')`,'↩ 基準位置へ')}${button(`iftyPlacesDeleteItem('${h(it.id)}')`,'削除','danger')}</div></div>`).join('')||'<p class="muted">まだ書き込みがありません。</p>'}</div>`}
+function renderList(){active=null;selected=null;draw=[];quiz=null;viewOverride=null;pl169ClearGesture();resetDraft();const maps=load();shell(`<h1>🗺️ ${displayLang(null)==='ja'?'地図・地名':'PLACES'}</h1><p class="muted">フォルダの代わりに地図を作成し、地名・河川・山脈・帝国領土・歴史イベントを記録。地図からそのまま練習できます。</p><div class="buttons">${button('iftyPlacesCreate()','＋ 新しい地図','')}${button('openIftyHome()','HOMEへ戻る')}</div><div class="maplist">${maps.map(m=>`<div class="panel"><h3>${h(mapName(m))}</h3><p class="muted">${h(REGIONS[m.region]?.label||'地域')} · ${m.items.length}件</p><div class="buttons">${button(`iftyPlacesOpen('${h(m.id)}')`,'地図を開く','')}${button(`iftyPlacesDeleteMap('${h(m.id)}')`,'削除','danger')}</div></div>`).join('')||'<p class="muted">地図はまだありません。「新しい地図」から始めてください。</p>'}</div><p class="muted">保存はこの端末・ブラウザのlocalStorageです。別端末への同期はまだありません。</p>`,'list')}
+function renderEditor(){captureDraft();const m=current();if(!m)return renderList();quiz=null;const opt=(items,value)=>items.map(([k,v])=>`<option value="${h(k)}" ${k===value?'selected':''}>${h(v)}</option>`).join('');const selItem=m.items.find(x=>x.id===selected);const val=(k,f)=>draft?.[k]??f;const mapTitle=mapName(m);
+ shell(`<div class="buttons">${button('openIftyPlaces()','← PLACES一覧')}${button('iftyPlacesStartQuiz()','⚔️ PRACTICE','')}</div><h1>🗺️ ${h(mapTitle)}</h1>${notice?`<p class="notice">${h(notice)}</p>`:''}
+ <div class="pl169-toolbar" role="group" aria-label="地図操作モード">
+ <button type="button" aria-pressed="${pl169Tool==='move'}" onclick="iftyPlacesSetTool('move')">🖐 移動</button><button type="button" aria-pressed="${pl169Tool==='place'}" onclick="iftyPlacesSetTool('place')">📍 配置</button>
+ ${button('iftyPlacesZoom(0.72)','＋ 拡大')}${button('iftyPlacesZoom(1.39)','－ 縮小')}${button('iftyPlacesResetView()','⤢ 全体')}
+ <label style="display:flex;align-items:center;gap:6px;flex:1 1 160px">表示名<select aria-label="地名の表示言語" onchange="iftyPlacesSetting('labelLanguage',this.value)">${opt([['auto','設定に従う'],['ja','日本語'],['en','English']],m.labelLanguage||'auto')}</select></label>
+ <span class="pl169-tip">${pl169Tool==='move'?'指で地図を動かし、マーカーは直接ドラッグ。':'空白をタップして位置を追加。'} 2本指で拡大・縮小。</span></div>
  ${mapSvg(m,'edit')}
- <div class="row"><div class="panel"><h3>${selItem?'マーカーを編集':'新しく書き込む'}</h3><div class="fields"><label>種類<select id="pl164Kind" onchange="iftyPlacesKindChanged()">${opt(Object.entries(THEMES),val('pl164Kind',selItem?.kind||'event'))}</select></label><label>アイコン<select id="pl164Icon">${opt(ICONS.map(i=>[i,i]),val('pl164Icon',selItem?.icon||'⚔️'))}</select></label><label>名称<input id="pl164ItemName" value="${h(val('pl164ItemName',selItem?.name||''))}" placeholder="例：ワーテルローの戦い" onchange="iftyPlacesAutoGenerate()" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();this.blur();}"></label><label>色<input type="color" id="pl164Color" value="${h(val('pl164Color',selItem?.color||'#dc2626'))}"></label><label>開始年（紀元前は負の値）<input type="number" id="pl164From" value="${h(val('pl164From',selItem?.from??''))}" placeholder="例：1815"></label><label>終了年<input type="number" id="pl164To" value="${h(val('pl164To',selItem?.to??''))}" placeholder="任意"></label></div><label style="margin-top:8px">解説・原因・結果<textarea id="pl164Desc" rows="3">${h(val('pl164Desc',selItem?.description||''))}</textarea></label><p class="pl-ai-note">名称を確定するとALLIAが解説・年代・マーカー種類・推定位置を提案します。位置や年代は必ず地図で確認してください。AIの位置は推定値で、保存前に仮マーカーをドラッグして変更できます。</p><div class="buttons" style="margin-top:9px">${button('iftyPlacesAutoGenerate(true)',aiPending?'⏳ ALLIA生成中':'✨ ALLIAで生成','',aiPending)}</div><p class="muted" id="pl165AiStatus" role="status" aria-live="polite">${h(aiStatus||'名称の入力を完了すると生成します。')}</p><p class="muted">${selItem?'既存マーカーは地図上でドラッグできます。線・面は選択後、頂点も編集できます。':'AIが置いた仮マーカーもドラッグできます。手動で地図上をタップして位置を追加し、線・面は複数点を指定してください。'}</p><div class="buttons">${button('iftyPlacesSaveItem()','💾 '+(selItem?'変更を保存':'書き込みを保存'),'')}${button('iftyPlacesUndoPoint()','直前の点を戻す')}${button('iftyPlacesClearPoints()','描画取消')}${selItem?button('iftyPlacesChoose(null)','新規作成'):''}</div><p class="muted">現在の入力点：${draw.length}個 ${selItem?'／編集対象の座標を使用':''}</p></div>${itemList(m)}</div>`,'editor')}
+ <div class="pl169-settings-toggle">${button('iftyPlacesToggleSettings()',pl169SettingsOpen?'⚙️ 地図設定を閉じる':'⚙️ 地図名・地域・国境線などの設定')}</div>
+ ${pl169SettingsOpen?` <div class="panel"><div class="fields"><label>地図名（基本）<input id="pl164Name" value="${h(m.name)}" onchange="iftyPlacesSetting('name',this.value)"></label><label>日本語名（地図）<input value="${h(m.nameJa||'')}" placeholder="例：世界史の地図" onchange="iftyPlacesSetting('nameJa',this.value)"></label><label>英語名（地図）<input value="${h(m.nameEn||'')}" placeholder="e.g. History Map" onchange="iftyPlacesSetting('nameEn',this.value)"></label><label>地名の表示言語<select onchange="iftyPlacesSetting('labelLanguage',this.value)">${opt([['auto','全体設定に合わせる'],['ja','日本語'],['en','English']],m.labelLanguage||'auto')}</select></label><label>表示地域<select onchange="iftyPlacesSetting('region',this.value)">${opt(Object.entries(REGIONS).map(([k,v])=>[k,v.label]),m.region)}</select></label><label>投影法<select onchange="iftyPlacesSetting('projection',this.value)">${opt([['equirect','正距円筒図法'],['mercator','メルカトル図法'],['azimuthal','正距方位図法（中心周辺）']],m.projection)}</select></label><label>表示年代（空欄で全時代）<input type="number" value="${h(m.filterYear??'')}" placeholder="例：1453" onchange="iftyPlacesSetting('filterYear',this.value)"></label></div><div class="buttons" style="margin-top:9px">${button('iftyPlacesToggleBorders()','🗺️ 国境線：'+(m.showBorders===false?'OFF':'ON'))}</div><p class="muted" style="margin:8px 0 0">国境線は参考用の現代国境です。歴史上の帝国・王国の領土や勢力圏とは異なります。</p></div>`:''}
+ <div class="row"><div class="panel"><h3>${selItem?'マーカーを編集':'新しく書き込む'}</h3><div class="fields"><label>種類<select id="pl164Kind" onchange="iftyPlacesKindChanged()">${opt(Object.entries(THEMES),val('pl164Kind',selItem?.kind||'event'))}</select></label><label>アイコン<select id="pl164Icon">${opt(ICONS.map(i=>[i,i]),val('pl164Icon',selItem?.icon||'⚔️'))}</select></label><label>名称（基本・ALLIA検索用）<input id="pl164ItemName" value="${h(val('pl164ItemName',selItem?.name||''))}" placeholder="例：ワーテルローの戦い" onchange="iftyPlacesAutoGenerate()" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();this.blur();}"></label><label>日本語名（任意）<input id="pl169NameJa" value="${h(val('pl169NameJa',selItem?.nameJa||''))}" placeholder="例：ワーテルローの戦い"></label><label>English name（任意）<input id="pl169NameEn" value="${h(val('pl169NameEn',selItem?.nameEn||''))}" placeholder="e.g. Battle of Waterloo"></label><label>色<input type="color" id="pl164Color" value="${h(val('pl164Color',selItem?.color||'#dc2626'))}"></label><label>開始年（紀元前は負の値）<input type="number" id="pl164From" value="${h(val('pl164From',selItem?.from??''))}" placeholder="例：1815"></label><label>終了年<input type="number" id="pl164To" value="${h(val('pl164To',selItem?.to??''))}" placeholder="任意"></label></div><label style="margin-top:8px">解説・原因・結果<textarea id="pl164Desc" rows="3">${h(val('pl164Desc',selItem?.description||''))}</textarea></label><p class="pl-ai-note">名称を確定するとALLIAが解説・年代・マーカー種類・推定位置を提案します。位置や年代は必ず地図で確認してください。AIの位置は推定値で、保存前に仮マーカーをドラッグして変更できます。</p><div class="buttons" style="margin-top:9px">${button('iftyPlacesAutoGenerate(true)',aiPending?'⏳ ALLIA生成中':'✨ ALLIAで生成','',aiPending)}</div><p class="muted" id="pl165AiStatus" role="status" aria-live="polite">${h(aiStatus||'名称の入力を完了すると生成します。')}</p><p class="muted">${selItem?'既存マーカーは地図上でドラッグできます。線・面は選択後、頂点も編集できます。':'AIが置いた仮マーカーもドラッグできます。手動で地図上をタップして位置を追加し、線・面は複数点を指定してください。'}</p><div class="buttons">${button('iftyPlacesSaveItem()','💾 '+(selItem?'変更を保存':'書き込みを保存'),'')}${selItem?button('iftyPlacesRestoreItem()', '↩ 基準位置へ戻す'):''}${selItem?button('iftyPlacesSetDefaultItem()', '📌 現位置を基準に設定'):''}${pl169LastMove?button('iftyPlacesUndoMove()', '⤺ 直前の移動を取消'):''}${button('iftyPlacesUndoPoint()','直前の点を戻す')}${button('iftyPlacesClearPoints()','描画取消')}${selItem?button('iftyPlacesChoose(null)','新規作成'):''}</div><p class="pl169-mini">${selItem?'基準位置：'+(selItem.defaultCoords?.length?'保存済み':'現在位置が初期基準（移動時に保存）'): '新規作成の位置は保存時に基準位置として登録されます。'}</p><p class="muted">現在の入力点：${draw.length}個 ${selItem?'／編集対象の座標を使用':''}</p></div>${itemList(m)}</div>`,'editor')}
 function renderQuiz(){const m=current();if(!m)return renderList();if(!quiz)return renderEditor();const q=quiz.questions[quiz.index];if(!q){return shell(`<h1>結果：${quiz.correct}/${quiz.questions.length}</h1><p>間違えた問題はこの端末に保存しました。次回、同じ地図・設問をそのまま再出題できます（ALLIA不使用）。</p><div class="buttons">${button('iftyPlacesRetryMissed()','🔁 誤答を復習','')}${button('iftyPlacesOpenActive()','地図編集に戻る')}</div>`, 'quiz')}
  const snapshot=Object.assign({},m,{region:q.region,projection:q.projection,filterYear:q.filterYear,items:q.items,showLabels:false,showBorders:q.showBorders!==false});const answered=!!quiz.feedback;
  shell(`<div class="buttons">${button('iftyPlacesOpenActive()','← 地図編集へ')}</div><h1>⚔️ PLACES PRACTICE</h1><p class="muted">${quiz.index+1} / ${quiz.questions.length}問 ／ 正解 ${quiz.correct}</p><h2>${q.type==='locate'?'「'+h(q.answer)+'」の位置・範囲を地図上で選べ。':'色で示した場所・領域の名称を答えよ。'}</h2>${q.type==='locate'?mapSvg(snapshot,'quiz'):mapSvg({...snapshot,items:q.items.map(it=>({...it,color:it.id===q.id?'#e11d48':'#64748b'}))},'quiz')}
  ${q.type==='name'?`<div class="panel"><label>名称を入力<input id="pl164Answer" autocomplete="off" placeholder="地名・出来事名"></label><div class="buttons" style="margin-top:10px">${button('iftyPlacesAnswerText()','回答する','')}</div></div>`:''}
  ${answered?`<div class="panel"><h3>${quiz.feedback.ok?'✅ 正解':'❌ 不正解'}</h3><p>正解：${h(q.answer)}</p>${q.description?`<p class="muted">${h(q.description)}</p>`:''}${button('iftyPlacesNext()','次へ →','')}</div>`:''}`, 'quiz')}
 function makeQuestions(m,missedOnly=false){const items=m.items.filter(it=>it.coords?.length && it.name);if(!items.length)return [];let questions=[];if(missedOnly){try{questions=JSON.parse(localStorage.getItem(storageKey()+'_missed')||'[]').filter(q=>q.mapId===m.id)}catch{};return questions.map(q=>({...q}))}
- for(const item of items){for(const type of ['locate','name'])questions.push({id:item.id,mapId:m.id,type,answer:item.name,aliases:item.aliases||[],description:item.description||'',region:m.region,projection:m.projection,filterYear:'',showBorders:m.showBorders!==false,items:m.items.map(it=>structuredClone(it))})}
+ for(const item of items){for(const type of ['locate','name'])questions.push({id:item.id,mapId:m.id,type,answer:itemName(item,m),aliases:[item.name,item.nameJa,item.nameEn,...(item.aliases||[])].filter(Boolean),description:item.description||'',region:m.region,projection:m.projection,filterYear:'',showBorders:m.showBorders!==false,items:m.items.map(it=>structuredClone(it))})}
  return questions.sort(()=>Math.random()-.5).slice(0,Math.min(20,questions.length))}
 function getAnswer(){if(!quiz)return;return quiz.questions[quiz.index]}
 function checkAnswer(ok){if(!quiz||quiz.feedback)return;quiz.feedback={ok};if(ok)quiz.correct++;else{const q=getAnswer();try{const k=storageKey()+'_missed',old=JSON.parse(localStorage.getItem(k)||'[]').filter(x=>!(x.mapId===q.mapId&&x.id===q.id&&x.type===q.type));old.push(q);localStorage.setItem(k,JSON.stringify(old.slice(-150)))}catch(e){console.warn('PLACES 誤答の保存に失敗',e)}}renderQuiz()}
@@ -32230,10 +32459,78 @@ function answerGeo(itemId,p){const q=getAnswer();if(!q||quiz.feedback)return;con
 function svgPoint(e,svg){const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const matrix=svg.getScreenCTM();return matrix?pt.matrixTransform(matrix.inverse()):null;}
 function pointFromEvent(e,svg,m){const p=svgPoint(e,svg);return p?unproject(p.x,p.y,m):null;}
 function getDragItem(){return current()?.items.find(i=>i.id===dragState?.id)}
+// STEP169: one-finger map panning, two-finger pinch zoom; no changes to the stored geometry during gestures.
+function pl169TouchStart(e,isItem){
+ if(e.pointerType==='mouse'&&e.button!==0)return;
+ const svg=document.getElementById('iftyPlacesSVG'),p=svg&&svgPoint(e,svg),map=pl169MapForView();if(!p||!map)return;
+ if(!pl169Gesture){suppressMapClickUntil=0;pl169Gesture={pointers:new Map(),initial:new Map(),startBounds:[...(viewOverride||REGIONS[map.region]?.bounds||REGIONS.world.bounds)],isItem:!!isItem,moved:false,pinch:false};}
+ const g=pl169Gesture;g.pointers.set(e.pointerId,[p.x,p.y]);g.initial.set(e.pointerId,[p.x,p.y]);
+ if(g.pointers.size>=2){
+  g.pinch=true;g.isItem=false;g.moved=true;g.startBounds=[...(viewOverride||REGIONS[map.region]?.bounds||REGIONS.world.bounds)];
+  g.initial=new Map([...g.pointers].map(([id,pos])=>[id,[...pos]]));
+  if(dragState){if(dragState.previewGroup)dragState.previewGroup.removeAttribute('transform');dragState=null;}
+ }
+ try{svg.setPointerCapture(e.pointerId)}catch(_){ }
+}
+function pl169MovePreview(){
+ const g=pl169Gesture,layer=document.getElementById('pl169Viewport');if(!g||!layer)return;
+ const entries=[...g.pointers],ids=entries.map(([id])=>id),pts=entries.map(x=>x[1]);
+ if(g.pinch&&pts.length>=2){
+  const a=g.initial.get(ids[0]),b=g.initial.get(ids[1]);if(!a||!b)return;
+  const oldCenter=[(a[0]+b[0])/2,(a[1]+b[1])/2],center=[(pts[0][0]+pts[1][0])/2,(pts[0][1]+pts[1][1])/2];
+  const oldDist=Math.max(1,Math.hypot(a[0]-b[0],a[1]-b[1])),dist=Math.max(1,Math.hypot(pts[0][0]-pts[1][0],pts[0][1]-pts[1][1]));
+  const ratio=clamp(dist/oldDist,.2,6);
+  layer.setAttribute('transform',`translate(${center[0]} ${center[1]}) scale(${ratio}) translate(${-oldCenter[0]} ${-oldCenter[1]})`);
+ }else if(!g.isItem&&pts.length){
+  const a=g.initial.get(ids[0]),p=pts[0];if(!a)return;
+  const dx=p[0]-a[0],dy=p[1]-a[1];if(Math.hypot(dx,dy)>5)g.moved=true;
+  if(g.moved)layer.setAttribute('transform',`translate(${dx} ${dy})`);
+ }
+}
+window.iftyPlacesMapPointerDown=function(e){pl169TouchStart(e,false)};
+window.iftyPlacesMapPointerMove=function(e){
+ const g=pl169Gesture,svg=document.getElementById('iftyPlacesSVG');if(!g||!g.pointers.has(e.pointerId)||!svg)return;
+ const p=svgPoint(e,svg);if(!p)return;
+ g.pointers.set(e.pointerId,[p.x,p.y]);
+ if(g.pinch||!g.isItem){pl169MovePreview();if(g.moved)e.preventDefault();}
+};
+window.iftyPlacesMapPointerUp=function(e){
+ const g=pl169Gesture,svg=document.getElementById('iftyPlacesSVG'),map=pl169MapForView();if(!g||!svg||!g.pointers.has(e.pointerId))return;
+ const p=svgPoint(e,svg);if(p)g.pointers.set(e.pointerId,[p.x,p.y]);
+ if(!map){pl169ClearGesture();return;}
+ let changed=false;
+ if(g.pinch&&g.pointers.size>=2){
+  const ids=[...g.pointers.keys()].slice(0,2),a=g.initial.get(ids[0]),b=g.initial.get(ids[1]),x=g.pointers.get(ids[0]),y=g.pointers.get(ids[1]);
+  if(a&&b&&x&&y){
+   const start=[(a[0]+b[0])/2,(a[1]+b[1])/2],end=[(x[0]+y[0])/2,(x[1]+y[1])/2],d0=Math.max(1,Math.hypot(a[0]-b[0],a[1]-b[1])),d1=Math.max(1,Math.hypot(x[0]-y[0],x[1]-y[1]));
+   const factor=clamp(d0/d1,.17,6);
+   const zoomed=pl169ZoomBounds(factor,start,g.startBounds,map);
+   viewOverride=pl169ApplyPan(start,end,zoomed,map);changed=true;
+  }
+ }else if(!g.isItem&&g.moved){
+  const id=[...g.initial.keys()][0];const start=g.initial.get(id),end=g.pointers.get(id);
+  if(start&&end){viewOverride=pl169ApplyPan(start,end,g.startBounds,map);changed=true;}
+ }
+ const suppressed=g.pinch||g.moved;
+ pl169ClearGesture();
+ try{svg.releasePointerCapture(e.pointerId)}catch(_){ }
+ if(suppressed)suppressMapClickUntil=Date.now()+500;
+ if(changed){e.preventDefault();pl169RefreshView();}
+};
+window.iftyPlacesMapPointerCancel=function(e){if(pl169Gesture){pl169ClearGesture();suppressMapClickUntil=Date.now()+400;pl169RefreshView();}};
+window.iftyPlacesWheel=function(e){
+ if(!e.ctrlKey&&e.target.closest('#iftyPlacesSVG')){
+  e.preventDefault();const svg=document.getElementById('iftyPlacesSVG'),m=pl169MapForView();if(!svg||!m)return;
+  const pt=svgPoint(e,svg);if(!pt)return;
+  viewOverride=pl169ZoomBounds(e.deltaY>0?1.13:.885,[pt.x,pt.y],viewOverride||REGIONS[m.region]?.bounds||REGIONS.world.bounds,m);
+  suppressMapClickUntil=Date.now()+300;pl169RefreshView();
+ }
+};
 window.iftyPlacesPointerDown=function(e,id,vertex){
  if(quiz||e.button>0)return;
  const m=current(),isDraft=id==='__draft__',item=isDraft?{id,coords:draw}:m?.items.find(x=>x.id===id),svg=document.getElementById('iftyPlacesSVG');if(!item||!svg||!item.coords.length)return;
  const pt=svgPoint(e,svg);if(!pt)return;
+ pl169TouchStart(e,true);
  e.stopPropagation();e.preventDefault();
  if(!isDraft&&selected!==id){selected=id;draw=[];resetDraft();}
  dragState={id,isDraft,vertex:Number(vertex),pointerId:e.pointerId,start:[pt.x,pt.y],last:[pt.x,pt.y],coords:item.coords.map(v=>[...v]),moved:false,previewGroup:vertex>=0?null:([...svg.querySelectorAll('[data-pl-id]')].find(n=>n.getAttribute('data-pl-id')===id)||null),previewVertex:vertex>=0?e.target:null};
@@ -32261,7 +32558,11 @@ window.iftyPlacesPointerUp=function(e){
  const newCoords=state.coords.map((pt,i)=>state.vertex>=0?(i===state.vertex?cleanCoords(p1):pt):cleanCoords([pt[0]+delta[0],pt[1]+delta[1]]));
  if(newCoords.some(pt=>pt[0]!==clamp(pt[0],-180,180)||pt[1]!==clamp(pt[1],-85,85))){notice='位置が地図の外に出ました。';renderEditor();return;}
  if(state.isDraft){draw=newCoords;notice='仮マーカーの位置を調整しました。内容を確認して保存してください。';}
- else if(update(map=>{const it=map.items.find(x=>x.id===state.id);if(it)it.coords=newCoords})){selected=state.id;notice='地図上の位置を更新しました。';}
+ else if(update(map=>{const it=map.items.find(x=>x.id===state.id);if(it){
+  if(!it.defaultCoords?.length)it.defaultCoords=copyCoords(it.coords);
+  pl169LastMove={mapId:map.id,id:it.id,coords:copyCoords(it.coords)};
+  it.coords=newCoords;
+ }})){selected=state.id;notice='位置を移動しました。「直前の移動を取消」または「基準位置へ戻す」が使えます。';}
  renderEditor();
 };
 window.iftyPlacesPointerCancel=function(e){if(!dragState||e.pointerId!==dragState.pointerId)return;dragState=null;renderEditor()};
@@ -32286,6 +32587,8 @@ window.iftyPlacesAutoGenerate=async function(force=false){
   assignGenerated('pl164Desc',desc,force||!(document.getElementById('pl164Desc')?.value||'').trim());
   assignGenerated('pl164From',from,force||!(document.getElementById('pl164From')?.value||'').trim());
   assignGenerated('pl164To',to,force||!(document.getElementById('pl164To')?.value||'').trim());
+   assignGenerated('pl169NameJa',data.nameJa,force||!(document.getElementById('pl169NameJa')?.value||'').trim());
+   assignGenerated('pl169NameEn',data.nameEn,force||!(document.getElementById('pl169NameEn')?.value||'').trim());
   const validIcon=ICONS.includes(data.icon)?data.icon:null;
   assignGenerated('pl164Icon',validIcon,!!validIcon&&(force||before.icon==='⚔️'||before.icon==='📍'));
   const candidateKind=POINT_TYPES.has(data.kind)?data.kind:null;
@@ -32304,24 +32607,51 @@ window.iftyPlacesAutoGenerate=async function(force=false){
  finally{aiPending=false;aiPendingKey='';}
 };
 window.openIftyPlaces=renderList;
-window.iftyPlacesCreate=function(){const name=prompt('地図の名前','新しい地図');if(!name?.trim())return;const all=load();const m={id:uid(),name:name.trim().slice(0,120),region:'world',projection:'equirect',filterYear:'',items:[],created:Date.now()};all.push(m);if(save(all)){active=m.id;viewOverride=null;resetDraft();renderEditor()}};
-window.iftyPlacesOpen=function(id){active=id;selected=null;draw=[];notice='';viewOverride=null;resetDraft();renderEditor()};
+window.iftyPlacesCreate=function(){const name=prompt('地図の名前','新しい地図');if(!name?.trim())return;const all=load();const m={id:uid(),name:name.trim().slice(0,120),region:'world',projection:'equirect',filterYear:'',items:[],created:Date.now()};all.push(m);if(save(all)){active=m.id;viewOverride=null;pl169Tool='move';pl169LastMove=null;pl169SettingsOpen=false;resetDraft();renderEditor()}};
+window.iftyPlacesOpen=function(id){active=id;selected=null;draw=[];notice='';viewOverride=null;pl169Tool='move';pl169LastMove=null;pl169SettingsOpen=false;resetDraft();renderEditor()};
 window.iftyPlacesOpenActive=function(){quiz=null;renderEditor()};
 window.iftyPlacesDeleteMap=function(id){const all=load(),m=all.find(x=>x.id===id);if(!m||!confirm('地図「'+m.name+'」を削除しますか？ 元に戻せません。'))return;if(save(all.filter(x=>x.id!==id)))renderList()};
-window.iftyPlacesSetting=function(key,val){if(!['name','region','projection','filterYear'].includes(key))return;if(key==='name'&&!String(val).trim())return;if(key==='region'&&!REGIONS[val])return;if(key==='projection'&&!['equirect','mercator','azimuthal'].includes(val))return;if(update(m=>m[key]=key==='name'?String(val).slice(0,120):val)){if(key==='region'||key==='projection')viewOverride=null;renderEditor()}};
-window.iftyPlacesZoom=function(scale){let m=current();if(!m)return;let b=viewOverride||REGIONS[m.region].bounds,cx=(b[0]+b[2])/2,cy=(b[1]+b[3])/2,w=(b[2]-b[0])*scale,h=(b[3]-b[1])*scale;viewOverride=[cx-w/2,cy-h/2,cx+w/2,cy+h/2];renderEditor()};
-window.iftyPlacesResetView=function(){viewOverride=null;renderEditor()};
+window.iftyPlacesSetting=function(key,val){if(!['name','nameJa','nameEn','labelLanguage','region','projection','filterYear'].includes(key))return;if(key==='labelLanguage'&&!['auto','ja','en'].includes(val))return;if(key==='name'&&!String(val).trim())return;if(key==='region'&&!REGIONS[val])return;if(key==='projection'&&!['equirect','mercator','azimuthal'].includes(val))return;if(update(m=>m[key]=key==='name'?String(val).slice(0,120):val)){if(key==='region'||key==='projection')viewOverride=null;renderEditor()}};
+window.iftyPlacesZoom=function(scale){const m=pl169MapForView();if(!m)return;viewOverride=pl169ZoomBounds(Number(scale),[500,300],viewOverride||REGIONS[m.region]?.bounds||REGIONS.world.bounds,m);pl169RefreshView()};
+window.iftyPlacesResetView=function(){viewOverride=null;pl169ClearGesture();pl169RefreshView()};
 window.iftyPlacesToggleBorders=function(){if(update(m=>{m.showBorders=m.showBorders===false})){renderEditor();}};
 window.iftyPlacesChoose=function(id){selected=id;draw=[];notice='';resetDraft();renderEditor()};
+window.iftyPlacesSetTool=function(tool){if(tool!=='move'&&tool!=='place')return;captureDraft();if(tool==='place'&&selected){selected=null;draw=[];resetDraft();}pl169Tool=tool;notice='';renderEditor()};
+window.iftyPlacesToggleSettings=function(){captureDraft();pl169SettingsOpen=!pl169SettingsOpen;renderEditor()};
+window.iftyPlacesRestoreItem=function(id){
+ const itemId=id||selected,m=current(),it=m?.items.find(x=>x.id===itemId);if(!it)return;
+ const baseline=itemDefaultCoords(it);
+ if(!baseline.length){notice='基準位置がありません。';renderEditor();return;}
+ if(update(map=>{const target=map.items.find(x=>x.id===itemId);if(target){
+  pl169LastMove={mapId:map.id,id:itemId,coords:copyCoords(target.coords)};
+  target.coords=baseline;
+  if(!target.defaultCoords?.length)target.defaultCoords=copyCoords(baseline);
+ }})){notice='基準位置へ戻しました。';renderEditor();}
+};
+window.iftyPlacesSetDefaultItem=function(id){
+ const itemId=id||selected,m=current(),it=m?.items.find(x=>x.id===itemId);if(!it)return;
+ if(update(map=>{const target=map.items.find(x=>x.id===itemId);if(target)target.defaultCoords=copyCoords(target.coords)})){
+  notice='現在の位置を新しい基準位置として保存しました。';renderEditor();
+ }
+};
+window.iftyPlacesUndoMove=function(){
+ const last=pl169LastMove,m=current();if(!last||!m||last.mapId!==m.id)return;
+ const it=m.items.find(x=>x.id===last.id);if(!it)return;
+ const oldCoords=copyCoords(it.coords);
+ if(update(map=>{const target=map.items.find(x=>x.id===last.id);if(target)target.coords=copyCoords(last.coords)})){
+  pl169LastMove={mapId:m.id,id:last.id,coords:oldCoords};selected=last.id;notice='直前の移動を取り消しました。';renderEditor();
+ }
+};
 window.iftyPlacesDeleteItem=function(id){const m=current(),it=m?.items.find(x=>x.id===id);if(!it||!confirm('「'+it.name+'」を削除しますか？'))return;update(m=>m.items=m.items.filter(x=>x.id!==id));selected=null;draw=[];resetDraft();renderEditor()};
 window.iftyPlacesMapClick=function(e){if(Date.now()<suppressMapClickUntil)return;const m=current();if(!m)return;const svg=e.currentTarget;const p=svgPoint(e,svg);if(!p)return;const geo=unproject(p.x,p.y,quiz?Object.assign({},m,{region:getAnswer().region,projection:getAnswer().projection}):m);if(!valid(geo))return;
  if(quiz){if(quiz.feedback||getAnswer()?.type!=='locate')return;answerGeo(null,geo);return}
+ if(pl169Tool!=='place')return;
  if(selected){notice='選択中のマーカーはドラッグして移動できます。新しい場所を追加するには「新規作成」を選んでください。';renderEditor();return}
  const kind=document.getElementById('pl164Kind')?.value||'event';if((kind==='point'||kind==='event')&&draw.length)draw=[];draw.push(geo.map(x=>Math.round(x*1e5)/1e5));renderEditor()};
 window.iftyPlacesMarkClick=function(e,id){e.stopPropagation();if(quiz){if(quiz.feedback)return;if(getAnswer().type==='locate')answerGeo(id);return}selected=id;draw=[];resetDraft();renderEditor()};
 window.iftyPlacesKindChanged=function(){const kind=document.getElementById('pl164Kind')?.value;const icon=document.getElementById('pl164Icon');if(icon&&kind==='point')icon.value='📍';if(icon&&kind==='event')icon.value='⚔️'};
 window.iftyPlacesUndoPoint=function(){draw.pop();renderEditor()};window.iftyPlacesClearPoints=function(){draw=[];renderEditor()};
-window.iftyPlacesSaveItem=function(){const m=current();if(!m)return;const name=document.getElementById('pl164ItemName')?.value?.trim(),kind=document.getElementById('pl164Kind')?.value||'event';if(!name){alert('名称を入力してください。');return}const prior=m.items.find(x=>x.id===selected);const coords=prior?prior.coords:draw;if(coords.length<(kind==='point'||kind==='event'?1:kind==='line'?2:3)){alert('地図上の位置を入力してください（線は2点以上、面は3点以上）。');return}const item={id:prior?.id||uid(),name:name.slice(0,200),kind,icon:document.getElementById('pl164Icon')?.value||'📍',color:document.getElementById('pl164Color')?.value||'#dc2626',from:document.getElementById('pl164From')?.value||'',to:document.getElementById('pl164To')?.value||'',description:document.getElementById('pl164Desc')?.value?.slice(0,5000)||'',coords:coords.map(p=>[Number(p[0]),Number(p[1])])};if(update(m=>{if(prior){const i=m.items.findIndex(x=>x.id===prior.id);m.items[i]=item}else m.items.push(item)})){selected=null;draw=[];resetDraft();notice='保存しました。';renderEditor()}};
+window.iftyPlacesSaveItem=function(){const m=current();if(!m)return;const name=document.getElementById('pl164ItemName')?.value?.trim(),kind=document.getElementById('pl164Kind')?.value||'event';if(!name){alert('名称を入力してください。');return}const prior=m.items.find(x=>x.id===selected);const coords=prior?prior.coords:draw;if(coords.length<(kind==='point'||kind==='event'?1:kind==='line'?2:3)){alert('地図上の位置を入力してください（線は2点以上、面は3点以上）。');return}const item={id:prior?.id||uid(),name:name.slice(0,200),kind,icon:document.getElementById('pl164Icon')?.value||'📍',color:document.getElementById('pl164Color')?.value||'#dc2626',from:document.getElementById('pl164From')?.value||'',to:document.getElementById('pl164To')?.value||'',description:document.getElementById('pl164Desc')?.value?.slice(0,5000)||'',nameJa:document.getElementById('pl169NameJa')?.value?.trim().slice(0,200)||'',nameEn:document.getElementById('pl169NameEn')?.value?.trim().slice(0,200)||'',coords:copyCoords(coords),defaultCoords:prior?itemDefaultCoords(prior):copyCoords(coords)};if(update(m=>{if(prior){const i=m.items.findIndex(x=>x.id===prior.id);m.items[i]=item}else m.items.push(item)})){selected=null;draw=[];resetDraft();notice='保存しました。';renderEditor()}};
 window.iftyPlacesStartQuiz=function(){const m=current();if(!m)return;const qs=makeQuestions(m);if(!qs.length){alert('先に地図上にマーカーを登録してください。');return}quiz={questions:qs,index:0,correct:0,feedback:null};renderQuiz()};
 window.iftyPlacesAnswerText=function(){const q=getAnswer();if(!q||quiz.feedback)return;const v=document.getElementById('pl164Answer')?.value||'';const norm=s=>String(s).normalize('NFKC').replace(/[\s　・\-]/g,'').toLowerCase();checkAnswer([q.answer,...q.aliases].some(s=>norm(v)===norm(s)))};
 window.iftyPlacesNext=function(){if(!quiz?.feedback)return;quiz.index++;quiz.feedback=null;renderQuiz()};
