@@ -1,3 +1,5 @@
+// ★ IFTY STEP174 2026-10-26：生成失敗の原因表示・安全な復旧・単純問題の無AI化 ★
+// ★ IFTY STEP173 2026-10-26：固定配色・移動パネル最小化・反論訂正 ★
 // ★ IFTY STEP162 2026-10-24：全教科PRACTICE誤答を問題単位で保存・無AI再出題 ★
 // ★★★ IFTY STEP160 2026-10-24：PRACTICEの独立した正誤パネルを撤去（既存クイズフォルダへ統一） ★★★
 // ★★★ IFTY STEP158 2026-10-22：PATCH NOTES + OPENCHAT QR / LINK ★★★
@@ -25,7 +27,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 170;
+const IFTY_APP_STEP = 174;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -706,11 +708,8 @@ let redoStack = [];
 let isRestoringHistory = false;
 const MAX_HISTORY_STEPS = 60;
 
-// Q3 第1弾：テーマ
-// Q3 STEP94：初回起動時はダークモードを既定にする。
-// 既に light / dark を選択済みの端末では、そのユーザー設定を必ず維持する。
-const iftyStoredTheme = localStorage.getItem('ifty_theme');
-let iftyTheme = iftyStoredTheme === 'light' ? 'light' : 'dark';
+// STEP173: 表示モードの選択は廃止。旧テーマCSSとの互換性のため内部識別子のみ固定する。
+let iftyTheme = 'dark';
 
 // Q3 STEP16：PERIODIC / MANUAL バックアップ + オートセーブ頻度
 const IFTY_RECOVERY_DB_NAME = 'ifty_recovery_q3';
@@ -1324,19 +1323,77 @@ function ensureIftyThemeStyles() {
   document.head.appendChild(style);
 }
 
-function applyIftyTheme() {
-  ensureIftyThemeStyles();
-  document.body.setAttribute('data-ifty-theme', iftyTheme);
-  localStorage.setItem('ifty_theme', iftyTheme);
-  const btn = document.getElementById('iftyThemeBtn');
-  if (btn) btn.textContent = iftyTheme === 'dark' ? '☀️' : '🌙';
+// STEP173: 単一の固定配色。旧画面のインライン配色を維持しつつ、
+// 文字と背景のコントラストが不足しやすい主要領域を共通化する。
+function ensureIfty173UnifiedPalette() {
+  if (!document.head || document.getElementById('ifty173UnifiedPalette')) return;
+  const style=document.createElement('style');style.id='ifty173UnifiedPalette';
+  style.textContent=`
+    :root { color-scheme: dark; --ifty173-bg:#0b1424; --ifty173-surface:#1b2a40;
+      --ifty173-panel:#233651; --ifty173-ink:#f8fafc; --ifty173-soft:#e2e8f0;
+      --ifty173-border:#8293ad; --ifty173-link:#93ddff; }
+    html,body {background:#0b1424!important;color:#e2e8f0!important;color-scheme:dark!important;}
+    body[data-ifty-theme="dark"] :is(.ifty-portal-shell,.ifty-practice-config,.ifty-year-card,.ifty-year-folder,
+      .ifty-social-item-card,.ifty-science-item-card,.ifty-ancient-item-card,.ifty-kanji-folder-card) {
+      color:#f8fafc;
+    }
+    body[data-ifty-theme="dark"] :is(input:not([type="checkbox"]):not([type="radio"]),textarea,select) {
+      background:#101e31!important;color:#fff!important;border-color:#8194ad!important;
+      color-scheme:dark!important;
+    }
+    body[data-ifty-theme="dark"] :is(input,textarea)::placeholder {color:#c4cedc!important;opacity:1!important;}
+    body[data-ifty-theme="dark"] :is(button,a,input,textarea,select):focus-visible {
+      outline:3px solid #7dd3fc!important;outline-offset:2px!important;
+    }
+    body[data-ifty-theme="dark"] :is(.ifty172-grade-panel,.ifty172-grade-panel * ) {
+      color:#f8fafc!important;
+    }
+    body[data-ifty-theme="dark"] .ifty172-grade-panel.ifty172-correct .ifty172-result-title {color:#a7f3d0!important;}
+    body[data-ifty-theme="dark"] .ifty172-grade-panel.ifty172-wrong .ifty172-result-title {color:#fecdd3!important;}
+    body[data-ifty-theme="dark"] :is(#practiceModal,#iftyHubPage,.ifty-portal-shell,.ifty144-years-modal)
+      :is(div,p,span,small,label,strong,b,h1,h2,h3,h4,h5,li)[style*="color:#0f172a"],
+    body[data-ifty-theme="dark"] :is(#practiceModal,#iftyHubPage,.ifty-portal-shell,.ifty144-years-modal)
+      :is(div,p,span,small,label,strong,b,h1,h2,h3,h4,h5,li)[style*="color:#111827"],
+    body[data-ifty-theme="dark"] :is(#practiceModal,#iftyHubPage,.ifty-portal-shell,.ifty144-years-modal)
+      :is(div,p,span,small,label,strong,b,h1,h2,h3,h4,h5,li)[style*="color:#334155"],
+    body[data-ifty-theme="dark"] :is(#practiceModal,#iftyHubPage,.ifty-portal-shell,.ifty144-years-modal)
+      :is(div,p,span,small,label,strong,b,h1,h2,h3,h4,h5,li)[style*="color:#475569"] {
+      color:#eef4ff!important;
+    }
+    body[data-ifty-theme="dark"] :is(#practiceModal,#iftyHubPage,.ifty-portal-shell,.ifty144-years-modal)
+      :is(div,p,span,small,label,strong,b,h1,h2,h3,h4,h5,li)[style*="color:#64748b"] {color:#d4dfed!important;}
+    body[data-ifty-theme="dark"] :is(#practiceModal,#iftyHubPage,.ifty-portal-shell,.ifty144-years-modal)
+      :is(div,p,span,small,label,strong,b,h1,h2,h3,h4,h5,li)[style*="color:#4c1d95"],
+    body[data-ifty-theme="dark"] :is(#practiceModal,#iftyHubPage,.ifty-portal-shell,.ifty144-years-modal)
+      :is(div,p,span,small,label,strong,b,h1,h2,h3,h4,h5,li)[style*="color:#581c87"] {
+      color:#d8b4fe!important;
+    }
+    body[data-ifty-theme="dark"] :is(#practiceModal,#iftyHubPage,.ifty-portal-shell,.ifty144-years-modal)
+      :is(div,p,span,small,label,strong,b,h1,h2,h3,h4,h5,li)[style*="color:#92400e"] {color:#fed7aa!important;}
+    body[data-ifty-theme="dark"] :is(#practiceModal,#iftyHubPage,.ifty-portal-shell,.ifty144-years-modal)
+      :is(div,p,span,small,label,strong,b,h1,h2,h3,h4,h5,li)[style*="color:#166534"] {color:#bbf7d0!important;}
+    /* Notes, answer text, challenge outcomes, modal text remain readable. */
+    body[data-ifty-theme="dark"] :is(.ifty173-appeal-status,.ifty173-appeal-status *){color:#f8fafc!important;}
+    body[data-ifty-theme="dark"] .ifty173-appeal-status {border:1px solid #a78bfa!important;
+      background:#2f2546!important;border-radius:10px;padding:12px;line-height:1.6;margin-top:10px;}
+    body[data-ifty-theme="dark"] :is(#iftyQuizAlliaHelpModal,#iftyKanbunHelpModal) {color:#f8fafc;}
+    @media(max-width:600px){body[data-ifty-theme="dark"] .ifty-portal-shell {max-width:100%;box-sizing:border-box;}}
+  `;
+  document.head.appendChild(style);
 }
 
-window.toggleIftyTheme = function() {
-  iftyTheme = iftyTheme === 'dark' ? 'light' : 'dark';
-  applyIftyTheme();
-  queueIftyCloudSave('テーマ変更');
-};
+function applyIftyTheme() {
+  // 内部CSS互換値だけを固定。ユーザー向けのライト／ダークの概念は廃止。
+  iftyTheme = 'dark';
+  ensureIftyThemeStyles();
+  if (document.body) document.body.setAttribute('data-ifty-theme', 'dark');
+  try { localStorage.removeItem('ifty_theme'); } catch (_) {}
+  document.getElementById('iftyThemeBtn')?.remove();
+  ensureIfty173UnifiedPalette();
+}
+
+// 古い呼出元が残っていても、配色切替やデータの保存は行わない。
+window.toggleIftyTheme = function() { applyIftyTheme(); };
 
 window.goToIftyHome = function() {
   if (typeof window.closeIftySideMenu === 'function') window.closeIftySideMenu();
@@ -1613,6 +1670,10 @@ window.toggleIftySideMenu = function(event) {
 // 招待URLを設定する場合は openchat-link.txt に https://line.me/ti/g2/... を1行で記入する。
 // ==========================================
 const IFTY_PATCH_NOTES_FALLBACK = [
+  {step:174,date:'2026-10-26',title:'問題生成の一時障害・診断改善',changes:['一時的なAIサービス障害のみWorkerで1回再試行','原因コード・診断IDを表示','LANGUAGESの基本問題を保存データから生成してAI不要に','失敗時に保存済み基本問題へ手動切替可能']},
+  { step:173, date:'2026-10-26', title:'固定高コントラスト配色・移動パネル最小化・反論後の成績訂正', changes:['ページ移動パネルをワンタップで最小化し状態を記憶','テーマ切替UIを廃止し、高コントラスト配色へ統一','Challenge承認時に正誤集計と誤答問題キューを修正','全教科の高度な記述クイズにも反論再審査を追加'] },
+  { step:172, date:'2026-10-26', title:'PRACTICE正誤表示と採点停止の修正', changes:['全教科の高度な記述クイズで正解・不正解を高コントラスト表示','ALLIA採点の待機表示・タイムアウト・再試行・自己採点フォールバック','解答を保持したまま採点し、次へは明示的に操作する方式へ改善'] },
+  { step:171, date:'2026-10-26', title:'ALLIA事実訂正・再生成の保護', changes:['社会の再生成で確認済み事実を保存・引き継ぎ','著者の取り違えを保存前に検出','再生成の最終監査へ訂正指示を引き継ぐ'] },
   { step:170, date:'2026-10-25', title:'選択した単語・項目の別フォルダ複製', changes:['LANGUAGES・社会・理科・古文・漢文・漢字・OTHERSの選択操作に複製を追加','元フォルダの内容は残して独立したIDで複製','複製先の重複を既定では回避し、必要なら許可できる'] },
   { step:169, date:'2026-10-25', title:'PLACES 日英名称・タッチ地図・基準位置・操作改善', changes:['設定に連動する日本語/英語の表示名','地図を指で移動・2本指で拡大縮小','マーカーの位置を元に戻す・基準位置を再設定','地図移動と書き込み操作を分離'] },
   { step:168, date:'2026-10-25', title:'フラッシュカードの1枚戻しと周回表示', changes:['直前のカードに戻り、判定と学習・復習記録も取り消して回答し直せる','LANGUAGESと全教科のフラッシュカードセットで2周目以降の開始を大きく表示','通常フラッシュカードにも1枚戻すボタンを追加'] },
@@ -6670,6 +6731,26 @@ function ifty132AliasInfo(item) {
     `<span class="ifty134-inline-alias" style="display:inline-flex;max-width:100%;align-items:baseline;gap:3px;margin-left:5px;font-size:.75em;color:#475569;overflow-wrap:anywhere;white-space:normal;"><b>${label}：</b>${names.map(escapeHtml).join(' / ')}</span>`).join('');
 }
 
+function ifty171NormalizeConfirmedFacts(value) {
+  const rows = Array.isArray(value) ? value : String(value || '').split(/\r?\n+/);
+  return [...new Set(rows.map(x => String(x || '').trim().slice(0, 180)).filter(Boolean))].slice(0, 12);
+}
+
+// This validation is independent of ALLIA and protects the saved card even if a
+// stale Worker is deployed. Other topics are not altered or auto-corrected.
+function ifty171ValidateSocialAuthor(topic, data) {
+  const key = String(topic || '').normalize('NFKC').replace(/[\s『』「」]/g, '');
+  if (!key.includes('対比列伝')) return '';
+  const fields = [data?.memoryText, ...(Array.isArray(data?.keyPoints) ? data.keyPoints : []),
+    data?.title, ...(Array.isArray(data?.aliases) ? data.aliases : []),
+    ...(Array.isArray(data?.descriptiveNames) ? data.descriptiveNames : [])];
+  const text = fields.map(v => String(v || '')).join(' ');
+  if (/司馬遷/.test(text) || !/プルタルコス/.test(text)) {
+    return '『対比列伝』の著者はプルタルコスです。ALLIAの生成内容を検証できなかったため、元のデータを保持しました。';
+  }
+  return '';
+}
+
 function normalizeIftySocialItem(value) {
   if (!value || typeof value !== 'object') return null;
   const text = field => String(value[field] || '').trim();
@@ -6685,6 +6766,7 @@ function normalizeIftySocialItem(value) {
     aliases: ifty132Aliases(value.aliases),
     alternateSpellings: ifty132Aliases(value.alternateSpellings),
     descriptiveNames: ifty132Aliases(value.descriptiveNames),
+    confirmedFacts: ifty171NormalizeConfirmedFacts(value.confirmedFacts),
     id: value.id || makeId('socialitem'),
     topic: normalizedTopic,
     title: normalizedTitle,
@@ -6834,8 +6916,10 @@ window.regenerateIftySocialItem = async function(folderId, itemId) {
   const item = ref.item;
   const topic = String(item.topic || item.title || '').trim();
   if (!topic) return;
-  const regenerationRequest = await requestIftyRegeneration124(topic);
-  if (regenerationRequest === null) return;
+  const regeneration = await requestIftyRegeneration124(topic, { structuredFacts:true, confirmedFacts:item.confirmedFacts });
+  if (regeneration === null) return;
+  const regenerationRequest = String(regeneration.request || '');
+  const confirmedFacts = ifty171NormalizeConfirmedFacts(regeneration.confirmedFacts);
   if (!ensureIftyOnline('社会項目の再生成')) return;
 
   const buttonId = `iftyRegenSocial_${item.id}`;
@@ -6863,23 +6947,31 @@ window.regenerateIftySocialItem = async function(folderId, itemId) {
         order: ifty135ThemeOrder('SOCIAL STUDIES',folderId),
         carefulRegenerate: true,
         regenerationRequest,
+        confirmedFacts,
         previousData
       })
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+    const invalidAuthor = ifty171ValidateSocialAuthor(`${topic} ${item.title || ''}`, data);
+    if (invalidAuthor) throw new Error(invalidAuthor);
 
+    // Normalization/save can replace objects during asynchronous generation.
+    const latest = getIftySocialItemById(itemId);
+    if (!latest || String(latest.folder.id) !== String(folderId)) return;
+    const current = latest.item;
     recordUndoState('社会項目再生成');
-    ifty140MergeNames(item, data, item.title || item.word || item.topic);
-    item.memoryText = String(data.memoryText || '').trim();
-    item.keyPoints = Array.isArray(data.keyPoints) ? data.keyPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12) : [];
-    item.imageKind = String(data.imageKind || '').trim();
-    item.imageFocus = String(data.imageFocus || '').trim();
-    item.workTitle = String(data.workTitle || '').trim();
+    ifty140MergeNames(current, data, current.title || current.word || current.topic);
+    current.memoryText = String(data.memoryText || '').trim();
+    current.keyPoints = Array.isArray(data.keyPoints) ? data.keyPoints.map(v => String(v || '').trim()).filter(Boolean).slice(0, 12) : [];
+    current.imageKind = String(data.imageKind || '').trim();
+    current.imageFocus = String(data.imageFocus || '').trim();
+    current.workTitle = String(data.workTitle || '').trim();
     // ユーザーが入力した用語名は変えない。
-    item.source = 'ALLIA';
-    item.regeneratedAt = Date.now();
-    item.updatedAt = Date.now();
+    current.confirmedFacts = confirmedFacts;
+    current.source = 'ALLIA';
+    current.regeneratedAt = Date.now();
+    current.updatedAt = Date.now();
 
     savePracticeData();
     refreshIftySocialFolderDynamic(folderId);
@@ -7533,6 +7625,8 @@ window.openIftySocialItemEditor = function(folderId, itemId) {
     ${field('iftySocialEditMemoryText','暗記用説明文（Who / When / Where / What / Why / Howを、必要な範囲で自然な文章として含める）',item.memoryText,7)}
     ${ifty132AliasField(item, 'ifty132SocialAliases')}
     ${field('iftySocialEditKeyPoints','重要ポイント（1行1項目）',item.keyPoints.join('\n'),4)}
+    ${field('iftySocialEditConfirmedFacts','✅ 確認済みの事実（1行1件・再生成時も維持）',ifty171NormalizeConfirmedFacts(item.confirmedFacts).join('\n'),3)}
+    <div style="font-size:.75em;color:#475569;margin-top:4px;">例：『対比列伝』の著者はプルタルコス。訂正済みの事項を入力してください。空欄なら固定しません。</div>
     <div style="margin-top:12px;padding:10px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:9px;">
       <div style="font-size:.8em;font-weight:900;color:#6b21a8;">画像資産</div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:7px;align-items:center;">
@@ -7611,6 +7705,7 @@ window.saveIftySocialItemEditor = function(folderId, itemId) {
   ifty140ReadNameFields(item, 'ifty132SocialAliases');
   item.memoryText = val('iftySocialEditMemoryText');
   item.keyPoints = val('iftySocialEditKeyPoints').split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 12);
+  item.confirmedFacts = ifty171NormalizeConfirmedFacts(val('iftySocialEditConfirmedFacts'));
   item.imageData = normalizeIftySocialImageData(iftySocialEditorImageDraft?.imageData);
   item.imageName = String(iftySocialEditorImageDraft?.imageName || '').trim();
   item.imageKind = normalizeIftySocialImageKind(val('iftySocialEditImageKind'));
@@ -13009,8 +13104,9 @@ window.submitIftyKanbunPracticeChallenge=async function(){
     st.challengePending=false;last.challenged=true;
     const accepted=data.challengeAccepted===true||data.correct===true;
     if(accepted){
-      st.wrong=Math.max(0,st.wrong-1);st.correct+=1;st.correctLast=true;
+      ifty173CorrectWrongCount(st);st.correctLast=true;
       correctIftySubjectLastStudyOutcome('KANBUN',q.targetItemId);
+      ifty173UndoRecentMistake('KANBUN',q,q.targetItemId);
     }
     st.feedback=String(data.feedback||st.feedback||'Challengeを再審査しました。').trim();
     st.modelAnswer=String(data.modelAnswer||st.modelAnswer||'').trim();
@@ -13151,7 +13247,6 @@ window.openIftySettings = function() {
     ? 'Developerモードではクラウド同期しません。'
     : String((cloudStatus && cloudStatus.textContent) || 'クラウド状態を確認中');
 
-  const themeName = iftyTheme === 'dark' ? 'ダーク' : 'ライト';
   const autosaveText = iftyAutosaveIntervalMinutes > 0
     ? `${iftyAutosaveIntervalMinutes}分ごと`
     : '停止中';
@@ -13164,18 +13259,6 @@ window.openIftySettings = function() {
           <div class="ifty-portal-subtitle">IFTYの表示・データ・アカウント設定。</div>
         </div>
         <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
-      </div>
-
-      <div class="ifty-settings-section">
-        <div class="ifty-settings-row">
-          <div>
-            <h3>APPEARANCE</h3>
-            <div class="ifty-settings-note">現在：${escapeHtml(themeName)}モード</div>
-          </div>
-          <button class="ifty-settings-action" type="button" onclick="toggleIftyTheme(); openIftySettings();" style="background:#334155;color:white;">
-            ${iftyTheme === 'dark' ? '☀️ ライトへ' : '🌙 ダークへ'}
-          </button>
-        </div>
       </div>
 
       <div class="ifty-settings-section">
@@ -13359,8 +13442,7 @@ function ensureIftyBrandUi() {
     controls.innerHTML = `
       <button id="iftyUndoBtn" onclick="undoIfty()" title="取り消し Ctrl/⌘ + Z" style="width:38px;height:38px;border:none;border-radius:9px;background:#334155;color:white;font-size:1.05em;cursor:pointer;">↶</button>
       <button id="iftyRedoBtn" onclick="redoIfty()" title="やり直し Ctrl + Y / ⌘ + Shift + Z" style="width:38px;height:38px;border:none;border-radius:9px;background:#334155;color:white;font-size:1.05em;cursor:pointer;">↷</button>
-      <button id="iftyRecoveryBtn" onclick="openIftyRecoveryCenter()" title="バックアップ / 復元" style="width:38px;height:38px;border:none;border-radius:9px;background:#334155;color:white;font-size:1em;cursor:pointer;">🛟</button>
-      <button id="iftyThemeBtn" onclick="toggleIftyTheme()" title="ライト / ダーク" style="width:38px;height:38px;border:none;border-radius:9px;background:#334155;color:white;font-size:1em;cursor:pointer;">☀️</button>`;
+      <button id="iftyRecoveryBtn" onclick="openIftyRecoveryCenter()" title="バックアップ / 復元" style="width:38px;height:38px;border:none;border-radius:9px;background:#334155;color:white;font-size:1em;cursor:pointer;">🛟</button>`;
     document.body.appendChild(controls);
   }
 
@@ -14481,15 +14563,28 @@ function isAlliaQuotaError(response, data) {
 
 function alliaHttpError(response, data, fallback) {
   if (isAlliaQuotaError(response, data)) {
-    if (data?.code === 'ALLIA_DAILY_QUOTA_LIMIT') {
-      return new Error('ALLIAの日次利用枠に達しました。AIサービスの解除時刻は未確認です。');
-    }
-    if (data?.code === 'ALLIA_RATE_LIMIT' || data?.limitKind === 'temporary') {
-      return new Error('ALLIAが一時的な利用制限を受けました。時間をおいて再試行してください。');
-    }
-    return new Error('ALLIAで利用制限が発生しました。一時的な制限か日次上限かは未確認です。時間をおいて再試行してください。');
+    let message = data?.code === 'ALLIA_DAILY_QUOTA_LIMIT'
+      ? 'ALLIAの日次利用枠に達しました。解除時刻は未確認です。'
+      : (data?.code === 'ALLIA_RATE_LIMIT' || data?.limitKind === 'temporary')
+        ? 'ALLIAが一時的な利用制限を受けました。時間をおいて再試行してください。'
+        : 'ALLIAで利用制限が発生しました。制限の種類は未確定です。';
+    const error = new Error(message);
+    error.code = String(data?.code || 'ALLIA_LIMIT_UNCONFIRMED');
+    error.status = Number(response?.status || 429);
+    error.retryable = false;
+    return error;
   }
-  return new Error((data && (data.error || data.details || data.message)) || fallback || ('HTTP ' + (response ? response.status : 'error')));
+  const code = String(data?.code || (Number(response?.status) >= 500 ? 'IFTY_SERVER_ERROR' : 'IFTY_REQUEST_ERROR'));
+  const requestId = String(data?.requestId || response?.headers?.get?.('X-IFTY-Request-Id') || '').slice(0, 72);
+  const details = String(data?.details || '').slice(0, 240);
+  const title = String(data?.error || fallback || 'ALLIAへの通信に失敗しました。').slice(0, 250);
+  const message = `${title}${details && details !== title ? `\n原因：${details}` : ''}${requestId ? `\n診断ID：${requestId}` : ''}`;
+  const error = new Error(message);
+  error.code = code;
+  error.requestId = requestId;
+  error.status = Number(response?.status || 0);
+  error.retryable = data?.retryable === true;
+  return error;
 }
 
 function deriveQuizAnswers(word) {
@@ -17221,6 +17316,38 @@ window.checkIftyItemLevel = async function(subject, itemId, button = null) {
   }
 };
 
+// STEP173: Challenge成立時に、直前に誤答として保存された「同じ問題」だけを訂正する。
+// 古い復習記録や別問題の誤答は消さない。
+function ifty173UndoRecentMistake(subject, question, sourceId) {
+  try {
+    const bank=ifty162Bank();
+    if(!Array.isArray(bank.items))return false;
+    const key=String(subject||'').trim().toUpperCase();
+    const prompt=question&&typeof question==='object'?ifty162QuestionPrompt(question):'';
+    const source=String(sourceId||'');
+    // 不完全な参照で別の誤答を削除しない（曖昧な場合は変更しない）。
+    if(!prompt||!source)return false;
+    const now=Date.now();
+    const candidates=bank.items.filter(x=>x.subject===key&&
+      (source?String(x.sourceId||'')===source:true)&&
+      (prompt?String(x.prompt||'')===prompt:true)&&
+      Number(x.lastWrongAt)>0&&now-Number(x.lastWrongAt)>=0&&now-Number(x.lastWrongAt)<=60*60*1000);
+    if(!candidates.length)return false;
+    candidates.sort((a,b)=>Number(b.lastWrongAt)-Number(a.lastWrongAt));
+    const item=candidates[0];
+    if(Number(item.mistakes||1)>1){ item.mistakes-=1; }
+    else { bank.items.splice(bank.items.indexOf(item),1); }
+    savePracticeData();
+    return true;
+  }catch(error){console.warn('STEP173: 誤答の訂正に失敗',error);return false;}
+}
+function ifty173CorrectWrongCount(st,correctKey='correct',wrongKey='wrong') {
+  if(!st||!(Number(st[wrongKey])>0))return false;
+  st[wrongKey]=Math.max(0,Number(st[wrongKey])-1);
+  st[correctKey]=(Number(st[correctKey])||0)+1;
+  return true;
+}
+
 function getIftySubjectStudyItem(subject, itemId) {
   const key = normalizeIftySubject(subject);
   if (key === 'SOCIAL STUDIES') return getIftySocialItemById(itemId)?.item || null;
@@ -19367,7 +19494,7 @@ function renderIftyBasicPracticeFeedback(correct, feedback, modelAnswer, canChal
 window.nextIftyBasicPracticeQuestion=function(){const st=iftyBasicPracticeState;if(!st)return;st.index++;renderIftyBasicPracticeQuestion();};
 
 window.submitIftyBasicClozeChallenge=async function(){
-  const st=iftyBasicPracticeState, modal=document.getElementById('practiceModal'); if(!st||!modal||st.mode!=='cloze'||!st.last||st.last.correct)return;
+  const st=iftyBasicPracticeState, modal=document.getElementById('practiceModal'); if(!st||!modal||st.mode!=='cloze'||!st.last||st.last.correct||st.last.challenged)return;
   const item=findIftyBasicSentenceById(st.queue[st.index]); if(!item||!ensureIftyOnline('Challenge再審査'))return;
   const reason=String(document.getElementById('iftyBasicChallengeReason')?.value||'').trim();
   modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><h3 style="color:#92400e;">⚖️ ALLIAがChallengeを再審査中…</h3></div>`;
@@ -19376,8 +19503,10 @@ window.submitIftyBasicClozeChallenge=async function(){
     const data=await response.json();
     if(!response.ok)throw alliaHttpError(response,data,'Challengeに失敗しました。');
     const accepted=data.challengeAccepted===true;
+    st.last.challenged=true;
     if(accepted){
-      st.wrong=Math.max(0,st.wrong-1);st.correct++;st.last.correct=true;
+      ifty173CorrectWrongCount(st);st.last.correct=true;st.last.challenged=true;
+      ifty173UndoRecentMistake('BASIC SENTENCES',{prompt:st.ifty143Prompt||''},item.id);
       const study=normalizeIftyBasicSentenceStudy(item.study);
       if(study.total){study.wrong=Math.max(0,study.wrong-1);study.correct++;item.study=study;savePracticeData();}
     }
@@ -20847,8 +20976,13 @@ window.ifty132RegenerateFolder=async function(subject, folderId){
   }
 };
 
-function requestIftyRegeneration124(label) {
-  if (ifty132BatchRegeneration && ifty132BatchRegeneration.runningId) return Promise.resolve(ifty132BatchRegeneration.request);
+function requestIftyRegeneration124(label, options = null) {
+  const factMode = !!(options && options.structuredFacts === true);
+  const existingFacts = factMode ? ifty171NormalizeConfirmedFacts(options.confirmedFacts) : [];
+  if (ifty132BatchRegeneration && ifty132BatchRegeneration.runningId) {
+    const request = String(ifty132BatchRegeneration.request || '');
+    return Promise.resolve(factMode ? { request, confirmedFacts:existingFacts } : request);
+  }
   return new Promise(resolve => {
     const old = document.getElementById('iftyRegenerationRequest124');
     if (old) old.remove();
@@ -20860,6 +20994,9 @@ function requestIftyRegeneration124(label) {
       <div style="font-size:.88rem;line-height:1.6;overflow-wrap:anywhere;">${escapeHtml(String(label || 'この項目'))} を再生成します。修正したい点を指定できます。</div>
       <label for="iftyRegen124Text" style="display:block;margin-top:12px;font-weight:800;">ALLIAへの要望（任意）</label>
       <textarea id="iftyRegen124Text" maxlength="1000" rows="5" placeholder="例：意味をもっと詳しく／誤っている年代を訂正／例文を2つ追加" style="display:block;margin-top:6px;width:100%;min-height:100px;box-sizing:border-box;border:1px solid #94a3b8;border-radius:8px;padding:10px;color:#0f172a;background:#fff;font:inherit;resize:vertical;"></textarea>
+      ${factMode ? `<label for="iftyRegen171Facts" style="display:block;margin-top:10px;font-weight:800;">✅ 確認済みの事実（次回以降も引き継ぐ）</label>
+      <textarea id="iftyRegen171Facts" rows="3" maxlength="2200" placeholder="例：『対比列伝』の著者はプルタルコス。" style="display:block;margin-top:5px;width:100%;box-sizing:border-box;border:1px solid #94a3b8;border-radius:8px;background:white;color:#0f172a;padding:10px;font:inherit;resize:vertical;">${escapeHtml(existingFacts.join('\n'))}</textarea>
+      <p style="font-size:.78rem;color:#cbd5e1;">確認済みの事実だけを1行ずつ入力。誤った内容は固定しないでください。再生成が失敗した場合は保存されません。</p>` : ''}
       <p style="font-size:.8rem;color:#cbd5e1;line-height:1.6;">要望がなくても再生成できます。正確性を優先し、既存の復習状態や画像は維持します。</p>
       <div style="display:flex;flex-wrap:wrap;gap:9px;justify-content:flex-end;">
         <button type="button" data-ifty-regen-cancel style="padding:10px 15px;border:1px solid #94a3b8;border-radius:8px;background:#334155;color:#fff;font-weight:800;cursor:pointer;">キャンセル</button>
@@ -20873,7 +21010,10 @@ function requestIftyRegeneration124(label) {
     const onKey = e => { if(e.key === 'Escape'){e.preventDefault();finish(null);} };
     document.addEventListener('keydown',onKey);
     veil.querySelector('[data-ifty-regen-cancel]').onclick = () => finish(null);
-    veil.querySelector('[data-ifty-regen-confirm]').onclick = () => finish(String(textarea.value || '').trim());
+    veil.querySelector('[data-ifty-regen-confirm]').onclick = () => {
+      const request = String(textarea.value || '').trim();
+      finish(factMode ? { request, confirmedFacts: ifty171NormalizeConfirmedFacts(veil.querySelector('#iftyRegen171Facts')?.value || '') } : request);
+    };
     veil.addEventListener('click',e=>{if(e.target===veil)finish(null);});
     textarea.focus();
   });
@@ -22929,7 +23069,7 @@ async function ifty149StartManagedSubject(subject,set,ids,modes,countOverride=nu
     const must=fromSequence?required.slice(0,questionCount):required;
     queue=ifty149Queue(ids,must,questionCount,set.random!==false);
   }catch(error){alert(error.message);return;}
-  ifty149Run={subject,setId:String(set.id),queue,modes,fromSequence,index:0,correct:0,wrong:0,unknown:0,current:null,busy:false,answered:false,answer:'',feedback:'',modelAnswer:'',id:'run'+Date.now()};
+  ifty149Run={subject,setId:String(set.id),queue,modes,fromSequence,index:0,correct:0,wrong:0,unknown:0,current:null,busy:false,answered:false,answer:'',feedback:'',modelAnswer:'',gradeError:'',manualReveal:false,lastCorrect:null,verdict:'',correction:'',id:'run'+Date.now()};
   iftySubjectQuizRunOverride=null;
   closePracticeModal();
   await ifty149RenderManaged();
@@ -22943,20 +23083,65 @@ function ifty149CurrentMode(run,ref){
   if(fixed && allowed.includes(fixed) && (!run.fromSequence || run.modes.includes(fixed)))return fixed;
   return run.modes[run.index % run.modes.length]||'derived';
 }
+// STEP172: Higher contrast and stable grading state for managed quiz folders.
+// The rest of the quiz engines (images, kanbun, geometry, etc.) are untouched.
+function ifty172EnsureManagedStyles(){
+  if(document.getElementById('ifty172ManagedStyles'))return;
+  const style=document.createElement('style');style.id='ifty172ManagedStyles';
+  style.textContent=`
+    #iftyHubPage .ifty172-grade-panel{border:2px solid #64748b;border-radius:12px;padding:15px;margin-top:14px;
+      background:#172537!important;color:#f8fafc!important;line-height:1.7;overflow-wrap:anywhere;white-space:pre-wrap}
+    #iftyHubPage .ifty172-grade-panel *{color:#f8fafc!important}
+    #iftyHubPage .ifty172-grade-panel.ifty172-correct{border-color:#34d399;background:#0b332b!important}
+    #iftyHubPage .ifty172-grade-panel.ifty172-wrong{border-color:#fda4af;background:#39222c!important}
+    #iftyHubPage .ifty172-grade-panel .ifty172-result-title{font-size:1.35rem;font-weight:950;display:block;margin-bottom:10px}
+    #iftyHubPage .ifty172-grade-panel.ifty172-correct .ifty172-result-title{color:#a7f3d0!important}
+    #iftyHubPage .ifty172-grade-panel.ifty172-wrong .ifty172-result-title{color:#fecdd3!important}
+    #iftyHubPage .ifty172-grade-panel .ifty172-model{padding:10px;border:1px solid #64748b;border-radius:8px;background:#101c2e!important;
+      color:#f8fafc!important;margin-top:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+    #iftyHubPage .ifty172-grade-panel .ifty172-model *{color:#f8fafc!important}
+    #iftyHubPage .ifty172-message{margin-top:12px;padding:13px;border:1px solid #f59e0b;border-radius:9px;
+      color:#fff7ed!important;background:#422a18!important;line-height:1.65;overflow-wrap:anywhere}
+    #iftyHubPage .ifty172-message *{color:#fff7ed!important}
+    #iftyHubPage .ifty172-main-action{display:block;width:100%;min-height:47px;margin-top:12px;
+      padding:12px;border:0;border-radius:9px;background:#2563eb!important;color:#fff!important;font:inherit;font-weight:900;cursor:pointer}
+    #iftyHubPage .ifty172-alt-action{min-height:44px;padding:10px 12px;border:1px solid #94a3b8;
+      border-radius:8px;background:#334155!important;color:#fff!important;font:inherit;font-weight:800;cursor:pointer}
+    #iftyHubPage .ifty172-main-action:disabled,#iftyHubPage .ifty172-alt-action:disabled{opacity:.55;cursor:wait}
+    @media(max-width:620px){#iftyHubPage .ifty172-grade-panel{padding:12px}#iftyHubPage .ifty172-grade-panel .ifty172-result-title{font-size:1.16rem}}
+  `;
+  document.head.appendChild(style);
+}
 function ifty149QuestionPanel(){
  const st=ifty149Run;if(!st)return;
+ ifty172EnsureManagedStyles();
  const q=st.current;
  const subject=escapeHtml(st.subject);
  const answerOptions=q?.kind==='choice' && Array.isArray(q.options)&&q.options.length===4;
- const opts=q?.kind==='year'?`<label style="display:block;margin-top:12px;font-size:.9em;color:#e2e8f0;font-weight:800;">年号を入力<input id="ifty149YearAnswer" inputmode="text" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" ${st.answered?'disabled':''} placeholder="例：1861 / 紀元前44 / 44 BC" onkeydown="if(event.key==='Enter'){event.preventDefault();ifty149Submit();}" style="display:block;margin-top:7px;width:100%;box-sizing:border-box;padding:13px;min-height:48px;border:1px solid #93c5fd;border-radius:9px;background:#fff;color:#0f172a;font-size:1.05rem;" value="${escapeHtml(st.answer||'')}"></label>`:q?.kind==='truefalse'?ifty151AnswerControls('ifty149Truth','ifty149TruthCorrection',st.answered):answerOptions?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px;margin-top:12px;">${q.options.map((value,i)=>`<label style="display:flex;gap:7px;padding:10px;border:1px solid #93c5fd;border-radius:8px;align-items:center;"><input type="radio" name="ifty149Choice" value="${escapeHtml(value)}" ${st.answered?'disabled':''}>${String.fromCharCode(65+i)}. ${escapeHtml(value)}</label>`).join('')}</div>`:`<textarea id="ifty149Answer" rows="4" ${st.answered?'disabled':''} placeholder="理由や根拠を含めて説明してください（記述）" style="width:100%;box-sizing:border-box;margin-top:12px;padding:12px;font:inherit;border:1px solid #94a3b8;border-radius:8px;resize:vertical;">${escapeHtml(st.answer||'')}</textarea>`;
- const result=st.answered?`<div style="border:1px solid #a5b4fc;padding:12px;border-radius:9px;margin-top:13px;background:#eff6ff;color:#1e293b;white-space:pre-wrap;"><b>${st.feedback==='分からない'?'分からない（正答を表示）':escapeHtml(st.feedback)}</b><div style="margin-top:8px;">模範解答：${escapeHtml(st.modelAnswer||q.referenceAnswer||'')}</div>${q.explanation?`<p>${escapeHtml(q.explanation)}</p>`:''}</div><button type="button" onclick="ifty149Next()" style="margin-top:10px;width:100%;padding:12px;border:0;background:#2563eb;color:white;border-radius:8px;font-weight:900;">次へ →</button>`:'';
+ const opts=q?.kind==='year'?`<label style="display:block;margin-top:12px;font-size:.9em;color:#e2e8f0;font-weight:800;">年号を入力<input id="ifty149YearAnswer" inputmode="text" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" ${st.answered||st.busy?'disabled':''} placeholder="例：1861 / 紀元前44 / 44 BC" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();ifty149Submit();}" style="display:block;margin-top:7px;width:100%;box-sizing:border-box;padding:13px;min-height:48px;border:1px solid #93c5fd;border-radius:9px;background:#fff;color:#0f172a;font-size:1.05rem;" value="${escapeHtml(st.answer||'')}"></label>`:q?.kind==='truefalse'?ifty151AnswerControls('ifty149Truth','ifty149TruthCorrection',st.answered||st.busy):answerOptions?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px;margin-top:12px;">${q.options.map((value,i)=>`<label style="display:flex;gap:7px;padding:10px;border:1px solid #93c5fd;border-radius:8px;align-items:center;"><input type="radio" name="ifty149Choice" value="${escapeHtml(value)}" ${st.busy||st.answered?'disabled':''} ${st.answer===String(value)?'checked':''}>${String.fromCharCode(65+i)}. ${escapeHtml(value)}</label>`).join('')}</div>`:`<textarea id="ifty149Answer" rows="4" ${st.answered||st.busy?'disabled':''} placeholder="理由や根拠を含めて説明してください（記述）" style="width:100%;box-sizing:border-box;margin-top:12px;padding:12px;font:inherit;border:1px solid #94a3b8;border-radius:8px;resize:vertical;">${escapeHtml(st.answer||'')}</textarea>`;
+ const verdictText=st.lastCorrect===true?'⭕ 正解':st.lastCorrect===false?'❌ 不正解':'？ 分からない';
+ const result=st.answered?`<div class="ifty172-grade-panel ${st.lastCorrect===true?'ifty172-correct':st.lastCorrect===false?'ifty172-wrong':''}" role="status" aria-live="polite" data-ifty172-graded="1"><strong class="ifty172-result-title">${verdictText}</strong><div>${escapeHtml(st.feedback||'')}</div><div class="ifty172-model"><b>模範解答：</b> ${escapeHtml(st.modelAnswer||q.referenceAnswer||'')}</div>${q.explanation?`<div style="margin-top:9px;">${escapeHtml(q.explanation)}</div>`:''}</div>${st.lastCorrect===false&&st.gradeOrigin==='allia'&&!st.challenged?`<div class="ifty173-appeal-status"><b>⚖️ ALLIAの判定に反論する</b><p style="font-size:.86em;margin:6px 0;">元の回答が正しいと思う理由を入力してください。再審査で認められた場合、この問題のカウントを訂正します。</p><textarea id="ifty173ManagedReason" rows="2" ${st.challengePending?'disabled':''} placeholder="反論理由（任意）" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;">${escapeHtml(st.challengeReason||'')}</textarea><button type="button" class="ifty172-alt-action" style="width:100%;margin-top:7px;" onclick="ifty173ManagedChallenge()" ${st.challengePending?'disabled':''}>${st.challengePending?'審査中…':'⚖️ Challenge（ALLIA）'}</button>${st.challengeError?`<p role="alert">${escapeHtml(st.challengeError)}</p>`:''}</div>`:''}<button type="button" onclick="ifty149Next()" class="ifty172-main-action" data-ifty172-next="1" ${st.challengePending?'disabled':''}>次へ →</button>`:'';
+ const grading=st.busy?`<div class="ifty172-message" role="status" aria-live="polite">⏳ ALLIAが採点中…<div style="font-size:.9em;margin-top:4px;">採点完了まで現在の問題を維持します。通信に時間がかかる場合は再試行・自己採点を選べます。</div></div>`:'';
+ const error=st.gradeError?`<div class="ifty172-message" role="alert" data-ifty172-error="1"><b>⚠ 採点を完了できませんでした</b><div style="white-space:pre-wrap;margin:8px 0;">${escapeHtml(st.gradeError)}</div><div style="font-size:.85em;">回答は保持されています。未採点のため正誤には加算していません。</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"><button type="button" class="ifty172-alt-action" onclick="ifty149Submit()">🔄 採点を再試行</button><button type="button" class="ifty172-alt-action" onclick="ifty172RevealManagedAnswer()">📖 模範解答で自己採点</button></div></div>`:'';
+ const manual=st.manualReveal&&!st.answered?`<div class="ifty172-grade-panel" role="status"><strong class="ifty172-result-title">📖 模範解答を確認</strong><div class="ifty172-model"><b>模範解答：</b> ${escapeHtml(q.referenceAnswer||'保存された模範解答がありません。')}</div><div style="margin-top:11px;">解答内容を照合し、自分で正誤を選んでください。ALLIAは使用しません。</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:11px;"><button type="button" class="ifty172-alt-action" onclick="ifty172ManualGradeManaged(true)">⭕ 正解にする</button><button type="button" class="ifty172-alt-action" onclick="ifty172ManualGradeManaged(false)">❌ 不正解にする</button></div></div>`:'';
+ // STEP172: grading/feedback redraw is not a navigation. Preserve the scroll position.
+ if(q&&(st.answered||st.busy||st.gradeError||st.manualReveal)){
+   window.__iftyPreserveHubViewport=true;
+   window.__iftyPreserveHubViewportY=Number(window.scrollY||document.scrollingElement?.scrollTop||0);
+ }
  showIftyHubContent(`<section class="ifty-portal-shell" style="max-width:860px;margin:0 auto;color:#e2e8f0;">
  <div style="background:#1e293b;border:1px solid #475569;border-radius:14px;padding:clamp(13px,3vw,24px);box-sizing:border-box;">
  <div style="display:flex;justify-content:space-between;gap:9px;align-items:center;flex-wrap:wrap;"><b>✍️ ${subject}・${st.index+1}/${st.queue.length}　${escapeHtml(st.mode||'')}</b><button onclick="ifty149Exit()" style="padding:8px;border-radius:7px;">PRACTICEに戻る</button></div>
  <p style="font-size:.81em;color:#93c5fd;">難易度：${escapeHtml(ifty149Difficulty(getIftySubjectQuizSet(st.subject,st.setId)?.difficulty))}／正解${st.correct}・不正解${st.wrong}・分からない${st.unknown}</p>
  <div style="background:#0c3047;border:1px solid #64748b;border-radius:9px;padding:15px;white-space:pre-wrap;line-height:1.65;overflow-wrap:anywhere;">${q?escapeHtml(q.question):'問題を生成しています…'}</div>
- ${q?`<div style="margin-top:7px;color:#cbd5e1;font-size:.87em;">${escapeHtml(q.instruction||'')}</div>${!st.answered?`${opts}<div style="display:flex;gap:8px;flex-direction:column;margin-top:10px;"><button type="button" onclick="ifty149Submit()" ${st.busy?'disabled':''} style="padding:12px;background:#2563eb;color:#fff;border:0;border-radius:8px;font-weight:900;">回答</button><button type="button" onclick="ifty149Unknown()" ${st.busy?'disabled':''} style="padding:12px;border:1px solid #cbd5e1;border-radius:8px;">？ 分からない（答えを見る）</button></div>`:''}<button type="button" onclick="ifty149Help()" style="margin-top:9px;border:1px solid #a78bfa;padding:9px;border-radius:8px;">💬 ALLIAに質問</button>${result}`:''}
+ ${q?`<div style="margin-top:7px;color:#cbd5e1;font-size:.87em;">${escapeHtml(q.instruction||'')}</div>${!st.answered&&!st.manualReveal?`${opts}${!st.gradeError?`<div style="display:flex;gap:8px;flex-direction:column;margin-top:10px;"><button type="button" onclick="ifty149Submit()" ${st.busy?'disabled':''} style="padding:12px;background:#2563eb;color:#fff;border:0;border-radius:8px;font-weight:900;">${st.busy?'採点中…':'回答'}</button><button type="button" onclick="ifty149Unknown()" ${st.busy?'disabled':''} style="padding:12px;border:1px solid #cbd5e1;border-radius:8px;">？ 分からない（答えを見る）</button></div>`:''}`:''}<button type="button" onclick="ifty149Help()" style="margin-top:9px;border:1px solid #a78bfa;padding:9px;border-radius:8px;">💬 ALLIAに質問</button>${grading}${error}${manual}${result}`:''}
  </div></section>`,'ifty149-managed');
+ if(q?.kind==='truefalse'&&!st.answered&&!st.busy){
+   const truth=document.querySelector(`input[name="ifty149Truth"][value="${st.verdict==='correct'?'correct':'incorrect'}"]`);
+   if(st.verdict&&truth)truth.checked=true;
+   const correction=document.getElementById('ifty149TruthCorrection');if(correction&&st.correction)correction.value=st.correction;
+   if(st.verdict && typeof window.ifty151UpdateCorrection==='function')window.ifty151UpdateCorrection('ifty149Truth','ifty149TruthCorrection');
+ }
 }
 async function ifty149RenderManaged(){
  const st=ifty149Run;if(!st)return;
@@ -22969,7 +23154,7 @@ async function ifty149RenderManaged(){
   showIftyHubContent(`<section class="ifty-portal-shell" style="max-width:720px;margin:auto;padding:25px;"><h2>練習完了</h2><p>正解 ${st.correct}・不正解 ${st.wrong}・分からない ${st.unknown}</p><button onclick="ifty149Exit()">PRACTICEに戻る</button></section>`,'ifty149-result');return;
  }
  const ref=ifty149QuizRef(st,st.queue[st.index]);if(!ref){alert('項目が見つからないため中止します。');window.ifty149Exit();return;}
- const set=getIftySubjectQuizSet(st.subject,st.setId);st.mode=ifty149CurrentMode(st,ref);st.current=null;st.answered=false;st.answer='';st.feedback='';st.modelAnswer='';st.busy=true;ifty149QuestionPanel();
+ const set=getIftySubjectQuizSet(st.subject,st.setId);st.mode=ifty149CurrentMode(st,ref);st.current=null;st.answered=false;st.answer='';st.feedback='';st.modelAnswer='';st.gradeError='';st.manualReveal=false;st.lastCorrect=null;st.gradeOrigin='';st.challenged=false;st.challengePending=false;st.challengeReason='';st.challengeError='';st.verdict='';st.correction='';st.busy=true;ifty149QuestionPanel();
  const runId=st.id,at=st.index;
  try{
   const candidates=ifty147RankRelated(ref,(set.itemIds||[]).filter(id=>String(id)!==String(ref.item.id)).map(id=>getIftySubjectFlashcardRefById(st.subject,id)).filter(Boolean)).slice(0,10).map(x=>({title:getIftySubjectFlashcardFront(st.subject,x.item),description:getIftySubjectFlashcardBack(st.subject,x.item).slice(0,150)}));
@@ -22994,27 +23179,134 @@ window.ifty154SkipYearQuestion=function(){
   if(!st||st.mode!=='year_written'||st.current||st.answered)return;
   st.unknown++;st.index++;void ifty149RenderManaged();
 };
+// STEP172: Commit only after a confirmed grade; never advance automatically.
+function ifty172CommitManagedGrade(st,correct,feedback,modelAnswer){
+ if(!st||st!==ifty149Run||st.answered||!st.current)return;
+ st.busy=false;st.answered=true;st.gradeError='';st.manualReveal=false;
+ st.lastCorrect=correct===true;
+ st.feedback=String(feedback||'').trim() || (st.lastCorrect?'回答は正解と判定されました。':'登録されている正解と一致しませんでした。');
+ st.modelAnswer=String(modelAnswer||st.current.referenceAnswer||'').trim();
+ if(st.lastCorrect)st.correct++;
+ else {
+   st.wrong++;
+   try{ifty162Capture(st.subject,st.current,st.mode,st.modelAnswer||st.current.referenceAnswer,st.queue[st.index]);}
+   catch(error){console.error('STEP172: 誤答問題の復習登録に失敗:',error);}
+ }
+ ifty149QuestionPanel();
+}
+function ifty172AwaitGrade(promise,limitMs=25000){
+ let timer;
+ return Promise.race([Promise.resolve(promise),new Promise((_,reject)=>{
+   timer=setTimeout(()=>reject(new Error('ALLIAの採点が時間内に終了しませんでした。回答は保存されています。再試行するか模範解答で自己採点してください。')),limitMs);
+ })]).finally(()=>clearTimeout(timer));
+}
 window.ifty149Submit=async function(){
- const st=ifty149Run;if(!st?.current||st.busy||st.answered)return;
- const q=st.current,radio=document.querySelector('input[name="ifty149Choice"]:checked');
- const verdict=q.kind==='truefalse'?String(document.querySelector('input[name="ifty149Truth"]:checked')?.value||''):'';
- const correction=q.kind==='truefalse'?String(document.getElementById('ifty149TruthCorrection')?.value||'').trim():'';
- const answer=(q.kind==='truefalse'?(verdict==='correct'?'○ 正しい':'✕ '+correction):q.kind==='year'?String(document.getElementById('ifty149YearAnswer')?.value||''):q.kind==='choice'?String(radio?.value||''):String(document.getElementById('ifty149Answer')?.value||'')).trim();
- if(q.kind==='truefalse' && (!verdict || (verdict==='incorrect' && !correction))){alert('○を選ぶか、✕を選んで訂正内容を入力してください。');return;}
+ const st=ifty149Run;if(!st?.current||st.busy||st.answered||st.manualReveal)return;
+ const q=st.current,at=st.index;
+ const radio=document.querySelector('input[name="ifty149Choice"]:checked');
+ const verdict=q.kind==='truefalse'?String(document.querySelector('input[name="ifty149Truth"]:checked')?.value||st.verdict||''):'';
+ const correction=q.kind==='truefalse'?String(document.getElementById('ifty149TruthCorrection')?.value??st.correction??'').trim():'';
+ // If the user retries after an error, keep their original submission verbatim.
+ const entered=q.kind==='year'?document.getElementById('ifty149YearAnswer')?.value
+   :q.kind==='choice'?radio?.value:q.kind==='truefalse'?(verdict==='correct'?'○ 正しい':'✕ '+correction)
+   :document.getElementById('ifty149Answer')?.value;
+ const answer=String(entered==null?st.answer:entered).trim();
+ if(q.kind==='truefalse'&&(!verdict||(verdict==='incorrect'&&!correction))){alert('○を選ぶか、✕を選んで訂正内容を入力してください。');return;}
  if(!answer){alert('回答を入力または選択してください。');return;}
- st.busy=true;st.answer=answer;let correct=false,feedback='',modelAnswer=q.referenceAnswer;
+ st.answer=answer;st.verdict=verdict;st.correction=correction;st.busy=true;st.gradeError='';
+ ifty149QuestionPanel();
+ let correct=false,feedback='',modelAnswer=q.referenceAnswer,gradedByAllia=false;
  try{
-  if(q.kind==='choice'){correct=answer===q.referenceAnswer;feedback=correct?'正解':'不正解';}
-  else if(q.kind==='year'){const submitted=ifty154YearAnswerKey(answer);const expected=ifty154YearAnswerKey(q.referenceAnswer);correct=!!submitted&&!!expected&&submitted===expected;feedback=correct?'年号が一致しました。':'年号が一致しませんでした。';}
-  else if(q.kind==='truefalse'){const data=await ifty151GradeTruth({subject:st.subject,statement:q.question,isCorrect:q.isCorrect,correctedSentence:q.correctedSentence,verdict,correction});correct=data.correct===true;feedback=String(data.feedback||'');modelAnswer=String(data.modelAnswer||modelAnswer);}
-  else {const resp=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'ifty149_grade',subject:st.subject,question:q.question,referenceAnswer:q.referenceAnswer,gradingPoints:q.gradingPoints||[],answer,difficulty:ifty149Difficulty(getIftySubjectQuizSet(st.subject,st.setId)?.difficulty)})});const data=await resp.json().catch(()=>({}));if(!resp.ok||data.error)throw alliaHttpError(resp,data,'採点に失敗しました。');correct=data.correct===true;feedback=String(data.feedback||'');modelAnswer=String(data.modelAnswer||modelAnswer);}
-  if(st!==ifty149Run)return;
-  if(correct)st.correct++;else {st.wrong++;ifty162Capture(st.subject,q,st.mode,modelAnswer||q.referenceAnswer,st.queue[st.index]);}
-  st.busy=false;st.answered=true;st.feedback=(correct?'正解：':'不正解：')+feedback;st.modelAnswer=modelAnswer;ifty149QuestionPanel();
- }catch(error){if(st!==ifty149Run)return;st.busy=false;alert(String(error.message||error));ifty149QuestionPanel();}
+   if(q.kind==='choice'){correct=answer===q.referenceAnswer;feedback=correct?'選択肢が一致しました。':'選択肢が一致しませんでした。';}
+   else if(q.kind==='year'){
+     const submitted=ifty154YearAnswerKey(answer),expected=ifty154YearAnswerKey(q.referenceAnswer);
+     if(!expected)throw new Error('模範年号の形式が不正です。手動で正誤を確認してください。');
+     correct=!!submitted&&submitted===expected;
+     feedback=correct?'年号が一致しました。':'年号が一致しませんでした。';
+   }
+   else if(q.kind==='truefalse'){
+     gradedByAllia=true;
+     const data=await ifty172AwaitGrade(ifty151GradeTruth({subject:st.subject,statement:q.question,isCorrect:q.isCorrect,correctedSentence:q.correctedSentence,verdict,correction}));
+     if(typeof data?.correct!=='boolean')throw new Error('ALLIAの採点結果に正誤情報がありません。');
+     correct=data.correct;feedback=String(data.feedback||'');modelAnswer=String(data.modelAnswer||modelAnswer);
+   }
+   else {
+     gradedByAllia=true;
+     const task=(async()=>{
+       const resp=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'ifty149_grade',subject:st.subject,question:q.question,referenceAnswer:q.referenceAnswer,gradingPoints:q.gradingPoints||[],answer,difficulty:ifty149Difficulty(getIftySubjectQuizSet(st.subject,st.setId)?.difficulty)})});
+       const data=await resp.json().catch(()=>({}));
+       if(!resp.ok||data.error)throw alliaHttpError(resp,data,'採点に失敗しました。');
+       if(typeof data.correct!=='boolean')throw new Error('ALLIAの採点結果に正誤情報がありません。');
+       return data;
+     })();
+     const data=await ifty172AwaitGrade(task);
+     correct=data.correct;feedback=String(data.feedback||'');modelAnswer=String(data.modelAnswer||modelAnswer);
+   }
+   if(st!==ifty149Run||st.index!==at||st.current!==q||st.answered||st.manualReveal)return;
+   st.gradeOrigin=gradedByAllia?'allia':'local';
+   ifty172CommitManagedGrade(st,correct,feedback,modelAnswer);
+ }catch(error){
+   if(st!==ifty149Run||st.index!==at||st.current!==q||st.answered||st.manualReveal)return;
+   st.busy=false;st.gradeError=String(error?.message||error||'採点処理でエラーが発生しました。').slice(0,800);
+   ifty149QuestionPanel();
+ }
 };
-window.ifty149Unknown=function(){const st=ifty149Run;if(!st?.current||st.answered||st.busy)return;st.unknown++;ifty162Capture(st.subject,st.current,st.mode,st.current.referenceAnswer,st.queue[st.index]);st.answered=true;st.feedback='分からない';st.modelAnswer=st.current.referenceAnswer;ifty149QuestionPanel();};
-window.ifty149Next=function(){const st=ifty149Run;if(!st?.answered||st.busy)return;st.index++;void ifty149RenderManaged();};
+window.ifty172RevealManagedAnswer=function(){
+ const st=ifty149Run;if(!st?.current||st.busy||st.answered)return;
+ st.gradeError='';st.manualReveal=true;ifty149QuestionPanel();
+};
+window.ifty172ManualGradeManaged=function(correct){
+ const st=ifty149Run;if(!st?.current||!st.manualReveal||st.busy||st.answered)return;
+ st.gradeOrigin='manual';
+ ifty172CommitManagedGrade(st,correct===true,'ALLIAを使わず、模範解答と比較して自己採点しました。',st.current.referenceAnswer);
+};
+window.ifty149Unknown=function(){
+ const st=ifty149Run;if(!st?.current||st.answered||st.busy||st.manualReveal)return;
+ st.unknown++;st.busy=false;st.answered=true;st.lastCorrect=null;st.feedback='分からないため、模範解答を表示しました。';
+ st.modelAnswer=st.current.referenceAnswer;
+ try{ifty162Capture(st.subject,st.current,st.mode,st.current.referenceAnswer,st.queue[st.index]);}
+ catch(error){console.error('STEP172: 誤答復習への保存に失敗:',error);}
+ ifty149QuestionPanel();
+};
+window.ifty173ManagedChallenge=async function(){
+  const st=ifty149Run,q=st?.current;
+  if(!st||!q||!st.answered||st.lastCorrect!==false||st.gradeOrigin!=='allia'||st.challenged||st.challengePending)return;
+  if(!ensureIftyOnline('ALLIA反論の再審査'))return;
+  const runId=st.id,index=st.index;
+  st.challengeReason=String(document.getElementById('ifty173ManagedReason')?.value||'').trim();
+  st.challengePending=true;st.challengeError='';ifty149QuestionPanel();
+  try{
+    const response=await ifty172AwaitGrade(iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      type:'ifty149_challenge',subject:st.subject,mode:st.mode,kind:q.kind,question:q.question,
+      referenceAnswer:q.referenceAnswer||'',gradingPoints:q.gradingPoints||[],userAnswer:st.answer||'',
+      firstFeedback:st.feedback||'',firstModelAnswer:st.modelAnswer||'',challengeReason:st.challengeReason,
+      order:getIftySubjectOrder(st.subject)
+    })}),25000);
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||data.error)throw alliaHttpError(response,data,'反論の再審査に失敗しました。');
+    if(typeof data.challengeAccepted!=='boolean')throw new Error('再審査結果に可否情報がありません。');
+    if(ifty149Run!==st||st.index!==index||st.id!==runId||st.current!==q)return;
+    st.challengePending=false;st.challenged=true;
+    const accepted=data.challengeAccepted===true;
+    if(accepted){
+      ifty173CorrectWrongCount(st);
+      st.lastCorrect=true;
+      ifty173UndoRecentMistake(st.subject,q,st.queue[st.index]);
+    }
+    st.feedback=(accepted?'⚖️ 反論成立：不正解→正解に訂正。':'⚖️ 反論は認められませんでした。不正解を維持。')+'\n'+String(data.feedback||'');
+    if(data.modelAnswer)st.modelAnswer=String(data.modelAnswer);
+    ifty149QuestionPanel();
+  }catch(error){
+    if(ifty149Run!==st||st.index!==index||st.current!==q)return;
+    st.challengePending=false;st.challengeError=String(error?.message||error);
+    ifty149QuestionPanel();
+  }
+};
+
+window.ifty149Next=function(){
+ const st=ifty149Run;if(!st?.answered||st.busy||st.challengePending)return;
+ st.index++;void ifty149RenderManaged();
+};
 window.ifty149Exit=function(){const st=ifty149Run;ifty149Run=null;window.ifty143CloseHelp?.();if(st)openPracticeHome(st.subject);};
 window.ifty149Help=function(){const st=ifty149Run;if(!st?.current)return;window.ifty143OpenHelp('ifty149');};
 
@@ -24520,10 +24812,10 @@ window.submitIftyAncientPracticeChallenge = async function() {
 
     const accepted = data.challengeAccepted === true;
     if (accepted) {
-      st.wrong = Math.max(0, st.wrong - 1);
-      st.correct += 1;
+      ifty173CorrectWrongCount(st);
       st.last.correct = true;
       correctIftySubjectLastStudyOutcome('ANCIENT', q.targetItemId);
+      ifty173UndoRecentMistake('ANCIENT',q,q.targetItemId);
     }
     renderIftyAncientPracticeFeedback(accepted, data.feedback || 'Challengeを再審査しました。', q.modelAnswer, false);
   } catch (error) {
@@ -24955,10 +25247,10 @@ window.submitIftySubjectTermWriteChallenge = async function() {
 
     const accepted = data.challengeAccepted === true;
     if (accepted) {
-      st.wrong = Math.max(0, st.wrong - 1);
-      st.correct += 1;
+      ifty173CorrectWrongCount(st);
       st.last.correct = true;
       correctIftySubjectLastStudyOutcome(st.subject, q.itemId);
+      ifty173UndoRecentMistake(st.subject,q,q.itemId);
     }
     renderIftySubjectTermWriteFeedback(accepted, data.feedback || 'Challengeを再審査しました。');
   } catch (error) {
@@ -25539,6 +25831,41 @@ window.startQuizSet = function(setId, restart=false, reviewOnly=false) {
   savePracticeData(); renderQuizPlayer(setId);
 };
 
+// STEP174: Saved card data is sufficient for simple/written question generation.
+// Same prompts, instructions and grading semantics as the Worker implementation.
+// ALLIA remains available for semantic grading, but is not called just to create the stem.
+function ifty174LocalVocabularyQuestion(word, type, direction) {
+  const headword = String(word?.word || '').trim();
+  const meanings = Array.isArray(word?.meanings) ? word.meanings.map(value => String(value || '').trim()).filter(Boolean) : [];
+  if (!headword || !meanings.length || !['simple', 'written'].includes(type)) return null;
+  const primaryMeaning = meanings[0];
+  const allMeanings = meanings.join(' / ');
+  if (type === 'simple') {
+    return direction === 'jp_to_en'
+      ? {question:`「${primaryMeaning}」に当てはまる見出し語を書いてください。`,instruction:'正しい表記を入力してください。',referenceAnswer:headword,options:[]}
+      : {question:`${headword} の日本語の意味を書いてください。`,instruction:'主要な意味のうち1つ以上を答えてください。',referenceAnswer:allMeanings,options:[]};
+  }
+  return direction === 'jp_to_en'
+    ? {question:`次の意味に対応する見出し語を、正しい表記で書いてください。\n${primaryMeaning}`,instruction:'同じ意味を持つ別語ではなく、この語彙帳の見出し語を答えてください。',referenceAnswer:headword,options:[]}
+    : {question:`${headword} の意味を、文脈で使える形で説明してください。`,instruction:'表現や語順が多少違っても、意味が合っていればALLIAが正解にします。',referenceAnswer:allMeanings,options:[]};
+}
+
+// On an AI error, the student may deliberately switch just this question to a basic
+// saved-data question. Never silently change the selected format or the quiz score.
+window.ifty174UseSavedVocabularyQuestion = function(setId) {
+  const set = getQuizSet(setId);
+  const p = set?.progress;
+  if (!p || p.currentQuestion || p.index >= p.queue.length) return;
+  const ref = getWordById(p.queue[p.index]);
+  if (!ref?.word) return;
+  const direction = resolveQuizDirection(set);
+  const question = ifty174LocalVocabularyQuestion(ref.word, 'written', direction);
+  if (!question) { alert('この単語には保存済みの意味データがありません。'); return; }
+  p.currentQuestion = {...question,quizType:'written',direction,wordId:ref.word.id,ifty174Fallback:true};
+  savePracticeData();
+  renderQuizPlayer(setId);
+};
+
 async function renderQuizPlayer(setId) {
   const set=getQuizSet(setId); if(!set||!set.progress)return;
   const modal=document.getElementById('practiceModal'); if(!modal)return;
@@ -25560,7 +25887,7 @@ async function renderQuizPlayer(setId) {
         return;
       }
       const direction=resolveQuizDirection(set);
-      if (!['selection','listening','inflection'].includes(type) && !ensureIftyOnline('このクイズ形式の問題生成', { silent: true })) {
+      if (!['selection','listening','inflection','simple','written'].includes(type) && !ensureIftyOnline('このクイズ形式の問題生成', { silent: true })) {
         throw new Error(iftyOfflineMessage('このクイズ形式の問題生成'));
       }
       if (type === 'selection') {
@@ -25575,16 +25902,38 @@ async function renderQuizPlayer(setId) {
       } else if (type === 'truefalse') {
         const data=await ifty151GenerateTruth({subject:'ENGLISH',makeCorrect:p.index%2===0,difficulty:ifty149Difficulty(set.difficulty),target:ifty151EnglishTarget(ref.word,ref.folder)});
         p.currentQuestion={...data,quizType:type,direction:'mixed',wordId:ref.word.id};
+      } else if ((type === 'simple' || type === 'written') && ifty174LocalVocabularyQuestion(ref.word,type,direction)) {
+        const data=ifty174LocalVocabularyQuestion(ref.word,type,direction);
+        p.currentQuestion={...data,quizType:type,direction,wordId:ref.word.id};
       } else {
         const candidateWords=ifty147RankRelated(ref,(set.wordIds||[]).filter(id=>id!==ref.word.id).map(id=>getWordById(id)).filter(Boolean)).slice(0,8).map(row=>row.word.word).filter(Boolean);
         const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_generate',quizType:type,direction,word:ref.word,candidateWords,subject:'ENGLISH',difficulty:ifty149Difficulty(set.difficulty),derivedKinds:ifty149DerivedKinds(set.derivedKinds),order:getIftyPracticeOrder('ENGLISH')})});
-        const data=await response.json();
-        if(!response.ok) throw alliaHttpError(response, data, '問題生成に失敗しました。');
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok || data.error) throw alliaHttpError(response, data, '問題生成に失敗しました。');
+        if(typeof data.question!=='string'||!data.question.trim()||typeof data.referenceAnswer!=='string'||!data.referenceAnswer.trim()) {
+          const error=new Error('AIから問題文・正答が揃ったデータを受信できませんでした。');
+          error.code='IFTY_AI_INVALID_QUESTION';
+          throw error;
+        }
         p.currentQuestion={...data,quizType:type,direction,wordId:ref.word.id};
       }
       savePracticeData();
     } catch(error){
-      modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h3 style="color:#ef4444;">問題生成に失敗しました</h3><p style="color:#64748b;">${escapeHtml(String(error.message||error))}</p><button onclick="retryCurrentQuizQuestion('${set.id}')" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">再試行</button><button onclick="openQuizSet('${set.id}')" style="margin-left:8px;background:#e2e8f0;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">戻る</button></div>`;
+      const code=String(error?.code||'IFTY_REQUEST_FAILED');
+      const retryText=error?.retryable ? 'AIサービスの一時的な不調の可能性があります。再試行できます。' : '再試行しても改善しない場合は診断コードを確認してください。';
+      const refForFallback=getWordById(p.queue[p.index]);
+      const canFallback=!!ifty174LocalVocabularyQuestion(refForFallback?.word,'written','jp_to_en');
+      modal.innerHTML=`<div role="alert" data-ifty174-error="1" style="background:#1e293b;color:#f8fafc;border:1px solid #64748b;border-radius:14px;width:min(660px,100%);padding:clamp(16px,4vw,24px);box-sizing:border-box;line-height:1.65;">
+        <h3 style="color:#fecaca;margin:0 0 10px;">⚠️ 問題生成に失敗しました</h3>
+        <p style="color:#e2e8f0;white-space:pre-wrap;overflow-wrap:anywhere;">${escapeHtml(String(error?.message||error))}</p>
+        <p style="color:#cbd5e1;font-size:.82em;">${escapeHtml(retryText)}</p>
+        <div style="color:#93c5fd;font-size:.78em;overflow-wrap:anywhere;">診断コード：${escapeHtml(code)}／STEP${IFTY_APP_STEP}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:15px;">
+          <button type="button" onclick="retryCurrentQuizQuestion('${set.id}')" style="background:#2563eb;color:white;border:0;border-radius:8px;padding:11px 14px;font-weight:800;">🔄 再試行</button>
+          ${canFallback?`<button type="button" onclick="ifty174UseSavedVocabularyQuestion('${set.id}')" style="background:#0f766e;color:white;border:0;border-radius:8px;padding:11px 14px;font-weight:800;">📖 保存済みデータから基本問題を出す（ALLIA不要）</button>`:''}
+          <button type="button" onclick="openQuizSet('${set.id}')" style="background:#334155;color:#f8fafc;border:1px solid #94a3b8;border-radius:8px;padding:11px 14px;font-weight:800;">戻る</button>
+        </div>
+      </div>`;
       return;
     }
   }
@@ -25896,8 +26245,9 @@ window.submitQuizChallenge = async function(setId) {
     last.challengeFeedback=data.feedback||'';
 
     if(accepted){
-      p.wrongCount=Math.max(0,(Number(p.wrongCount)||0)-1);
-      p.correctCount=(Number(p.correctCount)||0)+1;
+      ifty173CorrectWrongCount(p,'correctCount','wrongCount');
+      last.correct=true;
+      ifty173UndoRecentMistake('ENGLISH',q,q.wordId);
 
       if (set.systemReview) {
         restoreIftyReviewState(q.wordId, last.reviewStateBefore || null);
@@ -27652,6 +28002,7 @@ window.logout = async function() {
                 <li><strong>フォルダ ↑ 先頭</strong>：現在位置に対応するフォルダの先頭へ移動。</li>
                 <li><strong>フォルダ ↓ 末尾</strong>：そのフォルダの末尾へ移動。フォルダがない画面では下2つは利用できません。</li>
               </ul>
+              <p>移動パネル上部の<strong>−</strong>で最小化でき、<strong>↕</strong>で再展開します。状態は次回も保持されます。</p>
               <p>画面左下などの<strong>❮／❯</strong>はページの移動履歴です。↕ 移動先はスクロール、❮／❯は画面履歴という違いがあります。</p>
             </div>
           </details>
@@ -27662,7 +28013,7 @@ window.logout = async function() {
               <ul>
                 <li>バックアップには<strong>PERIODIC（自動）</strong>と<strong>MANUAL（手動）</strong>があります。MANUALは異なる保存時点を残せます。重要なデータはファイルへの書き出しも検討してください。</li>
                 <li>科目名の表示設定は、対応するHOMEやサイドメニューの表示にも反映されます。</li>
-                <li>操作しにくい場合は、画面のテーマ切り替えやフォルダ折りたたみを活用してください。</li>
+                <li>操作しにくい場合は、フォルダ折りたたみを活用してください。</li>
                 <li>不具合の報告機能では、画面・環境情報をまとめた報告文をコピーできます。個人情報や復旧コードを入力しないでください。</li>
               </ul>
             </div>
@@ -27862,9 +28213,9 @@ window.logout = async function() {
         <div class="ifty-manual-guide-group">
           <div class="ifty-manual-guide-heading">SETTINGS & TROUBLE</div>
           <details>
-            <summary>🌙 ダークモード・表示設定</summary>
+            <summary>🎨 表示と文字の見やすさ</summary>
             <div class="ifty-manual-guide-content">
-              <p><strong>初回起動時はダークモード</strong>です。テーマ切替ボタンでライトモードへ変更できます。一度変更したテーマは保存され、次回もその設定を使います。</p>
+              <p>STEP173からアプリ全体を読みやすい固定配色に統一しました。ライト／ダークの切替はありません。文字が読みにくい箇所があれば、画面と操作手順を不具合報告から知らせてください。</p>
             </div>
           </details>
 
@@ -30577,6 +30928,15 @@ function ensureIfty142JumpDock() {
     #ifty142JumpDock button span {display:block;white-space:nowrap;font-size:inherit;}
     #ifty142JumpDock button:disabled {opacity:.45;cursor:default;}
     #ifty142JumpDock button:focus-visible {outline:3px solid #38bdf8;}
+    #ifty142JumpDock .ifty142-nav-title {display:flex;align-items:center;justify-content:space-between;gap:7px;min-height:39px;}
+    #ifty142JumpDock .ifty173-jump-toggle {display:flex;min-width:44px;min-height:44px;padding:7px;flex:none;
+      border:1px solid #8293ad;border-radius:9px;background:#334d6e;color:#fff;font-size:19px;font-weight:900;}
+    #ifty142JumpDock.ifty173-minimized {width:52px;max-width:52px;padding:3px;border-radius:14px;}
+    #ifty142JumpDock.ifty173-minimized .ifty142-nav-title {padding:0;justify-content:center;min-height:44px;}
+    #ifty142JumpDock.ifty173-minimized .ifty142-nav-title > span,
+    #ifty142JumpDock.ifty173-minimized .ifty142-nav-grid,
+    #ifty142JumpDock.ifty173-minimized #ifty142JumpStatus {display:none!important;}
+    #ifty142JumpDock.ifty173-minimized .ifty173-jump-toggle {border:0;min-width:44px;width:44px;min-height:44px;}
     #ifty142JumpStatus {font-size:10px;color:#fcd34d;min-height:0;text-align:center;}
     @media(max-width:600px){
       #ifty142JumpDock {right:8px;bottom:calc(144px + env(safe-area-inset-bottom,0px));width:170px;padding:6px;}
@@ -30587,7 +30947,7 @@ function ensureIfty142JumpDock() {
   const dock=document.createElement('nav');
   dock.id='ifty142JumpDock';
   dock.setAttribute('aria-label','ページ・フォルダ内の移動');
-  dock.innerHTML=`<div class="ifty142-nav-title">↕ 移動先</div>
+  dock.innerHTML=`<div class="ifty142-nav-title"><span>↕ 移動先</span><button type="button" class="ifty173-jump-toggle" aria-label="移動パネルを最小化" aria-expanded="true" title="パネルを最小化">−</button></div>
     <div class="ifty142-nav-grid">
       <button type="button" data-ifty142-to="pageTop" title="ページの先頭へ" aria-label="ページの先頭へ"><span>ページ</span><span>↑ 先頭</span></button>
       <button type="button" data-ifty142-to="pageBottom" title="ページの末尾へ" aria-label="ページの末尾へ"><span>ページ</span><span>↓ 末尾</span></button>
@@ -30598,6 +30958,22 @@ function ensureIfty142JumpDock() {
     const btn=e.target.closest('button[data-ifty142-to]');if(!btn)return;
     ifty142Go(btn.dataset.ifty142To);
   });
+  const toggle=dock.querySelector('.ifty173-jump-toggle');
+  let minimized=false;
+  try {minimized=localStorage.getItem('ifty173_jump_minimized')==='1';} catch (_) {}
+  const updateCollapsed=()=>{
+    dock.classList.toggle('ifty173-minimized',minimized);
+    toggle.textContent=minimized?'↕':'−';
+    toggle.setAttribute('aria-expanded',String(!minimized));
+    toggle.setAttribute('aria-label',minimized?'移動パネルを展開':'移動パネルを最小化');
+    toggle.title=minimized?'移動パネルを展開':'パネルを最小化';
+  };
+  toggle.addEventListener('click',e=>{
+    e.preventDefault();e.stopPropagation();minimized=!minimized;
+    try {localStorage.setItem('ifty173_jump_minimized',minimized?'1':'0');} catch (_) {}
+    updateCollapsed();
+  });
+  updateCollapsed();
   document.body.appendChild(dock);
   let queued=false;
   const update=()=>{
