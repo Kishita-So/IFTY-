@@ -29,7 +29,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 182;
+const IFTY_APP_STEP = 185;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -1672,6 +1672,7 @@ window.toggleIftySideMenu = function(event) {
 // 招待URLを設定する場合は openchat-link.txt に https://line.me/ti/g2/... を1行で記入する。
 // ==========================================
 const IFTY_PATCH_NOTES_FALLBACK = [
+  { step:183, date:'2026-11-03', title:'PLACESの山脈・河川・領域対応', changes:['地点・線・面のAI自動判定と複数座標提案','位置が特定できない地形も未配置で保存可能','未配置の項目は編集・再生成・後から配置可能','線・面の地図PRACTICEで範囲・流路を判定'] },
   { step:182, date:'2026-11-03', title:'問題別振り返り・地図入力の2方式・分からない', changes:['実践の各問題の正誤・回答・模範解答を終了時に確認','PLACESの手動配置とALLIA生成を明確に分離','地図実践に分からないを追加'] },
   { step:181, date:'2026-11-03', title:'教科別ORDER・3つの適用範囲', changes:['実践専用ORDERを撤去','各ORDERに意味生成・ALLIAチャット・実践のON/OFFを追加','Worker送信前に教科別・用途別のORDERを選択'] },
   { step:180, date:'2026-11-03', title:'全ORDERの適用漏れ・言語指定を修正', changes:['教科別ORDERをAI通信前に補完','PRACTICE専用ORDERの分離維持','Workerで言語・その他のORDERを一貫して優先'] },
@@ -32448,12 +32449,31 @@ function ifty176TruthPick(subject,{sourceId='',setId='',exclude=[]}={}){
   if(!row||row.question?.kind!=='truefalse'||typeof row.question.isCorrect!=='boolean')return null;
   return row;
 }
+// STEP185: Offline emergency T/F question derived only from local card data.
+// No generated historical claims, no ALLIA request, no new Worker endpoint.
+function ifty185LocalTruthFallback(target,reason='') {
+  const t=String(target?.title||'').replace(/\s+/g,' ').trim().slice(0,100);
+  const d=String(target?.description||'').replace(/\s+/g,' ').trim().slice(0,210);
+  if(!t)throw new Error('保存カードの表題が見つかりません。');
+  const statement=d
+    ? `保存済みカード「${t}」の説明には「${d}」と記載されている。`
+    : `保存済みカードの表題は「${t}」である。`;
+  return {
+    kind:'truefalse',question:statement,statement,isCorrect:true,
+    correctedSentence:statement,referenceAnswer:'○ 正しい',
+    instruction:'⚠️ AI通信または生成に失敗したため、カードの記載内容に基づく無AIの代替問題を出題しています。',
+    explanation:'カード内の記録を確認する問題です。外部の事実関係を検証した問題ではありません。',
+    options:[],gradingPoints:[],_ifty175Saved:true,_ifty185Offline:true,
+    _ifty175FallbackNote:'⚠️ ALLIAの生成に失敗。保存済みカードを使った無AIの代替問題です。'
+  };
+}
+
 async function ifty151GenerateTruth({subject,target,difficulty='normal',makeCorrect=false,sourceId='',setId='',preferSaved=false,exclude=[]}) {
   const source=String(sourceId||target?.title||'');
   if(preferSaved){
     const row=ifty176TruthPick(subject,{sourceId:source,setId,exclude})||ifty176TruthPick(subject,{sourceId:source,setId});
     if(row)return {...JSON.parse(JSON.stringify(row.question)),_ifty175Saved:true,_ifty175SavedId:row.id,_ifty175SourceId:row.sourceId,_ifty175FallbackNote:'保存問題を使ってALLIAなしで継続中'};
-    const e=new Error('使用できる保存済み正誤問題がありません。AIを再試行するか、次の問題へ進んでください。');e.code='IFTY176_NO_SAVED_TRUTH';throw e;
+    return ifty185LocalTruthFallback(target,'no_saved_truth');
   }
   try {
   const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
@@ -32465,12 +32485,18 @@ async function ifty151GenerateTruth({subject,target,difficulty='normal',makeCorr
   if(data.kind!=='truefalse'||typeof data.isCorrect!=='boolean'||!String(data.question||'').trim()||!String(data.correctedSentence||'').trim()){
     throw new Error('ALLIAから有効な正誤問題を受け取れませんでした。再試行してください。');
   }
+  if(data._ifty185Offline){
+    return {...data,_ifty175Saved:true,_ifty175FallbackNote:'⚠️ AI生成の代わりに保存済みカードの内容を確認する問題です。'};
+  }
   ifty175Remember(subject,data,{sourceId:source,setId,mode:'truefalse'});
   return data;
   }catch(error){
     const row=ifty176TruthPick(subject,{sourceId:source,setId,exclude})||ifty176TruthPick(subject,{sourceId:source,setId});
     if(row)return {...JSON.parse(JSON.stringify(row.question)),_ifty175Saved:true,_ifty175SavedId:row.id,_ifty175SourceId:row.sourceId,_ifty175FallbackNote:'生成に失敗したため保存済み問題を使用中'};
-    throw error;
+    // No saved generated T/F question yet: continue without Worker instead of
+    // stopping at the error page. This is intentionally labelled as a card
+    // recall check; it does NOT pretend to be an AI-authored fact question.
+    return ifty185LocalTruthFallback(target,String(error?.code||'worker_error'));
   }
 }
 async function ifty151GradeTruth({subject,statement,isCorrect,correctedSentence,verdict,correction}) {
@@ -33096,7 +33122,7 @@ const REGIONS={
  world:{label:'世界全体',bounds:[-180,-83,180,83]},europe:{label:'ヨーロッパ',bounds:[-13,33,44,72]},asia:{label:'アジア',bounds:[25,-12,180,78]},africa:{label:'アフリカ',bounds:[-20,-37,53,39]},north_america:{label:'北アメリカ',bounds:[-170,5,-50,84]},south_america:{label:'南アメリカ',bounds:[-84,-58,-32,15]},oceania:{label:'オセアニア',bounds:[110,-49,180,0]},antarctica:{label:'南極大陸',bounds:[-180,-85,180,-60]},mediterranean:{label:'地中海世界',bounds:[-13,28,45,49]},middle_east:{label:'中東',bounds:[25,10,65,46]},east_asia:{label:'東アジア',bounds:[95,15,155,55]},japan:{label:'日本列島',bounds:[122,23,149,46]},kyushu:{label:'九州',bounds:[128.5,30,132.7,34.9]},kanto:{label:'関東',bounds:[137.5,34.4,141.5,37.8]},kinki:{label:'近畿',bounds:[133.8,33.3,137.8,36.3]},hokkaido:{label:'北海道',bounds:[139,41,146.5,46]},okinawa:{label:'沖縄',bounds:[122,23.5,131,27.5]}
 };
 const ICONS=['📍','⚔️','🏰','👑','🤝','🚩','🔥','⛵','🚢','📜','🏛️','⛪','🎓','🏭','🌋','🏔️','🌊','🌲','💎','⭐','🏺','🛤️'];
-const THEMES={point:'📍 地点・都市',line:'〰️ 河川・山脈・経路',area:'🟦 領土・砂漠・範囲',event:'⚔️ 歴史イベント'};
+const THEMES={auto:'✨ ALLIAが地物の種類を判定',point:'📍 地点・都市',line:'〰️ 河川・山脈・経路',area:'🟦 領土・砂漠・範囲',event:'⚔️ 歴史イベント'};
 let active=null,draw=[],quiz=null,selected=null,notice='',viewOverride=null,draft=null;
 let pl169Tool='move', pl169Gesture=null, pl169LastMove=null, pl169SettingsOpen=false, pl182EditMode=null;
 // STEP165: PLACES-only UI state; the existing subjects and quiz engines remain untouched.
@@ -33248,7 +33274,7 @@ function mapSvg(m,mode){
  }
  return `<div class="mapbox"><svg id="iftyPlacesSVG" class="${isEdit?'pl-editor':''}" viewBox="0 0 1000 600" role="img" aria-label="${h(m.name)} 地図" onclick="iftyPlacesMapClick(event)" onpointerdown="iftyPlacesMapPointerDown(event)" onpointermove="iftyPlacesMapPointerMove(event);iftyPlacesPointerMove(event)" onpointerup="iftyPlacesMapPointerUp(event);iftyPlacesPointerUp(event)" onpointercancel="iftyPlacesMapPointerCancel(event);iftyPlacesPointerCancel(event)" onwheel="iftyPlacesWheel(event)"><rect width="1000" height="600" fill="#dbeafe"/><g id="pl169Viewport">${borders}${coast}${art}${preview}</g></svg><div class="maphint">${isEdit?pl169Tool==='place'?'配置モード：空白をタップして地点を追加。指でなぞると地図移動、2本指で拡大縮小。':'移動モード：指で地図を動かし、2本指で拡大縮小。アイコンを長く押さずにドラッグすると位置調整。書き込みには「配置」を選択。':'地図上の位置・範囲をタップして回答してください。'}</div></div>`;
 }
-function itemList(m){return `<div class="panel"><h3>書き込み ${m.items.length}件</h3><div class="buttons">${button('iftyPlacesStartQuiz()','⚔️ この地図をPRACTICE','')}</div>${m.items.map(it=>`<div class="item ${selected===it.id?'active':''}"><div><b>${h(it.icon||'📍')} ${h(itemName(it,m))}</b> <span class="muted">${h(THEMES[it.kind]||it.kind)} ${h(it.from||'')}${it.to?'〜'+h(it.to):''}</span></div><div class="buttons" style="margin-top:6px">${button(`iftyPlacesChoose('${h(it.id)}')`,'編集')}${button(`iftyPlacesRestoreItem('${h(it.id)}')`,'↩ 基準位置へ')}${button(`iftyPlacesDeleteItem('${h(it.id)}')`,'削除','danger')}</div></div>`).join('')||'<p class="muted">まだ書き込みがありません。</p>'}</div>`}
+function itemList(m){return `<div class="panel"><h3>書き込み ${m.items.length}件</h3><div class="buttons">${button('iftyPlacesStartQuiz()','⚔️ この地図をPRACTICE','')}</div>${m.items.map(it=>`<div class="item ${selected===it.id?'active':''}"><div><b>${h(it.icon||'📍')} ${h(itemName(it,m))}</b> <span class="muted">${h(THEMES[it.kind]||it.kind)} ${!it.coords?.length?'<strong style="color:#fde68a">⚠️ 位置未設定・PRACTICE対象外</strong>':''} ${h(it.from||'')}${it.to?'〜'+h(it.to):''}</span></div><div class="buttons" style="margin-top:6px">${button(`iftyPlacesChoose('${h(it.id)}')`,'編集')}${button(`iftyPlacesRestoreItem('${h(it.id)}')`,'↩ 基準位置へ')}${button(`iftyPlacesDeleteItem('${h(it.id)}')`,'削除','danger')}</div></div>`).join('')||'<p class="muted">まだ書き込みがありません。</p>'}</div>`}
 function renderList(){active=null;selected=null;draw=[];quiz=null;viewOverride=null;pl169ClearGesture();resetDraft();const maps=load();shell(`<h1>🗺️ ${displayLang(null)==='ja'?'地図・地名':'PLACES'}</h1><p class="muted">フォルダの代わりに地図を作成し、地名・河川・山脈・帝国領土・歴史イベントを記録。地図からそのまま練習できます。</p><div class="buttons">${button('iftyPlacesCreate()','＋ 新しい地図','')}${button('openIftyHome()','HOMEへ戻る')}</div><div class="maplist">${maps.map(m=>`<div class="panel"><h3>${h(mapName(m))}</h3><p class="muted">${h(REGIONS[m.region]?.label||'地域')} · ${m.items.length}件</p><div class="buttons">${button(`iftyPlacesOpen('${h(m.id)}')`,'地図を開く','')}${button(`iftyPlacesDeleteMap('${h(m.id)}')`,'削除','danger')}</div></div>`).join('')||'<p class="muted">地図はまだありません。「新しい地図」から始めてください。</p>'}</div><p class="muted">保存はこの端末・ブラウザのlocalStorageです。別端末への同期はまだありません。</p>`,'list')}
 function renderEditor(){captureDraft();const m=current();if(!m)return renderList();quiz=null;const opt=(items,value)=>items.map(([k,v])=>`<option value="${h(k)}" ${k===value?'selected':''}>${h(v)}</option>`).join('');const selItem=m.items.find(x=>x.id===selected);const val=(k,f)=>draft?.[k]??f;const mapTitle=mapName(m);
  shell(`<div class="buttons">${button('openIftyPlaces()','← PLACES一覧')}${button('iftyPlacesStartQuiz()','⚔️ PRACTICE','')}</div><h1>🗺️ ${h(mapTitle)}</h1>
@@ -33265,7 +33291,7 @@ function renderEditor(){captureDraft();const m=current();if(!m)return renderList
  ${mapSvg(m,'edit')}
  <div class="pl169-settings-toggle">${button('iftyPlacesToggleSettings()',pl169SettingsOpen?'⚙️ 地図設定を閉じる':'⚙️ 地図名・地域・国境線などの設定')}</div>
  ${pl169SettingsOpen?` <div class="panel"><div class="fields"><label>地図名（基本）<input id="pl164Name" value="${h(m.name)}" onchange="iftyPlacesSetting('name',this.value)"></label><label>日本語名（地図）<input value="${h(m.nameJa||'')}" placeholder="例：世界史の地図" onchange="iftyPlacesSetting('nameJa',this.value)"></label><label>英語名（地図）<input value="${h(m.nameEn||'')}" placeholder="e.g. History Map" onchange="iftyPlacesSetting('nameEn',this.value)"></label><label>地名の表示言語<select onchange="iftyPlacesSetting('labelLanguage',this.value)">${opt([['auto','全体設定に合わせる'],['ja','日本語'],['en','English']],m.labelLanguage||'auto')}</select></label><label>表示地域<select onchange="iftyPlacesSetting('region',this.value)">${opt(Object.entries(REGIONS).map(([k,v])=>[k,v.label]),m.region)}</select></label><label>投影法<select onchange="iftyPlacesSetting('projection',this.value)">${opt([['equirect','正距円筒図法'],['mercator','メルカトル図法'],['azimuthal','正距方位図法（中心周辺）']],m.projection)}</select></label><label>表示年代（空欄で全時代）<input type="number" value="${h(m.filterYear??'')}" placeholder="例：1453" onchange="iftyPlacesSetting('filterYear',this.value)"></label></div><div class="buttons" style="margin-top:9px">${button('iftyPlacesToggleBorders()','🗺️ 国境線：'+(m.showBorders===false?'OFF':'ON'))}</div><p class="muted" style="margin:8px 0 0">国境線は参考用の現代国境です。歴史上の帝国・王国の領土や勢力圏とは異なります。</p></div>`:''}
- <div class="row" style="${(!selItem&&!pl182EditMode)?'display:none;':''}"><div class="panel"><h3>${selItem?'マーカーを編集':'新しく書き込む'}</h3><div class="fields"><label>種類<select id="pl164Kind" onchange="iftyPlacesKindChanged()">${opt(Object.entries(THEMES),val('pl164Kind',selItem?.kind||'event'))}</select></label><label>アイコン<select id="pl164Icon">${opt(ICONS.map(i=>[i,i]),val('pl164Icon',selItem?.icon||'⚔️'))}</select></label><label>名称（基本・ALLIA検索用）<input id="pl164ItemName" value="${h(val('pl164ItemName',selItem?.name||''))}" placeholder="例：ワーテルローの戦い" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();this.blur();}"></label><label>日本語名（任意）<input id="pl169NameJa" value="${h(val('pl169NameJa',selItem?.nameJa||''))}" placeholder="例：ワーテルローの戦い"></label><label>English name（任意）<input id="pl169NameEn" value="${h(val('pl169NameEn',selItem?.nameEn||''))}" placeholder="e.g. Battle of Waterloo"></label><label>色<input type="color" id="pl164Color" value="${h(val('pl164Color',selItem?.color||'#dc2626'))}"></label><label>開始年（紀元前は負の値）<input type="number" id="pl164From" value="${h(val('pl164From',selItem?.from??''))}" placeholder="例：1815"></label><label>終了年<input type="number" id="pl164To" value="${h(val('pl164To',selItem?.to??''))}" placeholder="任意"></label></div><label style="margin-top:8px">解説・原因・結果<textarea id="pl164Desc" rows="3">${h(val('pl164Desc',selItem?.description||''))}</textarea></label><p class="pl-ai-note">${pl182EditMode==='ai'?'ALLIAの候補を生成してから、地図上の位置・年代・説明を確認してください。正確な位置は保証されません。':'自分で位置を指定し、名称と説明を入力して保存します。この操作ではALLIAを呼びません。'}</p><div class="buttons" style="margin-top:9px">${pl182EditMode==='ai'?button('iftyPlacesAutoGenerate(true)',aiPending?'⏳ ALLIA生成中':'✨ 名称からALLIAで生成','',aiPending):''}</div><p class="muted" id="pl165AiStatus" role="status" aria-live="polite">${h(aiStatus||'名称の入力を完了すると生成します。')}</p><p class="muted">${selItem?'既存マーカーは地図上でドラッグできます。線・面は選択後、頂点も編集できます。':'AIが置いた仮マーカーもドラッグできます。手動で地図上をタップして位置を追加し、線・面は複数点を指定してください。'}</p><div class="buttons">${button('iftyPlacesSaveItem()','💾 '+(selItem?'変更を保存':'書き込みを保存'),'')}${selItem?button('iftyPlacesRestoreItem()', '↩ 基準位置へ戻す'):''}${selItem?button('iftyPlacesSetDefaultItem()', '📌 現位置を基準に設定'):''}${pl169LastMove?button('iftyPlacesUndoMove()', '⤺ 直前の移動を取消'):''}${button('iftyPlacesUndoPoint()','直前の点を戻す')}${button('iftyPlacesClearPoints()','描画取消')}${selItem?button('iftyPlacesChoose(null)','新規作成'):''}</div><p class="pl169-mini">${selItem?'基準位置：'+(selItem.defaultCoords?.length?'保存済み':'現在位置が初期基準（移動時に保存）'): '新規作成の位置は保存時に基準位置として登録されます。'}</p><p class="muted">現在の入力点：${draw.length}個 ${selItem?'／編集対象の座標を使用':''}</p></div>${itemList(m)}</div>`,'editor')}
+ <div class="row" style="${(!selItem&&!pl182EditMode)?'display:none;':''}"><div class="panel"><h3>${selItem?'マーカーを編集':'新しく書き込む'}</h3><div class="fields"><label>種類<select id="pl164Kind" onchange="iftyPlacesKindChanged()">${opt(Object.entries(THEMES),val('pl164Kind',selItem?.kind||(pl182EditMode==='ai'?'auto':'event')))}</select></label><label>アイコン<select id="pl164Icon">${opt(ICONS.map(i=>[i,i]),val('pl164Icon',selItem?.icon||'⚔️'))}</select></label><label>名称（基本・ALLIA検索用）<input id="pl164ItemName" value="${h(val('pl164ItemName',selItem?.name||''))}" placeholder="例：ワーテルローの戦い" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();this.blur();}"></label><label>日本語名（任意）<input id="pl169NameJa" value="${h(val('pl169NameJa',selItem?.nameJa||''))}" placeholder="例：ワーテルローの戦い"></label><label>English name（任意）<input id="pl169NameEn" value="${h(val('pl169NameEn',selItem?.nameEn||''))}" placeholder="e.g. Battle of Waterloo"></label><label>色<input type="color" id="pl164Color" value="${h(val('pl164Color',selItem?.color||'#dc2626'))}"></label><label>開始年（紀元前は負の値）<input type="number" id="pl164From" value="${h(val('pl164From',selItem?.from??''))}" placeholder="例：1815"></label><label>終了年<input type="number" id="pl164To" value="${h(val('pl164To',selItem?.to??''))}" placeholder="任意"></label></div><label style="margin-top:8px">解説・原因・結果<textarea id="pl164Desc" rows="3">${h(val('pl164Desc',selItem?.description||''))}</textarea></label><p class="pl-ai-note">${pl182EditMode==='ai'?'ALLIAの候補を生成してから、地図上の位置・年代・説明を確認してください。正確な位置は保証されません。':'自分で位置を指定し、名称と説明を入力して保存します。この操作ではALLIAを呼びません。'}</p><div class="buttons" style="margin-top:9px">${pl182EditMode==='ai'?button('iftyPlacesAutoGenerate(true)',aiPending?'⏳ ALLIA生成中':'✨ 名称からALLIAで生成','',aiPending):''}</div><p class="muted" id="pl165AiStatus" role="status" aria-live="polite">${h(aiStatus||'名称の入力を完了すると生成します。')}</p><p class="muted">${selItem?'既存マーカーは地図上でドラッグできます。線・面は選択後、頂点も編集できます。':'AIが提案する線・面は正確な境界ではなく仮形状です。頂点をドラッグして修正できます。位置を特定できない場合も内容を保存し、後から配置できます。'}</p><div class="buttons">${button('iftyPlacesSaveItem()','💾 '+(selItem?'変更を保存':'書き込みを保存'),'')}${selItem?button('iftyPlacesRestoreItem()', '↩ 基準位置へ戻す'):''}${selItem?button('iftyPlacesSetDefaultItem()', '📌 現位置を基準に設定'):''}${pl169LastMove?button('iftyPlacesUndoMove()', '⤺ 直前の移動を取消'):''}${button('iftyPlacesUndoPoint()','直前の点を戻す')}${button('iftyPlacesClearPoints()','描画取消')}${selItem?button('iftyPlacesChoose(null)','新規作成'):''}</div><p class="pl169-mini">${selItem?'基準位置：'+(selItem.defaultCoords?.length?'保存済み':'現在位置が初期基準（移動時に保存）'): '新規作成の位置は保存時に基準位置として登録されます。'}</p><p class="muted">現在の入力点：${draw.length}個 ${selItem?'／編集対象の座標を使用':''}</p></div>${itemList(m)}</div>`,'editor')}
 function renderQuiz(){const m=current();if(!m)return renderList();if(!quiz)return renderEditor();const q=quiz.questions[quiz.index];if(!q){return shell(`<h1>結果：${quiz.correct}/${quiz.questions.length}（分からない ${quiz.unknown||0}）</h1>${ifty182Summary(quiz.history182)}<p>間違えた問題はこの端末に保存しました。次回、同じ地図・設問をそのまま再出題できます（ALLIA不使用）。</p><div class="buttons">${button('iftyPlacesRetryMissed()','🔁 誤答を復習','')}${button('iftyPlacesOpenActive()','地図編集に戻る')}</div>`, 'quiz')}
  const snapshot=Object.assign({},m,{region:q.region,projection:q.projection,filterYear:q.filterYear,items:q.items,showLabels:false,showBorders:q.showBorders!==false});const answered=!!quiz.feedback;
  shell(`<div class="buttons">${button('iftyPlacesOpenActive()','← 地図編集へ')}</div><h1>⚔️ PLACES PRACTICE</h1><p class="muted">${quiz.index+1} / ${quiz.questions.length}問 ／ 正解 ${quiz.correct}</p><h2>${q.type==='locate'?'「'+h(q.answer)+'」の位置・範囲を地図上で選べ。':'色で示した場所・領域の名称を答えよ。'}</h2>${q.type==='locate'?mapSvg(snapshot,'quiz'):mapSvg({...snapshot,items:q.items.map(it=>({...it,color:it.id===q.id?'#e11d48':'#64748b'}))},'quiz')}
@@ -33276,7 +33302,28 @@ function makeQuestions(m,missedOnly=false){const items=m.items.filter(it=>it.coo
  return questions.sort(()=>Math.random()-.5).slice(0,Math.min(20,questions.length))}
 function getAnswer(){if(!quiz)return;return quiz.questions[quiz.index]}
 function checkAnswer(ok,unknown=false,userAnswer=''){if(!quiz||quiz.feedback)return;quiz.feedback={ok,unknown};if(ok)quiz.correct++;else{if(unknown)quiz.unknown=(quiz.unknown||0)+1;const q=getAnswer();try{const k=storageKey()+'_missed',old=JSON.parse(localStorage.getItem(k)||'[]').filter(x=>!(x.mapId===q.mapId&&x.id===q.id&&x.type===q.type));old.push(q);localStorage.setItem(k,JSON.stringify(old.slice(-150)))}catch(e){console.warn('PLACES 誤答の保存に失敗',e)}}const q=getAnswer();ifty182Record(quiz,quiz.index,q.type==='locate'?`「${q.answer}」の位置を選べ`: '色で示した場所・領域の名称を答えよ',unknown?null:ok,userAnswer,q.answer,q.description||'');renderQuiz()}
-function answerGeo(itemId,p){const q=getAnswer();if(!q||quiz.feedback)return;const target=q.items.find(x=>x.id===q.id);let ok=false;if(itemId){ok=itemId===q.id}else if(p&&target&&target.coords?.length){let loc=target.coords[0];let dx=Math.abs(p[0]-loc[0]),dy=Math.abs(p[1]-loc[1]);const bound=REGIONS[q.region]?.bounds||REGIONS.world.bounds;ok=dx<(bound[2]-bound[0])*.045&&dy<(bound[3]-bound[1])*.045}checkAnswer(ok,false,itemId|| (p?`緯度${p[1].toFixed(2)}°・経度${p[0].toFixed(2)}°`:''))}
+function pl183MapHit(p,item,q){
+ if(!p||!item?.coords?.length)return false;
+ const points=item.coords, bounds=REGIONS[q.region]?.bounds||REGIONS.world.bounds;
+ const dx=(bounds[2]-bounds[0])*.036,dy=(bounds[3]-bounds[1])*.036;
+ if(item.kind==='area'&&points.length>=3){
+  let inside=false;
+  for(let i=0,j=points.length-1;i<points.length;j=i++){
+   const a=points[i],b=points[j];
+   if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])inside=!inside;
+  }
+  if(inside)return true;
+ }
+ const count=item.kind==='area'&&points.length>=3?points.length:Math.max(1,points.length-1);
+ for(let i=0;i<count;i++){
+  const a=points[i],b=points[(i+1)%points.length];
+  const ax=a[0]/dx,ay=a[1]/dy,bx=b[0]/dx,by=b[1]/dy,x=p[0]/dx,y=p[1]/dy;
+  const u=Math.max(0,Math.min(1,((x-ax)*(bx-ax)+(y-ay)*(by-ay))/(Math.hypot(bx-ax,by-ay)**2||1)));
+  if(Math.hypot(x-(ax+(bx-ax)*u),y-(ay+(by-ay)*u))<=1)return true;
+ }
+ return false;
+}
+function answerGeo(itemId,p){const q=getAnswer();if(!q||quiz.feedback)return;const target=q.items.find(x=>x.id===q.id);const ok=itemId?itemId===q.id:pl183MapHit(p,target,q);checkAnswer(ok,false,itemId||(p?`緯度${p[1].toFixed(2)}°・経度${p[0].toFixed(2)}°`:''))}
 function svgPoint(e,svg){const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const matrix=svg.getScreenCTM();return matrix?pt.matrixTransform(matrix.inverse()):null;}
 function pointFromEvent(e,svg,m){const p=svgPoint(e,svg);return p?unproject(p.x,p.y,m):null;}
 function getDragItem(){return current()?.items.find(i=>i.id===dragState?.id)}
@@ -33389,6 +33436,27 @@ window.iftyPlacesPointerUp=function(e){
 window.iftyPlacesPointerCancel=function(e){if(!dragState||e.pointerId!==dragState.pointerId)return;dragState=null;renderEditor()};
 function setAiStatus(s){aiStatus=s;const el=document.getElementById('pl165AiStatus');if(el)el.textContent=s;}
 function assignGenerated(elId,value,canWrite){const el=document.getElementById(elId);if(el&&canWrite&&value!==undefined&&value!==null)el.value=String(value);}
+// STEP183: AI geometry is a provisional geographic sketch, never an authoritative boundary.
+function pl183Geometry(raw,kind){
+ const coords=Array.isArray(raw)?raw:[];
+ if(kind!=='line'&&kind!=='area')return [];
+ if(coords.length<(kind==='line'?2:3)||coords.length>36)return [];
+ const clean=[];
+ for(const pt of coords){
+  const lon=Array.isArray(pt)?pt[0]:pt?.longitude;
+  const lat=Array.isArray(pt)?pt[1]:pt?.latitude;
+  if(lon===null||lat===null||lon===''||lat==='')return [];
+  const a=Number(lon),b=Number(lat);
+  if(!Number.isFinite(a)||!Number.isFinite(b)||a < -180||a > 180||b < -85||b > 85)return [];
+  const c=cleanCoords([a,b]);
+  if(!clean.length||clean[clean.length-1][0]!==c[0]||clean[clean.length-1][1]!==c[1])clean.push(c);
+ }
+ if(kind==='area'&&clean.length>=4&&clean[0][0]===clean[clean.length-1][0]&&clean[0][1]===clean[clean.length-1][1])clean.pop();
+ if(clean.length<(kind==='line'?2:3))return [];
+ // Reject huge discontinuities; these are usually mixed longitude conventions or unrelated places.
+ if(clean.some((p,i)=>i>0&&Math.abs(p[0]-clean[i-1][0])>150))return [];
+ return clean;
+}
 window.iftyPlacesAutoGenerate=async function(force=false){
  if(pl182EditMode!=='ai'){setAiStatus('まず「ALLIAに生成させる」を選択してください。');return;}
  if(aiPending)return;
@@ -33413,16 +33481,26 @@ window.iftyPlacesAutoGenerate=async function(force=false){
    assignGenerated('pl169NameEn',data.nameEn,force||!(document.getElementById('pl169NameEn')?.value||'').trim());
   const validIcon=ICONS.includes(data.icon)?data.icon:null;
   assignGenerated('pl164Icon',validIcon,!!validIcon&&(force||before.icon==='⚔️'||before.icon==='📍'));
-  const candidateKind=POINT_TYPES.has(data.kind)?data.kind:null;
-  if(candidateKind&&POINT_TYPES.has(kind)&&!selected&&((kind==='event'&&data.kind==='point')||(kind==='point'&&data.kind==='event')))assignGenerated('pl164Kind',candidateKind,true);
-  // Never silently change manually selected geometries. AI coordinates are provisional.
-  const lat=Number(data.latitude),lon=Number(data.longitude);
-  const positionOK=data.positionConfidence!=='unknown'&&data.latitude!==null&&data.longitude!==null&&Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=85&&Math.abs(lon)<=180;
+  // Auto-detect mountains/rivers as LINE and deserts/empires as AREA, only when the
+  // caller selected automatic classification. Explicit user types are preserved.
+  const returnedKind=['point','event','line','area'].includes(data.kind)?data.kind:null;
+  const chosenKind=kind==='auto'?(returnedKind||'point'):kind;
+  if(kind==='auto'&&returnedKind){assignGenerated('pl164Kind',returnedKind,true);}
+  else if(returnedKind&&POINT_TYPES.has(kind)&&POINT_TYPES.has(returnedKind)&&!selId)assignGenerated('pl164Kind',returnedKind,true);
+  const finalKind=document.getElementById('pl164Kind')?.value||chosenKind;
+  const geometry=pl183Geometry(data.geometryCoordinates,finalKind);
+  if((!selId||!m.items.find(x=>x.id===selId)?.coords?.length)&&!draw.length&&geometry.length){
+   draw=geometry;
+   // Suggested line/area geometry is editable before saving; do not persist until confirmed.
+  }
+  const lat=data.latitude==null||data.latitude===''?NaN:Number(data.latitude);
+  const lon=data.longitude==null||data.longitude===''?NaN:Number(data.longitude);
+  const positionOK=data.positionConfidence==='approximate'&&Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=85&&Math.abs(lon)<=180;
   const projected=positionOK?project(lon,lat,m):null;
   const positionVisible=positionOK&&projected&&valid(projected)&&projected[0]>=0&&projected[0]<=1000&&projected[1]>=0&&projected[1]<=600;
-  if(!selId&&!draw.length&&positionVisible&&POINT_TYPES.has(document.getElementById('pl164Kind')?.value||kind))draw=[cleanCoords([lon,lat])];
+  if((!selId||!m.items.find(x=>x.id===selId)?.coords?.length)&&!draw.length&&positionVisible&&POINT_TYPES.has(finalKind))draw=[cleanCoords([lon,lat])];
   aiLastCompleted=key;
-  const locationInfo=positionOK?(positionVisible?`推定位置 ${lat.toFixed(3)}°, ${lon.toFixed(3)}°。地図上で確認・ドラッグ編集してください。`:`推定位置 ${lat.toFixed(3)}°, ${lon.toFixed(3)}° は現在の表示範囲外です。地域や倍率を変更してから配置してください。`):'位置は特定できませんでした。地図上で手動指定してください。';
+  const locationInfo=geometry.length?`推定${finalKind==='line'?'流路・稜線':'範囲'}（${geometry.length}点）を仮配置しました。地理的な正確さは未確認です。頂点を動かしてから保存してください。`:positionOK?(positionVisible?`推定位置 ${lat.toFixed(3)}°, ${lon.toFixed(3)}°。地図上で確認・ドラッグ編集してください。`:`推定位置 ${lat.toFixed(3)}°, ${lon.toFixed(3)}° は現在の表示範囲外です。地域や倍率を変更してから配置してください。`):'位置データを確定できませんでした。説明だけ保存して「位置未設定」として残し、後で地図上に配置できます。';
   setAiStatus('生成しました。'+locationInfo+(data.locationNote?' '+String(data.locationNote).slice(0,160):''));
   aiPending=false;captureDraft();renderEditor();
  }catch(err){setAiStatus('生成失敗：'+String(err?.message||err)+'。手動入力・保存は引き続き可能です。');}
@@ -33438,8 +33516,8 @@ window.iftyPlacesZoom=function(scale){const m=pl169MapForView();if(!m)return;vie
 window.iftyPlacesResetView=function(){viewOverride=null;pl169ClearGesture();pl169RefreshView()};
 window.iftyPlacesToggleBorders=function(){if(update(m=>{m.showBorders=m.showBorders===false})){renderEditor();}};
 window.iftyPlacesChoose=function(id){pl182EditMode=id?'manual':null;selected=id;draw=[];notice='';resetDraft();renderEditor()};
-window.iftyPlacesSetTool=function(tool){if(tool!=='move'&&tool!=='place')return;captureDraft();if(tool==='place')pl182EditMode='manual';if(tool==='place'&&selected){selected=null;draw=[];resetDraft();}pl169Tool=tool;notice='';renderEditor()};
-window.iftyPlacesChooseFlow=function(mode){if(mode!=='manual'&&mode!=='ai')return;captureDraft();pl182EditMode=mode;if(mode==='manual'){pl169Tool='place';}else{pl169Tool='move';}notice='';renderEditor()};
+window.iftyPlacesSetTool=function(tool){if(tool!=='move'&&tool!=='place')return;captureDraft();if(tool==='place')pl182EditMode='manual';if(tool==='place'&&selected&&current()?.items.find(x=>x.id===selected)?.coords?.length){selected=null;draw=[];resetDraft();}pl169Tool=tool;notice='';renderEditor()};
+window.iftyPlacesChooseFlow=function(mode){if(mode!=='manual'&&mode!=='ai')return;captureDraft();pl182EditMode=mode;if(mode==='manual'){pl169Tool='place';if(draft?.pl164Kind==='auto')draft.pl164Kind='event';}else{pl169Tool='move';if(!selected&&(!draft?.pl164Kind||draft.pl164Kind==='event')){draft={...(draft||{}),pl164Kind:'auto'};}}notice='';skipNextCapture=true;renderEditor()};
 window.iftyPlacesToggleSettings=function(){captureDraft();pl169SettingsOpen=!pl169SettingsOpen;renderEditor()};
 window.iftyPlacesRestoreItem=function(id){
  const itemId=id||selected,m=current(),it=m?.items.find(x=>x.id===itemId);if(!it)return;
@@ -33469,12 +33547,18 @@ window.iftyPlacesDeleteItem=function(id){const m=current(),it=m?.items.find(x=>x
 window.iftyPlacesMapClick=function(e){if(Date.now()<suppressMapClickUntil)return;const m=current();if(!m)return;const svg=e.currentTarget;const p=svgPoint(e,svg);if(!p)return;const geo=unproject(p.x,p.y,quiz?Object.assign({},m,{region:getAnswer().region,projection:getAnswer().projection}):m);if(!valid(geo))return;
  if(quiz){if(quiz.feedback||getAnswer()?.type!=='locate')return;answerGeo(null,geo);return}
  if(pl169Tool!=='place')return;
- if(selected){notice='選択中のマーカーはドラッグして移動できます。新しい場所を追加するには「新規作成」を選んでください。';renderEditor();return}
- const kind=document.getElementById('pl164Kind')?.value||'event';if((kind==='point'||kind==='event')&&draw.length)draw=[];draw.push(geo.map(x=>Math.round(x*1e5)/1e5));renderEditor()};
+ if(selected&&current()?.items.find(x=>x.id===selected)?.coords?.length){notice='選択中のマーカーはドラッグして移動できます。新しい場所を追加するには「新規作成」を選んでください。';renderEditor();return}
+ const kind=document.getElementById('pl164Kind')?.value||'event';if(kind==='auto'){notice='種類を「地点・線・面・イベント」から選んでください。';renderEditor();return;}if((kind==='point'||kind==='event')&&draw.length)draw=[];draw.push(geo.map(x=>Math.round(x*1e5)/1e5));renderEditor()};
 window.iftyPlacesMarkClick=function(e,id){e.stopPropagation();if(quiz){if(quiz.feedback)return;if(getAnswer().type==='locate')answerGeo(id);return}selected=id;draw=[];resetDraft();renderEditor()};
-window.iftyPlacesKindChanged=function(){const kind=document.getElementById('pl164Kind')?.value;const icon=document.getElementById('pl164Icon');if(icon&&kind==='point')icon.value='📍';if(icon&&kind==='event')icon.value='⚔️'};
+window.iftyPlacesKindChanged=function(){const kind=document.getElementById('pl164Kind')?.value;const icon=document.getElementById('pl164Icon');if(icon&&kind==='point')icon.value='📍';if(icon&&kind==='event')icon.value='⚔️';if(icon&&kind==='line')icon.value='🏔️';if(icon&&kind==='area')icon.value='🌲'};
 window.iftyPlacesUndoPoint=function(){draw.pop();renderEditor()};window.iftyPlacesClearPoints=function(){draw=[];renderEditor()};
-window.iftyPlacesSaveItem=function(){const m=current();if(!m)return;const name=document.getElementById('pl164ItemName')?.value?.trim(),kind=document.getElementById('pl164Kind')?.value||'event';if(!name){alert('名称を入力してください。');return}const prior=m.items.find(x=>x.id===selected);const coords=prior?prior.coords:draw;if(coords.length<(kind==='point'||kind==='event'?1:kind==='line'?2:3)){alert('地図上の位置を入力してください（線は2点以上、面は3点以上）。');return}const item={id:prior?.id||uid(),name:name.slice(0,200),kind,icon:document.getElementById('pl164Icon')?.value||'📍',color:document.getElementById('pl164Color')?.value||'#dc2626',from:document.getElementById('pl164From')?.value||'',to:document.getElementById('pl164To')?.value||'',description:document.getElementById('pl164Desc')?.value?.slice(0,5000)||'',nameJa:document.getElementById('pl169NameJa')?.value?.trim().slice(0,200)||'',nameEn:document.getElementById('pl169NameEn')?.value?.trim().slice(0,200)||'',coords:copyCoords(coords),defaultCoords:prior?itemDefaultCoords(prior):copyCoords(coords)};if(update(m=>{if(prior){const i=m.items.findIndex(x=>x.id===prior.id);m.items[i]=item}else m.items.push(item)})){selected=null;draw=[];resetDraft();notice='保存しました。';renderEditor()}};
+window.iftyPlacesSaveItem=function(){const m=current();if(!m)return;const name=document.getElementById('pl164ItemName')?.value?.trim(),kind=document.getElementById('pl164Kind')?.value||'event';if(!name){alert('名称を入力してください。');return}if(!['point','event','line','area'].includes(kind)){alert('保存する前に地物の種類を選択するか、ALLIA生成を実行してください。');return}const prior=m.items.find(x=>x.id===selected);const coords=prior?.coords?.length?prior.coords:draw;const needed=(kind==='point'||kind==='event'?1:kind==='line'?2:3);const missing=!coords.length;
+ if(!missing&&coords.length<needed){alert('線には2点以上、領域には3点以上の座標が必要です。頂点を追加してください。');return}
+ // An AI-created entry can be kept without a position; it is excluded from quiz until located.
+ const generatedForThisName=aiLastCompleted.startsWith(m.id+'|'+selected+'|'+name+'|');
+ if(missing&&!(prior&&!prior.coords?.length)&&!(pl182EditMode==='ai'&&generatedForThisName)){alert('位置を入力してください。推定位置が不明な場合はALLIAで説明を生成してから「位置未設定」として保存できます。');return}
+ const item={id:prior?.id||uid(),name:name.slice(0,200),kind,icon:document.getElementById('pl164Icon')?.value||'📍',color:document.getElementById('pl164Color')?.value||'#dc2626',from:document.getElementById('pl164From')?.value||'',to:document.getElementById('pl164To')?.value||'',description:document.getElementById('pl164Desc')?.value?.slice(0,5000)||'',nameJa:document.getElementById('pl169NameJa')?.value?.trim().slice(0,200)||'',nameEn:document.getElementById('pl169NameEn')?.value?.trim().slice(0,200)||'',coords:copyCoords(coords),defaultCoords:prior?.defaultCoords?.length?itemDefaultCoords(prior):copyCoords(coords),geometryPending:missing};
+ if(update(m=>{if(prior){const i=m.items.findIndex(x=>x.id===prior.id);m.items[i]=item}else m.items.push(item)})){selected=null;draw=[];resetDraft();notice=missing?'説明を保存しました（位置未設定）。「編集」→「自分で位置を指定」で後から座標を追加できます。':'保存しました。';renderEditor()}};
 window.iftyPlacesStartQuiz=function(){const m=current();if(!m)return;const qs=makeQuestions(m);if(!qs.length){alert('先に地図上にマーカーを登録してください。');return}quiz={questions:qs,index:0,correct:0,unknown:0,feedback:null,history182:[]};renderQuiz()};
 window.iftyPlacesAnswerText=function(){const q=getAnswer();if(!q||quiz.feedback)return;const v=document.getElementById('pl164Answer')?.value||'';const norm=s=>String(s).normalize('NFKC').replace(/[\s　・\-]/g,'').toLowerCase();checkAnswer([q.answer,...q.aliases].some(s=>norm(v)===norm(s)),false,v)};
 window.iftyPlacesUnknown=function(){if(!quiz||quiz.feedback||!getAnswer())return;checkAnswer(false,true,'')};
