@@ -1,4 +1,4 @@
-// IFTY STEP189: ORDER sending and subject/scope reliability (STEP188 otherwise preserved)
+// IFTY STEP190: isolate saved ORDER from folder context; prioritize complete ORDER when transmitted (STEP189 otherwise preserved)
 // ★ IFTY STEP176 2026-10-28：正誤問題の生成・採点障害を軽減 ★
 // ★ IFTY STEP175 2026-10-27：AI障害時の保存済み問題代替・問題手動作成 ★
 // ★ IFTY STEP174 2026-10-26：生成失敗の原因表示・安全な復旧・単純問題の無AI化 ★
@@ -30,7 +30,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 189;
+const IFTY_APP_STEP = 190;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -2302,16 +2302,22 @@ function ifty181AttachOrder(init) {
   const subject = ifty181InferOrderSubject(body);
   if (!subject) return init;
   const scope = ifty181OrderScopeForType(type);
-  const context = ifty181ExtractNonOrderContext(body);
-  const order = getIftyOrderForScope(subject, scope);
-  const combined = [context, order].filter(Boolean).join('\n\n').slice(0, IFTY_ORDER_MAX_CHARS);
-  // Explicit empty ORDER is essential for isolation between scopes and subjects.
-  // Supplying subject when absent prevents Worker fallback to another subject.
+  // STEP190: folder context is NOT an ORDER. Preserve the complete active ORDER first,
+  // even when a long folder theme would otherwise truncate it at MAX_CHARS.
+  const savedOrder = String(getIftyOrderForScope(subject, scope) || '').trim().slice(0, IFTY_ORDER_MAX_CHARS);
+  const originalContext = ifty181ExtractNonOrderContext(body);
+  const contextBudget = Math.max(0, IFTY_ORDER_MAX_CHARS - savedOrder.length - (savedOrder ? 2 : 0));
+  const folderContext = originalContext.slice(0, contextBudget);
+  const combined = [folderContext, savedOrder].filter(Boolean).join('\n\n');
+  // Keep the legacy 'order' value for existing generation prompts and caches. The
+  // separate property makes the Worker apply ONLY the actual user-selected ORDER.
   const payload = {
     ...body,
     ...(!String(body.subject || '').trim() ? { subject } : {}),
     ...(type.startsWith('year_') ? { subject: 'YEARS' } : {}),
     order: combined,
+    iftyOrderText: savedOrder,
+    iftyOrderContext: folderContext,
     orderScope: scope
   };
   return { ...init, body: JSON.stringify(payload) };
