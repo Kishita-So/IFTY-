@@ -29,7 +29,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 185;
+const IFTY_APP_STEP = 187;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -1672,6 +1672,8 @@ window.toggleIftySideMenu = function(event) {
 // 招待URLを設定する場合は openchat-link.txt に https://line.me/ti/g2/... を1行で記入する。
 // ==========================================
 const IFTY_PATCH_NOTES_FALLBACK = [
+  { step:187, date:'2026-11-03', title:'PLACES・YEARS操作改善', changes:['川・山脈・長城の線形状生成を再試行','ALLIA生成ごとにマーカー色を自動変更','YEARSの全項目編集と注文付き再生成','質問ラッシュを削除'] },
+  { step:186, date:'2026-11-03', title:'正誤問題の生成・代替出題を再設計', changes:['カードの記載確認だけの疑似問題を廃止','誤文・訂正文の矛盾検査','無効なAI問題を保存せず同形式の過去問で代替'] },
   { step:183, date:'2026-11-03', title:'PLACESの山脈・河川・領域対応', changes:['地点・線・面のAI自動判定と複数座標提案','位置が特定できない地形も未配置で保存可能','未配置の項目は編集・再生成・後から配置可能','線・面の地図PRACTICEで範囲・流路を判定'] },
   { step:182, date:'2026-11-03', title:'問題別振り返り・地図入力の2方式・分からない', changes:['実践の各問題の正誤・回答・模範解答を終了時に確認','PLACESの手動配置とALLIA生成を明確に分離','地図実践に分からないを追加'] },
   { step:181, date:'2026-11-03', title:'教科別ORDER・3つの適用範囲', changes:['実践専用ORDERを撤去','各ORDERに意味生成・ALLIAチャット・実践のON/OFFを追加','Worker送信前に教科別・用途別のORDERを選択'] },
@@ -6260,11 +6262,14 @@ function renderIftyYearEntryCard(entry, index, total) {
           <button type="button" ${index <= 0 ? 'disabled' : ''} onclick="moveIftyYearEntry('${escapeHtml(entry.id)}',-1)" title="上へ">↑</button>
           <button type="button" ${index >= total - 1 ? 'disabled' : ''} onclick="moveIftyYearEntry('${escapeHtml(entry.id)}',1)" title="下へ">↓</button>
           <button id="iftyYearCollapseBtn_${escapeHtml(entry.id)}" class="ifty-year-collapse" type="button" aria-expanded="${collapsed ? 'false' : 'true'}" onclick="toggleIftyYearEntryCollapse('${escapeHtml(entry.id)}')">${collapsed ? '▼ 展開' : '▲ 折りたたむ'}</button>
-          <button type="button" onclick="regenerateIftyYearEntry('${escapeHtml(entry.id)}')" style="background:#f59e0b;color:#111827;">再生成</button>
+          <button type="button" onclick="ifty187ToggleYearRegeneration('${escapeHtml(entry.id)}')" style="background:#f59e0b;color:#111827;">✨ 注文して再生成</button>
+          <button type="button" onclick="ifty187ToggleYearEditor('${escapeHtml(entry.id)}')" style="background:#2563eb;color:#fff;">✏️ 編集</button>
           <button type="button" onclick="ifty132EditYearAliases('${escapeHtml(entry.id)}')">別名</button>
           <button type="button" onclick="deleteIftyYearEntry('${escapeHtml(entry.id)}')" style="background:#ef4444;color:white;">削除</button>
         </div>
       </div>
+      <div id="ifty187YearEditor_${escapeHtml(entry.id)}" hidden class="ifty187-year-editor" style="margin:12px 0;background:#15263e;border:1px solid #6483a5;padding:12px;border-radius:12px;color:#f8fafc;"></div>
+      <div id="ifty187YearRegeneration_${escapeHtml(entry.id)}" hidden class="ifty187-year-editor" style="margin:12px 0;background:#15263e;border:1px solid #6483a5;padding:12px;border-radius:12px;color:#f8fafc;"></div>
       <div id="iftyYearBody_${escapeHtml(entry.id)}" class="ifty-year-body" ${collapsed ? 'hidden' : ''}>
         <div class="ifty-year-section-title">この年の重要事項</div>
         <div class="ifty-year-events">
@@ -6273,6 +6278,7 @@ function renderIftyYearEntryCard(entry, index, total) {
         ${nearby.length ? `<div class="ifty-year-section-title">前後の重要事項</div><div class="ifty-year-events">${nearby.map(event => renderIftyYearEventCard(event, true)).join('')}</div>` : ''}
         <div class="ifty-year-mnemonic">
           <div class="ifty-year-mnemonic-head"><span>語呂合わせ</span><div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;"><button class="ifty-year-mnemonic-edit" type="button" onclick="ifty167SuggestYearMnemonics('${escapeHtml(entry.id)}')" style="background:#0369a1;color:white;">✨ 再生成・3案</button><button class="ifty-year-mnemonic-edit" type="button" onclick="editIftyYearMnemonic('${escapeHtml(entry.id)}')">編集</button></div></div>
+          <label style="display:block;margin:7px 0;color:#dbeafe;font-size:.86em;">語呂候補への注文（任意）<textarea id="ifty187YearMnemonicOrder_${escapeHtml(entry.id)}" rows="2" placeholder="例：語感を重視し、無理な当て字は避ける" style="display:block;width:100%;box-sizing:border-box;background:#0c1d31;color:#fff;border:1px solid #7b99b7;border-radius:8px;padding:8px;"></textarea></label>
           <div id="ifty167YearMnemonicChoices_${escapeHtml(entry.id)}" aria-live="polite"></div>
           <div class="ifty-year-mnemonic-text">${entry.mnemonic ? escapeHtml(entry.mnemonic) : 'まだ語呂合わせはありません。編集から自分で追加できます。'}</div>
         </div>
@@ -6456,18 +6462,18 @@ window.openIftyYears = function() {
   setTimeout(() => document.querySelector('#iftyYearList .ifty128-unified-input')?.focus({ preventScroll:true }), 0);
 };
 
-async function requestIftyYearLookup(era, year, folderId = '') {
+async function requestIftyYearLookup(era, year, folderId = '', regenerateOptions = null) {
   const response = await iftyAlliaFetch(WORKER_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 'year_lookup', era, year, subject: 'SOCIAL STUDIES', order: ifty135ThemeOrder('YEARS',folderId,'YEARS') })
+    body: JSON.stringify({ type: 'year_lookup', era, year, subject: 'SOCIAL STUDIES', order: ifty135ThemeOrder('YEARS',folderId,'YEARS'), regenerationRequest: regenerateOptions?.instruction || '', previousData: regenerateOptions?.previousData || null })
   });
   const data = await response.json();
   if (!response.ok) throw alliaHttpError(response, data, '年号データの生成に失敗しました。');
   return data;
 }
 
-window.lookupIftyYear = async function(forcedEra = '', forcedYear = null, forcedFolderId = '') {
+window.lookupIftyYear = async function(forcedEra = '', forcedYear = null, forcedFolderId = '', regenerateOptions = null) {
   if (!ensureIftyOnline('年号検索')) return;
 
   const input = document.getElementById('iftyYearInput');
@@ -6503,7 +6509,7 @@ window.lookupIftyYear = async function(forcedEra = '', forcedYear = null, forced
   if (status) status.textContent = `${requestLabel}をALLIAが整理中…（生成中 ${iftyYearLookupPending}件）`;
 
   try {
-    const data = await requestIftyYearLookup(parsed.era, parsed.year, forcedFolderId || folderSelect?.value || iftyYearActiveFolderId);
+    const data = await requestIftyYearLookup(parsed.era, parsed.year, forcedFolderId || folderSelect?.value || iftyYearActiveFolderId, regenerateOptions);
     const entries = getIftyYearEntries();
     const existingIndex = entries.findIndex(entry => String(entry.folderId || '') === folderId && normalizeIftyYearEra(entry.era) === parsed.era && Number(entry.year) === parsed.year);
     const existing = existingIndex >= 0 ? entries[existingIndex] : null;
@@ -6516,7 +6522,7 @@ window.lookupIftyYear = async function(forcedEra = '', forcedYear = null, forced
       era: parsed.era,
       year: parsed.year,
       yearLabel: data.yearLabel || requestLabel,
-      mnemonic: existing?.mnemonic || data.mnemonic || '',
+      mnemonic: regenerateOptions?.preserveMnemonic===false ? (data.mnemonic || '') : (existing?.mnemonic || data.mnemonic || ''),
       aliases: existing?.aliases || [],
       alternateSpellings: existing?.alternateSpellings || [],
       descriptiveNames: existing?.descriptiveNames || [],
@@ -6567,9 +6573,73 @@ window.lookupIftyYear = async function(forcedEra = '', forcedYear = null, forced
   }
 };
 
-window.regenerateIftyYearEntry = function(entryId) {
-  const entry = getIftyYearEntries().find(item => String(item.id) === String(entryId));
-  if (!entry) return;
+// STEP187: Complete, local, reversible editing of existing YEARS entries.
+function ifty187YearEditField(label,value,id,extra=''){
+ return `<label style="display:grid;gap:4px;color:#eef5ff;font-weight:750;min-width:0;">${label}<input id="${id}" ${extra} value="${escapeHtml(String(value??''))}" style="min-width:0;width:100%;box-sizing:border-box;background:#0b1c31;border:1px solid #849bb5;color:#fff;padding:9px;border-radius:8px;"></label>`;
+}
+function ifty187YearEventRow(evt={},nearby=false){
+ const id=escapeHtml(String(evt.id||''));
+ const period=nearby?`<div style="display:flex;flex-wrap:wrap;gap:8px;">${ifty187YearEditField('年',evt.year||'','', 'data-ifty187-year="1" type="number" min="1" max="9999"') }<label style="display:grid;gap:4px;color:#fff;">紀元<select data-ifty187-era="1" style="background:#0b1c31;color:white;padding:8px;border:1px solid #849bb5;border-radius:8px;"><option value="CE" ${evt.era!=='BCE'?'selected':''}>西暦</option><option value="BCE" ${evt.era==='BCE'?'selected':''}>紀元前</option></select></label></div>`:'';
+ return `<div data-ifty187-year-event="${nearby?'nearby':'exact'}" data-ifty187-id="${id}" style="margin:8px 0;padding:11px;background:#263c56;border:1px solid #607b9c;border-radius:10px;display:grid;gap:8px;min-width:0;">
+  <label style="color:#fff;font-weight:750;">科目<select data-ifty187-subject="1" style="display:block;width:100%;padding:9px;background:#0b1c31;color:#fff;border:1px solid #849bb5;border-radius:8px;"><option value="WORLD_HISTORY" ${evt.subject!=='JAPANESE_HISTORY'?'selected':''}>世界史</option><option value="JAPANESE_HISTORY" ${evt.subject==='JAPANESE_HISTORY'?'selected':''}>日本史</option></select></label>
+  ${period}<label style="color:#fff;font-weight:750;">出来事名<input data-ifty187-title="1" maxlength="180" value="${escapeHtml(evt.title||'')}" style="display:block;width:100%;box-sizing:border-box;padding:9px;background:#0b1c31;color:white;border:1px solid #849bb5;border-radius:8px;"></label>
+  <label style="color:#fff;font-weight:750;">説明<textarea data-ifty187-memory="1" rows="2" style="display:block;width:100%;box-sizing:border-box;padding:9px;background:#0b1c31;color:white;border:1px solid #849bb5;border-radius:8px;">${escapeHtml(evt.memoryText||'')}</textarea></label>
+  <button type="button" onclick="this.closest('[data-ifty187-year-event]').remove()" style="justify-self:start;background:#7f1d1d;color:#fff;border:1px solid #f87171;border-radius:8px;padding:8px;">この出来事を削除</button></div>`;
+}
+window.ifty187ToggleYearEditor=function(entryId){
+ const id=String(entryId||''),panel=document.getElementById('ifty187YearEditor_'+id),entry=getIftyYearEntries().find(e=>String(e.id)===id);if(!panel||!entry)return;
+ const opening=panel.hidden;panel.hidden=!opening;if(!opening)return;
+ const era=entry.era==='BCE'?'BCE':'CE';
+ panel.innerHTML=`<h3 style="margin:0 0 12px;color:#fff;">✏️ ${escapeHtml(entry.yearLabel)}の全項目を編集</h3>
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:9px;">${ifty187YearEditField('年号',entry.year,'ifty187YearNumber_'+id,'type="number" min="1" max="9999"')}<label style="display:grid;gap:4px;color:#fff;">紀元<select id="ifty187YearEra_${escapeHtml(id)}" style="background:#0b1c31;color:#fff;border:1px solid #849bb5;padding:9px;border-radius:8px;"><option value="CE" ${era==='CE'?'selected':''}>西暦</option><option value="BCE" ${era==='BCE'?'selected':''}>紀元前</option></select></label>${ifty187YearEditField('時代の説明',entry.periodLabel,'ifty187YearPeriod_'+id)}</div>
+ <h4 style="color:#fff;margin-bottom:4px;">この年の重要事項</h4><div id="ifty187ExactEvents_${escapeHtml(id)}">${(entry.exactEvents||[]).map(x=>ifty187YearEventRow(x,false)).join('')}</div><button type="button" onclick="ifty187AddYearEvent('${escapeHtml(id)}',false)" style="padding:9px;color:white;background:#155e75;border-radius:8px;">＋ 同年の出来事</button>
+ <h4 style="color:#fff;margin-bottom:4px;">前後の重要事項</h4><div id="ifty187NearbyEvents_${escapeHtml(id)}">${(entry.nearbyEvents||[]).map(x=>ifty187YearEventRow(x,true)).join('')}</div><button type="button" onclick="ifty187AddYearEvent('${escapeHtml(id)}',true)" style="padding:9px;color:white;background:#155e75;border-radius:8px;">＋ 前後の出来事</button>
+ <label style="display:grid;gap:4px;color:#fff;font-weight:750;margin-top:10px;">語呂合わせ<textarea id="ifty187Mnemonic_${escapeHtml(id)}" rows="2" style="box-sizing:border-box;width:100%;padding:9px;background:#0b1c31;color:white;border:1px solid #849bb5;border-radius:8px;">${escapeHtml(entry.mnemonic||'')}</textarea></label>
+ <label style="display:grid;gap:4px;color:#fff;font-weight:750;margin-top:10px;">メモ<textarea id="ifty187Note_${escapeHtml(id)}" rows="2" style="box-sizing:border-box;width:100%;padding:9px;background:#0b1c31;color:white;border:1px solid #849bb5;border-radius:8px;">${escapeHtml(entry.note||'')}</textarea></label>
+ <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;"><button type="button" onclick="ifty187SaveYearEditor('${escapeHtml(id)}')" style="background:#2563eb;color:#fff;border:0;padding:11px 15px;border-radius:8px;font-weight:850;">💾 編集を保存</button><button type="button" onclick="ifty187ToggleYearEditor('${escapeHtml(id)}')" style="background:#475569;color:#fff;padding:11px;border-radius:8px;">キャンセル</button></div>`;
+};
+window.ifty187AddYearEvent=function(id,nearby){
+ const container=document.getElementById((nearby?'ifty187NearbyEvents_':'ifty187ExactEvents_')+id);
+ if(container)container.insertAdjacentHTML('beforeend',ifty187YearEventRow({},!!nearby));
+};
+window.ifty187SaveYearEditor=function(id){
+ const entry=getIftyYearEntries().find(x=>String(x.id)===String(id)),panel=document.getElementById('ifty187YearEditor_'+id);if(!entry||!panel)return;
+ const num=Number(document.getElementById('ifty187YearNumber_'+id)?.value);
+ const era=document.getElementById('ifty187YearEra_'+id)?.value||'CE';
+ if(!Number.isInteger(num)||num<1||num>9999){alert('年号は1〜9999の整数で入力してください。');return;}
+ if(getIftyYearEntries().some(x=>x!==entry&&String(x.folderId)===String(entry.folderId)&&Number(x.year)===num&&x.era===era)){alert('同じフォルダに同じ年号が存在します。');return;}
+ const parseEvents=nearby=>{
+  const container=document.getElementById((nearby?'ifty187NearbyEvents_':'ifty187ExactEvents_')+id);
+  const entries=[];
+  for(const row of container?.querySelectorAll('[data-ifty187-year-event]')||[]){
+   const title=row.querySelector('[data-ifty187-title]')?.value?.trim();if(!title)continue;
+   const evt={id:row.dataset.ifty187Id||makeId('yearevent'),subject:row.querySelector('[data-ifty187-subject]')?.value||'WORLD_HISTORY',title:title.slice(0,180),memoryText:(row.querySelector('[data-ifty187-memory]')?.value||'').trim().slice(0,1500)};
+   if(nearby){evt.year=Number(row.querySelector('[data-ifty187-year]')?.value);evt.era=row.querySelector('[data-ifty187-era]')?.value||'CE';if(!Number.isInteger(evt.year)||evt.year<1||evt.year>9999)throw Error('前後の出来事「'+evt.title+'」の年号を確認してください。');evt.yearLabel=formatIftyYearLabel(evt.era,evt.year);}
+   entries.push(evt);
+  }
+  return entries;
+ };
+ let exact,nearby;try{exact=parseEvents(false);nearby=parseEvents(true)}catch(e){alert(e.message);return;}
+ const y=window.scrollY;
+ recordUndoState('YEARS登録内容を編集');
+ Object.assign(entry,{era,year:num,yearLabel:formatIftyYearLabel(era,num),periodLabel:(document.getElementById('ifty187YearPeriod_'+id)?.value||'').trim().slice(0,250),exactEvents:exact,nearbyEvents:nearby,mnemonic:(document.getElementById('ifty187Mnemonic_'+id)?.value||'').trim().slice(0,800),note:(document.getElementById('ifty187Note_'+id)?.value||'').trim().slice(0,1200),updatedAt:Date.now()});
+ savePracticeData();renderIftyYearEntries();requestAnimationFrame(()=>window.scrollTo(0,y));
+};
+window.ifty187ToggleYearRegeneration=function(entryId){
+ const id=String(entryId||''),panel=document.getElementById('ifty187YearRegeneration_'+id),entry=getIftyYearEntries().find(x=>String(x.id)===id);if(!panel||!entry)return;
+ const opening=panel.hidden;panel.hidden=!opening;if(!opening)return;
+ panel.innerHTML=`<h3 style="margin:0 0 9px;color:#fff;">✨ ${escapeHtml(entry.yearLabel)}の再生成</h3><label style="display:grid;gap:5px;color:#fff;font-weight:750;">ALLIAへの注文<textarea id="ifty187RegenRequest_${escapeHtml(id)}" rows="4" placeholder="例：世界史を優先し、人物名と因果関係を詳しく。現在の記述の誤りを修正して。" style="width:100%;box-sizing:border-box;background:#0b1c31;color:#fff;border:1px solid #849bb5;border-radius:8px;padding:10px;"></textarea></label><label style="display:flex;gap:8px;align-items:center;margin:9px 0;color:#fff;"><input id="ifty187KeepMnemonic_${escapeHtml(id)}" type="checkbox" checked> 保存済みの語呂合わせを維持する</label><div style="display:flex;flex-wrap:wrap;gap:8px;"><button type="button" onclick="ifty187RunYearRegeneration('${escapeHtml(id)}')" style="background:#2563eb;color:#fff;border:0;border-radius:8px;padding:11px;">再生成を実行</button><button type="button" onclick="ifty187ToggleYearRegeneration('${escapeHtml(id)}')" style="background:#475569;color:#fff;border-radius:8px;padding:11px;">キャンセル</button></div><p style="color:#cbd5e1;font-size:.83em;">生成成功時だけ内容を更新します。手動編集の内容は生成結果で置き換わるため、必要ならバックアップしてください。</p>`;
+};
+window.ifty187RunYearRegeneration=function(id){
+ const el=document.getElementById('ifty187RegenRequest_'+id);
+ const instruction=String(el?.value||'').trim().slice(0,1200);
+ const preserveMnemonic=document.getElementById('ifty187KeepMnemonic_'+id)?.checked!==false;
+ const panel=document.getElementById('ifty187YearRegeneration_'+id);
+ if(panel)panel.hidden=true;
+ window.regenerateIftyYearEntry(id,{instruction,preserveMnemonic});
+};
+window.regenerateIftyYearEntry = function(entryId,opts={}) {
+  const entry = getIftyYearEntries().find(item => String(item.id) === String(entryId));if (!entry) return;
   const eraSelect = document.getElementById('iftyYearEra');
   const input = document.getElementById('iftyYearInput');
   const folderSelect = document.getElementById('iftyYearFolderSelect');
@@ -6577,7 +6647,7 @@ window.regenerateIftyYearEntry = function(entryId) {
   if (input) input.value = String(entry.year || '');
   if (folderSelect) folderSelect.value = entry.folderId;
   iftyYearActiveFolderId = entry.folderId;
-  window.lookupIftyYear(entry.era, entry.year, entry.folderId);
+  window.lookupIftyYear(entry.era, entry.year, entry.folderId,{instruction:String(opts.instruction||''),preserveMnemonic:opts.preserveMnemonic!==false,previousData:{yearLabel:entry.yearLabel,periodLabel:entry.periodLabel,exactEvents:entry.exactEvents,nearbyEvents:entry.nearbyEvents,note:entry.note}});
 };
 
 window.deleteIftyYearEntry = function(entryId) {
@@ -6631,7 +6701,9 @@ window.ifty167SuggestYearMnemonics = async function(entryId) {
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({type:'year_mnemonic_regenerate',era:entry.era,year:entry.year,
         exactEvents:(entry.exactEvents||[]).slice(0,4).map(event=>({title:event.title,memoryText:event.memoryText})),
-        nearbyEvents:(entry.nearbyEvents||[]).slice(0,3).map(event=>({yearLabel:event.yearLabel,title:event.title}))})
+        nearbyEvents:(entry.nearbyEvents||[]).slice(0,3).map(event=>({yearLabel:event.yearLabel,title:event.title})),
+        regenerationRequest:String(document.getElementById('ifty187YearMnemonicOrder_'+id)?.value||'').slice(0,900),
+        order:ifty135ThemeOrder('YEARS',entry.folderId,'YEARS')})
     });
     const data=await res.json();
     if(!res.ok)throw alliaHttpError(res,data,'語呂の再生成に失敗しました。');
@@ -23342,8 +23414,10 @@ async function ifty149RenderManaged(){
  const set=getIftySubjectQuizSet(st.subject,st.setId);st.mode=ifty149CurrentMode(st,ref);st.current=null;st.answered=false;st.answer='';st.feedback='';st.modelAnswer='';st.gradeError='';st.manualReveal=false;st.lastCorrect=null;st.gradeOrigin='';st.challenged=false;st.challengePending=false;st.challengeReason='';st.challengeError='';st.verdict='';st.correction='';st.fallbackNote='';st.currentSourceId=String(ref.item.id);st.busy=true;ifty149QuestionPanel();
  const runId=st.id,at=st.index;
  if(st.offlineFallback){
-   const prior=ifty175Pick(st.subject,{sourceId:ref.item.id,setId:st.setId,mode:st.mode,exclude:st.usedFallbackIds||[]})
-     ||ifty175Pick(st.subject,{sourceId:ref.item.id,setId:st.setId,mode:st.mode});
+   const prior=st.mode==='truefalse'
+     ? ifty186TruthPick(st.subject,{sourceId:ref.item.id,setId:st.setId,exclude:st.usedFallbackIds||[]})
+     : ifty175Pick(st.subject,{sourceId:ref.item.id,setId:st.setId,mode:st.mode,exclude:st.usedFallbackIds||[]})
+       ||ifty175Pick(st.subject,{sourceId:ref.item.id,setId:st.setId,mode:st.mode});
    if(prior){
      st.usedFallbackIds=(st.usedFallbackIds||[]).concat(prior.id);
      st.current={...JSON.parse(JSON.stringify(prior.question)),_ifty175Saved:true,_ifty175SourceId:String(prior.sourceId||ref.item.id)};
@@ -23370,7 +23444,9 @@ async function ifty149RenderManaged(){
   if(data._ifty175Saved){st.offlineFallback=true;st.fallbackNote='⚠️ 保存済みの正誤問題で継続中。ALLIA通信なし。';}else st.fallbackNote='';st.currentSourceId=String(data._ifty175SourceId||ref.item.id);
   ifty149QuestionPanel();
  }catch(error){if(ifty149Run!==st||st.index!==at)return;st.busy=false;
-  const previous=ifty175Pick(st.subject,{sourceId:ref.item.id,setId:st.setId,mode:st.mode,exclude:st.usedFallbackIds||[]})||ifty175Pick(st.subject,{sourceId:ref.item.id,setId:st.setId,mode:st.mode});
+  const previous=st.mode==='truefalse'
+    ? ifty186TruthPick(st.subject,{sourceId:ref.item.id,setId:st.setId,exclude:st.usedFallbackIds||[]})
+    : ifty175Pick(st.subject,{sourceId:ref.item.id,setId:st.setId,mode:st.mode,exclude:st.usedFallbackIds||[]})||ifty175Pick(st.subject,{sourceId:ref.item.id,setId:st.setId,mode:st.mode});
   if(previous){
     st.offlineFallback=true;
     st.usedFallbackIds=(st.usedFallbackIds||[]).concat(previous.id);
@@ -23388,7 +23464,7 @@ async function ifty149RenderManaged(){
 window.ifty176RetryManagedTruth=function(){const st=ifty149Run;if(!st||st.busy||st.current)return;st.offlineFallback=false;void ifty149RenderManaged();};
 window.ifty176SkipManagedTruth=function(){
  const st=ifty149Run;if(!st||st.mode!=='truefalse'||st.current||st.answered||st.busy)return;
- st.unknown++;st.index++;void ifty149RenderManaged();
+ st.ifty186Skipped=(st.ifty186Skipped||0)+1;st.index++;void ifty149RenderManaged();
 };
 // STEP154: 年号はAIの曖昧な採点ではなく、紀元前/西暦と年の一致で判定する。
 // 「44 BC」「紀元前44年」「-44」は同じ値。「44年」は西暦として扱う。
@@ -26124,6 +26200,9 @@ async function renderQuizPlayer(setId) {
   const modal=document.getElementById('practiceModal'); if(!modal)return;
   setIftyPracticeQuestionActive(modal, true);
   const p=set.progress;
+  if(p.currentQuestion?.quizType==='truefalse' && !ifty186TruthUsable(p.currentQuestion)){
+    p.currentQuestion=null;savePracticeData();
+  }
   if(p.index>=p.queue.length){ renderQuizComplete(setId); return; }
   const ref=getWordById(p.queue[p.index]);
   if(!ref){ p.index++; p.currentQuestion=null; savePracticeData(); renderQuizPlayer(setId); return; }
@@ -26140,7 +26219,7 @@ async function renderQuizPlayer(setId) {
         return;
       }
       const direction=resolveQuizDirection(set);
-      if(p.ifty175Offline&&!['selection','listening','inflection','simple','written'].includes(type))throw new Error('保存済み問題で練習を継続しています。');
+      if(p.ifty175Offline&&!['selection','listening','inflection','simple','written','truefalse'].includes(type))throw new Error('保存済み問題で練習を継続しています。');
       if (!['selection','listening','inflection','simple','written'].includes(type) && !ensureIftyOnline('このクイズ形式の問題生成', { silent: true })) {
         throw new Error(iftyOfflineMessage('このクイズ形式の問題生成'));
       }
@@ -26154,7 +26233,7 @@ async function renderQuizPlayer(setId) {
         const data = createLocalInflectionQuestion(ref.word);
         p.currentQuestion={...data,quizType:type,direction:'inflection',wordId:ref.word.id};
       } else if (type === 'truefalse') {
-        const data=await ifty151GenerateTruth({subject:'ENGLISH',makeCorrect:p.index%2===0,difficulty:ifty149Difficulty(set.difficulty),target:ifty151EnglishTarget(ref.word,ref.folder),sourceId:ref.word.id,setId:set.id});
+        const data=await ifty151GenerateTruth({subject:'ENGLISH',makeCorrect:p.index%2===0,difficulty:ifty149Difficulty(set.difficulty),target:ifty151EnglishTarget(ref.word,ref.folder),sourceId:ref.word.id,setId:set.id,preferSaved:p.ifty175Offline===true});
         p.currentQuestion={...data,quizType:type,direction:'mixed',wordId:ref.word.id};
       } else if ((type === 'simple' || type === 'written') && ifty174LocalVocabularyQuestion(ref.word,type,direction)) {
         const data=ifty174LocalVocabularyQuestion(ref.word,type,direction);
@@ -26171,20 +26250,21 @@ async function renderQuizPlayer(setId) {
         }
         p.currentQuestion={...data,quizType:type,direction,wordId:ref.word.id};
       }
-      ifty175Remember('ENGLISH',p.currentQuestion,{sourceId:ref.word.id,setId:set.id,mode:type});
+      if(type!=='truefalse')ifty175Remember('ENGLISH',p.currentQuestion,{sourceId:ref.word.id,setId:set.id,mode:type});
       savePracticeData();
     } catch(error){
       const failedType=chooseQuizType(set,ref.word);
-      const prior=ifty175Entries('ENGLISH').find(row=>row.sourceId===String(ref.word.id)&&row.mode===failedType&&row.question?.question);
+      const prior=failedType==='truefalse'?ifty186TruthPick('ENGLISH',{sourceId:ref.word.id,setId:set.id}):ifty175Entries('ENGLISH').find(row=>row.sourceId===String(ref.word.id)&&row.mode===failedType&&row.question?.question);
       if(prior){
         p.ifty175Offline=true;
         const old=prior.question;
         p.currentQuestion={...JSON.parse(JSON.stringify(old)),quizType:failedType,direction:resolveQuizDirection(set),wordId:ref.word.id,
           localGrade:true,localCorrectAnswer:old.referenceAnswer,localCorrectAnswers:[old.referenceAnswer],
-          localAnswerMode:old.kind==='written'?'spelling':'choice',ifty175Fallback:true};
+          localAnswerMode:old.kind==='written'?'spelling':'choice',ifty175Fallback:true,
+          ...(failedType==='truefalse'?{_ifty175Saved:true,_ifty175SavedId:prior.id,_ifty175SourceId:prior.sourceId}: {})};
         savePracticeData();return renderQuizPlayer(setId);
       }
-      const basic=ifty174LocalVocabularyQuestion(ref.word,'written',resolveQuizDirection(set));
+      const basic=failedType==='truefalse'?null:ifty174LocalVocabularyQuestion(ref.word,'written',resolveQuizDirection(set));
       if(basic){
         p.ifty175Offline=true;
         p.currentQuestion={...basic,quizType:'written',direction:resolveQuizDirection(set),wordId:ref.word.id,
@@ -26203,6 +26283,7 @@ async function renderQuizPlayer(setId) {
         <div style="color:#93c5fd;font-size:.78em;overflow-wrap:anywhere;">診断コード：${escapeHtml(code)}／STEP${IFTY_APP_STEP}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:15px;">
           <button type="button" onclick="retryCurrentQuizQuestion('${set.id}')" style="background:#2563eb;color:white;border:0;border-radius:8px;padding:11px 14px;font-weight:800;">🔄 再試行</button>
+          ${failedType==='truefalse'?`<button type="button" onclick="ifty186SkipEnglishTruth('${set.id}')" style="background:#475569;color:white;border:0;border-radius:8px;padding:11px 14px;font-weight:800;">問題生成不能のためスキップ →</button>`:''}
           ${canFallback?`<button type="button" onclick="ifty174UseSavedVocabularyQuestion('${set.id}')" style="background:#0f766e;color:white;border:0;border-radius:8px;padding:11px 14px;font-weight:800;">📖 保存済みデータから基本問題を出す（ALLIA不要）</button>`:''}
           <button type="button" onclick="ifty175OpenLibrary('ENGLISH','${set.id}')" style="background:#304866;color:white;border:1px solid #94a3b8;border-radius:8px;padding:11px 14px;font-weight:800;">📚 保存済み問題</button>
           <button type="button" onclick="openQuizSet('${set.id}')" style="background:#334155;color:#f8fafc;border:1px solid #94a3b8;border-radius:8px;padding:11px 14px;font-weight:800;">戻る</button>
@@ -26335,6 +26416,12 @@ window.sendIftyQuizAlliaQuestion = async function(setId) {
   renderIftyQuizAlliaHelpModal(setId, false);
 };
 
+window.ifty186SkipEnglishTruth=function(setId){
+  const set=getQuizSet(setId),p=set?.progress;
+  if(!p||p.currentQuestion||p.index>=p.queue.length)return;
+  p.ifty186UnavailableSkipped=(p.ifty186UnavailableSkipped||0)+1;
+  p.index++;p.currentQuestion=null;savePracticeData();renderQuizPlayer(setId);
+};
 window.retryCurrentQuizQuestion = function(setId){ const set=getQuizSet(setId); if(!set||!set.progress)return; set.progress.ifty175Offline=false;set.progress.currentQuestion=null; savePracticeData(); renderQuizPlayer(setId); };
 window.setIftyListeningRate = function(rate) {
   const value = Number(rate);
@@ -32443,60 +32530,71 @@ function ifty176TruthLocalGrade({isCorrect,correctedSentence,verdict,correction}
   if(model&&ifty176TruthNorm(correction)===ifty176TruthNorm(model))return {correct:true,feedback:'模範解答と一致したため端末内で採点しました（ALLIA通信なし）。',modelAnswer:model};
   return null; // Partial corrections and alternate correct expressions need contextual review.
 }
-function ifty176TruthPick(subject,{sourceId='',setId='',exclude=[]}={}){
-  if(typeof ifty175Pick!=='function')return null;
-  const row=ifty175Pick(subject,{sourceId,setId,mode:'truefalse',exclude});
-  if(!row||row.question?.kind!=='truefalse'||typeof row.question.isCorrect!=='boolean')return null;
-  return row;
+// STEP186: a single reusable, validated true/false question model.
+// Skip legacy STEP185 emergency items even if they were cached on the device.
+function ifty186TruthUsable(q){
+  if(!q||q.kind!=='truefalse'||typeof q.isCorrect!=='boolean'||q._ifty185Offline)return false;
+  const statement=String(q.question||q.statement||'').trim();
+  const corrected=String(q.correctedSentence||'').trim();
+  if(!statement||!corrected)return false;
+  if(/(?:保存済みカード|カードの表題|カードの説明には|カードに記載|上記の説明)/.test(statement))return false;
+  const same=ifty176TruthNorm(statement)===ifty176TruthNorm(corrected);
+  return q.isCorrect===same;
 }
-// STEP185: Offline emergency T/F question derived only from local card data.
-// No generated historical claims, no ALLIA request, no new Worker endpoint.
-function ifty185LocalTruthFallback(target,reason='') {
-  const t=String(target?.title||'').replace(/\s+/g,' ').trim().slice(0,100);
-  const d=String(target?.description||'').replace(/\s+/g,' ').trim().slice(0,210);
-  if(!t)throw new Error('保存カードの表題が見つかりません。');
-  const statement=d
-    ? `保存済みカード「${t}」の説明には「${d}」と記載されている。`
-    : `保存済みカードの表題は「${t}」である。`;
-  return {
-    kind:'truefalse',question:statement,statement,isCorrect:true,
-    correctedSentence:statement,referenceAnswer:'○ 正しい',
-    instruction:'⚠️ AI通信または生成に失敗したため、カードの記載内容に基づく無AIの代替問題を出題しています。',
-    explanation:'カード内の記録を確認する問題です。外部の事実関係を検証した問題ではありません。',
-    options:[],gradingPoints:[],_ifty175Saved:true,_ifty185Offline:true,
-    _ifty175FallbackNote:'⚠️ ALLIAの生成に失敗。保存済みカードを使った無AIの代替問題です。'
-  };
+function ifty186TruthPick(subject,{sourceId='',setId='',exclude=[]}={}){
+  if(typeof ifty175Entries!=='function')return null;
+  const used=new Set((exclude||[]).map(String));
+  const rows=ifty175Entries(subject).filter(r=>!used.has(String(r.id))&&ifty186TruthUsable(r.question));
+  if(!rows.length)return null;
+  const rank=row=>(sourceId&&String(row.sourceId)===String(sourceId)?100:0)
+    +(setId&&String(row.setId)===String(setId)?30:0)
+    +(row.origin==='manual'?10:0);
+  rows.sort((a,b)=>rank(b)-rank(a)||Number(b.lastSeenAt||b.createdAt||0)-Number(a.lastSeenAt||a.createdAt||0));
+  return rows[0];
 }
-
+// Keep the existing saved-question infrastructure; use it only for real T/F.
+function ifty176TruthPick(subject,opts={}){return ifty186TruthPick(subject,opts);}
+function ifty186ReuseTruth(subject,{sourceId='',setId='',exclude=[],reason=''}={}){
+  const row=ifty186TruthPick(subject,{sourceId,setId,exclude});
+  if(!row)return null;
+  const same=sourceId&&String(row.sourceId)===String(sourceId);
+  return {...JSON.parse(JSON.stringify(row.question)),_ifty175Saved:true,
+    _ifty175SavedId:row.id,_ifty175SourceId:row.sourceId,
+    _ifty175FallbackNote:same
+      ?'📚 元の学習項目の保存済み正誤問題を、ALLIAなしで再出題します。'
+      :'📚 AI生成に失敗したため、同じ教科の別の保存済み正誤問題を出題します（ALLIAなし）。'};
+}
 async function ifty151GenerateTruth({subject,target,difficulty='normal',makeCorrect=false,sourceId='',setId='',preferSaved=false,exclude=[]}) {
   const source=String(sourceId||target?.title||'');
   if(preferSaved){
-    const row=ifty176TruthPick(subject,{sourceId:source,setId,exclude})||ifty176TruthPick(subject,{sourceId:source,setId});
-    if(row)return {...JSON.parse(JSON.stringify(row.question)),_ifty175Saved:true,_ifty175SavedId:row.id,_ifty175SourceId:row.sourceId,_ifty175FallbackNote:'保存問題を使ってALLIAなしで継続中'};
-    return ifty185LocalTruthFallback(target,'no_saved_truth');
+    const q=ifty186ReuseTruth(subject,{sourceId:source,setId,exclude});
+    if(q)return q;
+    const e=new Error('利用できる保存済み正誤問題がありません。再試行するか、この問題をスキップしてください。');
+    e.code='IFTY186_NO_SAVED_TRUEFALSE';throw e;
   }
-  try {
-  const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    type:'ifty151_truefalse_generate',subject,target,difficulty,makeCorrect:makeCorrect===true,
-    order:getIftyPracticeOrder(subject)||getIftySubjectOrder(subject)
-  })});
-  const data=await response.json().catch(()=>({}));
-  if(!response.ok||data.error)throw alliaHttpError(response,data,'正誤問題の生成に失敗しました。');
-  if(data.kind!=='truefalse'||typeof data.isCorrect!=='boolean'||!String(data.question||'').trim()||!String(data.correctedSentence||'').trim()){
-    throw new Error('ALLIAから有効な正誤問題を受け取れませんでした。再試行してください。');
-  }
-  if(data._ifty185Offline){
-    return {...data,_ifty175Saved:true,_ifty175FallbackNote:'⚠️ AI生成の代わりに保存済みカードの内容を確認する問題です。'};
-  }
-  ifty175Remember(subject,data,{sourceId:source,setId,mode:'truefalse'});
-  return data;
+  try{
+    const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      type:'ifty151_truefalse_generate',subject,target,difficulty,makeCorrect:makeCorrect===true,
+      order:getIftyPracticeOrder(subject)||getIftySubjectOrder(subject)
+    })});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||data.error)throw alliaHttpError(response,data,'正誤問題の生成に失敗しました。');
+    if(data.unavailable===true){
+      const e=new Error(String(data.message||'ALLIAが正誤問題を作成できませんでした。'));
+      e.code=String(data.code||'IFTY186_TF_UNAVAILABLE');throw e;
+    }
+    if(!ifty186TruthUsable(data)){
+      const e=new Error('ALLIAの正誤情報が矛盾しているため、問題を採用しませんでした。');
+      e.code='IFTY186_TF_INVALID';throw e;
+    }
+    ifty175Remember(subject,data,{sourceId:source,setId,mode:'truefalse'});
+    return data;
   }catch(error){
-    const row=ifty176TruthPick(subject,{sourceId:source,setId,exclude})||ifty176TruthPick(subject,{sourceId:source,setId});
-    if(row)return {...JSON.parse(JSON.stringify(row.question)),_ifty175Saved:true,_ifty175SavedId:row.id,_ifty175SourceId:row.sourceId,_ifty175FallbackNote:'生成に失敗したため保存済み問題を使用中'};
-    // No saved generated T/F question yet: continue without Worker instead of
-    // stopping at the error page. This is intentionally labelled as a card
-    // recall check; it does NOT pretend to be an AI-authored fact question.
-    return ifty185LocalTruthFallback(target,String(error?.code||'worker_error'));
+    const q=ifty186ReuseTruth(subject,{sourceId:source,setId,exclude,reason:error.code});
+    if(q)return q;
+    const e=new Error('学習に使える正誤問題を用意できませんでした。再試行するか、この問題をスキップしてください。'+
+      (error?.code?'（'+String(error.code).slice(0,70)+'）':''));
+    e.code='IFTY186_TF_UNAVAILABLE';throw e;
   }
 }
 async function ifty151GradeTruth({subject,statement,isCorrect,correctedSentence,verdict,correction}) {
@@ -32668,7 +32766,7 @@ window.ifty151Submit=function(){
 window.ifty176RetryStandaloneGrade=function(){const st=ifty151Run;if(!st?.gradeError||st.busy||st.answered)return;void ifty176GradeStandalone();};
 window.ifty176RevealStandaloneTruth=function(){const st=ifty151Run;if(!st?.current||st.busy||st.answered)return;st.manualReveal=true;st.gradeError='';ifty151DrawPlayer();};
 window.ifty176FinishStandaloneGrade=function(correct){const st=ifty151Run;if(!st?.current||!st.manualReveal||st.answered||st.busy)return;ifty176CommitStandaloneGrade(st,{correct:correct===true,feedback:'模範解答を確認して自己採点しました（ALLIAなし）。',modelAnswer:st.current.correctedSentence});};
-window.ifty176SkipStandaloneTruth=function(){const st=ifty151Run;if(!st||st.busy||st.current||st.answered)return;st.unknown++;st.index++;st.error='';void ifty151LoadQuestion();};
+window.ifty176SkipStandaloneTruth=function(){const st=ifty151Run;if(!st||st.busy||st.current||st.answered)return;st.ifty186Skipped=(st.ifty186Skipped||0)+1;st.index++;st.error='';void ifty151LoadQuestion();};
 window.ifty151Unknown=function(){
   const st=ifty151Run;if(!st?.current||st.answered||st.busy)return;
   st.unknown++;ifty162Capture(st.subject,st.current,'truefalse',st.current.correctedSentence,st.current.targetItemId||'');st.answered=true;st.feedback={unknown:true,correct:false,feedback:'自分で訂正できなかったため、正しい文を確認してください。',modelAnswer:st.current.correctedSentence};ifty182Record(st,st.index,st.current.question,null,'',st.current.correctedSentence,st.feedback.feedback);ifty151DrawPlayer();
@@ -33436,6 +33534,16 @@ window.iftyPlacesPointerUp=function(e){
 window.iftyPlacesPointerCancel=function(e){if(!dragState||e.pointerId!==dragState.pointerId)return;dragState=null;renderEditor()};
 function setAiStatus(s){aiStatus=s;const el=document.getElementById('pl165AiStatus');if(el)el.textContent=s;}
 function assignGenerated(elId,value,canWrite){const el=document.getElementById(elId);if(el&&canWrite&&value!==undefined&&value!==null)el.value=String(value);}
+// STEP187: distinguish consecutive ALLIA-generated items, without touching manual colors.
+let pl187ColorSerial=0;
+function pl187NextGeneratedColor(map){
+ const palette=['#dc2626','#2563eb','#059669','#d97706','#7c3aed','#0891b2','#be185d','#65a30d','#ea580c','#4f46e5','#0f766e','#b45309'];
+ const existing=(map?.items||[]).map(it=>String(it.color||'').toLowerCase());
+ const last=String(document.getElementById('pl164Color')?.value||'').toLowerCase();
+ let idx=(existing.length+pl187ColorSerial++)%palette.length;
+ for(let i=0;i<palette.length;i++){const c=palette[(idx+i)%palette.length];if(c!==last&&c!==existing[existing.length-1])return c;}
+ return palette[idx];
+}
 // STEP183: AI geometry is a provisional geographic sketch, never an authoritative boundary.
 function pl183Geometry(raw,kind){
  const coords=Array.isArray(raw)?raw:[];
@@ -33479,6 +33587,9 @@ window.iftyPlacesAutoGenerate=async function(force=false){
   assignGenerated('pl164To',to,force||!(document.getElementById('pl164To')?.value||'').trim());
    assignGenerated('pl169NameJa',data.nameJa,force||!(document.getElementById('pl169NameJa')?.value||'').trim());
    assignGenerated('pl169NameEn',data.nameEn,force||!(document.getElementById('pl169NameEn')?.value||'').trim());
+  // Every successful ALLIA regeneration receives a distinct proposed color.
+  const proposedColor=pl187NextGeneratedColor(m);
+  assignGenerated('pl164Color',proposedColor,true);
   const validIcon=ICONS.includes(data.icon)?data.icon:null;
   assignGenerated('pl164Icon',validIcon,!!validIcon&&(force||before.icon==='⚔️'||before.icon==='📍'));
   // Auto-detect mountains/rivers as LINE and deserts/empires as AREA, only when the
@@ -33489,9 +33600,20 @@ window.iftyPlacesAutoGenerate=async function(force=false){
   else if(returnedKind&&POINT_TYPES.has(kind)&&POINT_TYPES.has(returnedKind)&&!selId)assignGenerated('pl164Kind',returnedKind,true);
   const finalKind=document.getElementById('pl164Kind')?.value||chosenKind;
   const geometry=pl183Geometry(data.geometryCoordinates,finalKind);
+  let movedToGeneratedGeometry=false;
   if((!selId||!m.items.find(x=>x.id===selId)?.coords?.length)&&!draw.length&&geometry.length){
    draw=geometry;
    // Suggested line/area geometry is editable before saving; do not persist until confirmed.
+   // An otherwise valid generated river/wall may be outside the current continent.
+   // Shift only the temporary viewport; never change the saved map region or geometry.
+   if(geometry.every(pt=>{const loc=project(pt[0],pt[1],m);return !valid(loc)||loc[0]<0||loc[0]>1000||loc[1]<0||loc[1]>600;})){
+    const longs=geometry.map(v=>v[0]),lats=geometry.map(v=>v[1]);
+    const minX=Math.min(...longs),maxX=Math.max(...longs),minY=Math.min(...lats),maxY=Math.max(...lats);
+    const cx=(minX+maxX)/2,cy=(minY+maxY)/2;
+    const spanX=Math.max(10,(maxX-minX)*1.5),spanY=Math.max(7,(maxY-minY)*1.7);
+    viewOverride=[Math.max(-180,cx-spanX/2),Math.max(-85,cy-spanY/2),Math.min(180,cx+spanX/2),Math.min(85,cy+spanY/2)];
+    movedToGeneratedGeometry=true;
+   }
   }
   const lat=data.latitude==null||data.latitude===''?NaN:Number(data.latitude);
   const lon=data.longitude==null||data.longitude===''?NaN:Number(data.longitude);
@@ -33501,7 +33623,7 @@ window.iftyPlacesAutoGenerate=async function(force=false){
   if((!selId||!m.items.find(x=>x.id===selId)?.coords?.length)&&!draw.length&&positionVisible&&POINT_TYPES.has(finalKind))draw=[cleanCoords([lon,lat])];
   aiLastCompleted=key;
   const locationInfo=geometry.length?`推定${finalKind==='line'?'流路・稜線':'範囲'}（${geometry.length}点）を仮配置しました。地理的な正確さは未確認です。頂点を動かしてから保存してください。`:positionOK?(positionVisible?`推定位置 ${lat.toFixed(3)}°, ${lon.toFixed(3)}°。地図上で確認・ドラッグ編集してください。`:`推定位置 ${lat.toFixed(3)}°, ${lon.toFixed(3)}° は現在の表示範囲外です。地域や倍率を変更してから配置してください。`):'位置データを確定できませんでした。説明だけ保存して「位置未設定」として残し、後で地図上に配置できます。';
-  setAiStatus('生成しました。'+locationInfo+(data.locationNote?' '+String(data.locationNote).slice(0,160):''));
+  setAiStatus('生成しました（自動色分け済み）。'+(movedToGeneratedGeometry?'生成した場所が表示範囲外だったため、一時的に地図を移動しました。「全体」で元の地図表示に戻せます。 ':'')+locationInfo+(data.locationNote?' '+String(data.locationNote).slice(0,160):''));
   aiPending=false;captureDraft();renderEditor();
  }catch(err){setAiStatus('生成失敗：'+String(err?.message||err)+'。手動入力・保存は引き続き可能です。');}
  finally{aiPending=false;aiPendingKey='';}
@@ -33647,7 +33769,8 @@ function ifty175Entries(subject='',setId=''){
    seen.add(identity);
    rows.push({id:'review_'+String(mistake.id),identity,subject:mistake.subject,mode:mistake.mode||q.kind,kind:q.kind,sourceId:String(mistake.sourceId||''),setId:'',origin:'review',question:q,createdAt:Number(mistake.createdAt)||0,correct:0,wrong:0});
  }
- return rows.sort((a,b)=>(b.origin==='manual')-(a.origin==='manual')||Number(b.createdAt||0)-Number(a.createdAt||0));
+ return rows.filter(row=>row.question?.kind!=='truefalse'||ifty186TruthUsable(row.question))
+   .sort((a,b)=>(b.origin==='manual')-(a.origin==='manual')||Number(b.createdAt||0)-Number(a.createdAt||0));
 }
 // Prefer the same original source item, then the same set/format, finally any
 // previously saved question of the SAME subject and compatible format.
@@ -34074,7 +34197,7 @@ function ifty177Render(){
 
 
 // ============================================================================
-// IFTY STEP178 — contrast repairs / ALLIA games navigation / QUESTION RUSH
+// IFTY STEP178 — contrast repairs / ALLIA games navigation
 // Keep existing game mode identifiers and Worker API unchanged.
 // ============================================================================
 (function(){
@@ -34090,24 +34213,8 @@ function ifty177Render(){
  #ifty143AlliaHelpModal [style*="background:#28173d"]{color:#f8fafc!important}
  #ifty143AlliaHelpModal [style*="background:#2e1646"] *,
  #ifty143AlliaHelpModal [style*="background:#28173d"] *{color:#f8fafc!important}
- #ifty178GameRoot{max-width:950px;margin:0 auto;color:#f8fafc}
- #ifty178GameRoot *{box-sizing:border-box}
- #ifty178GameRoot .qg-panel{background:#1b2a40;border:1px solid #64748b;border-radius:14px;padding:clamp(12px,2vw,20px);margin:12px 0}
- #ifty178GameRoot label{display:block;font-weight:800;margin:10px 0 5px;color:#f8fafc}
- #ifty178GameRoot input,#ifty178GameRoot textarea{width:100%;min-height:46px;border:1px solid #94a3b8;border-radius:9px;background:#0c182b;color:#f8fafc;font:inherit;padding:10px;max-width:100%}
- #ifty178GameRoot button{border:1px solid #94a3b8;border-radius:9px;background:#344966;color:white;padding:11px 14px;min-height:46px;font-weight:800;font:inherit;cursor:pointer}
- #ifty178GameRoot button.qg-primary{background:#145bd7;border-color:#60a5fa;font-weight:900}
- #ifty178GameRoot button.qg-buzz{background:#b91c1c;border:3px solid #fca5a5;font-weight:900;font-size:clamp(19px,4vw,30px);min-height:90px;width:100%}
- #ifty178GameRoot button:disabled{opacity:.55;cursor:default}
- #ifty178GameRoot .qg-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}
- #ifty178GameRoot .qg-row>*{flex:1 1 140px}
- #ifty178GameRoot .qg-note{color:#cbd5e1;font-size:.85em}
- #ifty178GameRoot .qg-question{background:#0b1b31;padding:16px;border-radius:10px;white-space:pre-wrap;overflow-wrap:anywhere;font-weight:800}
- #ifty178GameRoot .qg-log{max-height:240px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:#e2e8f0}
- #ifty178GameRoot .qg-error{color:#fecaca}
  #ifty178AlliaGamesBar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;padding:10px;background:#1b2a40;border:1px solid #64748b;border-radius:12px}
  #ifty178AlliaGamesBar button{background:#334d70;color:#fff;border:1px solid #94a3b8;border-radius:9px;padding:10px 13px;min-height:44px;font-weight:800}
- @media(max-width:480px){#ifty178GameRoot .qg-row>*{flex-basis:100%}}
  `;
  const mount=()=>{if(!document.getElementById(css.id))document.head.appendChild(css);};
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
@@ -34119,39 +34226,7 @@ function ifty177Render(){
  window.ifty178AttachAlliaGames=function(){
   const page=document.getElementById('aiChatPage');if(!page)return;
   let bar=document.getElementById('ifty178AlliaGamesBar');
-  if(!bar){bar=document.createElement('div');bar.id='ifty178AlliaGamesBar';bar.innerHTML='<button type="button" onclick="openIftySoloChatGames()">🎲 ALLIAと遊ぶ</button><button type="button" onclick="ifty178OpenQuestionRush()">⚡ 質問ラッシュ</button>';page.insertBefore(bar,page.firstChild);}
+  if(!bar){bar=document.createElement('div');bar.id='ifty178AlliaGamesBar';bar.innerHTML='<button type="button" onclick="openIftySoloChatGames()">🎲 ALLIAと遊ぶ</button>';page.insertBefore(bar,page.firstChild);}
  };
- const esc=v=>typeof escapeHtml==='function'?escapeHtml(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- let g=null;
- const persist=()=>{try{localStorage.setItem('ifty178_question_rush',JSON.stringify(g));}catch(_){}};
- const load=()=>{try{const x=JSON.parse(localStorage.getItem('ifty178_question_rush')||'null');return x&&Array.isArray(x.players)?x:null;}catch(_){return null;}};
- const view=html=>showIftyHubContent(`<section id="ifty178GameRoot"><h1>⚡ 質問ラッシュ</h1><p class="qg-note">質問を重ねてお題を推理し、分かった人が早押しするゲーム。1台を交代で操作するローカル対戦です。ALLIA通信・課金なし。</p>${html}</section>`,'question-rush');
- const msg=(t)=>{const e=document.getElementById('ifty178Error');if(e)e.textContent=t;};
- window.ifty178OpenQuestionRush=function(){g=load();ifty178RenderQuestionRush();};
- window.ifty178RenderQuestionRush=function(){
-  if(!g||g.phase==='setup'){
-   view(`<div class="qg-panel"><h2>新しいゲーム</h2><label>プレイヤー名（改行区切り、2〜8人）</label><textarea id="ifty178Names" rows="4" placeholder="Aさん\nBさん\nCさん">${esc(g?.names||'')}</textarea><label>お題（出題者だけが入力。開始後は非表示）</label><input id="ifty178Secret" type="password" autocomplete="off" placeholder="例：アレクサンドロス大王"><label>最大質問数（3〜30）</label><input id="ifty178Limit" type="number" min="3" max="30" value="12"><div class="qg-row" style="margin-top:14px"><button class="qg-primary" onclick="ifty178StartQuestionRush()">▶ 開始</button><button onclick="switchToChatView()">← ALLIAへ</button></div><p id="ifty178Error" class="qg-error" role="alert"></p></div>`);return;
-  }
-  const players=g.players.map((p,i)=>`<span style="padding:6px 10px;border:1px solid #64748b;border-radius:8px;display:inline-block">${esc(p.name)}：${p.score}点</span>`).join(' ');
-  const history=g.history.map((h,i)=>`${i+1}. ${esc(h)}`).join('<hr style="border:0;border-top:1px solid #475569">');
-  const header=`<div class="qg-panel"><div class="qg-row">${players}</div><p class="qg-note">第${g.round}ラウンド ／ 質問 ${g.asked}/${g.limit}</p></div>`;
-  if(g.phase==='reveal'){
-   view(header+`<div class="qg-panel"><h2>ラウンド終了</h2><div class="qg-question">正解：${esc(g.secret)}</div><p>${esc(g.winner||'正解者なし')}</p><div class="qg-row"><button class="qg-primary" onclick="ifty178NextQuestionRush()">次のラウンド</button><button onclick="ifty178ResetQuestionRush()">終了・初期化</button></div></div><div class="qg-panel qg-log">${history}</div>`);return;
-  }
-  const questionUi=g.phase==='ask'?`<label>質問者</label><select id="ifty178Asker" style="width:100%;padding:10px;background:#0c182b;color:white;border:1px solid #94a3b8;border-radius:9px">${g.players.map((p,i)=>`<option value="${i}" ${i===g.turn?'selected':''}>${esc(p.name)}</option>`).join('')}</select><label>お題について質問する</label><input id="ifty178Question" placeholder="例：紀元前の人物ですか？"><button class="qg-primary" style="margin-top:10px" onclick="ifty178AskQuestionRush()">質問を確定</button>`:`<div class="qg-question">質問：${esc(g.pending?.question||'')}</div><p class="qg-note">出題者がお題を確認し、質問に答えてください。</p><div class="qg-row">${['はい','いいえ','どちらとも言えない'].map((a,i)=>`<button onclick="ifty178AnswerQuestionRush(${i})">${a}</button>`).join('')}</div>`;
-  view(header+`<div class="qg-panel"><h2>質問タイム</h2>${questionUi}<p id="ifty178Error" class="qg-error" role="alert"></p></div><div class="qg-panel"><h2>⚡ 分かったら早押し</h2><div class="qg-row"><select id="ifty178Buzzer" style="flex:1;min-height:46px;background:#0c182b;color:white;border:1px solid #94a3b8;border-radius:9px">${g.players.map((p,i)=>`<option value="${i}">${esc(p.name)}</option>`).join('')}</select><button class="qg-buzz" onclick="ifty178BuzzQuestionRush()">⚡ 早押し！</button></div><div id="ifty178BuzzArea"></div></div><div class="qg-panel"><h2>質問履歴</h2><div class="qg-log">${history||'まだ質問はありません。'}</div><div class="qg-row" style="margin-top:10px"><button onclick="ifty178RevealQuestionRush()">出題者：答えを公開して終了</button><button onclick="ifty178ResetQuestionRush()">ゲームを初期化</button></div></div>`);
- };
- window.ifty178StartQuestionRush=function(){
-  const names=(document.getElementById('ifty178Names')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean),secret=(document.getElementById('ifty178Secret')?.value||'').trim(),limit=Number(document.getElementById('ifty178Limit')?.value||12);
-  if(names.length<2||names.length>8||new Set(names).size!==names.length){msg('重複のない名前を2〜8人分入力してください。');return;}
-  if(!secret||secret.length>160){msg('お題を1〜160文字で入力してください。');return;}
-  g={phase:'ask',players:names.map(name=>({name,score:0})),secret,round:1,asked:0,turn:0,limit:Math.max(3,Math.min(30,limit||12)),history:[],pending:null,winner:''};persist();ifty178RenderQuestionRush();
- };
- window.ifty178AskQuestionRush=function(){if(!g||g.phase!=='ask')return;const q=(document.getElementById('ifty178Question')?.value||'').trim(),who=Number(document.getElementById('ifty178Asker')?.value||0);if(!q||q.length>300){msg('質問を1〜300文字で入力してください。');return;}if(!g.players[who])return;g.pending={question:q,who};g.phase='answer';persist();ifty178RenderQuestionRush();};
- window.ifty178AnswerQuestionRush=function(i){if(!g||g.phase!=='answer'||!g.pending)return;const a=['はい','いいえ','どちらとも言えない'][i];if(!a)return;g.history.push(`${g.players[g.pending.who].name}：${g.pending.question} → ${a}`);g.asked++;g.turn=(g.pending.who+1)%g.players.length;g.pending=null;g.phase=g.asked>=g.limit?'reveal':'ask';if(g.phase==='reveal')g.winner='質問上限に達しました';persist();ifty178RenderQuestionRush();};
- window.ifty178BuzzQuestionRush=function(){if(!g||!['ask','answer'].includes(g.phase))return;const idx=Number(document.getElementById('ifty178Buzzer')?.value);if(!g.players[idx])return;const area=document.getElementById('ifty178BuzzArea');if(!area)return;area.innerHTML=`<p><b>${esc(g.players[idx].name)}が回答権を獲得</b></p><label>回答</label><input id="ifty178Guess" autocomplete="off" placeholder="答えを入力"><div class="qg-row" style="margin-top:8px"><button class="qg-primary" onclick="ifty178JudgeQuestionRush(${idx})">出題者が判定</button><button onclick="ifty178RenderQuestionRush()">キャンセル</button></div><p class="qg-note">判定は出題者が行います。回答を入力して確認してください。</p>`;};
- window.ifty178JudgeQuestionRush=function(idx){if(!g||!g.players[idx])return;const guess=(document.getElementById('ifty178Guess')?.value||'').trim();if(!guess)return;const correct=confirm(`${g.players[idx].name}の回答「${guess}」を正解にしますか？\nOK：正解（10点）／キャンセル：不正解（-2点）`);g.players[idx].score+=correct?10:-2;g.history.push(`${g.players[idx].name}：${guess} → ${correct?'正解 +10':'不正解 -2'}`);if(correct){g.phase='reveal';g.winner=`${g.players[idx].name}が正解！`;}persist();ifty178RenderQuestionRush();};
- window.ifty178RevealQuestionRush=function(){if(!g)return;if(!confirm('答えを公開してこのラウンドを終了しますか？'))return;g.phase='reveal';g.winner='出題者が公開';persist();ifty178RenderQuestionRush();};
- window.ifty178NextQuestionRush=function(){if(!g)return;const secret=prompt('次のラウンドのお題を入力してください（出題者のみ）');if(!secret?.trim())return;g.secret=secret.trim().slice(0,160);g.round++;g.asked=0;g.turn=0;g.phase='ask';g.history=[];g.pending=null;g.winner='';persist();ifty178RenderQuestionRush();};
- window.ifty178ResetQuestionRush=function(){if(!confirm('ゲームを初期化しますか？'))return;g=null;try{localStorage.removeItem('ifty178_question_rush');}catch(_){}ifty178RenderQuestionRush();};
+
 })();
