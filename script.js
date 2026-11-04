@@ -17720,7 +17720,7 @@ function getIftySubjectStudyItem(subject, itemId) {
   return null;
 }
 
-function recordIftySubjectStudyEvent(subject, itemId, correct, source = 'practice') {
+function recordIftySubjectStudyEvent(subject, itemId, correct, source = 'practice', options = {}) {
   if (!itemId) { if(!correct) ifty162CaptureSubjectMistake(subject,'',source); return false; }
   const item = getIftySubjectStudyItem(subject, itemId);
   if (!item) { if(!correct) ifty162CaptureSubjectMistake(subject,itemId,source); return false; }
@@ -17739,7 +17739,7 @@ function recordIftySubjectStudyEvent(subject, itemId, correct, source = 'practic
   // STEP162: 保存済みの問題を、正誤とともに誤答復習キューに登録。
   // KANJI/OTHERS は既存の採点処理が用語復習登録を行うため、二重登録しない。
   if (!correct) {
-    if (!['KANJI','OTHERS'].includes(normalizeIftySubject(subject))) enrollIftyEntityReviewFromStudy(item, false);
+    if (options.skipReviewReschedule !== true && !['KANJI','OTHERS'].includes(normalizeIftySubject(subject))) enrollIftyEntityReviewFromStudy(item, false);
     ifty162CaptureSubjectMistake(subject, itemId, source);
   }
   savePracticeData();
@@ -18454,93 +18454,198 @@ window.toggleIftySubjectWeakPanel = function(subject) {
   if (wrap) wrap.innerHTML = renderIftySubjectWeakPanel(key);
 };
 
-function renderIftySubjectReviewPanel(subject) {
-  const key = normalizeIftySubject(subject);
-  const label = getIftySubjectReviewLabel(key);
-  const allEntries = getIftySubjectReviewEntries(key);
-  const dueEntries = getIftySubjectReviewEntries(key, { dueOnly: true });
-  const graduated = getIftySubjectReviewGraduatedCount(key);
-  const nextReview = getIftySubjectNextReviewTimestamp(key);
-  const collapsed = getIftySubjectPanelCollapsed(IFTY_SUBJECT_REVIEW_COLLAPSE_PREFIX, key);
+// ============================================================================
+// IFTY STEP195 — All-subject unified learning manager (review due / weak items).
+// A single panel, two clearly labeled views and identical behavior for ENGLISH
+// and SOCIAL STUDIES / SCIENCE / ANCIENT / KANBUN / KANJI / OTHERS.
+// Existing review schedules and answer histories are preserved.
+// ============================================================================
+let ifty195LearningActiveTab = 'due';
+let ifty195LearningShowAll = false;
 
-  const dueList = dueEntries.length
-    ? dueEntries.slice(0, 12).map(({ folder, item, review }) => {
-        const title = String(item.term || item.title || item.word || item.topic || item.originalText || '無題');
-        const summary = String(
-          item.explanation ||
-          item.memoryText ||
-          item.translation ||
-          item.kundoku ||
-          (Array.isArray(item.meanings) ? item.meanings.join(' / ') : '')
-        ).trim().replace(/\s+/g, ' ');
-        const stage = review.level < 0 ? '今すぐ' : `${IFTY_REVIEW_INTERVAL_DAYS[Math.max(0, review.level)]}日段階`;
-        const toggleFn = key === 'SCIENCE'
-          ? 'toggleIftyScienceItemReview'
-          : (key === 'ANCIENT'
-              ? 'toggleIftyAncientItemReview'
-              : (key === 'KANBUN'
-                  ? 'toggleIftyKanbunItemReview'
-                  : (key === 'KANJI'
-                      ? 'toggleIftyKanjiItemReview'
-                      : (key === 'OTHERS' ? 'toggleIftyOthersItemReview' : 'toggleIftySocialItemReview'))));
-        return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #805f3d;">
-          <div style="min-width:0;flex:1;">
-            <div style="font-weight:900;color:#fed7aa;overflow-wrap:anywhere;">${escapeHtml(title)}</div>
-            ${summary ? `<div style="margin-top:2px;color:#fdba74;font-size:.78em;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtml(summary)}</div>` : ''}
-            <div style="margin-top:3px;color:#fdba74;font-size:.7em;">📁 ${escapeHtml(folder.name || '')} ・ ${escapeHtml(stage)} ・ ${review.source === 'auto' ? '自動登録' : '手動登録'}</div>
-          </div>
-          <button type="button" onclick="${toggleFn}('${folder.id}','${item.id}')" style="border:1px solid #9a6430;background:#352617;color:#fed7aa;border-radius:6px;padding:6px 8px;font-size:.72em;font-weight:900;cursor:pointer;flex:none;">解除</button>
-        </div>`;
-      }).join('')
-    : `<div style="padding:11px 2px;color:#fdba74;font-size:.8em;">今日の復習はありません。${nextReview ? `次回は ${escapeHtml(formatIftyReviewDate(nextReview))}。` : 'カードの「＋復習」またはフラッシュカード学習で登録できます。'}</div>`;
+function ifty195InstallLearningStyles() {
+  if (document.getElementById('ifty195LearningStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'ifty195LearningStyles';
+  style.textContent = `
+    .ifty195-learning-panel {background:#1b2638!important;border:2px solid #64748b!important;border-radius:12px!important;padding:14px!important;margin:12px 0!important;color:#f8fafc!important;min-width:0!important;box-sizing:border-box!important;}
+    .ifty195-learning-header {display:flex;gap:9px;align-items:center;justify-content:space-between;flex-wrap:wrap;}
+    .ifty195-learning-title {font-size:1rem;font-weight:900;color:#f8fafc!important;line-height:1.5;}
+    .ifty195-learning-desc {font-size:.78rem;color:#cbd5e1!important;line-height:1.6;margin:3px 0 10px;}
+    .ifty195-learning-tabs {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0;}
+    .ifty195-learning-tab {display:flex;justify-content:center;align-items:center;gap:5px;flex-wrap:wrap;min-height:44px;padding:8px 10px;border-radius:9px;cursor:pointer;font-weight:900;font-size:.9rem;line-height:1.4;box-sizing:border-box;background:#26374e!important;color:#e2e8f0!important;border:2px solid #536982!important;}
+    .ifty195-learning-tab[data-selected="true"] {background:#1f4765!important;border-color:#7dd3fc!important;color:#f8fafc!important;}
+    .ifty195-learning-tab:focus-visible,.ifty195-learning-button:focus-visible {outline:3px solid #7dd3fc!important;outline-offset:2px;}
+    .ifty195-learning-count {font-variant-numeric:tabular-nums;border-radius:999px;padding:2px 8px;background:#334155;color:#ffffff!important;white-space:nowrap;}
+    .ifty195-learning-tab[data-selected="true"] .ifty195-learning-count {background:#075985;}
+    .ifty195-learning-detail {color:#cbd5e1!important;font-size:.78rem;line-height:1.6;margin:0 0 10px;}
+    .ifty195-learning-controls {display:flex;align-items:center;justify-content:flex-start;gap:8px;flex-wrap:wrap;margin:8px 0;}
+    .ifty195-learning-button {border:1px solid #64748b!important;background:#334155!important;color:#f8fafc!important;cursor:pointer;border-radius:8px;min-height:40px;padding:8px 12px;font-size:.85rem;font-weight:800;}
+    .ifty195-learning-button[data-kind="start"] {background:#0369a1!important;border-color:#38bdf8!important;}
+    .ifty195-learning-button[data-kind="weak"] {background:#9f1239!important;border-color:#fb7185!important;}
+    .ifty195-learning-button:disabled {opacity:.45!important;cursor:default;}
+    .ifty195-learning-entry {padding:10px;margin:6px 0;border:1px solid #475569;border-radius:9px;background:#24364e!important;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;min-width:0;box-sizing:border-box;}
+    .ifty195-learning-entry-body {min-width:0;flex:1;overflow-wrap:anywhere;}
+    .ifty195-learning-entry-title {font-weight:900;color:#ffffff!important;font-size:.95rem;line-height:1.45;}
+    .ifty195-learning-entry-summary {font-size:.82rem;color:#e2e8f0!important;line-height:1.55;margin:4px 0;white-space:normal;}
+    .ifty195-learning-entry-meta {font-size:.72rem;color:#b6d9f4!important;line-height:1.5;margin-top:5px;}
+    .ifty195-learning-remove {flex:0 0 auto;align-self:flex-start;background:#334155!important;color:#f1f5f9!important;border:1px solid #94a3b8!important;border-radius:7px;padding:7px 9px;cursor:pointer;min-height:38px;font-weight:800;}
+    .ifty195-learning-muted {color:#cbd5e1!important;font-size:.82rem;padding:11px 0;line-height:1.6;}
+    @media(max-width:600px) {
+      .ifty195-learning-panel {padding:10px!important;}
+      .ifty195-learning-tab {font-size:.8rem;padding:7px 4px;}
+      .ifty195-learning-entry {padding:9px;gap:6px;}
+      .ifty195-learning-remove {padding:7px;font-size:.77rem;}
+    }
+  `;
+  (document.head||document.documentElement).appendChild(style);
+}
 
-  return `<div class="ifty-subject-review-panel" style="background:#1b2638;border:2px solid #c76b28;border-radius:10px;padding:12px;margin-top:12px;">
-    <div style="display:flex;justify-content:space-between;gap:9px;align-items:center;flex-wrap:wrap;">
-      <button type="button" onclick="toggleIftySubjectReviewPanel('${key}')" aria-expanded="${collapsed ? 'false' : 'true'}" style="border:none;background:transparent;padding:0;text-align:left;cursor:pointer;min-width:0;flex:1;color:inherit;">
-        <div style="font-weight:900;color:#fed7aa;">${collapsed ? '▶' : '▼'} 🔁 ${label}の復習 <span style="font-size:.8em;color:#fb923c;">今日 ${dueEntries.length} / 管理 ${allEntries.length} / 卒業 ${graduated}</span></div>
-        ${collapsed ? '' : '<div style="margin-top:3px;color:#fdba74;font-size:.72em;">今日の復習＝復習予定日が今日以前の項目。1日 → 3日 → 7日 → 14日 → 30日 → 卒業。未定着なら1日段階へ戻ります。</div>'}
-      </button>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-        <button type="button" onclick="toggleIftySubjectReviewPanel('${key}')" style="border:1px solid #c76b28;background:#202d41;color:#fed7aa;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${collapsed ? '開く' : '折りたたむ'}</button>
-        ${collapsed ? '' : `<button type="button" onclick="startIftySubjectDueReviewFlashcards('${key}','front')" ${dueEntries.length ? '' : 'disabled'} style="border:none;background:#ea580c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${dueEntries.length ? 'pointer' : 'default'};opacity:${dueEntries.length ? '1' : '.45'};">📇 今日の復習</button>`}
-      </div>
+function ifty195ReviewWeakData(subject) {
+  const key=normalizeIftySubject(subject);
+  const english=key==='ENGLISH';
+  const reviewAll=english?getIftyReviewEntries():getIftySubjectReviewEntries(key);
+  const due=english?getIftyReviewEntries({dueOnly:true}):getIftySubjectReviewEntries(key,{dueOnly:true});
+  const weak=english?getIftyWeakEntries():getIftySubjectWeakEntries(key);
+  const graduated=english?getIftyLearningStats().reviewGraduated:getIftySubjectReviewGraduatedCount(key);
+  const next=english?getIftyNextReviewTimestamp():getIftySubjectNextReviewTimestamp(key);
+  const label=english?'英語':getIftySubjectReviewLabel(key);
+  return {key,label,english,reviewAll,due,weak,graduated,next};
+}
+
+function ifty195RenderLearningEntry(entry,view,key) {
+  const item=entry.word||entry.item||{};
+  const folder=entry.folder||{};
+  const english=key==='ENGLISH';
+  const title=String(item.term||item.word||item.title||item.topic||item.originalText||'無題');
+  const summary=String(english
+      ? (Array.isArray(item.meanings)?item.meanings.join(' / '):(item.meanings||''))
+      : (item.explanation||item.memoryText||item.translation||item.kundoku||(Array.isArray(item.meanings)?item.meanings.join(' / '):'')))
+    .trim().replace(/\s+/g,' ');
+  const review=entry.review;
+  const meta=view==='due'
+    ? `📁 ${escapeHtml(folder.name||'')} ・ ${review.level<0?'今すぐ':(IFTY_REVIEW_INTERVAL_DAYS[Math.max(0,review.level)]+'日段階')} ・ ${review.source==='auto'?'自動登録':'手動登録'}`
+    : `📁 ${escapeHtml(folder.name||'')} ・ ${Number(entry.study?.correct||0)}/${Number(entry.study?.total||0)}正解 ・ 正答率${Math.round(entry.accuracy*100)}%`;
+  const removeButton=view==='due'
+    ? `<button type="button" class="ifty195-learning-remove" data-ifty195-action="remove" data-ifty195-subject="${escapeHtml(key)}" data-folder-id="${escapeHtml(String(folder.id||''))}" data-item-id="${escapeHtml(String(item.id||''))}">解除</button>`
+    : '';
+  return `<div class="ifty195-learning-entry">
+    <div class="ifty195-learning-entry-body"><div class="ifty195-learning-entry-title">${escapeHtml(title)}</div>
+    ${summary?`<div class="ifty195-learning-entry-summary">${escapeHtml(summary)}</div>`:''}
+    <div class="ifty195-learning-entry-meta">${meta}</div></div>${removeButton}</div>`;
+}
+
+function renderIfty195LearningPanel(subject) {
+  ifty195InstallLearningStyles();
+  const d=ifty195ReviewWeakData(subject);
+  const weakTab=ifty195LearningActiveTab==='weak';
+  const view=weakTab?'weak':'due';
+  const list=weakTab?d.weak:d.due;
+  const maxRows=ifty195LearningShowAll?list.length:12;
+  const rows=list.slice(0,maxRows).map(x=>ifty195RenderLearningEntry(x,view,d.key)).join('');
+  const remaining=Math.max(0,list.length-maxRows);
+  const emptyText=weakTab?'現在、苦手候補はありません。':`今日の復習はありません。${d.next?'次回は '+escapeHtml(formatIftyReviewDate(d.next))+'。':'学習または手動登録で復習対象を追加できます。'}`;
+  return `<section class="ifty195-learning-panel" data-ifty195-subject="${escapeHtml(d.key)}">
+    <div class="ifty195-learning-header"><div class="ifty195-learning-title">📚 ${escapeHtml(d.label)}の学習管理</div><div class="ifty195-learning-detail">管理 ${d.reviewAll.length}件 ・ 卒業 ${d.graduated}件</div></div>
+    <div class="ifty195-learning-desc">全教科共通：復習予定日と苦手判定は別々に管理します。下のタブで切り替えてください。</div>
+    <div class="ifty195-learning-tabs" role="group" aria-label="学習対象の種類">
+      <button type="button" class="ifty195-learning-tab" data-ifty195-action="tab" data-ifty195-tab="due" data-selected="${!weakTab}" aria-pressed="${!weakTab}">🔁 今日の復習 <span class="ifty195-learning-count">${d.due.length}件</span></button>
+      <button type="button" class="ifty195-learning-tab" data-ifty195-action="tab" data-ifty195-tab="weak" data-selected="${weakTab}" aria-pressed="${weakTab}">🎯 苦手候補 <span class="ifty195-learning-count">${d.weak.length}件</span></button>
     </div>
-    ${collapsed ? '' : `<div style="margin-top:7px;">${dueList}${dueEntries.length > 12 ? `<div style="padding-top:6px;color:#fdba74;font-size:.72em;">ほか ${dueEntries.length - 12}件</div>` : ''}</div>`}
-  </div>`;
+    <div class="ifty195-learning-detail">${weakTab?'正答率から判定（3回以上学習・2回以上不正解・正答率70%未満）。復習予定日とは無関係です。':'復習予定日が今日以前の項目。1日 → 3日 → 7日 → 14日 → 30日 → 卒業。未定着なら最初に戻ります。'}</div>
+    <div class="ifty195-learning-controls">
+      <button type="button" class="ifty195-learning-button" data-kind="${weakTab?'weak':'start'}" data-ifty195-action="start" ${list.length?'':'disabled'}>${weakTab?'📇 苦手候補を学習':'📇 今日の復習を始める'}</button>
+      ${remaining?`<button type="button" class="ifty195-learning-button" data-ifty195-action="all">さらに${remaining}件表示</button>`:''}
+      ${ifty195LearningShowAll&&list.length>12?`<button type="button" class="ifty195-learning-button" data-ifty195-action="less">12件に戻す</button>`:''}
+    </div>
+    ${list.length?rows:`<div class="ifty195-learning-muted">${emptyText}</div>`}
+  </section>`;
+}
+
+function ifty195RerenderLearningPanels() {
+  document.querySelectorAll('.ifty195-learning-panel[data-ifty195-subject]').forEach(panel=>{
+    const key=panel.getAttribute('data-ifty195-subject');
+    if(key) panel.outerHTML=renderIfty195LearningPanel(key);
+  });
+}
+
+window.startIfty195SubjectWeakFlashcards=function(subject,direction='front') {
+  const key=normalizeIftySubject(subject);
+  const entries=getIftySubjectWeakEntries(key);
+  if(!entries.length) {alert('現在、苦手候補はありません。');return;}
+  const keys={'SOCIAL STUDIES':['social','Social'],SCIENCE:['science','Science'],ANCIENT:['ancient','Ancient'],KANBUN:['kanbun','Kanbun'],KANJI:['kanji','Kanji'],OTHERS:['others','Others']};
+  const parts=keys[key];
+  if(!parts)return;
+  currentFlashcardMode=parts[0]+'_weak';
+  cardMode=direction==='back'?'back':'front';
+  isRandomMode=true;
+  flashcardList=shuffleArray(entries.map(({item})=>({
+    id:String(item.id||''),
+    word:key==='KANBUN'?String(item.originalText||item.title||'無題'):(key==='KANJI'?String(item.term||item.title||'無題'):String(item.word||item.title||item.topic||'無題')),
+    meanings:key==='KANBUN'?[String(item.kundoku||'').trim(),String(item.translation||'').trim()].filter(Boolean)
+      :(key==='KANJI'?[Array.isArray(item.readings)?item.readings.join('・'):'',Array.isArray(item.meanings)?item.meanings.join(' / '):'',String(item.explanation||'')].filter(Boolean)
+        :(Array.isArray(item.meanings)&&item.meanings.length?item.meanings:[String(item.memoryText||item.explanation||'').trim()])),
+    mastery:item.mastery||'unfixed',
+    language:'日本語', languageCode:'ja',
+    __ifty195SubjectWeak:key,
+    ['__ifty'+parts[1]+'Flashcard']:true,
+    ['__ifty'+parts[1]+'ItemId']:String(item.id||'')
+  })));
+  currentFlashcardIndex=0;
+  isCardFlipped=false;
+  ifty168SimpleLastTurn=null;
+  renderFlashcardModal();
+};
+
+// The subject review flashcard path already updates the SRS schedule, while
+// the study history was not incremented. Count one answer without resetting
+// the schedule a second time, preserving the same semantics as English.
+function ifty195RecordSubjectFlashcardStudy(subject,itemId,correct,isDue) {
+  return recordIftySubjectStudyEvent(subject,itemId,correct,isDue?'review_flashcard':'weak_flashcard',{skipReviewReschedule:isDue});
+}
+
+if (!window.ifty195LearningDelegationInstalled) {
+  window.ifty195LearningDelegationInstalled=true;
+  document.addEventListener('click',event=>{
+    const button=event.target?.closest?.('[data-ifty195-action]');
+    if(!button)return;
+    const panel=button.closest('.ifty195-learning-panel');
+    if(!panel)return;
+    event.preventDefault();event.stopPropagation();
+    const action=button.getAttribute('data-ifty195-action');
+    const key=normalizeIftySubject(panel.getAttribute('data-ifty195-subject'));
+    if(action==='tab'){
+      const tab=button.getAttribute('data-ifty195-tab');
+      if(!['due','weak'].includes(tab))return;
+      ifty195LearningActiveTab=tab;ifty195LearningShowAll=false;ifty195RerenderLearningPanels();
+    }else if(action==='all'){
+      ifty195LearningShowAll=true;ifty195RerenderLearningPanels();
+    }else if(action==='less'){
+      ifty195LearningShowAll=false;ifty195RerenderLearningPanels();
+    }else if(action==='start'){
+      if(ifty195LearningActiveTab==='due'){
+        if(key==='ENGLISH')startIftyDueReviewFlashcards('front');
+        else startIftySubjectDueReviewFlashcards(key,'front');
+      }else{
+        if(key==='ENGLISH')startIftyWeakFlashcards('front');
+        else startIfty195SubjectWeakFlashcards(key,'front');
+      }
+    }else if(action==='remove'){
+      const folderId=button.getAttribute('data-folder-id')||'';
+      const itemId=button.getAttribute('data-item-id')||'';
+      if(key==='ENGLISH')toggleIftyWordReview(folderId,itemId);
+      else toggleIftySubjectItemReview(key,folderId,itemId);
+    }
+  });
+}
+
+function renderIftySubjectReviewPanel(subject) {
+  return renderIfty195LearningPanel(subject);
 }
 
 function renderIftySubjectWeakPanel(subject) {
-  const key = normalizeIftySubject(subject);
-  const entries = getIftySubjectWeakEntries(key);
-  const collapsed = getIftySubjectPanelCollapsed(IFTY_SUBJECT_WEAK_COLLAPSE_PREFIX, key);
-  const label = getIftySubjectReviewLabel(key);
-
-  const list = entries.slice(0, 12).map(({ folder, item, study, accuracy }) => {
-    const title = String(item.term || item.word || item.title || item.topic || item.originalText || '無題');
-    const summary = String(
-      item.explanation ||
-      item.memoryText ||
-      item.translation ||
-      item.kundoku ||
-      (Array.isArray(item.meanings) ? item.meanings.join(' / ') : '')
-    ).trim().replace(/\s+/g, ' ');
-    return `<div style="padding:8px 0;border-bottom:1px solid #713044;">
-      <div style="font-weight:900;color:#fecdd3;overflow-wrap:anywhere;">${escapeHtml(title)}</div>
-      ${summary ? `<div style="margin-top:2px;color:#fda4af;font-size:.78em;line-height:1.4;">${escapeHtml(summary)}</div>` : ''}
-      <div style="margin-top:3px;color:#fb7185;font-size:.72em;">📁 ${escapeHtml(folder.name || '')} ・ ${study.correct}/${study.total}正解 ・ 正答率${Math.round(accuracy * 100)}%</div>
-    </div>`;
-  }).join('');
-
-  return `<div class="ifty-subject-weak-panel" style="background:#1b2638;border:2px solid #be4161;border-radius:10px;padding:12px;margin-top:10px;">
-    <div style="display:flex;justify-content:space-between;gap:9px;align-items:center;flex-wrap:wrap;">
-      <button type="button" onclick="toggleIftySubjectWeakPanel('${key}')" aria-expanded="${collapsed ? 'false' : 'true'}" style="border:none;background:transparent;padding:0;text-align:left;cursor:pointer;min-width:0;flex:1;color:inherit;">
-        <div style="font-weight:900;color:#fecdd3;">${collapsed ? '▶' : '▼'} 🎯 ${label}の苦手候補 <span style="font-size:.8em;color:#fb7185;">${entries.length}件</span></div>
-        ${collapsed ? '' : '<div style="margin-top:3px;color:#fda4af;font-size:.72em;">苦手候補＝正答履歴から判定（3回以上学習・2回以上不正解・正答率70%未満）。今日の復習とは別に管理します。</div>'}
-      </button>
-      <button type="button" onclick="toggleIftySubjectWeakPanel('${key}')" style="border:1px solid #be4161;background:#202d41;color:#fecdd3;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${collapsed ? '開く' : '折りたたむ'}</button>
-    </div>
-    ${collapsed ? '' : `<div style="margin-top:7px;">${entries.length ? list + (entries.length > 12 ? `<div style="padding-top:6px;color:#fda4af;font-size:.72em;">ほか ${entries.length - 12}件</div>` : '') : `<div style="padding:10px 2px;color:#fda4af;font-size:.8em;">現在、${escapeHtml(label)}の苦手候補はありません。</div>`}</div>`}
-  </div>`;
+  // Already included in the unified panel above: avoid duplicate displays.
+  return '';
 }
 
 window.startIftySubjectDueReviewFlashcards = function(subject, direction = 'front') {
@@ -18618,65 +18723,12 @@ window.toggleIftyWeakFolderPanel = function() {
 };
 
 function renderIftyReviewFolder() {
-  const allEntries = getIftyReviewEntries();
-  const dueEntries = getIftyReviewEntries({ dueOnly: true });
-  const nextReview = getIftyNextReviewTimestamp();
-  const stats = getIftyLearningStats();
-  const collapsed = getIftyLearningPanelCollapsed(IFTY_REVIEW_PANEL_COLLAPSE_KEY);
-
-  const dueList = dueEntries.length
-    ? dueEntries.map(({ folder, word, review }) => {
-        const meanings = Array.isArray(word.meanings) ? word.meanings : (word.meanings ? [word.meanings] : []);
-        const stage = review.level < 0 ? '手動・今すぐ' : `${IFTY_REVIEW_INTERVAL_DAYS[Math.max(0, review.level)]}日段階`;
-        return `
-          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid #fed7aa;">
-            <div style="min-width:0;">
-              <div style="font-weight:900;color:#7c2d12;">${escapeHtml(word.word || '')}</div>
-              <div style="margin-top:2px;color:#9a3412;font-size:.82em;line-height:1.4;">${escapeHtml(meanings.join(' / '))}</div>
-              <div style="margin-top:3px;color:#a16207;font-size:.72em;">📁 ${escapeHtml(folder.name || '')} ・ ${escapeHtml(stage)} ・ ${review.source === 'auto' ? '自動登録' : '手動登録'}</div>
-            </div>
-            <button type="button" onclick="toggleIftyWordReview('${folder.id}','${word.id}')" style="border:none;background:#ffedd5;color:#9a3412;border-radius:6px;padding:6px 8px;font-size:.74em;font-weight:800;cursor:pointer;flex:none;">解除</button>
-          </div>`;
-      }).join('')
-    : `<div style="padding:16px 4px;text-align:center;color:#a16207;font-size:.86em;">今日の復習はありません。${nextReview ? `次回は ${escapeHtml(formatIftyReviewDate(nextReview))} です。` : 'フラッシュカードやクイズで学習すると自動登録されます。手動登録も可能です。'}</div>`;
-
-  return `
-    <div id="iftyReviewFolder" style="background:#fff7ed;border:2px solid #fb923c;border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 2px 5px rgba(154,52,18,.08);">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-        <button type="button" onclick="toggleIftyReviewFolderPanel()" aria-expanded="${collapsed ? 'false' : 'true'}" style="border:none;background:transparent;padding:0;text-align:left;cursor:pointer;min-width:0;flex:1;color:inherit;">
-          <h3 style="margin:0;color:#7c2d12;font-size:1.12em;">${collapsed ? '▶' : '▼'} 🔁 復習 <span style="font-size:.82em;color:#c2410c;">(今日 ${dueEntries.length}件 / 管理 ${allEntries.length}件 / 卒業 ${stats.reviewGraduated}件)</span></h3>
-          ${collapsed ? '' : '<div style="margin-top:4px;color:#9a3412;font-size:.78em;">今日の復習＝復習予定日が今日以前の単語。学習 → 1日 → 3日 → 7日 → 14日 → 30日 → 卒業。間違いは1日段階へ戻る</div>'}
-        </button>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-          <button type="button" onclick="toggleIftyReviewFolderPanel()" style="border:1px solid #fb923c;background:transparent;color:#c2410c;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${collapsed ? '開く' : '折りたたむ'}</button>
-          ${collapsed ? '' : `<button type="button" onclick="startIftyDueReviewFlashcards('front')" ${dueEntries.length ? '' : 'disabled'} style="border:none;background:#ea580c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${dueEntries.length ? 'pointer' : 'default'};opacity:${dueEntries.length ? '1' : '.45'};">📇 今日の復習</button>
-          <button type="button" onclick="startIftyDueReviewQuiz()" ${dueEntries.length ? '' : 'disabled'} style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${dueEntries.length ? 'pointer' : 'default'};opacity:${dueEntries.length ? '1' : '.45'};">❓ クイズ</button>`}
-        </div>
-      </div>
-      ${collapsed ? '' : `<div style="margin-top:10px;">${dueList}</div>`}
-    </div>`;
+  return renderIfty195LearningPanel('ENGLISH');
 }
 
 function renderIftyWeakFolder() {
-  const entries = getIftyWeakEntries();
-  const collapsed = getIftyLearningPanelCollapsed(IFTY_WEAK_PANEL_COLLAPSE_KEY);
-  const list = entries.slice(0, 12).map(({ folder, word, study, accuracy }) => {
-    const meanings = Array.isArray(word.meanings) ? word.meanings : (word.meanings ? [word.meanings] : []);
-    return `<div style="padding:8px 0;border-bottom:1px solid #fecdd3;display:flex;justify-content:space-between;gap:10px;align-items:flex-start;"><div><div style="font-weight:900;color:#881337;">${escapeHtml(word.word || '')}</div><div style="font-size:.8em;color:#9f1239;margin-top:2px;">${escapeHtml(meanings.join(' / '))}</div><div style="font-size:.72em;color:#be123c;margin-top:3px;">📁 ${escapeHtml(folder.name || '')} ・ ${study.correct}/${study.total}正解 ・ 正答率${Math.round(accuracy * 100)}%</div></div></div>`;
-  }).join('');
-  return `<div id="iftyWeakFolder" style="background:#fff1f2;border:2px solid #fb7185;border-radius:10px;padding:16px;margin-bottom:12px;">
-    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
-      <button type="button" onclick="toggleIftyWeakFolderPanel()" aria-expanded="${collapsed ? 'false' : 'true'}" style="border:none;background:transparent;padding:0;text-align:left;cursor:pointer;min-width:0;flex:1;color:inherit;">
-        <h3 style="margin:0;color:#881337;font-size:1.08em;">${collapsed ? '▶' : '▼'} 🎯 苦手候補 <span style="font-size:.82em;color:#be123c;">${entries.length}語</span></h3>
-        ${collapsed ? '' : '<div style="font-size:.76em;color:#9f1239;margin-top:4px;">苦手候補＝正答履歴から判定（3回以上学習・2回以上不正解・正答率70%未満）。今日の復習とは別に管理</div>'}
-      </button>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-        <button type="button" onclick="toggleIftyWeakFolderPanel()" style="border:1px solid #fb7185;background:transparent;color:#be123c;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${collapsed ? '開く' : '折りたたむ'}</button>
-        ${collapsed ? '' : `<button type="button" onclick="startIftyWeakFlashcards('front')" ${entries.length ? '' : 'disabled'} style="border:none;background:#be123c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${entries.length ? 'pointer' : 'default'};opacity:${entries.length ? '1' : '.45'};">📇 苦手だけ学習</button>`}
-      </div>
-    </div>
-    ${collapsed ? '' : `<div style="margin-top:9px;">${entries.length ? list + (entries.length > 12 ? `<div style="padding-top:8px;color:#9f1239;font-size:.76em;">ほか ${entries.length - 12}語</div>` : '') : '<div style="padding:10px 2px;color:#9f1239;font-size:.8em;">現在、苦手候補はありません。</div>'}</div>`}
-  </div>`;
+  // Already included in the unified panel above: avoid duplicate displays.
+  return '';
 }
 
 window.startIftyWeakFlashcards = function(direction = 'front') {
@@ -27501,6 +27553,7 @@ window.renderFlashcardModal = function() {
   if (currentFlashcardIndex >= flashcardList.length) {
     const isReviewSession = currentFlashcardMode === 'review_due';
     const isWeakSession = currentFlashcardMode === 'weak';
+    const ifty195SubjectWeakSession = /^(social|science|ancient|kanbun|kanji|others)_weak$/.test(currentFlashcardMode);
     const isSocialSession = currentFlashcardMode === 'social';
     const isScienceSession = currentFlashcardMode === 'science';
     const isSocialReviewSession = currentFlashcardMode === 'social_review_due';
@@ -27510,6 +27563,8 @@ window.renderFlashcardModal = function() {
     const isKanbunReviewSession = currentFlashcardMode === 'kanbun_review_due';
     const isKanjiReviewSession = currentFlashcardMode === 'kanji_review_due';
     const isOthersReviewSession = currentFlashcardMode === 'others_review_due';
+    const ifty195WeakReturnActions = {social:'renderIftySocialStudiesPage();',science:'renderIftySciencePage();',ancient:'renderIftyAncientPage();',kanbun:'renderIftyKanbunPage();',kanji:'renderIftyKanjiPage();',others:'renderIftyOthersPage();'};
+    const ifty195WeakSubject = currentFlashcardMode.replace(/_weak$/, '');
     const completedReturnAction = isSocialReviewSession ? "renderIftySocialStudiesPage();"
       : (isScienceReviewSession ? "renderIftySciencePage();"
         : ((isAncientReviewSession || isAncientSession) ? "renderIftyAncientPage();"
@@ -27528,6 +27583,11 @@ window.renderFlashcardModal = function() {
                   : (isOthersReviewSession ? 'OTHERSへ戻る'
                     : (isSocialSession ? '社会PRACTICEへ戻る'
                       : (isScienceSession ? '理科PRACTICEへ戻る' : '閉じる')))))))));
+    if (ifty195SubjectWeakSession) {
+      const doneAction = ifty195WeakReturnActions[ifty195WeakSubject] || '';
+      modal.innerHTML = `<div style="background:#fff;border-radius:12px;padding:28px;width:min(400px,92vw);text-align:center;"><h3 style="color:#0f172a;">🎉 完了！</h3><p style="color:#475569;">苦手候補の学習を終了しました。</p><button type="button" onclick="closeFlashcardModal();${doneAction}" style="background:#e2e8f0;color:#334155;border:none;border-radius:8px;padding:12px 16px;font-weight:900;">教科へ戻る</button></div>`;
+      return;
+    }
     if (isReviewSession || isWeakSession) renderFolders();
     modal.innerHTML = `
       <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
@@ -27615,48 +27675,78 @@ window.setMasteryAndNext = function(status) {
       const ref = findIftySocialPracticeItemById(current.__iftySocialItemId || current.id);
       if (ref && ref.item) {
         ref.item.mastery = status;
-        if (current.__iftySubjectReviewDue) applyIftyEntityReviewResult(ref.item, correct);
-        else enrollIftyEntityReviewFromStudy(ref.item, correct);
+        if (current.__iftySubjectReviewDue) {
+          applyIftyEntityReviewResult(ref.item, correct);
+          ifty195RecordSubjectFlashcardStudy('SOCIAL STUDIES', current.id, correct, true);
+        } else if (current.__ifty195SubjectWeak) {
+          ifty195RecordSubjectFlashcardStudy('SOCIAL STUDIES', current.id, correct, false);
+          if (correct) enrollIftyEntityReviewFromStudy(ref.item, true);
+        } else enrollIftyEntityReviewFromStudy(ref.item, correct);
       }
       savePracticeData();
     } else if (current.__iftyScienceFlashcard) {
       const ref = findIftySciencePracticeItemById(current.__iftyScienceItemId || current.id);
       if (ref && ref.item) {
         ref.item.mastery = status;
-        if (current.__iftySubjectReviewDue) applyIftyEntityReviewResult(ref.item, correct);
-        else enrollIftyEntityReviewFromStudy(ref.item, correct);
+        if (current.__iftySubjectReviewDue) {
+          applyIftyEntityReviewResult(ref.item, correct);
+          ifty195RecordSubjectFlashcardStudy('SCIENCE', current.id, correct, true);
+        } else if (current.__ifty195SubjectWeak) {
+          ifty195RecordSubjectFlashcardStudy('SCIENCE', current.id, correct, false);
+          if (correct) enrollIftyEntityReviewFromStudy(ref.item, true);
+        } else enrollIftyEntityReviewFromStudy(ref.item, correct);
       }
       savePracticeData();
     } else if (current.__iftyAncientFlashcard) {
       const ref = getIftyAncientItemById(current.__iftyAncientItemId || current.id);
       if (ref && ref.item) {
         ref.item.mastery = status;
-        if (current.__iftySubjectReviewDue) applyIftyEntityReviewResult(ref.item, correct);
-        else enrollIftyEntityReviewFromStudy(ref.item, correct);
+        if (current.__iftySubjectReviewDue) {
+          applyIftyEntityReviewResult(ref.item, correct);
+          ifty195RecordSubjectFlashcardStudy('ANCIENT', current.id, correct, true);
+        } else if (current.__ifty195SubjectWeak) {
+          ifty195RecordSubjectFlashcardStudy('ANCIENT', current.id, correct, false);
+          if (correct) enrollIftyEntityReviewFromStudy(ref.item, true);
+        } else enrollIftyEntityReviewFromStudy(ref.item, correct);
       }
       savePracticeData();
     } else if (current.__iftyKanbunFlashcard) {
       const ref = getIftyKanbunItemById(current.__iftyKanbunItemId || current.id);
       if (ref && ref.item) {
         ref.item.mastery = status;
-        if (current.__iftySubjectReviewDue) applyIftyEntityReviewResult(ref.item, correct);
-        else enrollIftyEntityReviewFromStudy(ref.item, correct);
+        if (current.__iftySubjectReviewDue) {
+          applyIftyEntityReviewResult(ref.item, correct);
+          ifty195RecordSubjectFlashcardStudy('KANBUN', current.id, correct, true);
+        } else if (current.__ifty195SubjectWeak) {
+          ifty195RecordSubjectFlashcardStudy('KANBUN', current.id, correct, false);
+          if (correct) enrollIftyEntityReviewFromStudy(ref.item, true);
+        } else enrollIftyEntityReviewFromStudy(ref.item, correct);
       }
       savePracticeData();
     } else if (current.__iftyKanjiFlashcard) {
       const ref = getIftyKanjiItemById(current.__iftyKanjiItemId || current.id);
       if (ref && ref.item) {
         ref.item.mastery = status;
-        if (current.__iftySubjectReviewDue) applyIftyEntityReviewResult(ref.item, correct);
-        else enrollIftyEntityReviewFromStudy(ref.item, correct);
+        if (current.__iftySubjectReviewDue) {
+          applyIftyEntityReviewResult(ref.item, correct);
+          ifty195RecordSubjectFlashcardStudy('KANJI', current.id, correct, true);
+        } else if (current.__ifty195SubjectWeak) {
+          ifty195RecordSubjectFlashcardStudy('KANJI', current.id, correct, false);
+          enrollIftyEntityReviewFromStudy(ref.item, correct);
+        } else enrollIftyEntityReviewFromStudy(ref.item, correct);
       }
       savePracticeData();
     } else if (current.__iftyOthersFlashcard) {
       const ref = getIftyOthersItemById(current.__iftyOthersItemId || current.id);
       if (ref && ref.item) {
         ref.item.mastery = status;
-        if (current.__iftySubjectReviewDue) applyIftyEntityReviewResult(ref.item, correct);
-        else enrollIftyEntityReviewFromStudy(ref.item, correct);
+        if (current.__iftySubjectReviewDue) {
+          applyIftyEntityReviewResult(ref.item, correct);
+          ifty195RecordSubjectFlashcardStudy('OTHERS', current.id, correct, true);
+        } else if (current.__ifty195SubjectWeak) {
+          ifty195RecordSubjectFlashcardStudy('OTHERS', current.id, correct, false);
+          enrollIftyEntityReviewFromStudy(ref.item, correct);
+        } else enrollIftyEntityReviewFromStudy(ref.item, correct);
       }
       savePracticeData();
     } else {
