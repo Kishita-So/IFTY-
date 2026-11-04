@@ -418,6 +418,7 @@ function isIftyPracticeQuestionActive(modal) {
   return !!(modal && modal.getAttribute('data-ifty-question-active') === 'true');
 }
 
+// IFTY STEP192: Cloudflare GraphQL Neurons usage (independent of local request count).
 const IFTY_ALLIA_USAGE_STORAGE_PREFIX = 'ifty_allia_usage_';
 const IFTY_ALLIA_USAGE_RESET_HOUR_JST = 9;
 const IFTY_ALLIA_LIMIT_STATE_PREFIX = 'ifty_allia_limit_state_';
@@ -428,6 +429,7 @@ const IFTY_ALLIA_ACCOUNT_TYPES = new Set([
   'account_register','account_login','account_session','account_logout','account_profile',
   'account_username_change','account_email_request','account_email_verify','account_recovery_code_generate','account_password_change',
   'account_sessions','account_session_revoke','account_logout_all','account_delete',
+  'allia_usage_status',
   'password_reset_request','password_reset_confirm','password_reset_recovery','cloud_load','cloud_save','activity_heartbeat','activity_stats',
   'friends_list','friend_request_send','friend_request_accept','friend_request_decline','friend_request_cancel','friend_remove','friend_activity_visibility',
   'class_list','class_create','class_join','class_leave','class_delete','class_members','class_avatar_save',
@@ -2147,26 +2149,21 @@ async function inspectIftyAlliaLimitResponse(response, type) {
 
 function getIftyAlliaEffectiveLimitState() {
   const state = loadIftyAlliaLimitState();
-  // Retry-Afterの期限後や、期限不明で5分経過した警告は「要再確認」へ移す。
-  // 実際に利用枠が回復したと断定せず、次のリクエスト結果で確定する。
   if (state.status === 'rate_limited' && (
     (state.retryAt > 0 && Date.now() >= state.retryAt) ||
     (!state.retryAt && state.updatedAt > 0 && Date.now() - state.updatedAt >= 300000)
-  )) return {...state, status:'unknown', estimated:false, message:'前回の制限は再確認が必要です。'};
-  if (state.status === 'reached' || state.status === 'near' || state.status === 'rate_limited') return { ...state, estimated:false };
-
-  const learned = loadIftyAlliaLearnedLimit();
-  const usage = loadIftyAlliaUsage();
-  if (learned >= 2 && usage.total >= Math.max(1, Math.floor(learned * IFTY_ALLIA_ESTIMATED_NEAR_RATIO))) {
-    return {
-      ...state,
-      status: 'near',
-      estimated: true,
-      learnedLimit: learned,
-      message: '前回ALLIAが上限に達した使用量から見て、上限が近い可能性があります。'
-    };
+  )) return { ...state, status:'unknown', estimated:false, message:'前回の制限は再確認が必要です。' };
+  // Confirmed AI refusals take priority over delayed Analytics readings.
+  if (state.status === 'reached' || state.status === 'rate_limited') return { ...state, estimated:false };
+  const cloud = ifty192GetNeuronSnapshot();
+  if (cloud?.available === true && typeof cloud.limitNeurons === 'number' &&
+      typeof cloud.remainingNeurons === 'number' && cloud.limitNeurons > 0) {
+    return { ...state, status: cloud.remainingNeurons / cloud.limitNeurons <= IFTY_ALLIA_NEAR_RATIO ? 'near' : 'normal',
+      estimated:false, message:'Cloudflare Analyticsによる無料枠の集計値です。' };
   }
-  return { ...state, estimated:false, learnedLimit:learned };
+  // A past request count or unrelated rate-limit header is not proof that
+  // today's Workers AI Neurons are almost exhausted.
+  return { ...state, status: 'unknown', estimated:false };
 }
 
 function ensureIftyAlliaLimitBadge() {
@@ -2197,7 +2194,7 @@ function updateIftyAlliaLimitBadge() {
     badge.style.color = '#fff';
     badge.style.display = 'block';
   } else if (state.status === 'near') {
-    badge.textContent = state.estimated ? '⚠️ ALLIA 上限が近い可能性' : '⚠️ ALLIA 上限が近い';
+    badge.textContent = ifty192GetNeuronSnapshot()?.available ? '⚠️ ALLIA 無料枠の残量が少なめ（集計値）' : '⚠️ ALLIA 上限が近い';
     badge.style.background = '#f59e0b';
     badge.style.color = '#422006';
     badge.style.display = 'block';
@@ -2332,12 +2329,104 @@ async function iftyAlliaFetch(input, init) {
     if (shouldTrack) {
       recordIftyAlliaUsage(type, response.ok);
       await inspectIftyAlliaLimitResponse(response, type);
+      ifty192AfterAlliaCall();
     }
     return response;
   } catch (error) {
     if (shouldTrack) recordIftyAlliaUsage(type, false);
     throw error;
   }
+}
+
+// STEP192: Cloudflare analytics status is shared by the entire Cloudflare account.
+// This endpoint does not invoke AI and does not count as a learning request.
+const IFTY192_NEURON_CACHE_PREFIX = 'ifty192_neuron_usage_';
+let ifty192NeuronSnapshot = null;
+let ifty192NeuronFetching = null;
+let ifty192NeuronLastAttempt = 0;
+let ifty192NeuronQueued = false;
+let ifty192NeuronError = '';
+function ifty192UsageUtcDay() { return new Date().toISOString().slice(0,10); }
+function ifty192GetNeuronSnapshot() {
+  const day = ifty192UsageUtcDay();
+  if (ifty192NeuronSnapshot?.periodStart?.slice(0,10) === day) return ifty192NeuronSnapshot;
+  ifty192NeuronSnapshot = null;
+  try {
+    const cached = JSON.parse(localStorage.getItem(IFTY192_NEURON_CACHE_PREFIX + day) || 'null');
+    if (cached?.periodStart?.slice(0,10) === day && Number.isFinite(Date.parse(cached.checkedAt))) {
+      ifty192NeuronSnapshot = cached;
+    }
+  } catch (_) {}
+  return ifty192NeuronSnapshot;
+}
+function ifty192RequestNeuronRefresh(force = false) {
+  const now = Date.now();
+  if (ifty192NeuronFetching) return ifty192NeuronFetching;
+  // A single tab polls at most once every 90 s, except when explicitly refreshed.
+  if (!force && now - ifty192NeuronLastAttempt < 90000) return Promise.resolve(ifty192GetNeuronSnapshot());
+  ifty192NeuronLastAttempt = now;
+  ifty192NeuronFetching = (async () => {
+    try {
+      const response = await fetch(WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'allia_usage_status' }),
+        cache: 'no-store'
+      });
+      const data = await response.json();
+      if (!response.ok || !data || data.source !== 'cloudflare_graphql_analytics') {
+        throw new Error('WorkerがSTEP192の使用量APIに対応していません。Workerを更新してください。');
+      }
+      if (data.available === true) {
+        const used = Number(data.usedNeurons);
+        const limit = Number(data.limitNeurons);
+        const left = Number(data.remainingNeurons);
+        if (data.usedNeurons == null || data.remainingNeurons == null || data.limitNeurons == null ||
+            !Number.isFinite(used) || used < 0 || !Number.isFinite(limit) || limit <= 0 ||
+            !Number.isFinite(left) || left < 0 || Math.abs(left - Math.max(0, limit-used)) > 0.01 ||
+            String(data.periodStart || '').slice(0,10) !== ifty192UsageUtcDay() ||
+            !Number.isFinite(Date.parse(data.checkedAt))) {
+          throw new Error('Cloudflareの使用量データを確認できませんでした。');
+        }
+      }
+      ifty192NeuronSnapshot = data;
+      ifty192NeuronError = '';
+      try { localStorage.setItem(IFTY192_NEURON_CACHE_PREFIX + ifty192UsageUtcDay(), JSON.stringify(data)); } catch (_) {}
+    } catch (error) {
+      ifty192NeuronError = String(error?.message || '使用量の取得に失敗しました。').slice(0,160);
+    } finally {
+      ifty192NeuronFetching = null;
+      refreshIftyAlliaUsageDisplays();
+    }
+    return ifty192GetNeuronSnapshot();
+  })();
+  return ifty192NeuronFetching;
+}
+window.ifty192RefreshAlliaQuota = function() { return ifty192RequestNeuronRefresh(true); };
+function ifty192QueueNeuronRefresh() {
+  if (ifty192NeuronQueued) return;
+  ifty192NeuronQueued = true;
+  setTimeout(() => {
+    ifty192NeuronQueued = false;
+    ifty192RequestNeuronRefresh().catch(() => {});
+  }, 50);
+}
+// Refresh after AI results, but not on every regeneration or every DOM re-render.
+function ifty192AfterAlliaCall() {
+  if (window.__ifty192AfterAlliaTimer) clearTimeout(window.__ifty192AfterAlliaTimer);
+  window.__ifty192AfterAlliaTimer = setTimeout(() => {
+    ifty192RequestNeuronRefresh().catch(() => {});
+  }, 10000);
+}
+if (!window.__ifty192NeuronPollingInstalled) {
+  window.__ifty192NeuronPollingInstalled = true;
+  ifty192QueueNeuronRefresh();
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible') ifty192RequestNeuronRefresh().catch(() => {});
+  }, 120000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') ifty192RequestNeuronRefresh().catch(() => {});
+  });
 }
 
 // STEP155: ALLIAの想定日次切替（日本時間09:00）までのカウントダウン。
@@ -2379,54 +2468,64 @@ if (!window.__iftyAlliaResetCountdownTimer) {
 // STEP154: 時刻ごとの棒グラフではなく、分母の根拠を明示した残量バロメータに変更する。
 // Workers AIの処理量はリクエストごとに異なるため、根拠がない場合は割合を捏造しない。
 function renderIftyAlliaUsageBarHtml(compact = false) {
+  ifty192QueueNeuronRefresh();
   const usage = loadIftyAlliaUsage();
   const state = getIftyAlliaEffectiveLimitState();
-  const direct = state.status !== 'unknown' && Number.isFinite(state.limit) && state.limit > 0 &&
-    Number.isFinite(state.remaining) && state.remaining >= 0 && state.remaining <= state.limit;
-  const learned = Number(state.learnedLimit || loadIftyAlliaLearnedLimit()) || 0;
-  const estimated = !direct && learned >= 2 && state.status !== 'rate_limited';
-  const known = direct || estimated || state.status === 'reached';
-  let ratio = state.status === 'reached' ? 1 : direct ? (state.limit-state.remaining)/state.limit :
-    estimated ? usage.total/learned : 0;
-  ratio = Math.min(1,Math.max(0,ratio));
-  const usedPercent = Math.round(ratio*100);
-  const remainingPercent = Math.max(0,100-usedPercent);
+  const cloud = ifty192GetNeuronSnapshot();
+  const direct = cloud?.available === true && cloud.usedNeurons != null && cloud.limitNeurons != null &&
+    Number.isFinite(Number(cloud.usedNeurons)) && Number(cloud.usedNeurons) >= 0 &&
+    Number.isFinite(Number(cloud.limitNeurons)) && Number(cloud.limitNeurons) > 0;
+  const used = direct ? Number(cloud.usedNeurons) : 0;
+  const limit = direct ? Number(cloud.limitNeurons) : 0;
+  const remaining = direct ? Math.max(0, limit-used) : 0;
+  const usedPercent = direct ? Math.round(Math.min(100,100*used/limit)*10)/10 : 0;
+  const pct = direct ? Math.min(100,100*used/limit) : 0;
+  const fmt = number => new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 2 }).format(number);
+  const checkTime = direct && Number.isFinite(Date.parse(cloud.checkedAt))
+    ? new Date(cloud.checkedAt).toLocaleTimeString('ja-JP',{ timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',second:'2-digit' }) : '';
   const reached = state.status === 'reached';
-  const near = state.status === 'near';
   const limited = state.status === 'rate_limited';
-  const mainColor = reached ? '#dc2626' : limited ? '#ea580c' : near ? '#eab308' : '#2563eb';
+  const near = direct && remaining/limit <= .15;
   const border = reached ? '#fca5a5' : limited ? '#fdba74' : near ? '#fcd34d' : '#94a3b8';
   const background = reached ? '#35171d' : limited ? '#3c261d' : near ? '#342a16' : '#16253b';
-  const headline = reached ? '⛔ ALLIA 日次利用枠の上限' : limited ?
-    (state.limitKind === 'temporary' ? '⏳ ALLIA 一時的に利用制限中' : '⏳ ALLIA 利用制限中（種類未確認）') :
-    near ? (state.estimated?'⚠️ ALLIA 上限が近い可能性':'⚠️ ALLIA 上限が近い') : '🤖 ALLIA 使用状況';
-  const resetText = reached ? (state.retryAt > Date.now()
-      ? `API指定の再試行目安まで約${Math.ceil((state.retryAt-Date.now())/60000)}分`
-      : 'AI利用枠の解除時刻は未確認') :
-    limited ? (state.retryAt > Date.now()
-      ? `API指定の再試行目安まで約${Math.ceil((state.retryAt-Date.now())/60000)}分`
-      : '解除時刻は未確認。後で再試行してください') : '';
-  const label = known ? (direct ? `使用 ${usedPercent}% ・ 残り ${remainingPercent}%` :
-    reached ? '上限到達（残量0）' : `推定使用 ${usedPercent}%`) : '上限データ未取得（残量不明）';
-  const foot = direct ? `APIが返した残量 ${state.remaining} / ${state.limit}` :
-    estimated ? `この端末の過去の上限到達 ${learned}回を目安に表示（AI処理量で変動）` :
-    `この端末で今日 ${usage.total}回リクエスト（回数＝消費量ではありません）`;
-  return `<div data-ifty-allia-usage role="group" aria-label="ALLIA利用バロメータ" style="border:1px solid ${border};background:${background};color:#f8fafc;border-radius:11px;padding:${compact?'10px':'13px'};box-sizing:border-box;min-width:0;">
+  const color = reached ? '#dc2626' : limited ? '#ea580c' : near ? '#eab308' : '#3b82f6';
+  const headline = reached ? '⛔ ALLIA 日次上限が報告されました' : limited ?
+    '⏳ ALLIA 利用制限中（種類は別途確認）' : near ? '⚠️ ALLIA 無料枠の残量が少なくなっています' : '🤖 ALLIA 使用状況';
+  const label = direct
+    ? `無料枠残り ${fmt(remaining)} / ${fmt(limit)} Neurons`
+    : 'Cloudflare残量：未取得';
+  const errorDetail = cloud?.available === false
+    ? String(cloud.message || 'Cloudflareが利用量を返しませんでした。')
+    : (ifty192NeuronError || 'Cloudflareの使用量を取得しています。');
+  const foot = direct
+    ? `Cloudflareアカウント全体：使用 ${fmt(used)} Neurons（${usedPercent}%）。最終照会 ${checkTime} JST`
+    : errorDetail;
+  const retryText = state.retryAt > Date.now()
+    ? `APIが示した再試行目安：約${Math.ceil((state.retryAt-Date.now())/60000)}分`
+    : (reached ? '現在の利用可否は実際のAI応答で判定します' : '');
+  return `<div data-ifty-allia-usage role="group" aria-label="ALLIA利用状況" style="border:1px solid ${border};background:${background};color:#f8fafc;border-radius:11px;padding:${compact?'10px':'13px'};box-sizing:border-box;min-width:0;overflow-wrap:anywhere;">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:7px;">
       <b style="font-size:${compact?'.84em':'1em'};color:#f8fafc;">${headline}</b>
-      <span style="font-size:.78em;font-weight:800;color:#e2e8f0;">${label}</span>
+      <span style="font-size:.79em;font-weight:850;color:#e2e8f0;">${label}</span>
     </div>
-    <div role="progressbar" aria-label="ALLIA ${known?'使用率':'使用状況（上限不明）'}" ${known?`aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usedPercent}"`:'aria-valuetext="利用上限が不明"'} style="width:100%;height:${compact?'13px':'19px'};background:#334155;border:1px solid #64748b;border-radius:999px;overflow:hidden;margin-top:10px;">
-      <div style="width:${known?usedPercent:0}%;height:100%;background:${mainColor};border-radius:999px;transition:width .25s ease;"></div>
+    <div role="progressbar" aria-label="Workers AI無料枠の使用率" ${direct?`aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usedPercent}"`:'aria-valuetext="使用量を取得できません"'} style="width:100%;height:${compact?'13px':'19px'};background:#334155;border:1px solid #64748b;border-radius:999px;overflow:hidden;margin-top:10px;">
+      <div style="width:${direct?pct:0}%;height:100%;background:${color};border-radius:999px;transition:width .25s ease;"></div>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px;font-size:.74em;color:#cbd5e1;">
-      <span>${escapeHtml(foot)}</span><span>${escapeHtml(resetText||`今日 ${usage.total}回${usage.failed?` ・ 失敗 ${usage.failed}`:''}`)}</span>
+      <span>${escapeHtml(foot)}</span><span>この端末：今日 ${usage.total}回のリクエスト</span>
+    </div>
+    <div style="font-size:.7em;color:#b9d5eb;margin-top:7px;">${direct
+      ? 'Cloudflareの集計値です。反映遅延があり、直近のAI処理がまだ含まれない場合があります。Paidプランでは無料枠残量0でも利用できる場合があります。'
+      : '取得できない場合は数値を推測しません。Workerの設定または通信を確認してください。'}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:9px;padding-top:8px;border-top:1px solid #475569;">
-      <span style="font-size:.75em;color:#cbd5e1;">端末の使用回数集計切替まで（日本時間 9:00・APIの解除時刻ではありません）</span>
-      <strong data-ifty-allia-reset-countdown aria-label="使用回数の集計切替までの残り時間" style="font-size:${compact?'1em':'1.15em'};font-variant-numeric:tabular-nums;letter-spacing:.04em;color:#f8fafc;">${getIftyAlliaResetCountdown()}</strong>
+      <span style="font-size:.75em;color:#cbd5e1;">Cloudflare無料枠のUTC日付切替まで（日本時間9:00）</span>
+      <strong data-ifty-allia-reset-countdown aria-label="無料枠の日付切替まで" style="font-size:${compact?'1em':'1.15em'};font-variant-numeric:tabular-nums;letter-spacing:.04em;color:#f8fafc;">${getIftyAlliaResetCountdown()}</strong>
     </div>
-    ${limited?'<p style="font-size:.72em;color:#fed7aa;margin:5px 0 0;">429エラーは日次上限とは限りません。制限解除を試すためにログイン情報を切り替える必要はありません。</p>':''}
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">
+      <span style="font-size:.71em;color:#cbd5e1;">${escapeHtml(retryText)}</span>
+      <button type="button" onclick="ifty192RefreshAlliaQuota()" style="border:1px solid #7da0c4;background:#294565;color:white;border-radius:8px;padding:7px 10px;min-height:36px;font-size:.8em;cursor:pointer;">↻ 残量を更新</button>
+    </div>
   </div>`;
 }
 
@@ -34359,4 +34458,442 @@ function ifty177Render(){
   if(!bar){bar=document.createElement('div');bar.id='ifty178AlliaGamesBar';bar.innerHTML='<button type="button" onclick="openIftySoloChatGames()">🎲 ALLIAと遊ぶ</button>';page.insertBefore(bar,page.firstChild);}
  };
 
+})();
+
+
+// ============================================================================
+// IFTY STEP193 — visibility corrections for pronunciation IPA and LANGUAGES list
+// STEP192 code and Cloudflare Worker are otherwise untouched.
+// ============================================================================
+(function ifty193EnsureReadability() {
+  'use strict';
+  const styleId = 'ifty193Readability';
+  if (document.getElementById(styleId)) return;
+  const element = document.createElement('style');
+  element.id = styleId;
+  element.textContent = `/* STEP193: Contrast fixes ONLY for the IPA stripe and ENGLISH folder/cards.
+   The dark theme's legacy [style*=color] rules were turning text white even
+   on legacy light surfaces. Recolor both surfaces and their text together. */
+#iftyPronFolders .ifty177-ipa-row,
+[data-ifty139-subject="PRONUNCIATION"] .ifty177-ipa-row {
+  background: #163852 !important;
+  border: 1px solid #6ca5ca !important;
+  color: #f8fafc !important;
+}
+#iftyPronFolders .ifty177-ipa-row > span:first-child,
+[data-ifty139-subject="PRONUNCIATION"] .ifty177-ipa-row > span:first-child {
+  color: #9be7ff !important;
+}
+#iftyPronFolders .ifty177-ipa-row [data-ifty177-ipa],
+[data-ifty139-subject="PRONUNCIATION"] .ifty177-ipa-row [data-ifty177-ipa] {
+  color: #ffffff !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+#iftyPronFolders .ifty177-ipa-row button,
+[data-ifty139-subject="PRONUNCIATION"] .ifty177-ipa-row button {
+  background: #315b80 !important;
+  border-color: #88b6d5 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+/* LANGUAGES: never place pale/mint headings on pale folders, or dark-green
+   headings on dark word cards, regardless of the old theme overrides. */
+#folders .ifty156-english-folder {
+  background: #1c2a3e !important;
+  border-color: #70849c !important;
+  color: #e5edf7 !important;
+}
+#folders .ifty156-english-folder .ifty-folder-header h3 {
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc !important;
+  text-shadow: none !important;
+  overflow-wrap: anywhere;
+}
+#folders .ifty156-english-word {
+  background: #24364e !important;
+  border-color: #647e9c !important;
+  color: #e5edf7 !important;
+}
+#folders .ifty156-english-word .ifty156-english-word-title {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  text-shadow: none !important;
+  opacity: 1 !important;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+#folders .ifty156-english-word .ifty-word-card-content > div:not(.ifty156-english-word-title)[style*="color: #0f172a"],
+#folders .ifty156-english-word .ifty-word-card-content > div:not(.ifty156-english-word-title)[style*="color:#0f172a"] {
+  color: #f1f5f9 !important;
+}
+#folders .ifty156-english-word .ifty-word-card-content > div:not(.ifty156-english-word-title)[style*="color: #334155"],
+#folders .ifty156-english-word .ifty-word-card-content > div:not(.ifty156-english-word-title)[style*="color:#334155"] {
+  color: #e2e8f0 !important;
+}
+#folders .ifty156-english-word .ifty-word-card-content > div:not(.ifty156-english-word-title)[style*="color: #64748b"],
+#folders .ifty156-english-word .ifty-word-card-content > div:not(.ifty156-english-word-title)[style*="color:#64748b"] {
+  color: #cbd5e1 !important;
+}
+#folders .ifty156-english-word .ifty-word-card-actions > button {
+  min-height: 38px;
+}
+/* Reflow the same cards at narrow phone/tablet widths without changing
+   actions, data bindings, ordering, or selection behavior. */
+@media (max-width: 860px) {
+  #folders .ifty156-english-folder .ifty-folder-header {
+    flex-wrap: wrap;
+  }
+  #folders .ifty156-english-folder .ifty-folder-header-main {
+    flex: 1 1 210px;
+    max-width: 100%;
+  }
+  #folders .ifty156-english-folder .ifty-folder-actions {
+    max-width: 100%;
+  }
+}
+@media (max-width: 640px) {
+  #folders .ifty156-english-folder .ifty-folder-header h3 {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+  #folders .ifty156-english-word .ifty-word-card-actions > button {
+    min-height: 40px;
+  }
+}`;
+  const mount = () => {
+    if (!document.getElementById(styleId)) (document.head || document.documentElement).appendChild(element);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once:true });
+  else mount();
+})();
+
+
+// ============================================================================
+// IFTY STEP194 — restore meaning-image / mouth-image visuals for prepositions
+// and pronunciation guides without rewriting existing logic.
+// STEP193 readability fixes remain active.
+// ============================================================================
+(function ifty194RestoreLearningVisuals() {
+  'use strict';
+  const STYLE_ID = 'ifty194LearningVisuals';
+  if (!document.getElementById(STYLE_ID)) {
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = `
+      .ifty194-prep-visual, .ifty194-ipa-visual, .ifty194-guide-visual {
+        flex: 0 0 auto;
+        display: grid;
+        gap: 4px;
+        align-content: start;
+      }
+      .ifty194-prep-visual img, .ifty194-ipa-visual img, .ifty194-guide-visual img {
+        display: block;
+        width: 86px;
+        height: 86px;
+        object-fit: contain;
+        border-radius: 12px;
+        background: #ffffff;
+        border: 1px solid #dbeafe;
+        box-shadow: 0 1px 5px rgba(15, 23, 42, .05);
+      }
+      .ifty194-prep-caption, .ifty194-ipa-caption, .ifty194-guide-caption {
+        color: #475569;
+        font-size: 10px;
+        line-height: 1.35;
+        text-align: center;
+        max-width: 86px;
+      }
+      .ifty194-ipa-visual img, .ifty194-guide-visual img {
+        background: linear-gradient(160deg, #eff6ff, #f8fafc);
+        border-color: #c4b5fd;
+      }
+      .ifty194-guide-visual-wrap {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+      body[data-ifty-theme="dark"] .ifty194-prep-visual img,
+      body[data-ifty-theme="dark"] .ifty194-ipa-visual img,
+      body[data-ifty-theme="dark"] .ifty194-guide-visual img {
+        background: #0f172a;
+        border-color: #64748b;
+      }
+      body[data-ifty-theme="dark"] .ifty194-prep-caption,
+      body[data-ifty-theme="dark"] .ifty194-ipa-caption,
+      body[data-ifty-theme="dark"] .ifty194-guide-caption {
+        color: #cbd5e1;
+      }
+      @media (max-width: 640px) {
+        .ifty194-prep-visual img, .ifty194-ipa-visual img, .ifty194-guide-visual img {
+          width: 74px;
+          height: 74px;
+        }
+        .ifty194-prep-caption, .ifty194-ipa-caption, .ifty194-guide-caption {
+          max-width: 74px;
+          font-size: 9.5px;
+        }
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function svgData(svg) {
+    return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+  }
+
+  function prepVisualConfig(word) {
+    const w = String(word || '').trim().toLowerCase();
+    const map = {
+      'at': { label: '点', icon: 'dot' },
+      'in': { label: '中', icon: 'in' },
+      'into': { label: '中へ', icon: 'into' },
+      'on': { label: '接触', icon: 'on' },
+      'onto': { label: '上へ', icon: 'onto' },
+      'off': { label: '離脱', icon: 'off' },
+      'out of': { label: '外へ', icon: 'outof' },
+      'from': { label: '起点', icon: 'from' },
+      'to': { label: '到達', icon: 'to' },
+      'for': { label: '目的', icon: 'for' },
+      'by': { label: '手段', icon: 'by' },
+      'with': { label: '付帯', icon: 'with' },
+      'of': { label: '所属', icon: 'of' },
+      'up': { label: '上昇', icon: 'up' },
+      'down': { label: '下降', icon: 'down' },
+      'away': { label: '離れる', icon: 'away' },
+      'forward': { label: '前進', icon: 'forward' },
+      'over': { label: '越える', icon: 'over' },
+      'under': { label: '下で', icon: 'under' },
+      'through': { label: '貫通', icon: 'through' },
+      'across': { label: '横断', icon: 'across' },
+      'along': { label: '沿う', icon: 'along' },
+      'beyond': { label: '境界外', icon: 'beyond' },
+      'about': { label: '周囲', icon: 'about' },
+      'against': { label: '押し当て', icon: 'against' },
+      'between / among': { label: '間・集団中', icon: 'between' },
+      'before / after': { label: '前 / 後', icon: 'timeline' }
+    };
+    return map[w] || { label: '核イメージ', icon: 'generic' };
+  }
+
+  function buildPrepositionSvg(word, coreLabel) {
+    const cfg = prepVisualConfig(word);
+    const strokes = '#2563eb';
+    const fills = '#bfdbfe';
+    const accent = '#7c3aed';
+    let inner = '';
+    switch (cfg.icon) {
+      case 'dot':
+        inner = `<line x1="22" y1="24" x2="74" y2="24" stroke="#dbeafe"/><line x1="22" y1="43" x2="74" y2="43" stroke="#dbeafe"/><line x1="22" y1="62" x2="74" y2="62" stroke="#dbeafe"/><circle cx="48" cy="43" r="8" fill="${accent}"/>`;
+        break;
+      case 'in':
+        inner = `<rect x="20" y="18" width="56" height="48" rx="10" fill="none" stroke="${strokes}" stroke-width="3"/><circle cx="48" cy="42" r="9" fill="${fills}" stroke="${accent}" stroke-width="3"/>`;
+        break;
+      case 'into':
+        inner = `<rect x="26" y="18" width="48" height="48" rx="10" fill="none" stroke="${strokes}" stroke-width="3"/><path d="M10 42H34" stroke="${accent}" stroke-width="4" stroke-linecap="round"/><path d="M28 36l8 6-8 6" fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="56" cy="42" r="8" fill="${fills}" stroke="${strokes}" stroke-width="3"/>`;
+        break;
+      case 'on':
+        inner = `<line x1="16" y1="56" x2="80" y2="56" stroke="${strokes}" stroke-width="4" stroke-linecap="round"/><circle cx="48" cy="44" r="9" fill="${fills}" stroke="${accent}" stroke-width="3"/>`;
+        break;
+      case 'onto':
+        inner = `<line x1="16" y1="56" x2="80" y2="56" stroke="${strokes}" stroke-width="4" stroke-linecap="round"/><path d="M48 18V42" stroke="${accent}" stroke-width="4" stroke-linecap="round"/><path d="M42 36l6 8 6-8" fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="48" cy="44" r="8" fill="${fills}" stroke="${strokes}" stroke-width="3"/>`;
+        break;
+      case 'off':
+        inner = `<line x1="16" y1="56" x2="76" y2="56" stroke="${strokes}" stroke-width="4" stroke-linecap="round"/><circle cx="34" cy="44" r="8" fill="${fills}" stroke="${strokes}" stroke-width="3"/><path d="M44 44h20" stroke="${accent}" stroke-width="4" stroke-linecap="round"/><path d="M58 38l8 6-8 6" fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
+        break;
+      case 'outof':
+        inner = `<rect x="18" y="18" width="40" height="48" rx="10" fill="none" stroke="${strokes}" stroke-width="3"/><circle cx="36" cy="42" r="7" fill="${fills}" stroke="${strokes}" stroke-width="3"/><path d="M44 42h22" stroke="${accent}" stroke-width="4" stroke-linecap="round"/><path d="M60 36l8 6-8 6" fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
+        break;
+      case 'from':
+        inner = `<circle cx="24" cy="42" r="8" fill="${accent}"/><path d="M34 42h28" stroke="${strokes}" stroke-width="4" stroke-linecap="round"/><path d="M54 36l10 6-10 6" fill="none" stroke="${strokes}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="70" cy="42" r="7" fill="${fills}" stroke="${strokes}" stroke-width="3"/>`;
+        break;
+      case 'to':
+      case 'for':
+      case 'forward':
+        inner = `<circle cx="22" cy="42" r="7" fill="${fills}" stroke="${strokes}" stroke-width="3"/><path d="M30 42h32" stroke="${accent}" stroke-width="4" stroke-linecap="round"/><path d="M54 36l10 6-10 6" fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="72" cy="42" r="8" fill="none" stroke="${strokes}" stroke-width="3"/>`;
+        break;
+      case 'by':
+        inner = `<rect x="14" y="24" width="24" height="24" rx="6" fill="${fills}" stroke="${strokes}" stroke-width="3"/><path d="M44 38h10" stroke="${accent}" stroke-width="4" stroke-linecap="round"/><rect x="58" y="24" width="16" height="28" rx="6" fill="none" stroke="${strokes}" stroke-width="3"/><circle cx="66" cy="54" r="4" fill="${accent}"/>`;
+        break;
+      case 'with':
+        inner = `<circle cx="33" cy="42" r="10" fill="${fills}" stroke="${strokes}" stroke-width="3"/><circle cx="60" cy="42" r="10" fill="#ede9fe" stroke="${accent}" stroke-width="3"/><path d="M43 42h7" stroke="#64748b" stroke-width="3" stroke-linecap="round"/>`;
+        break;
+      case 'of':
+        inner = `<rect x="18" y="18" width="58" height="48" rx="12" fill="none" stroke="${strokes}" stroke-width="3"/><circle cx="38" cy="42" r="9" fill="${fills}" stroke="${strokes}" stroke-width="3"/><circle cx="60" cy="42" r="6" fill="${accent}"/>`;
+        break;
+      case 'up':
+        inner = `<path d="M48 62V24" stroke="${accent}" stroke-width="5" stroke-linecap="round"/><path d="M38 34l10-12 10 12" fill="none" stroke="${accent}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`;
+        break;
+      case 'down':
+        inner = `<path d="M48 22v38" stroke="${accent}" stroke-width="5" stroke-linecap="round"/><path d="M38 50l10 12 10-12" fill="none" stroke="${accent}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`;
+        break;
+      case 'away':
+        inner = `<circle cx="22" cy="42" r="8" fill="${fills}" stroke="${strokes}" stroke-width="3"/><path d="M30 42h36" stroke="${accent}" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 4"/><path d="M58 36l10 6-10 6" fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
+        break;
+      case 'over':
+        inner = `<line x1="16" y1="56" x2="80" y2="56" stroke="#dbeafe" stroke-width="3"/><path d="M22 52C30 24 66 24 74 52" fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round"/><path d="M67 44l9 8" stroke="${accent}" stroke-width="4" stroke-linecap="round"/>`;
+        break;
+      case 'under':
+        inner = `<line x1="16" y1="28" x2="80" y2="28" stroke="${strokes}" stroke-width="4" stroke-linecap="round"/><circle cx="48" cy="46" r="10" fill="${fills}" stroke="${accent}" stroke-width="3"/>`;
+        break;
+      case 'through':
+        inner = `<rect x="22" y="22" width="52" height="40" rx="18" fill="none" stroke="${strokes}" stroke-width="3"/><path d="M10 42h56" stroke="${accent}" stroke-width="4" stroke-linecap="round"/><path d="M58 36l10 6-10 6" fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
+        break;
+      case 'across':
+        inner = `<rect x="16" y="26" width="64" height="32" rx="8" fill="none" stroke="#dbeafe" stroke-width="3"/><path d="M20 42h48" stroke="${accent}" stroke-width="4" stroke-linecap="round"/><path d="M60 36l10 6-10 6" fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
+        break;
+      case 'along':
+        inner = `<path d="M16 54C28 28 44 28 72 42" fill="none" stroke="${strokes}" stroke-width="4" stroke-linecap="round"/><path d="M24 50c10-8 24-10 38-7" fill="none" stroke="${accent}" stroke-width="3" stroke-linecap="round" stroke-dasharray="5 4"/>`;
+        break;
+      case 'about':
+        inner = `<circle cx="48" cy="42" r="11" fill="${fills}" stroke="${strokes}" stroke-width="3"/><path d="M18 42c0-16 14-28 30-28s30 12 30 28" fill="none" stroke="${accent}" stroke-width="3" stroke-linecap="round" stroke-dasharray="5 4"/><path d="M69 18l7 3-5 6" fill="none" stroke="${accent}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+        break;
+      case 'against':
+        inner = `<rect x="54" y="18" width="12" height="48" rx="4" fill="#dbeafe" stroke="${strokes}" stroke-width="3"/><circle cx="36" cy="42" r="10" fill="${fills}" stroke="${accent}" stroke-width="3"/><path d="M46 42h10" stroke="${accent}" stroke-width="4" stroke-linecap="round"/>`;
+        break;
+      case 'between':
+        inner = `<circle cx="22" cy="42" r="9" fill="${fills}" stroke="${strokes}" stroke-width="3"/><circle cx="74" cy="42" r="9" fill="${fills}" stroke="${strokes}" stroke-width="3"/><circle cx="48" cy="42" r="8" fill="${accent}"/><circle cx="60" cy="28" r="5" fill="#ede9fe" stroke="${accent}"/><circle cx="34" cy="58" r="5" fill="#ede9fe" stroke="${accent}"/>`;
+        break;
+      case 'timeline':
+        inner = `<line x1="14" y1="42" x2="82" y2="42" stroke="${strokes}" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="42" r="8" fill="${fills}" stroke="${strokes}" stroke-width="3"/><circle cx="62" cy="42" r="8" fill="#ede9fe" stroke="${accent}" stroke-width="3"/><text x="23" y="25" font-size="10" fill="#334155">before</text><text x="56" y="25" font-size="10" fill="#334155">after</text>`;
+        break;
+      case 'beyond':
+        inner = `<line x1="48" y1="18" x2="48" y2="66" stroke="#94a3b8" stroke-width="3" stroke-dasharray="5 4"/><circle cx="34" cy="42" r="8" fill="${fills}" stroke="${strokes}" stroke-width="3"/><path d="M42 42h22" stroke="${accent}" stroke-width="4" stroke-linecap="round"/><path d="M56 36l10 6-10 6" fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
+        break;
+      default:
+        inner = `<circle cx="48" cy="42" r="10" fill="${fills}" stroke="${strokes}" stroke-width="3"/><path d="M20 42h20" stroke="${accent}" stroke-width="4" stroke-linecap="round"/><path d="M56 42h20" stroke="${accent}" stroke-width="4" stroke-linecap="round"/>`;
+    }
+    return svgData(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect x="2" y="2" width="92" height="92" rx="16" fill="#f8fbff" stroke="#dbeafe"/><text x="48" y="14" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#334155">${String(word||'').replace(/&/g,'&amp;')}</text>${inner}<text x="48" y="84" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#475569">${String(coreLabel||cfg.label).replace(/&/g,'&amp;')}</text></svg>`);
+  }
+
+  function inferOpenness(text) {
+    if (/大き|しっかり|十分/.test(text)) return 28;
+    if (/少し|小さめ|軽く|あまり開けません|脱力/.test(text)) return 14;
+    return 20;
+  }
+  function inferRounding(text) {
+    if (/丸め|丸く|突き出/.test(text)) return 1;
+    return 0;
+  }
+  function inferTongue(tongueText) {
+    const text = String(tongueText || '');
+    let x = 38, y = 46, w = 32, h = 12, label1 = '舌';
+    if (/前|前寄り|前方/.test(text)) x = 31;
+    if (/後ろ|奥|後方/.test(text)) x = 45;
+    if (/高|上げ/.test(text)) y = 38;
+    if (/低|下げ/.test(text)) y = 52;
+    if (/中央/.test(text)) x = 38;
+    if (/平た/.test(text)) h = 9;
+    if (/反ら/.test(text)) label1 = '巻き舌';
+    return { x, y, w, h, label1 };
+  }
+  function buildIpaSvg(symbol, mouthText, tongueText) {
+    const mouth = String(mouthText || '');
+    const tongue = String(tongueText || '');
+    const open = inferOpenness(mouth);
+    const rounded = inferRounding(mouth);
+    const t = inferTongue(tongue);
+    const lipW = rounded ? 22 : 34;
+    const lipH = rounded ? open + 2 : open;
+    const lipX = 48 - lipW / 2;
+    const lipY = 48 - lipH / 2;
+    const lipFill = rounded ? '#fca5a5' : '#fecaca';
+    const cue = rounded ? '丸める' : (open >= 24 ? '大きく開く' : (open <= 16 ? '小さく保つ' : '自然に開く'));
+    return svgData(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect x="2" y="2" width="92" height="92" rx="16" fill="#f8fafc" stroke="#ddd6fe"/><text x="48" y="14" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#5b21b6">${String(symbol||'IPA').replace(/&/g,'&amp;')}</text><ellipse cx="48" cy="48" rx="32" ry="26" fill="#fff7ed" stroke="#cbd5e1" stroke-width="2"/><ellipse cx="48" cy="48" rx="${lipW/2}" ry="${lipH/2}" fill="${lipFill}" stroke="#dc2626" stroke-width="2"/><ellipse cx="${t.x}" cy="${t.y}" rx="${t.w/2}" ry="${t.h/2}" fill="#93c5fd" stroke="#2563eb" stroke-width="2"/><path d="M16 72h64" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="4 4"/><text x="48" y="84" text-anchor="middle" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" fill="#475569">${cue} / ${t.label1}</text></svg>`);
+  }
+
+  function extractLabeledText(text, label) {
+    const raw = String(text || '').replace(/\s+/g, ' ').trim();
+    const re = new RegExp('^' + label + '\\s*[:：]\\s*');
+    return raw.replace(re, '').trim();
+  }
+
+  function enhancePrepositions(root) {
+    root.querySelectorAll('.ifty-manual-core').forEach(card => {
+      if (card.querySelector('.ifty194-prep-visual')) return;
+      const wordEl = card.querySelector('.ifty-manual-core-word');
+      const textEl = card.querySelector('.ifty-manual-core-text');
+      if (!wordEl || !textEl) return;
+      const word = (wordEl.textContent || '').trim();
+      const coreText = (textEl.textContent || '').replace(/^核イメージ[:：]?\s*/, '').trim();
+      const visual = document.createElement('div');
+      visual.className = 'ifty194-prep-visual';
+      const cfg = prepVisualConfig(word);
+      visual.innerHTML = `<img src="${buildPrepositionSvg(word, cfg.label)}" alt="${word} の意味イメージ"><div class="ifty194-prep-caption">${cfg.label}</div>`;
+      card.insertBefore(visual, textEl);
+      if (coreText && !textEl.querySelector('.ifty194-core-prefix')) {
+        textEl.innerHTML = `<strong class="ifty194-core-prefix">核イメージ：</strong>${textEl.innerHTML.replace(/^<strong>核イメージ：<\/strong>/,'')}`;
+      }
+    });
+  }
+
+  function enhanceManualIpa(root) {
+    root.querySelectorAll('.ifty-manual-ipa-sound').forEach(card => {
+      if (card.querySelector('.ifty194-ipa-visual')) return;
+      const symEl = card.querySelector('.ifty-manual-ipa-symbol');
+      const how = card.querySelector('.ifty-manual-ipa-how');
+      if (!symEl || !how) return;
+      const rows = Array.from(how.querySelectorAll('div'));
+      const mouth = extractLabeledText(rows[0]?.textContent, '口');
+      const tongue = extractLabeledText(rows[1]?.textContent, '舌');
+      const visual = document.createElement('div');
+      visual.className = 'ifty194-ipa-visual';
+      visual.innerHTML = `<img src="${buildIpaSvg((symEl.textContent || '').trim(), mouth, tongue)}" alt="${(symEl.textContent || '').trim()} の口の開け方"><div class="ifty194-ipa-caption">口の開け方</div>`;
+      card.insertBefore(visual, how);
+    });
+  }
+
+  function enhancePronGuide(root) {
+    root.querySelectorAll('.ifty-pron-guide').forEach(box => {
+      if (box.querySelector('.ifty194-guide-visual-wrap')) return;
+      const lines = Array.from(box.querySelectorAll('div'));
+      const mouthLine = lines.find(el => /口・唇/.test(el.textContent || ''));
+      const tongueLine = lines.find(el => /舌/.test(el.textContent || ''));
+      if (!mouthLine && !tongueLine) return;
+      const badge = box.querySelector('span[style*="font-family:ui-monospace"], span[style*="font-family: ui-monospace"]');
+      const phonetic = badge ? (badge.textContent || '').replace(/^発音\s*/, '').trim() : 'IPA';
+      const mouth = mouthLine ? extractLabeledText(mouthLine.textContent, '👄 口・唇') : '';
+      const tongue = tongueLine ? extractLabeledText(tongueLine.textContent, '👅 舌') : '';
+      const wrap = document.createElement('div');
+      wrap.className = 'ifty194-guide-visual-wrap';
+      const visual = document.createElement('div');
+      visual.className = 'ifty194-guide-visual';
+      visual.innerHTML = `<img src="${buildIpaSvg(phonetic, mouth, tongue)}" alt="発音ポイントの図"><div class="ifty194-guide-caption">口・舌の図</div>`;
+      wrap.appendChild(visual);
+      const ref = mouthLine || tongueLine;
+      box.insertBefore(wrap, ref);
+    });
+  }
+
+  function apply(root) {
+    try {
+      enhancePrepositions(root || document);
+      enhanceManualIpa(root || document);
+      enhancePronGuide(root || document);
+    } catch (_) {}
+  }
+
+  let raf = 0;
+  const schedule = (root) => {
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => apply(root || document));
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => schedule(document), { once:true });
+  else schedule(document);
+
+  const observer = new MutationObserver(mutations => {
+    for (const m of mutations) {
+      if (m.addedNodes && m.addedNodes.length) { schedule(document); break; }
+    }
+  });
+  const start = () => {
+    if (document.body) observer.observe(document.body, { childList:true, subtree:true });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once:true });
+  else start();
 })();
