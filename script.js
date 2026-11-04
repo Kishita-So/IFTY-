@@ -6277,7 +6277,7 @@ function renderIftyYearEntryCard(entry, index, total) {
           <button type="button" ${index <= 0 ? 'disabled' : ''} onclick="moveIftyYearEntry('${escapeHtml(entry.id)}',-1)" title="上へ">↑</button>
           <button type="button" ${index >= total - 1 ? 'disabled' : ''} onclick="moveIftyYearEntry('${escapeHtml(entry.id)}',1)" title="下へ">↓</button>
           <button id="iftyYearCollapseBtn_${escapeHtml(entry.id)}" class="ifty-year-collapse" type="button" aria-expanded="${collapsed ? 'false' : 'true'}" onclick="toggleIftyYearEntryCollapse('${escapeHtml(entry.id)}')">${collapsed ? '▼ 展開' : '▲ 折りたたむ'}</button>
-          <button type="button" onclick="ifty187ToggleYearRegeneration('${escapeHtml(entry.id)}')" style="background:#f59e0b;color:#111827;">✨ 注文して再生成</button>
+          <button type="button" onclick="ifty187ToggleYearRegeneration('${escapeHtml(entry.id)}')" style="background:#f59e0b;color:#111827;">再生成</button>
           <button type="button" onclick="ifty187ToggleYearEditor('${escapeHtml(entry.id)}')" style="background:#2563eb;color:#fff;">✏️ 編集</button>
           <button type="button" onclick="ifty132EditYearAliases('${escapeHtml(entry.id)}')">別名</button>
           <button type="button" onclick="deleteIftyYearEntry('${escapeHtml(entry.id)}')" style="background:#ef4444;color:white;">削除</button>
@@ -7392,6 +7392,7 @@ function renderIftySocialStudiesPage(options = {}) {
       ${renderIftySubjectSelectionToolbar('SOCIAL STUDIES')}
       <div id="iftySocialModuleSummary" style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 項目 ${countIftySocialItems()}。画像はクイズ用に圧縮して項目へ保存され、既存のpracticeDataと一緒にクラウド同期・バックアップ対象になります。</div>
       <div id="iftySocialReviewPanelWrap">${renderIftySubjectReviewPanel('SOCIAL STUDIES')}</div>
+      <div id="iftySocialWeakPanelWrap">${renderIftySubjectWeakPanel('SOCIAL STUDIES')}</div>
       <div>${module.folders.length ? module.folders.map(renderIftySocialFolder).join('') : '<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">社会フォルダを作成してください。</div>'}</div>
     </section>
   `, 'subject');
@@ -9625,6 +9626,7 @@ function renderIftySciencePage(options = {}) {
       ${renderIftySubjectSelectionToolbar('SCIENCE')}
       <div id="iftyScienceModuleSummary" style="margin-top:10px;color:#64748b;font-size:.78em;">フォルダ ${module.folders.length} / 項目 ${countIftyScienceItems()}。画像はクイズ用に圧縮して項目へ保存され、既存のpracticeDataと一緒にクラウド同期・バックアップ対象になります。</div>
       <div id="iftyScienceReviewPanelWrap">${renderIftySubjectReviewPanel('SCIENCE')}</div>
+      <div id="iftyScienceWeakPanelWrap">${renderIftySubjectWeakPanel('SCIENCE')}</div>
       <div>${module.folders.length ? module.folders.map(renderIftyScienceFolder).join('') : '<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">理科フォルダを作成してください。</div>'}</div>
     </section>
   `, 'subject');
@@ -16766,6 +16768,7 @@ ${ifty132RegenerateFolderButton('KANJI',folder.id,(folder.items||[]).length)}
     </div>
     ${renderIftySubjectSelectionToolbar('KANJI')}
     <div id="iftyKanjiReviewPanelWrap">${renderIftySubjectReviewPanel('KANJI')}</div>
+      <div id="iftyKanjiWeakPanelWrap">${renderIftySubjectWeakPanel('KANJI')}</div>
     ${rows||(globalSearchActive?'<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">検索に一致するKANJIフォルダがありません。</div>':'<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">KANJIフォルダを作成してください。</div>')}
   </section>`,'subject');
   if(options.preserveScroll)requestAnimationFrame(()=>window.scrollTo(0,y));
@@ -17079,7 +17082,8 @@ function renderIftyOthersPage(options={}){
     <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start;"><div style="min-width:0;flex:1;"><button type="button" onclick="toggleIftyOthersFolder('${folder.id}')" style="border:none;background:transparent;padding:0;font-weight:900;color:#0f172a;font-size:1.02em;cursor:pointer;">${folder.collapsed?'▶':'▼'} 📁 ${escapeHtml(folder.name)} (${(folder.items||[]).length}件)</button><div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">${folder.tags.map(t=>`<span style="padding:3px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.72em;font-weight:900;">${escapeHtml(t)}</span>`).join('')||'<span style="font-size:.75em;color:#94a3b8;">教科タグ未設定</span>'}</div></div><div style="display:flex;gap:5px;flex-wrap:wrap;">${ifty132RegenerateFolderButton('OTHERS',folder.id,(folder.items||[]).length)}${ifty135ThemeButton('OTHERS',folder)}<button onclick="renameIftyOthersFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">名前変更</button><button onclick="editIftyOthersFolderTags('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">教科タグ変更</button><button onclick="deleteIftyOthersFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">フォルダ削除</button></div></div>
     ${folder.collapsed?'':`<div style="margin-top:11px;"><div style="display:flex;gap:7px;flex-wrap:wrap;"><input id="iftyOthersTopic_${folder.id}" value="${escapeHtml(iftyOthersTopicDrafts[folder.id]||'')}" placeholder="用語・概念・人物など" oninput="iftyOthersTopicDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftyOthersItem('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}))}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;"><button onclick="generateIftyOthersItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">＋ 追加（ALLIA）</button><button onclick="addBlankIftyOthersItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;">白紙</button></div><div id="iftyOthersPending_${folder.id}" style="margin-top:6px;color:#64748b;font-size:.76em;">${Number(iftyOthersGenerationPending[folder.id]||0)>0?`ALLIA生成中… ${Number(iftyOthersGenerationPending[folder.id]||0)}件`:''}</div><div id="iftyOthersItems_${folder.id}">${(folder.items||[]).map(item=>renderIftyOthersItemCard(folder,item)).join('')||'<div style="padding:18px;text-align:center;color:#94a3b8;">まだ項目がありません。</div>'}</div></div>`}
   </section>`).join('');
-  showIftyHubContent(`<section class="ifty-portal-shell"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;"><div><h1 class="ifty-portal-title">OTHERS</h1><div class="ifty-portal-subtitle">保健・情報など、専用教科がない内容を自由な教科タグで管理。</div></div>${renderIftySubjectHeaderActions('OTHERS')}</div><div style="margin-top:14px;padding:13px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-weight:900;color:#0c4a6e;">新しいOTHERSフォルダ</div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;"><input id="iftyOthersFolderName" placeholder="例：保健 / 情報I" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><input id="iftyOthersFolderTags" placeholder="教科タグ（例：保健, 情報）" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><button onclick="createIftyOthersFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">作成</button></div><div style="font-size:.75em;color:#64748b;margin-top:6px;">タグ名は自由に変更できます。「世界史 / 日本史」のような固定候補にはしません。</div></div>${renderIftySubjectSelectionToolbar('OTHERS')}<div id="iftyOthersReviewPanelWrap">${renderIftySubjectReviewPanel('OTHERS')}</div>${rows||'<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">OTHERSフォルダを作成してください。</div>'}</section>`,'subject');
+  showIftyHubContent(`<section class="ifty-portal-shell"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;"><div><h1 class="ifty-portal-title">OTHERS</h1><div class="ifty-portal-subtitle">保健・情報など、専用教科がない内容を自由な教科タグで管理。</div></div>${renderIftySubjectHeaderActions('OTHERS')}</div><div style="margin-top:14px;padding:13px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-weight:900;color:#0c4a6e;">新しいOTHERSフォルダ</div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;"><input id="iftyOthersFolderName" placeholder="例：保健 / 情報I" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><input id="iftyOthersFolderTags" placeholder="教科タグ（例：保健, 情報）" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><button onclick="createIftyOthersFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">作成</button></div><div style="font-size:.75em;color:#64748b;margin-top:6px;">タグ名は自由に変更できます。「世界史 / 日本史」のような固定候補にはしません。</div></div>${renderIftySubjectSelectionToolbar('OTHERS')}<div id="iftyOthersReviewPanelWrap">${renderIftySubjectReviewPanel('OTHERS')}</div>
+      <div id="iftyOthersWeakPanelWrap">${renderIftySubjectWeakPanel('OTHERS')}</div>${rows||'<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">OTHERSフォルダを作成してください。</div>'}</section>`,'subject');
   if(options.preserveScroll){requestAnimationFrame(()=>window.scrollTo({top:y,left:0,behavior:'auto'}));}
 }
 window.createIftyOthersFolder=function(){const n=String(document.getElementById('iftyOthersFolderName')?.value||'').trim();if(!n)return alert('フォルダ名を入力してください。');const tags=normalizeIftyOthersTags(document.getElementById('iftyOthersFolderTags')?.value||'');recordUndoState('OTHERSフォルダ作成');getIftyOthersModule().folders.push({id:makeId('othersfolder'),name:n,tags,collapsed:false,items:[]});savePracticeData();renderIftyOthersPage();};
@@ -18395,7 +18399,7 @@ function renderIftySubjectReviewPanel(subject) {
     <div style="display:flex;justify-content:space-between;gap:9px;align-items:center;flex-wrap:wrap;">
       <button type="button" onclick="toggleIftySubjectReviewPanel('${key}')" aria-expanded="${collapsed ? 'false' : 'true'}" style="border:none;background:transparent;padding:0;text-align:left;cursor:pointer;min-width:0;flex:1;color:inherit;">
         <div style="font-weight:900;color:#fed7aa;">${collapsed ? '▶' : '▼'} 🔁 ${label}の復習 <span style="font-size:.8em;color:#fb923c;">今日 ${dueEntries.length} / 管理 ${allEntries.length} / 卒業 ${graduated}</span></div>
-        ${collapsed ? '' : '<div style="margin-top:3px;color:#fdba74;font-size:.72em;">1日 → 3日 → 7日 → 14日 → 30日 → 卒業。未定着なら1日段階へ戻ります。</div>'}
+        ${collapsed ? '' : '<div style="margin-top:3px;color:#fdba74;font-size:.72em;">今日の復習＝復習予定日が今日以前の項目。1日 → 3日 → 7日 → 14日 → 30日 → 卒業。未定着なら1日段階へ戻ります。</div>'}
       </button>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
         <button type="button" onclick="toggleIftySubjectReviewPanel('${key}')" style="border:1px solid #c76b28;background:#202d41;color:#fed7aa;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${collapsed ? '開く' : '折りたたむ'}</button>
@@ -18432,7 +18436,7 @@ function renderIftySubjectWeakPanel(subject) {
     <div style="display:flex;justify-content:space-between;gap:9px;align-items:center;flex-wrap:wrap;">
       <button type="button" onclick="toggleIftySubjectWeakPanel('${key}')" aria-expanded="${collapsed ? 'false' : 'true'}" style="border:none;background:transparent;padding:0;text-align:left;cursor:pointer;min-width:0;flex:1;color:inherit;">
         <div style="font-weight:900;color:#fecdd3;">${collapsed ? '▶' : '▼'} 🎯 ${label}の苦手候補 <span style="font-size:.8em;color:#fb7185;">${entries.length}件</span></div>
-        ${collapsed ? '' : '<div style="margin-top:3px;color:#fda4af;font-size:.72em;">3回以上学習・2回以上不正解・正答率70%未満を自動抽出します。</div>'}
+        ${collapsed ? '' : '<div style="margin-top:3px;color:#fda4af;font-size:.72em;">苦手候補＝正答履歴から判定（3回以上学習・2回以上不正解・正答率70%未満）。今日の復習とは別に管理します。</div>'}
       </button>
       <button type="button" onclick="toggleIftySubjectWeakPanel('${key}')" style="border:1px solid #be4161;background:#202d41;color:#fecdd3;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${collapsed ? '開く' : '折りたたむ'}</button>
     </div>
@@ -18542,7 +18546,7 @@ function renderIftyReviewFolder() {
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
         <button type="button" onclick="toggleIftyReviewFolderPanel()" aria-expanded="${collapsed ? 'false' : 'true'}" style="border:none;background:transparent;padding:0;text-align:left;cursor:pointer;min-width:0;flex:1;color:inherit;">
           <h3 style="margin:0;color:#7c2d12;font-size:1.12em;">${collapsed ? '▶' : '▼'} 🔁 復習 <span style="font-size:.82em;color:#c2410c;">(今日 ${dueEntries.length}件 / 管理 ${allEntries.length}件 / 卒業 ${stats.reviewGraduated}件)</span></h3>
-          ${collapsed ? '' : '<div style="margin-top:4px;color:#9a3412;font-size:.78em;">自動：学習 → 1日 → 3日 → 7日 → 14日 → 30日 → 卒業　／　間違いは1日段階へ戻る</div>'}
+          ${collapsed ? '' : '<div style="margin-top:4px;color:#9a3412;font-size:.78em;">今日の復習＝復習予定日が今日以前の単語。学習 → 1日 → 3日 → 7日 → 14日 → 30日 → 卒業。間違いは1日段階へ戻る</div>'}
         </button>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
           <button type="button" onclick="toggleIftyReviewFolderPanel()" style="border:1px solid #fb923c;background:transparent;color:#c2410c;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${collapsed ? '開く' : '折りたたむ'}</button>
@@ -18556,7 +18560,6 @@ function renderIftyReviewFolder() {
 
 function renderIftyWeakFolder() {
   const entries = getIftyWeakEntries();
-  if (!entries.length) return '';
   const collapsed = getIftyLearningPanelCollapsed(IFTY_WEAK_PANEL_COLLAPSE_KEY);
   const list = entries.slice(0, 12).map(({ folder, word, study, accuracy }) => {
     const meanings = Array.isArray(word.meanings) ? word.meanings : (word.meanings ? [word.meanings] : []);
@@ -18566,14 +18569,14 @@ function renderIftyWeakFolder() {
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
       <button type="button" onclick="toggleIftyWeakFolderPanel()" aria-expanded="${collapsed ? 'false' : 'true'}" style="border:none;background:transparent;padding:0;text-align:left;cursor:pointer;min-width:0;flex:1;color:inherit;">
         <h3 style="margin:0;color:#881337;font-size:1.08em;">${collapsed ? '▶' : '▼'} 🎯 苦手候補 <span style="font-size:.82em;color:#be123c;">${entries.length}語</span></h3>
-        ${collapsed ? '' : '<div style="font-size:.76em;color:#9f1239;margin-top:4px;">3回以上学習・2回以上不正解・正答率70%未満を自動抽出</div>'}
+        ${collapsed ? '' : '<div style="font-size:.76em;color:#9f1239;margin-top:4px;">苦手候補＝正答履歴から判定（3回以上学習・2回以上不正解・正答率70%未満）。今日の復習とは別に管理</div>'}
       </button>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
         <button type="button" onclick="toggleIftyWeakFolderPanel()" style="border:1px solid #fb7185;background:transparent;color:#be123c;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${collapsed ? '開く' : '折りたたむ'}</button>
-        ${collapsed ? '' : `<button type="button" onclick="startIftyWeakFlashcards('front')" style="border:none;background:#be123c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">📇 苦手だけ学習</button>`}
+        ${collapsed ? '' : `<button type="button" onclick="startIftyWeakFlashcards('front')" ${entries.length ? '' : 'disabled'} style="border:none;background:#be123c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:${entries.length ? 'pointer' : 'default'};opacity:${entries.length ? '1' : '.45'};">📇 苦手だけ学習</button>`}
       </div>
     </div>
-    ${collapsed ? '' : `<div style="margin-top:9px;">${list}${entries.length > 12 ? `<div style="padding-top:8px;color:#9f1239;font-size:.76em;">ほか ${entries.length - 12}語</div>` : ''}</div>`}
+    ${collapsed ? '' : `<div style="margin-top:9px;">${entries.length ? list + (entries.length > 12 ? `<div style="padding-top:8px;color:#9f1239;font-size:.76em;">ほか ${entries.length - 12}語</div>` : '') : '<div style="padding:10px 2px;color:#9f1239;font-size:.8em;">現在、苦手候補はありません。</div>'}</div>`}
   </div>`;
 }
 
