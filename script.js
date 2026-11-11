@@ -1,3 +1,4 @@
+// IFTY STEP199 2026-11-07: IFTY folder sharing adds LINE-compatible .txt export and import, preserves .iftyfolder.
 // IFTY STEP198 2026-11-05: review & weak learning tabs individually collapsible; STEP197 otherwise retained.
 // IFTY STEP190: isolate saved ORDER from folder context; prioritize complete ORDER when transmitted (STEP189 otherwise preserved)
 // ★ IFTY STEP176 2026-10-28：正誤問題の生成・採点障害を軽減 ★
@@ -3889,11 +3890,15 @@ function downloadIftyFolderPackage(file) {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
-window.exportIftyFolder = async function(subject, folderId) {
+window.exportIftyFolder = async function(subject, folderId, fileFormat = 'iftyfolder') {
   try {
     const pack = getIftyFolderPackage(subject, folderId);
-    const filename = `${sanitizeIftyFilename(pack.folder?.name || 'IFTYフォルダ')}.iftyfolder`;
-    const file = new File([JSON.stringify(pack, null, 2)], filename, { type:'application/json' });
+    // STEP199: keep the original format by default, while supporting a standard
+    // text/plain file for LINE and other apps that reject custom extensions.
+    // Both formats contain the exact same IFTY_FOLDER_PACKAGE JSON payload.
+    const lineText = fileFormat === 'txt';
+    const filename = `${sanitizeIftyFilename(pack.folder?.name || 'IFTYフォルダ')}${lineText ? '.txt' : '.iftyfolder'}`;
+    const file = new File([JSON.stringify(pack, null, 2)], filename, { type:lineText ? 'text/plain' : 'application/json' });
     if (navigator.share && navigator.canShare && navigator.canShare({ files:[file] })) {
       try {
         await navigator.share({ files:[file], title:`IFTY：${pack.folder?.name || 'フォルダ'}`, text:`IFTYの${pack.subjectLabel}フォルダです。` });
@@ -3915,7 +3920,7 @@ function ensureIftyFolderImportInput() {
   input = document.createElement('input');
   input.id = 'iftyFolderImportInput';
   input.type = 'file';
-  input.accept = '.iftyfolder,application/json';
+  input.accept = '.iftyfolder,.txt,.json,application/json,text/plain';
   input.style.display = 'none';
   input.addEventListener('change', async () => {
     const file = input.files && input.files[0];
@@ -4557,12 +4562,17 @@ window.iftySaveEditedClassFolder=async function(){
 window.openIftyFolderShareOptions=function(subject,folderId){
   let pack;try{pack=getIftyFolderPackage(subject,folderId);}catch(e){alert(String(e?.message||e));return;}
   const id=String(pack.folder.name||'共有フォルダ');
-  iftyShowShareDialog(`「${id}」を共有`,`<p class="ifty-sh-label">LINEでは独自拡張子のファイルを扱えない場合があります。共有リンクなら相手はIFTYで直接取り込めます（14日間有効・IFTYログイン必須）。</p>
-  <div class="ifty-sh-row"><button class="ifty-sh-btn green" onclick="iftyCreateFolderShareLink('line')">LINEに送る</button><button class="ifty-sh-btn blue" onclick="iftyCreateFolderShareLink('copy')">リンクをコピー</button><button class="ifty-sh-btn" onclick="iftyShareFolderAsFile()">.iftyfolderファイル</button></div>
+  iftyShowShareDialog(`「${id}」を共有`,`<p class="ifty-sh-label">LINEでは独自拡張子 .iftyfolder を扱えない場合があります。ファイルを送る場合は「LINE用ファイル（.txt）」を選んでください。受信側は IFTY の「フォルダを読み込み」から .txt を直接取り込めます（従来の .iftyfolder も対応）。共有リンクでも取り込めます（14日間有効・IFTYログイン必須）。</p>
+  <div class="ifty-sh-row"><button class="ifty-sh-btn green" onclick="iftyCreateFolderShareLink('line')">LINEに送る（共有リンク）</button><button class="ifty-sh-btn blue" onclick="iftyCreateFolderShareLink('copy')">リンクをコピー</button><button class="ifty-sh-btn" onclick="iftyShareFolderAsFile()">📄 LINE用ファイル（.txt）</button><button class="ifty-sh-btn" onclick="iftyShareFolderAsOriginalFile()">従来のファイル（.iftyfolder）</button></div>
   <div class="ifty-sh-row"><button class="ifty-sh-btn" onclick="iftyShowFolderClassDestinations()">🏫 クラスに共有</button></div><div id="iftyShareDialogStatus" role="status" class="ifty-sh-label"></div>`);
   window.iftyCurrentShareFolder={subject,folderId};
 };
 window.iftyShareFolderAsFile=function(){
+  const f=window.iftyCurrentShareFolder;if(!f)return;
+  iftyCloseShareDialog();window.exportIftyFolder(f.subject,f.folderId,'txt');
+};
+// Original .iftyfolder export remains available for existing users/workflows.
+window.iftyShareFolderAsOriginalFile=function(){
   const f=window.iftyCurrentShareFolder;if(!f)return;
   iftyCloseShareDialog();window.exportIftyFolder(f.subject,f.folderId);
 };
@@ -16489,7 +16499,7 @@ async function enterIftyAccount(account, options = {}) {
     syncIftyClassAvatarIfNeeded().catch(error => console.warn('クラス用アイコンの同期エラー:', error));
   }
 
-  if (typeof window.openIftyHome === 'function') window.openIftyHome();
+  if (!window.ifty200ResumeLastScreen?.() && typeof window.openIftyHome === 'function') window.openIftyHome();
   // STEP126: complete pending share-link import after account login/cloud initialization.
   if (!options.offline && window.location.search.includes('ifty_share=')) {
     setTimeout(() => window.iftyHandleIncomingFolderLink?.(), 450);
@@ -16533,7 +16543,7 @@ async function enterIftyDeveloperSession() {
   // Developerはアカウント認証を省略する代わりに、クラウド同期は常に無効。
   iftyCloudSaveEnabled = false;
 
-  if (typeof window.openIftyHome === 'function') window.openIftyHome();
+  if (!window.ifty200ResumeLastScreen?.() && typeof window.openIftyHome === 'function') window.openIftyHome();
 }
 
 window.enterIftyDeveloperMode = async function() {
@@ -20599,7 +20609,13 @@ function normalizeIftySubjectQuizSet(value, index = 0, subject = '') {
 
 function normalizeIftyBasicPracticeSet(value, index = 0) {
   const source = value && typeof value === 'object' ? value : {};
-  const mode = source.mode === 'truefalse' ? 'truefalse' : (source.mode === 'cloze' ? 'cloze' : 'written');
+  // STEP201: STEP197's multi-format selection must survive normalizePracticeData(),
+  // savePracticeData(), cloud sync, app restart, and practice-set duplication.
+  const allowedModes = ['written', 'cloze', 'truefalse'];
+  const legacyMode = allowedModes.includes(source.mode) ? source.mode : 'written';
+  const modes = [...new Set((Array.isArray(source.modes) ? source.modes : [legacyMode])
+    .map(String).filter(mode => allowedModes.includes(mode)))];
+  if (!modes.length) modes.push(legacyMode);
   const savedDirection = String(getIftyPracticeUiPref('BASIC SENTENCES', 'writtenDirection', 'mixed') || 'mixed');
   const direction = ['mixed','ja_to_en','en_to_ja'].includes(String(source.direction || '')) ? String(source.direction) : (['mixed','ja_to_en','en_to_ja'].includes(savedDirection) ? savedDirection : 'mixed');
   return {
@@ -20610,7 +20626,8 @@ function normalizeIftyBasicPracticeSet(value, index = 0) {
     forcedIds: ifty149ForceIds(source.forcedIds),
     itemModes: ifty149ModeMap(source.itemModes),
     derivedKinds: ifty149DerivedKinds(source.derivedKinds),
-    mode,
+    mode: modes[0],
+    modes,
     direction,
     questionCount: [5,10,15,20,25,30].includes(Number(source.questionCount)) ? Number(source.questionCount) : 5,
     random: source.random !== false,
@@ -30835,7 +30852,11 @@ function iftyCgRenderRoom(s){
     const block=document.createElement('div');block.dataset.ifty128Special='1';block.className=subject==='YEARS'?'ifty128-years-row':'ifty128-basic-row';
     const tabs=document.createElement('div');tabs.className='ifty128-mode-tabs';tabs.style.margin='0';
     const add=document.createElement('button'),lookup=document.createElement('button');
-    add.type=lookup.type='button';add.textContent='＋ 追加';lookup.textContent='🔎 検索';tabs.append(add,lookup);
+    add.type=lookup.type='button';add.textContent='＋ 追加';lookup.textContent='🔎 検索';
+    // STEP200: BASIC SENTENCES already has the dedicated registration action.
+    // Keep the real search button, remove only the redundant "＋ 追加" mode tab.
+    if(subject==='BASIC SENTENCES') tabs.append(lookup);
+    else tabs.append(add,lookup);
     const row=document.createElement('div');row.className='ifty128-unified-row';
     const field=document.createElement('input');field.type='text';field.className='ifty128-unified-input';field.style.cssText='padding:9px;border:1px solid #94a3b8;border-radius:7px;font:inherit;';
     if(subject==='YEARS'){
@@ -30871,6 +30892,7 @@ function iftyCgRenderRoom(s){
       filterLocal(subject,id);
       add.setAttribute('aria-pressed',String(!looking));
       lookup.setAttribute('aria-pressed',String(looking));
+      if(subject==='BASIC SENTENCES') lookup.textContent=looking?'← 登録へ戻る':'🔎 検索';
       field.placeholder=looking?'このフォルダ内を検索':subject==='YEARS'?'年号を入力（例：1600）':'英文・和訳は登録画面で入力';
       field.style.display=subject==='BASIC SENTENCES'&&!looking?'none':'';
       submit.textContent=subject==='BASIC SENTENCES'?'＋ 英文・和訳を登録':'＋ 追加';
@@ -30880,7 +30902,11 @@ function iftyCgRenderRoom(s){
       if(looking)count.textContent=filterLocal(subject,id);
     };
     add.onclick=()=>{const changed=current!=='add';set('add');if(changed)field.focus({preventScroll:true});};
-    lookup.onclick=()=>{const changed=current!=='search';set('search');if(changed)field.focus({preventScroll:true});};
+    lookup.onclick=()=>{
+      // STEP200: the sole BASIC search control returns to registration when tapped again.
+      if(subject==='BASIC SENTENCES' && current==='search'){set('add');return;}
+      const changed=current!=='search';set('search');if(changed)field.focus({preventScroll:true});
+    };
     field.oninput=()=>{
       if(current==='search'){
         queries.set(k,field.value);
@@ -31815,7 +31841,7 @@ function ifty143RenderHelp(){
   if(!modal){modal=document.createElement('div');modal.id='ifty143AlliaHelpModal';document.body.appendChild(modal);}
   modal.style.cssText='position:fixed;inset:0;z-index:12500;background:rgba(15,23,42,.68);padding:12px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;';
   const rows=IFTY143_HELP_MESSAGES.get(key)||[];
-  const messages=rows.length?rows.map(m=>`<div style="margin:8px 0;padding:10px 12px;background:${m.role==='user'?'#eff6ff':'#f5f3ff'};border-radius:9px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;color:#1e293b;"><b>${m.role==='user'?'自分':'ALLIA'}</b><div>${escapeHtml(m.text)}</div></div>`).join(''):'<div style="color:#64748b;font-size:.85em;">分からない部分、考え方、用語、文法などを質問できます。</div>';
+  const messages=rows.length?rows.map(m=>`<div style="margin:8px 0;padding:10px 12px;background:${m.role==='user'?'#18475a':'#302443'};border:1px solid ${m.role==='user'?'#4e9cae':'#8b6ab5'};border-radius:9px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;color:#f8fafc;-webkit-text-fill-color:#f8fafc;"><b>${m.role==='user'?'自分':'ALLIA'}</b><div>${escapeHtml(m.text)}</div></div>`).join(''):'<div style="color:#64748b;font-size:.85em;">分からない部分、考え方、用語、文法などを質問できます。</div>';
   modal.innerHTML=`<section role="dialog" aria-modal="true" aria-label="ALLIAへの質問" style="width:min(680px,100%);max-height:min(88vh,820px);min-width:0;background:white;color:#0f172a;border-radius:14px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 16px 50px #0004;">
     <header style="padding:13px 15px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #e2e8f0;"><div><b style="color:#6d28d9;">💬 ALLIAに質問</b><div style="font-size:.73em;color:#64748b;">${active.answered?'採点後：答えを含む解説も質問可能':'回答前：答えを伏せたままヒント・解説'}</div></div><button type="button" onclick="ifty143CloseHelp()" style="background:#e2e8f0;border:0;border-radius:8px;padding:9px 13px;color:#334155;">閉じる</button></header>
     <div style="padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;max-height:130px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.84em;line-height:1.6;">${escapeHtml(active.question)}</div>
@@ -35119,3 +35145,147 @@ window.ifty197StartTruthPart=function(setId,count){
     window.ifty151StartSavedSet('BASIC SENTENCES',setId);
   }finally{set.questionCount=original;}
 };
+
+// ============================================================================
+// IFTY STEP200 — local, per-account last page + scroll restoration.
+// No study data, answers, unsaved forms or passwords are stored here.
+// ============================================================================
+(function ifty200InstallResumeLastScreen(){
+  'use strict';
+  const PREFIX='ifty_step200_last_screen_v1_';
+  const SUPPORTED=new Set([
+    'home','vocab','chat','subject','ancient','kanbun','kanji','social','science','others',
+    'years','pronunciation','basic_sentences','examples','stats','settings',
+    'classes','friends','places'
+  ]);
+  let restoring=false;
+  let pendingScrollSave=0;
+  let currentScreen=null;
+  let onTransientPage=false;
+
+  function key(){
+    return PREFIX+encodeURIComponent(String(currentUser||'default_user'));
+  }
+  function authenticated(){
+    return !!(iftyAccount || iftyDeveloperMode);
+  }
+  function canonical(page,subject){
+    const p=String(page||'').trim().toLowerCase();
+    if(!SUPPORTED.has(p))return null; // Never auto-resume a mid-answer quiz or transient overlay.
+    const subj=String(subject||'ENGLISH').trim().toUpperCase();
+    if(p==='subject' && !IFTY_SUBJECT_KEYS.includes(subj))return null;
+    return {page:p,subject:subj};
+  }
+  function pageY(){
+    return Math.max(0,Math.min(10000000,Math.round(Number(window.scrollY||document.scrollingElement?.scrollTop||0)||0)));
+  }
+  function save(){
+    if(restoring||onTransientPage||!authenticated()||!currentScreen||currentScreen.user!==String(currentUser))return;
+    try{
+      localStorage.setItem(key(),JSON.stringify({
+        page:currentScreen.page,subject:currentScreen.subject,y:pageY(),savedAt:Date.now()
+      }));
+    }catch(_){/* Private mode/storage quota: normal navigation still works. */}
+  }
+  function read(){
+    if(!authenticated())return null;
+    try{
+      const raw=JSON.parse(localStorage.getItem(key())||'null');
+      const safe=canonical(raw?.page,raw?.subject);
+      if(!safe)return null;
+      return {...safe,y:Math.max(0,Math.min(10000000,Number(raw.y)||0))};
+    }catch(_){return null;}
+  }
+  function remember(page){
+    if(restoring||!authenticated())return;
+    const next=canonical(page,currentIftySubject);
+    if(!next){onTransientPage=true;return;}
+    onTransientPage=false;
+    const user=String(currentUser);
+    const same=!!currentScreen && currentScreen.user===user && next.page===currentScreen.page && next.subject===currentScreen.subject;
+    // Save the new route immediately; scrolling is updated after layout settles.
+    currentScreen={...next,user};
+    if(!same){
+      try{localStorage.setItem(key(),JSON.stringify({...next,y:0,savedAt:Date.now()}));}catch(_){}
+      requestAnimationFrame(()=>requestAnimationFrame(save));
+    }else save();
+  }
+  window.ifty200ResumeLastScreen=function(){
+    const snap=read();
+    if(!snap)return false;
+    let route=null;
+    switch(snap.page){
+      case 'home':route=()=>window.openIftyHome?.();break;
+      case 'vocab':route=()=>window.switchToVocabView?.();break;
+      case 'chat':route=()=>window.switchToChatView?.();break;
+      case 'subject':route=()=>window.openIftySubject?.(snap.subject);break;
+      case 'ancient':route=()=>window.openIftySubject?.('ANCIENT');break;
+      case 'kanbun':route=()=>window.openIftySubject?.('KANBUN');break;
+      case 'kanji':route=()=>window.openIftySubject?.('KANJI');break;
+      case 'social':route=()=>window.openIftySubject?.('SOCIAL STUDIES');break;
+      case 'science':route=()=>window.openIftySubject?.('SCIENCE');break;
+      case 'others':route=()=>window.openIftySubject?.('OTHERS');break;
+      case 'years':route=()=>window.openIftyYears?.();break;
+      case 'pronunciation':route=()=>window.openIftyPronunciation?.();break;
+      case 'basic_sentences':route=()=>window.openIftyBasicSentences?.();break;
+      case 'examples':route=()=>window.openIftyExampleBank?.();break;
+      case 'stats':route=()=>window.openIftyLearningStats?.();break;
+      case 'settings':route=()=>window.openIftySettings?.();break;
+      case 'classes':route=()=>window.openIftyClassesPage?.();break;
+      case 'friends':route=()=>window.openIftyFriendsPage?.();break;
+      case 'places':route=()=>window.openIftyPlaces?.();break;
+    }
+    if(!route)return false;
+    restoring=true;
+    onTransientPage=false;
+    try{
+      currentScreen={page:snap.page,subject:snap.subject,user:String(currentUser)};
+      route();
+      // The content is rendered asynchronously on some pages. Reapply the scroll
+      // after layout; never try to restore old unsaved modal fields or quiz answers.
+      const target=snap.y;
+      const move=()=>{
+        try{window.scrollTo({top:target,left:0,behavior:'instant'});}
+        catch(_){window.scrollTo(0,target);}
+      };
+      requestAnimationFrame(()=>requestAnimationFrame(move));
+      setTimeout(move,120);
+      setTimeout(move,350);
+      setTimeout(()=>{restoring=false;save();},400);
+      return true;
+    }catch(error){
+      restoring=false;
+      currentScreen=null;
+      console.warn('IFTY resume skipped:',error);
+      return false;
+    }
+  };
+
+  // Wrap the final STEP199 navigation implementations, including the existing
+  // history hooks, without changing their behavior or return values.
+  const originalHub=showIftyHubContent;
+  showIftyHubContent=function(html,pageName){
+    const result=originalHub.apply(this,arguments);
+    remember(pageName||'home');
+    return result;
+  };
+  for(const [fn,route] of [['switchToChatView','chat'],['switchToVocabView','vocab']]){
+    const old=window[fn];
+    if(typeof old!=='function')continue;
+    window[fn]=function(...args){
+      const result=old.apply(this,args);
+      remember(route);
+      return result;
+    };
+  }
+  window.addEventListener('scroll',()=>{
+    if(restoring||!currentScreen)return;
+    if(pendingScrollSave)clearTimeout(pendingScrollSave);
+    pendingScrollSave=setTimeout(()=>{pendingScrollSave=0;save();},220);
+  },{passive:true});
+  // iOS may kill the PWA without a conventional unload event; write on hide too.
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='hidden')save();
+  });
+  window.addEventListener('pagehide',save);
+})();
