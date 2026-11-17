@@ -32,7 +32,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 190;
+const IFTY_APP_STEP = 206;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -1613,6 +1613,7 @@ function renderIftySideMenu() {
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyExampleBank();">📚 ${escapeHtml(getIftySideMenuDisplayText('examples'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPronunciation();">🗣 ${escapeHtml(getIftySideMenuDisplayText('pronunciation'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyBasicSentences();">📝 ${escapeHtml(getIftySideMenuDisplayText('basicSentences'))}</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyConversation();">🗣 ENGLISH CONVERSATION</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyYears();">📅 ${escapeHtml(getIftySideMenuDisplayText('years'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPlaces();">🗺️ ${escapeHtml(getIftyHomeSubjectNameMode()==='ja'?'地図・地名':'PLACES')}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openPracticeHome(currentIftySubject);">⚔️ ${escapeHtml(getIftySideMenuDisplayText('practice'))}</button>
@@ -1677,6 +1678,7 @@ window.toggleIftySideMenu = function(event) {
 // 招待URLを設定する場合は openchat-link.txt に https://line.me/ti/g2/... を1行で記入する。
 // ==========================================
 const IFTY_PATCH_NOTES_FALLBACK = [
+  { step:204, date:'2026-11-13', title:'ENGLISH CONVERSATION', changes:['ALLIAとの英会話・音声入力・読み上げ','相互フレンド限定のブラウザ音声通話','話題カードと会話の振り返り'] },
   { step:188, date:'2026-11-03', title:'PLACES出題バリエーション・ALLIA質問', changes:['PLACESの問題中にALLIAへ質問','関連人物・関連出来事・年代・説明・四択など地図クイズを拡張','地図項目ごとに関連人物・出来事を保存'] },
   { step:187, date:'2026-11-03', title:'PLACES・YEARS操作改善', changes:['川・山脈・長城の線形状生成を再試行','ALLIA生成ごとにマーカー色を自動変更','YEARSの全項目編集と注文付き再生成','質問ラッシュを削除'] },
   { step:186, date:'2026-11-03', title:'正誤問題の生成・代替出題を再設計', changes:['カードの記載確認だけの疑似問題を廃止','誤文・訂正文の矛盾検査','無効なAI問題を保存せず同形式の過去問で代替'] },
@@ -2275,7 +2277,7 @@ function ifty181InferOrderSubject(body) {
 }
 function ifty181OrderScopeForType(type) {
   const t=String(type||'').trim().toLowerCase();
-  if (t === 'agent_chat' || t === 'question_help' || t === 'manual_rule_lookup') return 'chat';
+  if (t === 'agent_chat' || t === 'question_help' || t === 'manual_rule_lookup' || t === 'conv_ai_turn' || t === 'conv_ai_feedback') return 'chat';
   if (/^(ifty149_|ifty151_|question_(?:generate|grade|challenge)$|subject_term_challenge$|level_check$)/.test(t)) return 'practice';
   if (/^(?:.*_practice_.*|.*_grade$|.*_challenge$|.*_handwriting_recognize$)/.test(t)) return 'practice';
   return 'meaning';
@@ -5452,6 +5454,7 @@ window.openIftyHome = function() {
         <button type="button" onclick="switchToChatView()" style="background:#0284c7;color:white;">🤖 ALLIA</button>
         <button type="button" onclick="openIftyExampleBank()" style="background:#2563eb;color:white;">📚 例文資産 ${stats.examples}</button>
         <button type="button" onclick="openIftyBasicSentences()" style="background:#059669;color:white;">📝 BASIC SENTENCES ${stats.basicSentences}</button>
+        <button type="button" onclick="openIftyConversation()" style="background:#0f766e;color:white;">🗣 ENGLISH CONVERSATION</button>
         <button type="button" onclick="openIftyYears()" style="background:#b45309;color:white;">📅 YEARS ${stats.years}</button>
         <button type="button" onclick="openIftyPlaces()" style="background:#155e75;color:white;">🗺️ ${escapeHtml(getIftyHomeSubjectNameMode()==='ja'?'地図・地名':'PLACES')}</button>
         <button type="button" onclick="openPracticeHome()" style="background:#7c3aed;color:white;">⚔️ 実践</button>
@@ -19148,6 +19151,8 @@ window.openIftyBasicSentenceEditor = function(sentenceId = '', preferredFolderId
   modal.dataset.sentenceId = item ? String(item.id) : '';
   modal.dataset.savedDuringSession = '0';
   modal.dataset.ifty196Dirty = '0';
+  // Invalidate a pending translation if this editor is reopened for another item.
+  modal.dataset.ifty205TranslationSeq = String((Number(modal.dataset.ifty205TranslationSeq)||0)+1);
   const folderOptions = getIftySortedBasicSentenceFolders().map(folder => `<option value="${escapeHtml(folder.id)}" ${String(folder.id) === folderId ? 'selected' : ''}>${escapeHtml(folder.name)}</option>`).join('');
   modal.innerHTML = `
     <div class="ifty196-basic-editor" style="width:min(94vw,700px);max-height:92vh;overflow:auto;background:#1e293b;color:#f1f5f9;border:1px solid #64748b;border-radius:14px;padding:20px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
@@ -19160,6 +19165,10 @@ window.openIftyBasicSentenceEditor = function(sentenceId = '', preferredFolderId
         </label>
         <label style="display:grid;gap:5px;font-weight:800;color:#f1f5f9;">英文（必須）<textarea id="iftyBasicSentenceEn" rows="3" placeholder="English sentence" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.en : '')}</textarea></label>
         <label style="display:grid;gap:5px;font-weight:800;color:#f1f5f9;">和訳（任意・後から編集可能）<textarea id="iftyBasicSentenceJa" rows="3" placeholder="日本語訳" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.ja : '')}</textarea></label>
+        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:-5px;">
+          <button type="button" id="ifty205BasicTranslateButton" onclick="ifty205TranslateBasicSentence()" style="border:1px solid #38bdf8;border-radius:8px;background:#075985;color:white;padding:10px 13px;font:inherit;font-size:.86em;font-weight:900;min-height:42px;cursor:pointer;">✨ ALLIAで和訳を生成</button>
+          <span style="color:#cbd5e1;font-size:.76em;line-height:1.5;">英文を日本語に翻訳します。生成結果を確認してから保存してください（ALLIA利用枠を消費）。</span>
+        </div>
         <label style="display:grid;gap:5px;font-weight:800;color:#f1f5f9;">メモ<textarea id="iftyBasicSentenceNote" rows="2" placeholder="文法・語法・覚え方など（任意）" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.note : '')}</textarea></label>
       </div>
       <div id="iftyBasicSentenceSaveStatus" style="min-height:1.2em;margin-top:10px;color:#86efac;font-size:.8em;font-weight:800;"></div>
@@ -19168,7 +19177,7 @@ window.openIftyBasicSentenceEditor = function(sentenceId = '', preferredFolderId
         ${item ? '' : '<button type="button" onclick="saveIftyBasicSentenceEditor()" style="border:1px solid #a78bfa;background:#4c1d95;color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">保存して次へ</button>'}
         <button type="button" onclick="saveIftyBasicSentenceEditor('close')" style="border:none;background:#059669;color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">保存して終了</button>
       </div>
-      <div style="margin-top:7px;color:#cbd5e1;font-size:.76em;">${item ? '保存すると変更を確定して閉じます。' : '「保存して次へ」は連続登録、「保存して終了」は今入力中の英文も保存して閉じます。'} ${item ? 'Ctrl/Cmd + Enterでも保存して閉じられます。' : 'Ctrl/Cmd + Enterは保存して次へ。'} ALLIAは使用しません。</div>
+      <div style="margin-top:7px;color:#cbd5e1;font-size:.76em;">${item ? '保存すると変更を確定して閉じます。' : '「保存して次へ」は連続登録、「保存して終了」は今入力中の英文も保存して閉じます。'} ${item ? 'Ctrl/Cmd + Enterでも保存して閉じられます。' : 'Ctrl/Cmd + Enterは保存して次へ。'} 通常の登録・編集はALLIAを使用しません。和訳生成を押した場合のみAIを利用します。</div>
     </div>`;
   modal.onkeydown = event => {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) {
@@ -19177,6 +19186,68 @@ window.openIftyBasicSentenceEditor = function(sentenceId = '', preferredFolderId
     }
   };
   setTimeout(() => document.getElementById('iftyBasicSentenceEn')?.focus(), 0);
+};
+
+// STEP205: AI translation is a draft only. It never writes practiceData until Save.
+window.ifty205TranslateExistingBasicSentence = function(sentenceId) {
+  if(!findIftyBasicSentenceById(sentenceId))return;
+  window.openIftyBasicSentenceEditor(sentenceId);
+  window.ifty205TranslateBasicSentence();
+};
+
+window.ifty205TranslateBasicSentence = async function() {
+  const modal=document.getElementById('iftyBasicSentenceModal');
+  if(!modal || modal.style.display==='none')return;
+  const enInput=document.getElementById('iftyBasicSentenceEn');
+  const jaInput=document.getElementById('iftyBasicSentenceJa');
+  const noteInput=document.getElementById('iftyBasicSentenceNote');
+  const button=document.getElementById('ifty205BasicTranslateButton');
+  const status=document.getElementById('iftyBasicSentenceSaveStatus');
+  if(!enInput || !jaInput || !button || !status)return;
+  const sentence=String(enInput.value||'').trim();
+  if(!sentence){alert('先に英文を入力してください。');enInput.focus();return;}
+  if(sentence.length>1600){alert('英文が長すぎます。1600文字以内にしてください。');return;}
+  if(button.disabled)return;
+  if(!ensureIftyOnline('ALLIAによる和訳生成'))return;
+  const previousJa=String(jaInput.value||'');
+  if(previousJa.trim()&&!confirm('入力済みの和訳をALLIAの生成文で置き換えますか？\n保存するまでは元データは変更されません。'))return;
+  const seq=String((Number(modal.dataset.ifty205TranslationSeq)||0)+1);
+  modal.dataset.ifty205TranslationSeq=seq;
+  button.disabled=true;
+  button.style.opacity='.65';
+  button.textContent='ALLIAが和訳を生成中…';
+  status.textContent='英文を翻訳しています。結果は和訳欄に入ります。';
+  status.style.color='#bae6fd';
+  try {
+    const response=await iftyAlliaFetch(WORKER_URL,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({type:'basic_sentence_translate',subject:'BASIC SENTENCES',sentence,note:String(noteInput?.value||'').trim().slice(0,350)})
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok || data.error)throw alliaHttpError(response,data,'和訳を生成できませんでした。');
+    const translation=String(data.ja||'').trim();
+    if(!translation || translation.length>2000)throw new Error('有効な和訳が取得できませんでした。');
+    if(modal.style.display==='none' || modal.dataset.ifty205TranslationSeq!==seq)return;
+    if(String(enInput.value||'').trim()!==sentence || String(jaInput.value||'')!==previousJa){
+      status.textContent='生成中に英文または和訳が変更されました。上書きを防ぐため生成結果を適用していません。もう一度生成してください。';
+      status.style.color='#fcd34d';
+      return;
+    }
+    jaInput.value=translation;
+    modal.dataset.ifty196Dirty='1';
+    status.textContent='和訳を生成しました。内容を確認し、「保存して終了」または「保存して次へ」で確定してください。';
+    status.style.color='#86efac';
+    jaInput.focus();
+  }catch(error){
+    if(modal.style.display==='none' || modal.dataset.ifty205TranslationSeq!==seq)return;
+    status.textContent=String(error?.message||'和訳の生成に失敗しました。');
+    status.style.color='#fca5a5';
+  }finally{
+    if(modal.dataset.ifty205TranslationSeq===seq){
+      const activeButton=document.getElementById('ifty205BasicTranslateButton');
+      if(activeButton){activeButton.disabled=false;activeButton.style.opacity='1';activeButton.textContent='✨ ALLIAで和訳を生成';}
+    }
+  }
 };
 
 window.saveIftyBasicSentenceEditor = function(action = 'next') {
@@ -19212,6 +19283,7 @@ window.saveIftyBasicSentenceEditor = function(action = 'next') {
   const now = Date.now();
   if (current) {
     const moved = String(current.folderId || '') !== folderId;
+    if (String(current.en||'') !== en) current.clozeProgress = {};
     current.en = en;
     current.ja = ja;
     current.note = note;
@@ -19378,6 +19450,7 @@ function renderIftyBasicSentenceCard(item, index, total) {
         <button type="button" ${index >= total - 1 ? 'disabled' : ''} onclick="moveIftyBasicSentence('${escapeHtml(String(item.id))}',1)" title="下へ" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 9px;cursor:pointer;">↓</button>
         <button type="button" onclick="speakIftyBasicSentence('${escapeHtml(String(item.id))}')" title="英文を読む" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">🔊</button>
         <button type="button" onclick="openIftyBasicSentenceEditor('${escapeHtml(String(item.id))}')" title="編集" style="border:none;background:#64748b;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">✏️</button>
+        ${!item.ja ? `<button type="button" onclick="ifty205TranslateExistingBasicSentence('${escapeHtml(String(item.id))}')" title="ALLIAで和訳を生成して編集する" style="border:1px solid #38bdf8;background:#075985;color:white;border-radius:7px;padding:7px 9px;font-size:.76em;font-weight:850;min-height:36px;cursor:pointer;">✨ 和訳を生成</button>` : ''}
         <button type="button" onclick="deleteIftyBasicSentence('${escapeHtml(String(item.id))}')" title="削除" style="border:none;background:#dc2626;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">削除</button>
       </div>
     </div>
@@ -19532,15 +19605,191 @@ function normalizeIftyBasicPracticeAnswer(value) {
     .replace(/\s+/g, ' ').replace(/[.!?。！？]+$/g, '').trim();
 }
 
-function getIftyBasicCloze(item) {
-  const sentence = String(item.en || '').trim();
-  const tokens = sentence.match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g) || [];
-  const candidates = tokens.filter(token => token.replace(/[^A-Za-z]/g, '').length >= 3);
+// STEP206: A rule-based study-priority estimate, not a verified learning-effect score.
+// Keep all selection local: no new AI calls, user data disclosure, or Worker changes.
+function ifty206ClozeWordKey(word) {
+  return `${Number(word.index)}:${String(word.text || '').toLowerCase()}`;
+}
+
+function ifty206ClozeProgress(item, key) {
+  const row = item?.clozeProgress && typeof item.clozeProgress === 'object' ? item.clozeProgress[key] : null;
+  return { correct:Math.max(0,Math.trunc(Number(row?.correct)||0)), wrong:Math.max(0,Math.trunc(Number(row?.wrong)||0)) };
+}
+
+function ifty206RecordClozeProgress(item, cloze, values, outcome = 'submitted') {
+  if (!item || !cloze || !Array.isArray(cloze.parts)) return;
+  const stored = item.clozeProgress && typeof item.clozeProgress === 'object' && !Array.isArray(item.clozeProgress)
+    ? { ...item.clozeProgress } : {};
+  cloze.parts.forEach((part, index) => {
+    const key=ifty206ClozeWordKey(part);
+    const row=ifty206ClozeProgress({clozeProgress:stored},key);
+    const given = Array.isArray(values) ? String(values[index] || '') : '';
+    const matched = normalizeIftyBasicPracticeAnswer(given) === normalizeIftyBasicPracticeAnswer(part.text);
+    if (outcome==='unknown') row.wrong++;
+    else if (outcome==='challenge') {
+      if (!matched) { row.wrong=Math.max(0,row.wrong-1); row.correct++; }
+    } else if (matched) row.correct++;
+    else row.wrong++;
+    stored[key]={correct:Math.min(999,row.correct), wrong:Math.min(999,row.wrong)};
+  });
+  // Protect cloud storage size if the registered sentence has been edited repeatedly.
+  const keys=Object.keys(stored);
+  if(keys.length>90) for(const key of keys.slice(0,keys.length-90)) delete stored[key];
+  item.clozeProgress=stored;
+}
+
+function ifty206ClozeAnalysis(item, words) {
+  const important = new Map();
+  function mark(word, weight, reason) {
+    const prev=important.get(word.index);
+    if (!prev || weight>prev.weight) important.set(word.index,{weight,reason});
+  }
+  const lexical = new Set('although though unless until whether whereas while despite because since lest notwithstanding albeit insofar provided assuming supposing whereby wherein notwithstanding neither nor either both only also even still ever never hardly scarcely barely rather instead moreover nevertheless however therefore consequently otherwise otherwise despite ought would could should must might may shall used accustomed wish require ensure prevent avoid refrain permit enable imply entail depend result differ comprise consist deserve lack suffice'.split(' '));
+  const weak = new Set('the a an i he she it we they you me him her us them this these those that there here is am are was were been being have has had do does did and or but with without from then than which who whom whose what where when why how can will shall very really much many some any all each every one two three our your their his its my not'.split(' '));
+  const stopNote = new Set([...weak,'good','important','word','english','sentence','grammar','example','meaning','use','study','learning']);
+  const note=String(item?.note||'').toLowerCase().normalize('NFKC').replace(/[’‘]/g,"'");
+  const noteTokens=new Set((note.match(/[a-z]+(?:'[a-z]+)*/g)||[]));
+  const normalized=words.map(w=>w.text.toLowerCase().replace(/[’‘]/g,"'"));
+  const patterns=[
+    ['insofar as',['insofar'],'接続表現 insofar as'],
+    ['provided that',['provided'],'条件表現 provided that'],
+    ['as long as',['long'],'条件表現 as long as'],
+    ['as soon as',['soon'],'時・条件の表現 as soon as'],
+    ['as opposed to',['opposed'],'対比表現 as opposed to'],
+    ['in spite of',['spite'],'譲歩表現 in spite of'],
+    ['on account of',['account'],'理由表現 on account of'],
+    ['on the grounds that',['grounds'],'理由表現 on the grounds that'],
+    ['due to',['due'],'理由表現 due to'],
+    ['owing to',['owing'],'理由表現 owing to'],
+    ['in case',['case'],'条件表現 in case'],
+    ['even if',['even'],'譲歩条件 even if'],
+    ['even though',['though'],'譲歩表現 even though'],
+    ['rather than',['rather'],'比較・選択 rather than'],
+    ['instead of',['instead'],'代替表現 instead of'],
+    ['so that',['so'],'目的・結果 so that'],
+    ['so as to',['as'],'目的表現 so as to'],
+    ['in order to',['order'],'目的表現 in order to'],
+    ['be supposed to',['supposed'],'義務・期待 be supposed to'],
+    ['have to',['have'],'義務表現 have to'],
+    ['had better',['better'],'助言表現 had better'],
+    ['would rather',['rather'],'選好表現 would rather'],
+    ['would have',['would','have'],'仮定・完了 would have'],
+    ['could have',['could','have'],'推量・完了 could have'],
+    ['should have',['should','have'],'後悔・判断 should have'],
+    ['must have',['must','have'],'強い推量 must have'],
+    ['make good use of',['use','of'],'定型表現 make good use of'],
+    ['make use of',['use','of'],'定型表現 make use of'],
+    ['take advantage of',['advantage','of'],'定型表現 take advantage of'],
+    ['look forward to',['forward','to'],'定型表現 look forward to'],
+    ['in need of',['need','of'],'定型表現 in need of'],
+    ['far from',['far','from'],'否定・程度 far from'],
+    ['refrain from',['refrain','from'],'語法 refrain from'],
+    ['prevent from',['prevent','from'],'語法 prevent from'],
+    ['be capable of',['capable','of'],'語法 be capable of'],
+    ['be responsible for',['responsible','for'],'語法 be responsible for'],
+    ['be aware of',['aware','of'],'語法 be aware of'],
+    ['be interested in',['interested','in'],'語法 be interested in'],
+    ['depend on',['depend','on'],'語法 depend on'],
+    ['consist of',['consist','of'],'語法 consist of'],
+    ['result in',['result','in'],'語法 result in'],
+    ['result from',['result','from'],'語法 result from'],
+    ['not only',['only'],'相関表現 not only'],
+    ['but also',['also'],'相関表現 but also'],
+    ['no longer',['longer'],'否定表現 no longer'],
+    ['by no means',['means'],'強い否定 by no means'],
+    ['on the verge of',['verge','of'],'定型表現 on the verge of'],
+    ['in terms of',['terms','of'],'定型表現 in terms of'],
+    ['with regard to',['regard','to'],'定型表現 with regard to']
+  ];
+  const normalizedJoined=normalized.join(' ');
+  for(const [phrase,focus,label] of patterns){
+    const parts=phrase.split(' ');
+    for(let i=0;i<=normalized.length-parts.length;i++){
+      if(parts.some((p,j)=>normalized[i+j]!==p))continue;
+      parts.forEach((part,j)=>{
+        if(focus.includes(part))mark(words[i+j],94,label);
+      });
+    }
+  }
+  // Paired conjunctions need not appear consecutively.
+  for(const [left,right,label] of [['neither','nor','neither ... nor'],['either','or','either ... or'],['not','but','not ... but']]){
+    for(let i=0;i<normalized.length;i++)if(normalized[i]===left){
+      const j=normalized.findIndex((t,k)=>k>i&&k<=i+16&&t===right);
+      if(j>i){mark(words[i],76,`相関表現 ${label}`);mark(words[j],76,`相関表現 ${label}`);}
+    }
+  }
+  // An explicitly noted expression is stronger evidence than generic word length.
+  for(let i=0;i<words.length;i++){
+    const token=normalized[i];
+    if (noteTokens.has(token)&&token.length>=4&&!stopNote.has(token))
+      mark(words[i],102,'登録メモにある重要語');
+    for(let length=2;length<=Math.min(5,words.length-i);length++){
+      const phrase=normalized.slice(i,i+length).join(' ');
+      if(phrase.length<7 || !note.includes(phrase))continue;
+      for(let j=i;j<i+length;j++)if(!stopNote.has(normalized[j]))mark(words[j],115,'登録メモにある重要表現');
+    }
+  }
+  return {important,lexical,weak};
+}
+
+function getIftyBasicCloze(item, requestedCount = 1, selectionMode = 'smart') {
+  const sentence = String(item?.en || '').trim();
+  const words = [...sentence.matchAll(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g)].map(match => ({
+    text: match[0], index: match.index, length: match[0].length
+  }));
+  const smart = selectionMode!=='legacy';
+  const analysis = smart ? ifty206ClozeAnalysis(item,words) : null;
+  const candidates = words.filter(w => w.text.replace(/[^A-Za-z]/g, '').length >= 3 || (smart&&analysis.important.has(w.index)));
   if (!candidates.length) return null;
-  const answer = candidates.reduce((best, token) => token.length > best.length ? token : best, candidates[0]);
-  const index = sentence.toLowerCase().indexOf(answer.toLowerCase());
-  if (index < 0) return null;
-  return { answer, prompt: sentence.slice(0,index) + '□□□□' + sentence.slice(index + answer.length) };
+  // Keep at least one original word visible whenever the sentence has multiple words.
+  const maxBlank = words.length > 1 ? Math.min(words.length - 1, candidates.length) : 1;
+  const target = Math.min(maxBlank, Math.max(1, Math.min(5, Math.trunc(Number(requestedCount) || 1))));
+  let byPriority;
+  if (!smart) {
+    byPriority = candidates.slice().sort((a,b) => b.length - a.length || a.index - b.index);
+  } else {
+    byPriority = candidates.map(word=>{
+      const token=word.text.toLowerCase().replace(/[’‘]/g,"'");
+      const wordInfo=analysis.important.get(word.index);
+      const progress=ifty206ClozeProgress(item,ifty206ClozeWordKey(word));
+      const isFunction=analysis.weak.has(token);
+      const proper=/^[A-Z]/.test(word.text)&&word.index>0;
+      let priority=24+Math.min(12,word.text.length)*1.2;
+      if(analysis.lexical.has(token))priority+=55;
+      if(isFunction)priority-=35;
+      if(proper)priority-=25;
+      if(wordInfo)priority+=wordInfo.weight;
+      if(progress.wrong)priority+=Math.min(105,progress.wrong*37);
+      if(progress.correct)priority-=Math.min(35,progress.correct*11);
+      const reason=progress.wrong ? '以前間違えた空欄を復習' : (wordInfo?.reason || (analysis.lexical.has(token) ? '文法・意味のつながりを確認' : '英文の意味を支える語を確認'));
+      return {...word,priority,reason};
+    }).sort((a,b)=>b.priority-a.priority||a.index-b.index);
+  }
+  const picked=[];
+  for(const word of byPriority){
+    if(picked.length>=target)break;
+    if(picked.length&&target>1&&byPriority.some(other=>
+      !picked.includes(other)&&other!==word&&
+      Math.min(...picked.map(p=>Math.abs(p.index-other.index)))>
+      Math.min(...picked.map(p=>Math.abs(p.index-word.index)))+6&&
+      (smart ? other.priority>=word.priority-13 : other.length>=word.length-2)))continue;
+    picked.push(word);
+  }
+  for(const word of byPriority){
+    if(picked.length>=target)break;
+    if(!picked.includes(word))picked.push(word);
+  }
+  picked.sort((a,b)=>a.index-b.index);
+  let output='',cursor=0;
+  picked.forEach((word,i)=>{
+    output+=sentence.slice(cursor,word.index);
+    output+=picked.length===1?'□□□□':`〔${i+1}〕□□□□`;
+    cursor=word.index+word.length;
+  });
+  output+=sentence.slice(cursor);
+  const answers=picked.map(word=>word.text);
+  const parts=picked.map(word=>({text:word.text,index:word.index,length:word.length,reason:word.reason||'従来方式：長い単語を優先'}));
+  return {answer:answers.join(' / '),answers,prompt:output,parts,selectionMode:smart?'smart':'legacy'};
 }
 
 function renderIftyBasicPracticeTabs(active = 'BASIC SENTENCES') {
@@ -19705,6 +19954,24 @@ window.setIftyBasicPracticeSetQuestionCount = function(setId, value) {
   savePracticeData();
 };
 
+window.setIftyBasicPracticeSetClozeBlankCount = function(setId, value) {
+  const set = getIftyBasicPracticeSet(setId);
+  if (!set) return;
+  const count = Math.trunc(Number(value));
+  if (![1,2,3,4,5].includes(count)) return;
+  set.clozeBlankCount = count;
+  set.updatedAt = Date.now();
+  savePracticeData();
+};
+
+window.setIftyBasicPracticeSetClozeSelection = function(setId, value) {
+  const set = getIftyBasicPracticeSet(setId);
+  if (!set || !['smart','legacy'].includes(String(value))) return;
+  set.clozeSelection = String(value);
+  set.updatedAt = Date.now();
+  savePracticeData();
+};
+
 window.setIftyBasicPracticeSetDirection = function(setId, value) {
   const set = getIftyBasicPracticeSet(setId);
   if (!set) return;
@@ -19822,6 +20089,23 @@ window.openIftyBasicPracticeSet = function(setId) {
       </div>
     </div>
 
+    ${modeCloze ? `<div class="ifty202-basic-cloze-config" style="margin-top:10px;padding:12px;background:#16334a;border:1px solid #4f8cae;border-radius:9px;color:#e0f2fe;">
+      <label style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;font-weight:900;color:#f1f5f9;">
+        <span>🧩 穴にする単語数</span>
+        <select aria-label="1問で穴にする単語数" onchange="setIftyBasicPracticeSetClozeBlankCount('${set.id}',this.value)" style="min-width:115px;min-height:40px;padding:7px 10px;border-radius:8px;border:1px solid #93c5fd;background:#0f172a;color:#f8fafc;font:inherit;">
+          ${[1,2,3,4,5].map(n=>`<option value="${n}" ${Number(set.clozeBlankCount||1)===n?'selected':''}>${n}語</option>`).join('')}
+        </select>
+      </label>
+      <label style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-top:12px;font-weight:900;color:#f1f5f9;">
+        <span>🎯 空欄の選び方</span>
+        <select aria-label="穴埋めで空欄にする語の選び方" onchange="setIftyBasicPracticeSetClozeSelection('${set.id}',this.value)" style="max-width:100%;min-height:40px;padding:7px 10px;border-radius:8px;border:1px solid #93c5fd;background:#0f172a;color:#f8fafc;font:inherit;">
+          <option value="smart" ${set.clozeSelection!=='legacy'?'selected':''}>自動・重要表現と苦手を優先</option>
+          <option value="legacy" ${set.clozeSelection==='legacy'?'selected':''}>従来・長い単語を優先</option>
+        </select>
+      </label>
+      <div style="font-size:.79em;color:#cbd5e1;line-height:1.5;margin-top:7px;">自動判定では文法・熟語・登録メモの要点、以前誤答した空欄を優先します。学習効果を保証するものではありません。短い文は穴数を調整し、番号順に回答できます。</div>
+    </div>` : ''}
+
     <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
       <b style="color:#334155;">2. 問題数</b>
       <select onchange="setIftyBasicPracticeSetQuestionCount('${set.id}',this.value)" style="padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
@@ -19907,6 +20191,8 @@ window.startIftyBasicPracticeSet = function(setId) {
     mode: plan.modes.find(m=>m!=='truefalse') || 'written',
     modes: plan.modes.filter(m=>m!=='truefalse'),
     truthRemaining: plan.tf,
+    clozeBlankCount: Math.max(1,Math.min(5,Number(set.clozeBlankCount)||1)),
+    clozeSelection: set.clozeSelection==='legacy'?'legacy':'smart',
     direction: set.direction,
     queue: items.map(x => String(x.id)),
     index: 0,
@@ -19951,35 +20237,52 @@ function renderIftyBasicPracticeQuestion() {
   st.currentDirection=direction; st.answered=false; st.last=null;
   st.difficulty=st.setId?ifty149Difficulty(getIftyBasicPracticeSet(st.setId)?.difficulty):'normal';
   let prompt='', label='';
-  if(st.mode==='cloze'){ const c=getIftyBasicCloze(item); if(!c){st.index++;renderIftyBasicPracticeQuestion();return;} st.cloze=c; prompt=c.prompt; label='空欄に入る英語を入力'; }
+  if(st.mode==='cloze'){ const c=getIftyBasicCloze(item,st.clozeBlankCount||1,st.clozeSelection||'smart'); if(!c){st.index++;renderIftyBasicPracticeQuestion();return;} st.cloze=c; prompt=c.prompt; label='空欄に入る英語を入力'; }
   else if(direction==='ja_to_en'){prompt=item.ja;label='英訳を入力';}
   else {prompt=item.en;label='和訳を入力';}
   const closeAction = st.setId ? `openIftyBasicPracticeSet('${st.setId}')` : `setIftyUnifiedPracticeSubject('BASIC SENTENCES')`;
   st.ifty143Prompt=prompt;
   const degreeNote=st.mode==='written'&&st.difficulty==='hard'?'※ HARD：時制・語法・語順まで自然な翻訳を意識してください。':st.mode==='written'&&st.difficulty==='extreme'?'※ EXTREME：意味の細部、前置詞や語形、ニュアンスまで正確に訳してください。':'';
-  modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(700px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:10px;"><div style="font-weight:900;color:${st.mode==='cloze'?'#1d4ed8':'#5b21b6'};">${st.mode==='cloze'?'🧩 穴埋め':'✍️ 記述'}　${st.index+1}/${st.queue.length}</div><button onclick="${closeAction}" style="border:none;background:none;font-size:1.3em;color:#64748b;">✕</button></div><div style="margin-top:18px;padding:16px;border-radius:10px;background:#f8fafc;font-size:1.08em;line-height:1.7;white-space:pre-wrap;">${escapeHtml(prompt)}</div>${degreeNote?`<p style="font-size:.85em;color:#475569;">${escapeHtml(degreeNote)}</p>`:''}<label style="display:block;margin-top:14px;font-weight:800;color:#334155;">${label}<textarea id="iftyBasicPracticeAnswer" rows="3" style="width:100%;box-sizing:border-box;margin-top:7px;padding:11px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;"></textarea></label><button id="iftyBasicPracticeSubmit" onclick="submitIftyBasicPracticeAnswer()" style="width:100%;margin-top:11px;border:none;background:${st.mode==='cloze'?'#2563eb':'#7c3aed'};color:white;border-radius:8px;padding:11px;font-weight:900;">回答</button><button type="button" onclick="ifty182UnknownBasic()" style="width:100%;margin-top:9px;padding:11px;background:#475569;color:white;border:0;border-radius:8px;font-weight:850;">？ 分からない（答えを見る）</button><div style="margin-top:8px;color:#64748b;font-size:.78em;">Enterで回答 / Shift+Enterで改行${st.mode==='cloze'?'。通常はALLIAを使用しません。':''}</div></div>`;
-  const input=document.getElementById('iftyBasicPracticeAnswer');
-  if(input){
-    input.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();window.submitIftyBasicPracticeAnswer();}};
-    setTimeout(()=>input.focus(),0);
-  }
+  const answerField = st.mode==='cloze' ? `<div style="margin-top:14px;"><div style="font-weight:900;color:#f1f5f9;margin-bottom:7px;">空欄の答え（番号順）</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:9px;">${(st.cloze.answers||[st.cloze.answer]).map((_,i)=>`<label style="display:grid;gap:5px;color:#cbd5e1;font-weight:800;">${i+1}番目<input data-ifty202-cloze-answer="${i}" aria-label="${i+1}番目の空欄" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="単語を入力" style="width:100%;min-width:0;box-sizing:border-box;min-height:43px;background:#0f172a;color:#f8fafc;border:1px solid #93c5fd;border-radius:8px;padding:9px 11px;font:inherit;"></label>`).join('')}</div></div>` : `<label style="display:block;margin-top:14px;font-weight:800;color:#334155;">${label}<textarea id="iftyBasicPracticeAnswer" rows="3" style="width:100%;box-sizing:border-box;margin-top:7px;padding:11px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;"></textarea></label>`;
+  modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(700px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:10px;"><div style="font-weight:900;color:${st.mode==='cloze'?'#1d4ed8':'#5b21b6'};">${st.mode==='cloze'?'🧩 穴埋め':'✍️ 記述'}　${st.index+1}/${st.queue.length}</div><button onclick="${closeAction}" style="border:none;background:none;font-size:1.3em;color:#64748b;">✕</button></div><div style="margin-top:18px;padding:16px;border-radius:10px;background:#f8fafc;font-size:1.08em;line-height:1.7;white-space:pre-wrap;">${escapeHtml(prompt)}</div>${degreeNote?`<p style="font-size:.85em;color:#475569;">${escapeHtml(degreeNote)}</p>`:''}${answerField}<button id="iftyBasicPracticeSubmit" onclick="submitIftyBasicPracticeAnswer()" style="width:100%;margin-top:11px;border:none;background:${st.mode==='cloze'?'#2563eb':'#7c3aed'};color:white;border-radius:8px;padding:11px;font-weight:900;">回答</button><button type="button" onclick="ifty182UnknownBasic()" style="width:100%;margin-top:9px;padding:11px;background:#475569;color:white;border:0;border-radius:8px;font-weight:850;">？ 分からない（答えを見る）</button><div style="margin-top:8px;color:#64748b;font-size:.78em;">Enterで回答 / Shift+Enterで改行${st.mode==='cloze'?'。通常はALLIAを使用しません。':''}</div></div>`;
+  const inputs=st.mode==='cloze' ? [...modal.querySelectorAll('[data-ifty202-cloze-answer]')] : [document.getElementById('iftyBasicPracticeAnswer')].filter(Boolean);
+  inputs.forEach((input,i)=>{
+    input.onkeydown=e=>{
+      if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){
+        e.preventDefault();
+        if(st.mode==='cloze'&&i<inputs.length-1)inputs[i+1].focus();
+        else window.submitIftyBasicPracticeAnswer();
+      }
+    };
+  });
+  if(inputs.length)setTimeout(()=>{if(document.contains(inputs[0]))inputs[0].focus();},0);
 }
 
 window.submitIftyBasicPracticeAnswer = async function() {
   const st=iftyBasicPracticeState, modal=document.getElementById('practiceModal'); if(!st||!modal||st.answered)return;
   const item=findIftyBasicSentenceById(st.queue[st.index]); if(!item)return;
-  const answer=String(document.getElementById('iftyBasicPracticeAnswer')?.value||'').trim(); if(!answer){document.getElementById('iftyBasicPracticeAnswer')?.focus();return;}
+  const blankInputs=st.mode==='cloze'?[...modal.querySelectorAll('[data-ifty202-cloze-answer]')]:[];
+  const blankValues=blankInputs.map(input=>String(input.value||'').trim());
+  const answer=st.mode==='cloze'?blankValues.join(' / '):String(document.getElementById('iftyBasicPracticeAnswer')?.value||'').trim();
+  const missing=blankInputs.find(input=>!String(input.value||'').trim());
+  if(missing){missing.focus();return;}
+  if(!answer){document.getElementById('iftyBasicPracticeAnswer')?.focus();return;}
   st.answered=true;
   if(st.mode==='cloze'){
-    const correct=normalizeIftyBasicPracticeAnswer(answer)===normalizeIftyBasicPracticeAnswer(st.cloze.answer);
+    const expected=st.cloze.answers||[st.cloze.answer];
+    const correct=blankValues.length===expected.length && blankValues.every((value,i)=>normalizeIftyBasicPracticeAnswer(value)===normalizeIftyBasicPracticeAnswer(expected[i]));
+    ifty206RecordClozeProgress(item,st.cloze,blankValues,'submitted');
     st.last={answer,correct}; if(correct)st.correct++;else {st.wrong++;ifty162Capture('BASIC SENTENCES',{prompt:st.ifty143Prompt||'',answer:st.cloze.answer,mode:'cloze'},'cloze',st.cloze.answer,item.id);} recordIftyBasicSentenceStudy(item.id,correct); savePracticeData(); renderIftyBasicPracticeFeedback(correct, correct?'登録英文の空欄と一致しました。':'登録英文とは一致しませんでした。', st.cloze.answer, !correct); return;
   }
+  // STEP207: The saved sentence/translation is the immutable display reference.
+  // ALLIA may accept alternative wording, but must not replace the registered model.
+  const registeredAnswer=st.currentDirection==='ja_to_en'?item.en:item.ja;
   if(!ensureIftyOnline('BASIC SENTENCES記述採点')){st.answered=false;return;}
   modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><h3 style="color:#5b21b6;">ALLIAが採点中…</h3></div>`;
   try{
-    const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'basic_sentence_grade',difficulty:st.difficulty,direction:st.currentDirection,prompt:st.currentDirection==='ja_to_en'?item.ja:item.en,referenceAnswer:st.currentDirection==='ja_to_en'?item.en:item.ja,userAnswer:answer})});
+    const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'basic_sentence_grade',difficulty:st.difficulty,direction:st.currentDirection,prompt:st.currentDirection==='ja_to_en'?item.ja:item.en,referenceAnswer:registeredAnswer,userAnswer:answer})});
     const data=await response.json(); if(!response.ok)throw alliaHttpError(response,data,'採点に失敗しました。');
-    const correct=data.correct===true; if(correct)st.correct++;else st.wrong++; st.last={answer,correct}; if(!correct)ifty162Capture('BASIC SENTENCES',{prompt:st.ifty143Prompt||'',referenceAnswer:st.currentDirection==='ja_to_en'?item.en:item.ja,instruction:st.currentDirection==='ja_to_en'?'英訳を入力':'和訳を入力'},'written',data.modelAnswer||(st.currentDirection==='ja_to_en'?item.en:item.ja),item.id); recordIftyBasicSentenceStudy(item.id,correct); savePracticeData(); renderIftyBasicPracticeFeedback(correct,data.feedback||'',data.modelAnswer|| (st.currentDirection==='ja_to_en'?item.en:item.ja),false);
+    const correct=data.correct===true; if(correct)st.correct++;else st.wrong++; st.last={answer,correct}; if(!correct)ifty162Capture('BASIC SENTENCES',{prompt:st.ifty143Prompt||'',referenceAnswer:registeredAnswer,instruction:st.currentDirection==='ja_to_en'?'英訳を入力':'和訳を入力'},'written',registeredAnswer,item.id); recordIftyBasicSentenceStudy(item.id,correct); savePracticeData(); renderIftyBasicPracticeFeedback(correct,data.feedback||'',registeredAnswer,false);
   }catch(error){
     st.answered=false;
     modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h3 style="color:#ef4444;">採点に失敗しました</h3><p>${escapeHtml(String(error.message||error))}</p><button onclick="renderIftyBasicPracticeQuestion()" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;">問題に戻る</button></div>`;
@@ -19988,14 +20291,27 @@ window.submitIftyBasicPracticeAnswer = async function() {
 
 function renderIftyBasicPracticeFeedback(correct, feedback, modelAnswer, canChallenge) {
   const modal=document.getElementById('practiceModal'), st=iftyBasicPracticeState; if(!modal||!st)return;
-  modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(650px,100%);padding:22px;"><h2 style="margin-top:0;color:${correct?'#059669':'#dc2626'};">${st.last?.unknown?'？ 分からない':correct?'⭕ 正解':'❌ 不正解'}</h2><div style="padding:10px;background:#f8fafc;border-radius:8px;"><b>あなたの回答：</b>${escapeHtml(st.last?.answer||'')}</div><div style="padding:10px;background:#f5f3ff;border-radius:8px;margin-top:8px;color:#4c1d95;"><b>登録・模範：</b>${escapeHtml(modelAnswer||'')}</div><div style="margin-top:10px;color:#475569;white-space:pre-wrap;line-height:1.55;">${escapeHtml(feedback||'')}</div>${canChallenge?`<div style="margin-top:13px;padding:11px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;"><div style="font-weight:900;color:#92400e;">別解だと思う場合</div><textarea id="iftyBasicChallengeReason" rows="2" placeholder="理由（任意）" style="width:100%;box-sizing:border-box;margin-top:7px;padding:9px;border:1px solid #f59e0b;border-radius:7px;"></textarea><button onclick="submitIftyBasicClozeChallenge()" style="width:100%;margin-top:7px;border:none;background:#d97706;color:white;border-radius:7px;padding:9px;font-weight:900;">⚖️ Challenge（ALLIA）</button></div>`:''}<button onclick="nextIftyBasicPracticeQuestion()" style="width:100%;margin-top:13px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:11px;font-weight:900;">次へ</button></div>`;
+  const unknown=st.last?.unknown===true;
+  const prompt=String(st.ifty143Prompt||'');
+  const referenceLabel=st.mode==='cloze'?'空欄の正解（番号順）':'登録済みの模範解答';
+  modal.innerHTML=`<div class="ifty-practice-config ifty202-basic-feedback" style="background:#1e293b;border:1px solid #64748b;border-radius:14px;width:min(650px,100%);padding:22px;color:#f8fafc;">
+    <h2 style="margin-top:0;color:${unknown?'#fda4af':correct?'#86efac':'#fca5a5'};">${unknown?'📖 解答確認（分からない）':correct?'⭕ 正解':'❌ 不正解'}</h2>
+    ${prompt?`<div style="padding:12px;border:1px solid #64748b;background:#24364e;border-radius:9px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;"><b style="color:#bfdbfe;">今回の問題：</b><div style="margin-top:4px;color:#f8fafc;">${escapeHtml(prompt)}</div></div>`:''}
+    <div style="padding:11px;background:#293b53;border-radius:9px;margin-top:9px;color:#f8fafc;overflow-wrap:anywhere;"><b>あなたの回答：</b>${escapeHtml(st.last?.answer||(unknown?'（分からないを選択）':'（未回答）'))}</div>
+    <div style="padding:11px;background:#37254a;border:1px solid #815ba6;border-radius:9px;margin-top:9px;color:#f5d0fe;overflow-wrap:anywhere;"><b>${referenceLabel}：</b>${escapeHtml(modelAnswer||'')}</div>
+    <div style="margin-top:10px;color:#e2e8f0;white-space:pre-wrap;line-height:1.6;">${escapeHtml(feedback||'')}</div>
+    ${st.mode==='cloze'&&st.cloze?.selectionMode==='smart'&&st.cloze?.parts?.length?`<details style="margin-top:12px;border:1px solid #64748b;border-radius:8px;padding:9px;color:#e2e8f0;"><summary style="cursor:pointer;font-weight:900;color:#bfdbfe;">🎯 この語を空欄にした理由</summary><div style="margin-top:7px;font-size:.88em;line-height:1.6;">${st.cloze.parts.map((p,i)=>`<div>${i+1}. <b>${escapeHtml(p.text)}</b> — ${escapeHtml(p.reason||'重要語を確認')}</div>`).join('')}</div></details>`:''}
+    ${canChallenge?`<div style="margin-top:13px;padding:11px;background:#382e20;border:1px solid #eab308;border-radius:8px;color:#fef3c7;"><div style="font-weight:900;">別解だと思う場合</div><textarea id="iftyBasicChallengeReason" rows="2" placeholder="理由（任意）" style="width:100%;box-sizing:border-box;margin-top:7px;padding:9px;border:1px solid #f59e0b;border-radius:7px;"></textarea><button onclick="submitIftyBasicClozeChallenge()" style="width:100%;margin-top:7px;border:none;background:#d97706;color:white;border-radius:7px;padding:9px;font-weight:900;">⚖️ Challenge（ALLIA）</button></div>`:''}
+    <button onclick="nextIftyBasicPracticeQuestion()" style="width:100%;margin-top:13px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:12px;font-weight:900;">次の問題へ →</button>
+  </div>`;
 }
 
 window.nextIftyBasicPracticeQuestion=function(){const st=iftyBasicPracticeState;if(!st)return;const item=findIftyBasicSentenceById(st.queue?.[st.index]);if(st.last&&item)ifty182Record(st,st.index,st.ifty143Prompt||item.ja||item.en||'例文問題',st.last.unknown?null:st.last.correct===true,st.last.answer,st.mode==='cloze'?st.cloze?.answer:(st.currentDirection==='ja_to_en'?item.en:item.ja),'');st.index++;renderIftyBasicPracticeQuestion();};
 window.ifty182UnknownBasic=function(){
  const st=iftyBasicPracticeState,item=st&&findIftyBasicSentenceById(st.queue?.[st.index]);if(!item||st.last)return;
  const expected=String(st.mode==='cloze'?st.cloze?.answer:(st.currentDirection==='ja_to_en'?item.en:item.ja)||'');
- st.last={correct:false,unknown:true,answer:''};st.unknown=(st.unknown||0)+1;
+ st.last={correct:false,unknown:true,answer:''};st.answered=true;st.unknown=(st.unknown||0)+1;
+ if(st.mode==='cloze')ifty206RecordClozeProgress(item,st.cloze,[],'unknown');
  try{ifty162Capture('BASIC SENTENCES',{prompt:st.ifty143Prompt||'',referenceAnswer:expected},st.mode,expected,item.id)}catch(_){ }
  savePracticeData();renderIftyBasicPracticeFeedback(false,'分からないため模範解答を確認してください。',expected,false);
 };
@@ -20012,6 +20328,7 @@ window.submitIftyBasicClozeChallenge=async function(){
     const accepted=data.challengeAccepted===true;
     st.last.challenged=true;
     if(accepted){
+      ifty206RecordClozeProgress(item,st.cloze,String(st.last.answer||'').split(/\s*\/\s*/),'challenge');
       ifty173CorrectWrongCount(st);st.last.correct=true;st.last.challenged=true;
       ifty173UndoRecentMistake('BASIC SENTENCES',{prompt:st.ifty143Prompt||''},item.id);
       const study=normalizeIftyBasicSentenceStudy(item.study);
@@ -20052,7 +20369,7 @@ function ensureIftyReviewQuizSet() {
       name: '今日の復習',
       wordIds: [],
       directionMode: ['jp_to_en','en_to_jp','mixed'].includes(String(getIftyPracticeUiPref('ENGLISH','quizDirection','mixed'))) ? String(getIftyPracticeUiPref('ENGLISH','quizDirection','mixed')) : 'mixed',
-      types: { simple: true, selection: false, written: false, example: false, knowledge: false, composition: false, translation: false, listening: false, usage_cloze: false, synonym_choice: false, inflection: false, derived: false, truefalse: false },
+      types: { simple: true, selection: false, written: false, example: false, knowledge: false, composition: false, translation: false, listening: false, usage_cloze: false, synonym_choice: false, inflection: false, accent_tap: false, derived: false, truefalse: false },
       random: true,
       questionCount: 5,
       progress: null,
@@ -20629,6 +20946,8 @@ function normalizeIftyBasicPracticeSet(value, index = 0) {
     mode: modes[0],
     modes,
     direction,
+    clozeBlankCount: Math.max(1,Math.min(5,Math.trunc(Number(source.clozeBlankCount)||1))),
+    clozeSelection: source.clozeSelection==='legacy'?'legacy':'smart',
     questionCount: [5,10,15,20,25,30].includes(Number(source.questionCount)) ? Number(source.questionCount) : 5,
     random: source.random !== false,
     createdAt: Math.max(0, Number(source.createdAt || Date.now())),
@@ -20670,7 +20989,7 @@ function normalizePracticeData() {
     set.derivedKinds=ifty149DerivedKinds(set.derivedKinds);
     if (!['jp_to_en', 'en_to_jp', 'mixed'].includes(set.directionMode)) set.directionMode = 'mixed';
     if (!set.types || typeof set.types !== 'object') set.types = {};
-    const defaults = { simple: true, selection: false, written: false, example: false, knowledge: false, composition: false, translation: false, listening: false, usage_cloze: false, synonym_choice: false, inflection: false, derived: false, truefalse: false };
+    const defaults = { simple: true, selection: false, written: false, example: false, knowledge: false, composition: false, translation: false, listening: false, usage_cloze: false, synonym_choice: false, inflection: false, accent_tap: false, derived: false, truefalse: false };
     Object.keys(defaults).forEach(key => {
       if (typeof set.types[key] !== 'boolean') set.types[key] = defaults[key];
     });
@@ -26107,6 +26426,176 @@ window.restartPracticeConfirm = function(setId) { if(confirm('このセットを
 // ==========================================
 // 実践 / クエスチョン
 // ==========================================
+// STEP203 — ENGLISH PRACTICE: primary word stress by tapping the vowel.
+// A saved IPA with ˈ is preferred. Missing IPA can be retrieved from the public
+// Free Dictionary API. Never guess a stress index from spelling alone.
+const IFTY203_ACCENT_CACHE_PREFIX = 'ifty203_stress_en_v1:';
+const ifty203AccentMemory = new Map();
+function ifty203VowelAt(word, index) {
+  return Number.isInteger(index) && index >= 0 && index < word.length && /[aeiouy]/i.test(word[index]);
+}
+function ifty203IsAccentCandidate(word) {
+  const name = String(word?.word || '').trim();
+  return /^[A-Za-z]+$/.test(name) && (name.match(/[aeiouy]+/gi) || []).length >= 2 &&
+    String(getIftyWordLanguageInfo(word).code || '').toLowerCase().startsWith('en');
+}
+function ifty203MarkVowel(word, index) {
+  if (!ifty203VowelAt(word, index)) return word;
+  return (word.slice(0,index+1)+'\u0301'+word.slice(index+1)).normalize('NFC');
+}
+// Count IPA vowel nuclei, treating common English diphthongs as one nucleus.
+function ifty203IpaNuclei(ipa) {
+  const text = String(ipa || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const vowels = 'ɑɐɒæaɛeɜəɚɝiɪɨoɔɤuʊʌʉyʏøœ';
+  const diphthongs = ['aɪ','aʊ','eɪ','ɔɪ','oʊ','əʊ','ɛə','eə','ɪə','ʊə'];
+  let n=0;
+  for (let i=0; i<text.length;) {
+    if (!vowels.includes(text[i])) { i++; continue; }
+    const pair = diphthongs.find(part => text.startsWith(part, i));
+    i += pair ? pair.length : 1;
+    n++;
+  }
+  return n;
+}
+function ifty203IpaStress(ipa) {
+  const text = String(ipa || '').trim();
+  if ((text.match(/ˈ/g) || []).length !== 1 || !/^[^\n]{3,160}$/.test(text)) return null;
+  const before = text.slice(0,text.indexOf('ˈ'));
+  const index = ifty203IpaNuclei(before);
+  const count = ifty203IpaNuclei(text);
+  return count >= 2 && index >= 0 && index < count ? { syllableIndex:index, syllableCount:count, ipa:text } : null;
+}
+// Orthographic vowel groups are mapped to pronounced syllable nuclei. A final
+// silent e is removed first when doing so still allows exact syllable alignment.
+// Split i+a / i+o etc. only when the IPA contains more syllables than groups.
+function ifty203GraphemeCandidates(word, syllables) {
+  const raw = [...String(word).matchAll(/[aeiouy]+/gi)].map(m => ({start:m.index,text:m[0].toLowerCase()}));
+  const choices=[];
+  const variants=[raw];
+  const last=raw[raw.length-1];
+  if (last?.text==='e' && last.start===word.length-1 && raw.length>1) variants.unshift(raw.slice(0,-1));
+  const priority=[];
+  for (const [variantIndex,groups] of variants.entries()) {
+    const out=[];
+    const dfs=(i,indices,splits)=>{
+      if(indices.length>syllables) return;
+      if(i===groups.length){ if(indices.length===syllables) out.push({indices,splits,variantIndex}); return; }
+      const g=groups[i];
+      dfs(i+1,[...indices,g.start],splits);
+      // Only clearly separable hiatus pairs are considered as two syllables.
+      if(g.text.length===2 && /^(?:ia|io|ie|iu|ua|ue|ui|uo|eo|oa|oe)$/.test(g.text))
+        dfs(i+1,[...indices,g.start,g.start+1],splits+1);
+    };
+    dfs(0,[],0);
+    for(const row of out)priority.push(row);
+    // When a silent-final-e alignment is available, do not treat e as a syllable.
+    if (variantIndex===0 && variants.length===2 && out.length) break;
+  }
+  if (!priority.length) return [];
+  const minSplit = Math.min(...priority.map(row=>row.splits));
+  return priority.filter(row=>row.splits===minSplit).map(row=>row.indices);
+}
+function ifty203DeriveAccent(word, ipa) {
+  const parsed=ifty203IpaStress(ipa);
+  if(!parsed) return null;
+  const candidates=ifty203GraphemeCandidates(word,parsed.syllableCount);
+  const positions=[...new Set(candidates.map(indices=>indices[parsed.syllableIndex]).filter(index=>ifty203VowelAt(word,index)))];
+  if(positions.length!==1) return null;
+  return { index:positions[0], ipa:parsed.ipa };
+}
+function ifty203ExplicitAccent(word) {
+  const name=String(word?.word||'').trim();
+  const i=Number(word?.accentVowelIndex);
+  return word?.accentVowelIndex!==undefined && word?.accentVowelIndex!==null && word?.accentVowelIndex!=='' && ifty203VowelAt(name,i)
+    ? {index:i,ipa:String(word?.pronunciation||''),source:'登録済みのアクセント位置'} : null;
+}
+function ifty203CandidatePhonetics(rows,word) {
+  const positionMap = new Map();
+  for(const ipa of [...new Set(rows.map(String).filter(Boolean))]) {
+    const answer=ifty203DeriveAccent(word,ipa);
+    if(!answer) continue;
+    const bucket=positionMap.get(answer.index)||[];
+    bucket.push(answer.ipa);
+    positionMap.set(answer.index,bucket);
+  }
+  // Multiple conflicting accepted pronunciations must not yield a guessed answer.
+  return positionMap.size===1 ? {index:[...positionMap.keys()][0],ipa:positionMap.values().next().value[0]} : null;
+}
+async function ifty203ResolveAccent(word) {
+  const name=String(word?.word||'').trim();
+  if(!ifty203IsAccentCandidate(word)) return null;
+  const explicit=ifty203ExplicitAccent(word);
+  if(explicit) return explicit;
+  const local=ifty203CandidatePhonetics([word.pronunciation,word.ipa,word.guide?.phonetic],name);
+  if(local) return {...local,source:'保存済みの発音情報'};
+  const key=name.toLowerCase();
+  if(ifty203AccentMemory.has(key))return ifty203AccentMemory.get(key);
+  try {
+    const saved=JSON.parse(localStorage.getItem(IFTY203_ACCENT_CACHE_PREFIX+key)||'null');
+    if(saved && ifty203VowelAt(name,Number(saved.index))) {
+      const entry={index:Number(saved.index),ipa:String(saved.ipa||''),source:'辞書の保存済み情報'};
+      ifty203AccentMemory.set(key,entry);return entry;
+    }
+  }catch(_){}
+  if(typeof navigator!=='undefined' && navigator.onLine===false) return null;
+  const controller=typeof AbortController==='function' ? new AbortController() : null;
+  const timer=controller ? setTimeout(()=>controller.abort(),5500) : null;
+  try {
+    const res=await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/'+encodeURIComponent(key),
+      controller?{signal:controller.signal,headers:{'Accept':'application/json'}}:{headers:{'Accept':'application/json'}});
+    if(!res.ok)return null;
+    const data=await res.json();
+    if(!Array.isArray(data))return null;
+    const ipa=[];
+    data.filter(entry=>String(entry?.word||'').trim().toLowerCase()===key).forEach(entry=>{
+      if(typeof entry.phonetic==='string')ipa.push(entry.phonetic);
+      if(Array.isArray(entry.phonetics))entry.phonetics.forEach(row=>{if(typeof row?.text==='string')ipa.push(row.text);});
+    });
+    const answer=ifty203CandidatePhonetics(ipa,name);
+    if(!answer)return null;
+    const result={...answer,source:'Free Dictionary API'};
+    ifty203AccentMemory.set(key,result);
+    try{localStorage.setItem(IFTY203_ACCENT_CACHE_PREFIX+key,JSON.stringify(result));}catch(_){}
+    return result;
+  }catch(_){return null;}
+  finally{if(timer!==null)clearTimeout(timer);}
+}
+function ifty203AccentControls(question,setId) {
+  const name=String(question.accentWord||'');
+  const selected=Number.isInteger(question.selectedAccentIndex)?question.selectedAccentIndex:-1;
+  const letters=[...name].map((ch,i)=>{
+    if(!/[aeiouy]/i.test(ch)) return `<span style="font-weight:800;min-width:14px;display:inline-grid;place-items:center;min-height:48px;">${escapeHtml(ch)}</span>`;
+    const active=selected===i;
+    return `<button type="button" aria-label="${escapeHtml(ch)}（${i+1}文字目）にアクセント" aria-pressed="${active}" data-ifty203-index="${i}" onclick="ifty203ChooseAccent('${escapeHtml(setId)}',${i})" onkeydown="event.stopPropagation()" style="min-width:44px;min-height:48px;flex:0 0 44px;touch-action:manipulation;border:2px solid ${active?'#c4b5fd':'#64748b'};border-radius:9px;background:${active?'#6d28d9':'#21344d'};color:#fff;font-size:1.3rem;font-weight:950;cursor:pointer;">${escapeHtml(active?ifty203MarkVowel(ch,0):ch)}</button>`;
+  }).join('');
+  return `<div style="margin-top:12px;padding:14px;border:1px solid #64748b;background:#17283e;border-radius:11px;color:#f8fafc;box-sizing:border-box;">
+    <b style="font-size:.94rem;">第一アクセントの母音をタップ</b>
+    <p style="font-size:.8rem;color:#cbd5e1;margin:5px 0 10px;">選んだ母音に ´ が付きます。横に長い語はスクロールできます。</p>
+    <div style="display:flex;align-items:center;gap:2px;overflow-x:auto;max-width:100%;padding:5px 2px;white-space:nowrap;overscroll-behavior-x:contain;" data-ifty203-letters="1">${letters}</div>
+    <div style="margin-top:9px;font-size:.84rem;color:#d8b4fe;" data-ifty203-status="1">${selected<0?'母音を1つ選択してください。':'選択済み：'+escapeHtml(ifty203MarkVowel(name,selected))}</div>
+  </div>`;
+}
+window.ifty203ChooseAccent=function(setId,index){
+  const set=getQuizSet(setId),q=set?.progress?.currentQuestion;
+  const word=String(q?.accentWord||'');
+  if(q?.quizType!=='accent_tap'||!ifty203VowelAt(word,index))return;
+  q.selectedAccentIndex=index;
+  savePracticeData();
+  const area=document.querySelector('[data-ifty203-letters="1"]');
+  if(area){
+    area.querySelectorAll('button').forEach(btn=>{
+      const i=Number(btn.dataset.ifty203Index);
+      const active=i===index;
+      btn.setAttribute('aria-pressed',String(active));
+      btn.style.borderColor=active?'#c4b5fd':'#64748b';
+      btn.style.background=active?'#6d28d9':'#21344d';
+      btn.textContent=active?ifty203MarkVowel(word[i],0):word[i];
+    });
+  }
+  const status=document.querySelector('[data-ifty203-status="1"]');
+  if(status)status.textContent='選択済み：'+ifty203MarkVowel(word,index);
+};
+
 function getQuizSets() {
   normalizePracticeData();
   return practiceData.modules.questions.sets;
@@ -26133,6 +26622,7 @@ function quizTypeLabel(type) {
     usage_cloze: '語法穴埋め',
     synonym_choice: '類義語選別',
     inflection: '活用',
+    accent_tap: 'アクセント記号',
     derived: '派生記述',
     truefalse: '正誤・訂正'
   })[type] || type;
@@ -26150,7 +26640,7 @@ window.createQuizSet = function() {
       name,
       wordIds: [],
       directionMode: ['jp_to_en','en_to_jp','mixed'].includes(String(getIftyPracticeUiPref('ENGLISH','quizDirection','mixed'))) ? String(getIftyPracticeUiPref('ENGLISH','quizDirection','mixed')) : 'mixed',
-      types: { simple: true, selection: false, written: false, example: false, knowledge: false, composition: false, translation: false, listening: false, usage_cloze: false, synonym_choice: false, inflection: false, derived: false, truefalse: false },
+      types: { simple: true, selection: false, written: false, example: false, knowledge: false, composition: false, translation: false, listening: false, usage_cloze: false, synonym_choice: false, inflection: false, accent_tap: false, derived: false, truefalse: false },
       random: true,
       questionCount: 5,
       progress: null,
@@ -26220,6 +26710,7 @@ window.openQuizSet = function(setId) {
     ['usage_cloze','語法穴埋め','前置詞・語形・コロケーション・定型表現の穴埋め'],
     ['synonym_choice','類義語選別','似た語の中から文脈・ニュアンスに最も合う語を選ぶ'],
     ['inflection','活用','set–set–set / lie–lay–lain など、保存済みの過去形・過去分詞・-ing・三単現を確認'],
+    ['accent_tap','アクセント記号（母音タップ）','第一強勢のある音節の母音をタップして ´ を付ける。英語の多音節語のみ。保存済みIPAか公開辞書で位置を確認できる語を出題し、ALLIA採点は不要'],
     ['derived','派生記述（ALLIA）','功績・経緯・類似語との違いなどを文脈に沿って説明する問題'],
     ['truefalse','⭕ 正誤・訂正（ALLIA）','正しい英文は○。誤った英文は正しい形に訂正する']
   ];
@@ -26398,11 +26889,12 @@ function createLocalInflectionQuestion(word) {
   };
 }
 
-function chooseQuizType(set, word = null) {
+function chooseQuizType(set, word = null, excludeModes = []) {
   const override=word?.id && ifty149ModeMap(set.itemModes)[String(word.id)];
-  if(override && ['simple','selection','written','example','knowledge','composition','translation','listening','usage_cloze','synonym_choice','inflection','derived','truefalse'].includes(override) && !(override==='inflection'&&!hasIftyInflectionData(word)))return override;
-  let types=getEnabledQuizTypes(set);
+  if(override && ['simple','selection','written','example','knowledge','composition','translation','listening','usage_cloze','synonym_choice','inflection','accent_tap','derived','truefalse'].includes(override) && !(override==='inflection'&&!hasIftyInflectionData(word)) && !(override==='accent_tap'&&!ifty203IsAccentCandidate(word)) && !excludeModes.includes(override))return override;
+  let types=getEnabledQuizTypes(set).filter(type=>!excludeModes.includes(type));
   if (word && !hasIftyInflectionData(word)) types = types.filter(type => type !== 'inflection');
+  if (word && !ifty203IsAccentCandidate(word)) types = types.filter(type => type !== 'accent_tap');
   if (!types.length) return '';
   return types[Math.floor(Math.random()*types.length)];
 }
@@ -26410,6 +26902,8 @@ function chooseQuizType(set, word = null) {
 window.startQuizSet = function(setId, restart=false, reviewOnly=false) {
   const set=getQuizSet(setId); if(!set)return;
   let validIds=uniqueExistingWordIds(reviewOnly ? (set.reviewWordIds||[]) : (set.wordIds||[]));
+  if(getEnabledQuizTypes(set).length===1 && getEnabledQuizTypes(set)[0]==='accent_tap')
+    validIds=validIds.filter(id=>ifty203IsAccentCandidate(getWordById(id)?.word));
   if(!validIds.length){ alert(reviewOnly?'復習対象の単語がありません。':'このクイズフォルダに利用できる単語がありません。'); return; }
   if(restart || !set.progress || !!set.progress.reviewOnly!==!!reviewOnly){
     const questionCount = set.systemReview ? validIds.length : ([5, 10, 15, 20, 25, 30].includes(Number(set.questionCount)) ? Number(set.questionCount) : 5);
@@ -26474,7 +26968,7 @@ async function renderQuizPlayer(setId) {
   if(!p.currentQuestion){
     modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><div style="font-size:2em;">❓</div><h3 style="color:#4c1d95;">問題を準備中…</h3><div style="color:#64748b;">${p.index+1}/${p.queue.length}</div></div>`;
     try {
-      const type=chooseQuizType(set, ref.word);
+      const type=chooseQuizType(set, ref.word,p.ifty203FallbackWordId===String(ref.word.id)?['accent_tap']:[]);
       if (!type) {
         p.index++;
         p.currentQuestion=null;
@@ -26483,8 +26977,8 @@ async function renderQuizPlayer(setId) {
         return;
       }
       const direction=resolveQuizDirection(set);
-      if(p.ifty175Offline&&!['selection','listening','inflection','simple','written','truefalse'].includes(type))throw new Error('保存済み問題で練習を継続しています。');
-      if (!['selection','listening','inflection','simple','written'].includes(type) && !ensureIftyOnline('このクイズ形式の問題生成', { silent: true })) {
+      if(p.ifty175Offline&&!['selection','listening','inflection','accent_tap','simple','written','truefalse'].includes(type))throw new Error('保存済み問題で練習を継続しています。');
+      if (!['selection','listening','inflection','accent_tap','simple','written'].includes(type) && !ensureIftyOnline('このクイズ形式の問題生成', { silent: true })) {
         throw new Error(iftyOfflineMessage('このクイズ形式の問題生成'));
       }
       if (type === 'selection') {
@@ -26496,6 +26990,29 @@ async function renderQuizPlayer(setId) {
       } else if (type === 'inflection') {
         const data = createLocalInflectionQuestion(ref.word);
         p.currentQuestion={...data,quizType:type,direction:'inflection',wordId:ref.word.id};
+      } else if (type === 'accent_tap') {
+        const answer=await ifty203ResolveAccent(ref.word);
+        if(getQuizSet(setId)?.progress!==p || p.queue[p.index]!==ref.word.id) return;
+        if(answer) {
+          const name=String(ref.word.word||'');
+          p.currentQuestion={question:`${name} の第一アクセントの母音を選んでください。`,
+            instruction:'母音をタップすると ´ が付きます。辞書と保存済みの発音情報を元に、端末内で採点します。',
+            referenceAnswer:ifty203MarkVowel(name,answer.index),
+            localCorrectAnswer:String(answer.index),localGrade:true,localAnswerMode:'accent_tap',
+            quizType:'accent_tap',accentWord:name,accentVowelIndex:answer.index,
+            accentSourceIPA:answer.ipa,accentSource:answer.source,direction:'accent',
+            wordId:ref.word.id,selectedAccentIndex:null,options:[]};
+        } else {
+          if(getEnabledQuizTypes(set).some(mode=>mode!=='accent_tap' && (mode!=='inflection' || hasIftyInflectionData(ref.word)))) {
+            p.ifty203FallbackWordId=String(ref.word.id);
+            p.currentQuestion=null;
+            savePracticeData();
+            return renderQuizPlayer(setId);
+          }
+          p.currentQuestion={quizType:'accent_unavailable',question:String(ref.word.word||''),
+            instruction:'この語の第一強勢を確認できる発音情報がありません。推測で採点しないため、正誤には加算せず次の語へ進みます。オンライン時は公開辞書も確認します。',
+            referenceAnswer:'',direction:'accent',wordId:ref.word.id,options:[]};
+        }
       } else if (type === 'truefalse') {
         const data=await ifty151GenerateTruth({subject:'ENGLISH',makeCorrect:p.index%2===0,difficulty:ifty149Difficulty(set.difficulty),target:ifty151EnglishTarget(ref.word,ref.folder),sourceId:ref.word.id,setId:set.id,preferSaved:p.ifty175Offline===true});
         p.currentQuestion={...data,quizType:type,direction:'mixed',wordId:ref.word.id};
@@ -26514,7 +27031,7 @@ async function renderQuizPlayer(setId) {
         }
         p.currentQuestion={...data,quizType:type,direction,wordId:ref.word.id};
       }
-      if(type!=='truefalse')ifty175Remember('ENGLISH',p.currentQuestion,{sourceId:ref.word.id,setId:set.id,mode:type});
+      if(type!=='truefalse' && type!=='accent_tap')ifty175Remember('ENGLISH',p.currentQuestion,{sourceId:ref.word.id,setId:set.id,mode:type});
       savePracticeData();
     } catch(error){
       const failedType=chooseQuizType(set,ref.word);
@@ -26558,15 +27075,25 @@ async function renderQuizPlayer(setId) {
   }
 
   const q=p.currentQuestion;
+  if(q.quizType==='accent_unavailable') {
+    modal.innerHTML=`<div style="background:#1c2a3e;color:#f8fafc;border:1px solid #64748b;border-radius:14px;width:min(650px,100%);box-sizing:border-box;padding:clamp(16px,4vw,24px);line-height:1.6;">
+      <div style="font-weight:900;font-size:1.12rem;color:#fcd34d;">アクセント位置を確認できません</div>
+      <div style="margin:14px 0;padding:13px;border:1px solid #64748b;border-radius:9px;font-size:1.25rem;">${escapeHtml(q.question)}</div>
+      <p style="color:#cbd5e1;">${escapeHtml(q.instruction)}</p>
+      <button type="button" onclick="ifty203SkipUnavailableAccent('${set.id}')" style="width:100%;min-height:48px;padding:12px;border:0;border-radius:9px;background:#2563eb;color:white;font-weight:900;">採点せず次の語へ</button>
+      <button type="button" onclick="pauseQuizSet('${set.id}')" style="margin-top:8px;width:100%;min-height:44px;padding:9px;border:1px solid #94a3b8;border-radius:9px;background:#334155;color:#fff;">終了・戻る</button>
+    </div>`;
+    return;
+  }
   modal.innerHTML=`
-    <div tabindex="0" onkeydown="handleIftyQuizKeydown(event,'${set.id}')" style="background:white;border-radius:14px;width:min(700px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);outline:none;">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div style="color:#7c3aed;font-size:.88em;font-weight:bold;">${escapeHtml(set.name)} ・ ${p.index+1}/${p.queue.length} ・ ${quizTypeLabel(q.quizType)}${['listening','inflection','truefalse'].includes(q.quizType)?'':` ・ ${quizDirectionLabel(q.direction==='jp_to_en'?'jp_to_en':'en_to_jp')}`}</div><button onclick="pauseQuizSet('${set.id}')" style="background:#ede9fe;color:#5b21b6;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;">${set.systemReview?'✕ 終了':'⏸ 一時中断'}</button></div>
+    <div tabindex="0 onkeydown="handleIftyQuizKeydown(event,'${set.id}')" style="background:white;border-radius:14px;width:min(700px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);outline:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div style="color:#7c3aed;font-size:.88em;font-weight:bold;">${escapeHtml(set.name)} ・ ${p.index+1}/${p.queue.length} ・ ${quizTypeLabel(q.quizType)}${['listening','inflection','truefalse','accent_tap'].includes(q.quizType)?'':` ・ ${quizDirectionLabel(q.direction==='jp_to_en'?'jp_to_en':'en_to_jp')}`}</div><button onclick="pauseQuizSet('${set.id}')" style="background:#ede9fe;color:#5b21b6;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;">${set.systemReview?'✕ 終了':'⏸ 一時中断'}</button></div>
       <div style="margin-top:15px;padding:18px;background:#faf5ff;border:2px solid #ddd6fe;border-radius:10px;color:#2e1065;line-height:1.65;font-size:1.08em;white-space:pre-wrap;">${escapeHtml(q.question||'')}</div>
       ${q.audioText?`<div style="margin-top:10px;display:flex;justify-content:center;gap:6px;align-items:center;flex-wrap:wrap;"><button onclick="speakQuizAudio('${set.id}')" style="background:#0ea5e9;color:white;border:none;border-radius:8px;padding:10px 16px;font-weight:bold;cursor:pointer;">🔊 音声を再生</button><span style="font-size:.72em;color:#64748b;font-weight:800;">速度</span>${[0.75,0.9,1].map(rate=>`<button type="button" onclick="setIftyListeningRate(${rate}); speakQuizAudio('${set.id}')" style="border:1px solid ${iftyListeningRate===rate?'#0284c7':'#cbd5e1'};background:${iftyListeningRate===rate?'#e0f2fe':'white'};color:#0369a1;border-radius:6px;padding:6px 8px;font-size:.76em;cursor:pointer;">${rate}×</button>`).join('')}</div>`:''}
       ${q.ifty175Fallback?'<div style="background:#fff7ed;border:1px solid #fdba74;color:#78350f;border-radius:8px;padding:9px;margin-top:10px;">⚠ ALLIAの生成に失敗したため保存済み教材から無AIで出題しています。表現違いは結果表示を確認してください。</div>':''}${q.instruction?`<div style="margin-top:7px;color:#64748b;font-size:.82em;">${escapeHtml(q.instruction)}</div>`:''}
       <div style="margin-top:9px;display:flex;justify-content:flex-end;"><button type="button" onclick="openIftyQuizAllia('${set.id}')" style="border:1px solid #c4b5fd;background:#faf5ff;color:#6d28d9;border-radius:8px;padding:8px 11px;font-weight:900;cursor:pointer;">🤖 ALLIA</button></div>
-      ${q.quizType==='truefalse'?ifty151AnswerControls('ifty151EnglishTruth','ifty151EnglishCorrection',false):Array.isArray(q.options)&&q.options.length?`<div id="quizChoiceArea" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;">${q.options.map((option,i)=>`<label style="display:flex;gap:8px;align-items:center;border:2px solid #ddd6fe;background:white;border-radius:8px;padding:10px;cursor:pointer;"><input type="radio" name="quizChoice" value="${escapeHtml(option)}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuizAnswer('${set.id}');}" style="accent-color:#7c3aed;"><span>${String.fromCharCode(65+i)}. ${escapeHtml(option)}</span></label>`).join('')}</div>`:(q.localAnswerMode==='spelling'?`<input id="quizAnswerInput" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="${q.quizType==='inflection'?'活用形を入力してEnter':'スペルを入力してEnter'}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1.05em;">`:`<textarea id="quizAnswerInput" rows="4" placeholder="答えを入力（Enterで確定 / Shift+Enterで改行）" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1em;resize:vertical;"></textarea>`)}
-      <div style="display:flex;gap:8px;margin-top:10px;"><button onclick="submitQuizAnswer('${set.id}')" style="flex:1;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${q.localGrade?'端末内で判定':(Array.isArray(q.options)&&q.options.length?'回答する':'ALLIAに判定してもらう')}</button></div><button type="button" class="ifty145-unknown-btn ifty145-english-unknown" onclick="ifty145RevealEnglishQuiz('${set.id}')">？ 分からない（答えを見る）</button>
+      ${q.quizType==='accent_tap'?ifty203AccentControls(q,set.id):q.quizType==='truefalse'?ifty151AnswerControls('ifty151EnglishTruth','ifty151EnglishCorrection',false):Array.isArray(q.options)&&q.options.length?`<div id="quizChoiceArea" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;">${q.options.map((option,i)=>`<label style="display:flex;gap:8px;align-items:center;border:2px solid #ddd6fe;background:white;border-radius:8px;padding:10px;cursor:pointer;"><input type="radio" name="quizChoice" value="${escapeHtml(option)}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuizAnswer('${set.id}');}" style="accent-color:#7c3aed;"><span>${String.fromCharCode(65+i)}. ${escapeHtml(option)}</span></label>`).join('')}</div>`:(q.localAnswerMode==='spelling'?`<input id="quizAnswerInput" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="${q.quizType==='inflection'?'活用形を入力してEnter':'スペルを入力してEnter'}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1.05em;">`:`<textarea id="quizAnswerInput" rows="4" placeholder="答えを入力（Enterで確定 / Shift+Enterで改行）" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1em;resize:vertical;"></textarea>`)}
+      <div style="display:flex;gap:8px;margin-top:10px;"><button onclick="submitQuizAnswer('${set.id}')" style="flex:1;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${q.quizType==='accent_tap'?'アクセントを判定':q.localGrade?'端末内で判定':(Array.isArray(q.options)&&q.options.length?'回答する':'ALLIAに判定してもらう')}</button></div><button type="button" class="ifty145-unknown-btn ifty145-english-unknown" onclick="ifty145RevealEnglishQuiz('${set.id}')">？ 分からない（答えを見る）</button>
       <div style="margin-top:9px;color:#94a3b8;font-size:.78em;text-align:center;">「選択」「リスニング」「活用」は端末内で問題生成・採点するためALLIAを使いません。活用は語彙カードに保存済みの過去形・過去分詞・-ing・三単現から出題します。リスニングは各語彙の言語に合った音声で見出し語を再生し、語彙4択・意味4択・表記記述の3形式をランダム出題します。その他の記述回答はALLIAが表記ゆれ・複数の意味・自然さを含めて判定します。</div>
     </div>`;
   const input=document.getElementById('quizAnswerInput');
@@ -26711,6 +27238,13 @@ window.handleIftyQuizKeydown = function(event, setId) {
   if (key === 'r') { event.preventDefault(); speakQuizAudio(setId); }
 };
 window.pauseQuizSet = function(setId){ const set=getQuizSet(setId); savePracticeData(); if(set&&set.systemReview){ closePracticeModal(); renderFolders(); return; } openQuizSet(setId); };
+window.ifty203SkipUnavailableAccent=function(setId){
+  const set=getQuizSet(setId),p=set?.progress;
+  if(!p||p.currentQuestion?.quizType!=='accent_unavailable')return;
+  p.ifty203Unavailable=(p.ifty203Unavailable||0)+1;
+  p.index++;p.currentQuestion=null;
+  savePracticeData();renderQuizPlayer(setId);
+};
 window.skipQuizQuestion = function(setId){ const set=getQuizSet(setId); if(!set||!set.progress)return; const p=set.progress,q=p.currentQuestion; if(q)ifty182Record(p,p.index,q.question||q.instruction||q.word||'単語問題',null,'',q.referenceAnswer||'','分からないとして次へ進みました。'); set.progress.index++; set.progress.currentQuestion=null; savePracticeData(); renderQuizPlayer(setId); };
 
 window.submitQuizAnswer = async function(setId) {
@@ -26720,14 +27254,20 @@ window.submitQuizAnswer = async function(setId) {
   const checked=document.querySelector('input[name="quizChoice"]:checked');
   const truthVerdict=q.quizType==='truefalse'?String(document.querySelector('input[name="ifty151EnglishTruth"]:checked')?.value||q.ifty176PendingVerdict||''):'';
   const truthCorrection=q.quizType==='truefalse'?String(document.getElementById('ifty151EnglishCorrection')?.value??q.ifty176PendingCorrection??'').trim():'';
-  const answer=q.quizType==='truefalse'?(truthVerdict==='correct'?'○ 正しい':truthVerdict==='incorrect'?'✕ '+truthCorrection:''):(checked?String(checked.value||'').trim():(input?input.value.trim():''));
+  const answer=q.quizType==='accent_tap'?(Number.isInteger(q.selectedAccentIndex)?String(q.selectedAccentIndex):''):q.quizType==='truefalse'?(truthVerdict==='correct'?'○ 正しい':truthVerdict==='incorrect'?'✕ '+truthCorrection:''):(checked?String(checked.value||'').trim():(input?input.value.trim():''));
   if(q.quizType==='truefalse' && truthVerdict==='incorrect' && !truthCorrection){alert('✕を選んだ場合は訂正内容を入力してください。');return;}
-  if(!answer){ alert(Array.isArray(q.options)&&q.options.length?'選択肢を1つ選んでください。':'答えを入力してください。'); return; }
+  if(!answer){ alert(q.quizType==='accent_tap'?'アクセントを置く母音をタップしてください。':Array.isArray(q.options)&&q.options.length?'選択肢を1つ選んでください。':'答えを入力してください。'); return; }
   const ref=getWordById(q.wordId); if(!ref)return;
   const modal=document.getElementById('practiceModal'); if(!modal)return;
 
   if (q.localGrade) {
-    const data = q.quizType==='truefalse' ? (q.ifty176TruthLocalResult||ifty176TruthLocalGrade({isCorrect:q.isCorrect,correctedSentence:q.correctedSentence,verdict:truthVerdict,correction:truthCorrection})) : gradeLocalSelectionAnswer(q, answer);
+    const shownAnswer=q.quizType==='accent_tap'?ifty203MarkVowel(q.accentWord,q.selectedAccentIndex):answer;
+    const data = q.quizType==='accent_tap' ? {
+      correct:answer===String(q.accentVowelIndex),
+      feedback:`${answer===String(q.accentVowelIndex)?'第一アクセントの母音が正しいです。':'第一アクセントの母音が違います。'}
+${q.accentSourceIPA?'参照IPA：'+q.accentSourceIPA+'\n':''}参照元：${q.accentSource||'保存済み情報'}。ALLIAは使用していません。`,
+      modelAnswer:q.referenceAnswer
+    } : q.quizType==='truefalse' ? (q.ifty176TruthLocalResult||ifty176TruthLocalGrade({isCorrect:q.isCorrect,correctedSentence:q.correctedSentence,verdict:truthVerdict,correction:truthCorrection})) : gradeLocalSelectionAnswer(q, answer);
     if(q.quizType==='truefalse'&&!data){
       q.ifty176PendingVerdict=truthVerdict;q.ifty176PendingCorrection=truthCorrection;
       window.ifty176EnglishShowSelfGrade(setId);
@@ -26747,7 +27287,7 @@ window.submitQuizAnswer = async function(setId) {
     }
     p.lastGrade={
       wordId:q.wordId,
-      userAnswer:answer,
+      userAnswer:shownAnswer,
       correct,
       firstFeedback:data.feedback||'',
       firstModelAnswer:data.modelAnswer||q.referenceAnswer||'',
@@ -26767,7 +27307,7 @@ window.submitQuizAnswer = async function(setId) {
     }
     saveUserData();
     savePracticeData();
-    renderQuizFeedback(setId, correct, data.feedback||'', data.modelAnswer||q.referenceAnswer||'', answer);
+    renderQuizFeedback(setId, correct, data.feedback||'', data.modelAnswer||q.referenceAnswer||'', shownAnswer);
     return;
   }
 
@@ -26970,6 +27510,7 @@ function renderQuizComplete(setId) {
   const p=set.progress;
   const modal=document.getElementById('practiceModal'); if(!modal)return;
   const correct=p.correctCount||0, wrong=p.wrongCount||0;
+  const ungradable203=p.ifty203Unavailable?`<p style="color:#b45309;font-weight:800;">アクセント情報不足による採点対象外：${p.ifty203Unavailable}語</p>`:String();
 
   if (set.systemReview) {
     const review182=ifty182Summary(p.history182);
@@ -26977,13 +27518,13 @@ function renderQuizComplete(setId) {
     savePracticeData();
     renderFolders();
     const remaining = getIftyReviewEntries({ dueOnly: true }).length;
-    modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(560px,100%);padding:26px;text-align:center;"><h2 style="color:#4c1d95;margin-top:0;">🎉 今日の復習クイズ完了</h2><p style="color:#475569;">正解 ${correct} / 不正解 ${wrong}</p><p style="color:#c2410c;font-weight:bold;">今日まだ復習できる単語：${remaining}語</p>${review182}<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">${remaining?'<button onclick="startIftyDueReviewQuiz()" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">残りを続ける</button>':''}<button onclick="closePracticeModal(); renderFolders();" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">復習フォルダへ戻る</button></div></div>`;
+    modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(560px,100%);padding:26px;text-align:center;"><h2 style="color:#4c1d95;margin-top:0;">🎉 今日の復習クイズ完了</h2><p style="color:#475569;">正解 ${correct} / 不正解 ${wrong}</p><p style="color:#c2410c;font-weight:bold;">今日まだ復習できる単語：${remaining}語</p>${ungradable203}${review182}<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">${remaining?'<button onclick="startIftyDueReviewQuiz()" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">残りを続ける</button>':''}<button onclick="closePracticeModal(); renderFolders();" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">復習フォルダへ戻る</button></div></div>`;
     return;
   }
 
    const review182=ifty182Summary(p.history182);
   set.progress=null; savePracticeData();
-  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(560px,100%);padding:26px;text-align:center;"><h2 style="color:#4c1d95;margin-top:0;">🎉 クイズ完了</h2><p style="color:#475569;">正解 ${correct} / 不正解 ${wrong}</p><p style="color:#ea580c;font-weight:bold;">復習対象：${set.reviewWordIds.length}語</p>${review182}<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;"><button onclick="startQuizSet('${set.id}',true,false)" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">最初から</button><button onclick="startQuizSet('${set.id}',true,true)" ${set.reviewWordIds.length?'':'disabled'} style="background:#ea580c;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;opacity:${set.reviewWordIds.length?'1':'.45'};">間違いだけ復習</button><button onclick="openQuizSet('${set.id}')" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">設定へ戻る</button></div></div>`;
+  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(560px,100%);padding:26px;text-align:center;"><h2 style="color:#4c1d95;margin-top:0;">🎉 クイズ完了</h2><p style="color:#475569;">正解 ${correct} / 不正解 ${wrong}</p><p style="color:#ea580c;font-weight:bold;">復習対象：${set.reviewWordIds.length}語</p>${ungradable203}${review182}<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;"><button onclick="startQuizSet('${set.id}',true,false)" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">最初から</button><button onclick="startQuizSet('${set.id}',true,true)" ${set.reviewWordIds.length?'':'disabled'} style="background:#ea580c;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;opacity:${set.reviewWordIds.length?'1':'.45'};">間違いだけ復習</button><button onclick="openQuizSet('${set.id}')" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">設定へ戻る</button></div></div>`;
 }
 
 // 5. メイン機能ランチャー・画面切り替え
@@ -31757,7 +32298,7 @@ function ifty143Context(kind) {
   if (!text) text=String(q.sourceText||q.title||'現在の練習問題');
   const options=Array.isArray(q.options)?q.options.map(x=>String(typeof x==='string'?x:(x?.label||x?.text||''))).filter(Boolean).slice(0,8):[];
   if (Array.isArray(q.events)) options.push(...q.events.slice(0,8).map(x=>String(x.text||'')));
-  const answered=!!st.answered || (kind==='pronunciation'&&!!st.result);
+  const answered=!!st.answered || (kind==='basic'&&!!st.last) || (kind==='pronunciation'&&!!st.result);
   const extra=answered?String(st.modelAnswer||st.feedback||q.explanation||'').slice(0,1800):'';
   if(!st.ifty143SessionId)st.ifty143SessionId='q'+Date.now().toString(36)+Math.random().toString(36).slice(2);
   const key=[kind,subject,st.ifty143SessionId,String(st.index??st.itemId??''),text].join('\u241f');
@@ -32488,7 +33029,18 @@ function ifty145InstallUnknown(kind,options){
     insertAfter.insertAdjacentElement('afterend',card);
     ifty145DisableAnswers(root);
   }else{
-    if(kind==='basic' && root.querySelector('button[onclick*="ifty182UnknownBasic"]'))return;
+    if(kind==='basic' && (ctx.st.last || root.querySelector('button[onclick*="ifty182UnknownBasic"]')))return;
+    // STEP205: native practice players (especially sort/order) already render
+    // their own answer-reveal button. Keep that handler. If a common button was
+    // previously injected before the native one appeared, remove it too.
+    const alreadyHasNativeUnknown=[...root.querySelectorAll('button')].some(button => {
+      if(button.classList.contains('ifty145-unknown-btn'))return false;
+      if(button.hidden || button.style.display==='none')return false;
+      const label=String(button.textContent||'').trim();
+      const action=String(button.getAttribute('onclick')||'');
+      return /分からない/.test(label) && (/答えを見る|模範|解答を見る/.test(label) || /unknown|reveal/i.test(action));
+    });
+    if(alreadyHasNativeUnknown){root.querySelectorAll('.ifty145-unknown-btn').forEach(btn=>btn.remove());return;}
     if(root.querySelector('.ifty145-unknown-btn'))return;
     const btn=document.createElement('button');btn.type='button';btn.className='ifty145-unknown-btn';
     btn.textContent='？ 分からない（答えを見る）';btn.onclick=()=>window.ifty145RevealUnknown(kind);
@@ -35156,7 +35708,7 @@ window.ifty197StartTruthPart=function(setId,count){
   const SUPPORTED=new Set([
     'home','vocab','chat','subject','ancient','kanbun','kanji','social','science','others',
     'years','pronunciation','basic_sentences','examples','stats','settings',
-    'classes','friends','places'
+    'classes','friends','places','conversation'
   ]);
   let restoring=false;
   let pendingScrollSave=0;
@@ -35233,6 +35785,7 @@ window.ifty197StartTruthPart=function(setId,count){
       case 'settings':route=()=>window.openIftySettings?.();break;
       case 'classes':route=()=>window.openIftyClassesPage?.();break;
       case 'friends':route=()=>window.openIftyFriendsPage?.();break;
+      case 'conversation':route=()=>window.openIftyConversation?.();break;
       case 'places':route=()=>window.openIftyPlaces?.();break;
     }
     if(!route)return false;
@@ -35288,4 +35841,416 @@ window.ifty197StartTruthPart=function(setId,count){
     if(document.visibilityState==='hidden')save();
   });
   window.addEventListener('pagehide',save);
+})();
+
+// ============================================================================
+// IFTY STEP204 — ENGLISH CONVERSATION
+// AI English-speaking practice and private, mutual-friend WebRTC audio calls.
+// Does not store recordings, friend call transcripts, or live audio.
+// ============================================================================
+(function ifty204InstallConversation() {
+  'use strict';
+  const cssId='ifty204ConversationStyles';
+  if (!document.getElementById(cssId)) {
+    const style=document.createElement('style');
+    style.id=cssId;
+    style.textContent=`
+      .ifty204-shell{max-width:970px;margin:auto;color:#f1f5f9;box-sizing:border-box;padding:16px 10px 36px;}
+      .ifty204-header{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
+      .ifty204-header h1{margin:0;color:#f8fafc;font-size:clamp(1.35rem,3vw,2rem);}
+      .ifty204-sub{color:#cbd5e1;font-size:.86rem;line-height:1.55;margin-top:7px;}
+      .ifty204-panel{background:#1e293b;border:1px solid #64748b;border-radius:14px;padding:15px;margin-bottom:13px;box-sizing:border-box;}
+      .ifty204-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+      .ifty204-switch button,.ifty204-action,.ifty204-pill{border:1px solid #64748b;color:#f8fafc;background:#334155;min-height:43px;border-radius:10px;padding:9px 12px;font-weight:800;cursor:pointer;}
+      .ifty204-switch button[aria-selected="true"]{background:#0f766e;border-color:#5eead4;color:#fff;}
+      .ifty204-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;align-items:end;}
+      .ifty204-field{display:grid;gap:5px;font-size:.85rem;font-weight:700;color:#e2e8f0;min-width:0;}
+      .ifty204-field select,.ifty204-field textarea{width:100%;min-width:0;box-sizing:border-box;border:1px solid #94a3b8;background:#0f172a;color:#f8fafc;padding:11px;border-radius:9px;font:inherit;min-height:44px;}
+      .ifty204-field textarea{min-height:82px;resize:vertical;line-height:1.55;}
+      .ifty204-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;align-items:center;}
+      .ifty204-actions button{flex:0 1 auto;}
+      .ifty204-action.primary{background:#0f766e;border-color:#5eead4;color:#fff;}
+      .ifty204-action.purple{background:#6d28d9;border-color:#a78bfa;color:#fff;}
+      .ifty204-action.danger{background:#7f1d1d;border-color:#fda4af;color:#ffe4e6;}
+      .ifty204-action:disabled{cursor:not-allowed;opacity:.45;}
+      .ifty204-chat{min-height:160px;max-height:390px;overflow:auto;border:1px solid #475569;background:#111c2d;border-radius:10px;padding:12px;display:grid;align-content:start;gap:10px;}
+      .ifty204-bubble{border-radius:10px;padding:10px 12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;color:#f8fafc !important;border:1px solid #475569;background:#283b55;max-width:93%;font-size:.95rem;}
+      .ifty204-bubble.user{justify-self:end;background:#075985;border-color:#38bdf8;}
+      .ifty204-bubble.ai{justify-self:start;background:#1e3a36;border-color:#14b8a6;}
+      .ifty204-chatmeta{font-size:.72rem;color:#cbd5e1;font-weight:700;margin-bottom:5px;}
+      .ifty204-bubble button{margin-top:7px;border:1px solid #8bd5c6;background:#07594e;color:#fff;padding:5px 9px;border-radius:7px;min-height:32px;cursor:pointer;}
+      .ifty204-status{min-height:23px;margin-top:9px;color:#fde68a;font-size:.82rem;line-height:1.5;overflow-wrap:anywhere;}
+      .ifty204-row{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;padding:10px;border:1px solid #475569;border-radius:10px;background:#172033;margin-top:9px;}
+      .ifty204-muted{font-size:.79rem;color:#cbd5e1;line-height:1.55;}
+      .ifty204-notsupported{color:#fde68a;font-size:.82rem;line-height:1.55;}
+      .ifty204-check{display:inline-flex;align-items:center;gap:7px;font-size:.83rem;line-height:1.4;color:#f8fafc;}
+      .ifty204-check input{width:18px;height:18px;accent-color:#14b8a6;}
+      #ifty204RemoteAudio{width:100%;height:36px;max-width:540px;margin-top:8px;}
+      @media(max-width:640px){.ifty204-shell{padding:12px 4px 28px;}.ifty204-panel{padding:12px;}.ifty204-controls{grid-template-columns:1fr;}.ifty204-actions button{flex:1 1 135px;}.ifty204-chat{max-height:46vh;}.ifty204-bubble{max-width:100%;}.ifty204-header h1{font-size:1.5rem;}}
+    `;
+    (document.head||document.documentElement).appendChild(style);
+  }
+
+  const promptCards={
+    daily:['What was the most interesting part of your day?','If you could change one habit, what would it be?','What makes a good friend?'],
+    school:['Should schools give students more freedom?','Which subject has changed the way you think?','How could we improve English lessons?'],
+    travel:['Where would you travel if you had a week?','What would you do if you got lost abroad?','What is one cultural difference visitors should know?'],
+    airport:['Could you explain how to change a connecting flight?','How would you help a passenger whose baggage is missing?','What makes airport announcements easy to understand?'],
+    history:['Which historical invention changed everyday life most?','What can we learn from ancient trade networks?','Why do societies remember some historical figures more than others?'],
+    debate:['Should public transport be free for students?','What are the strongest counterarguments to your opinion?','How would you summarize your position in 30 seconds?'],
+    interview:['Please introduce yourself in one minute.','Describe a challenge you overcame and what you learned.','Why do you want to study languages and other cultures?'],
+    free:['What topic would you like to discuss today?','Could you explain your opinion with an example?','What question would you like to ask your partner?']
+  };
+  const options={
+    topics:[['daily','日常会話'],['school','学校・教育'],['travel','旅行'],['airport','空港・接客'],['history','世界史・文化'],['debate','社会問題・ディベート'],['interview','面接'],['free','自由会話']],
+    levels:[['A2','A2（やさしい）'],['B1','B1（標準）'],['B2','B2（英検準1級目安）'],['C1','C1（高度）']]
+  };
+  const state={mode:'ai',topic:'school',level:'B2',autoVoice:false,voiceAccent:'en-GB',
+    aiMessages:[],aiBusy:false,aiStarted:false,speech:null,speechBusy:false,
+    friends:[],incoming:[],friendsLoaded:false,inboxTimer:null,callTimer:null,call:null,callPollBusy:false,
+    friendError:'',feedback:'',lastStatus:'',statusError:false,promptIndex:0};
+
+  function e(value){return escapeHtml(String(value ?? ''));}
+  function getRoot(){return document.getElementById('ifty204ConversationPage');}
+  function setStatus(text,error=false){state.lastStatus=String(text||'');state.statusError=!!error;
+    const el=document.getElementById('ifty204Status');if(el){el.textContent=state.lastStatus;el.style.color=error?'#fda4af':'#fde68a';}}
+  function accountReady(){return !iftyDeveloperMode && !!iftySessionToken;}
+  function selectRows(rows,selected){return rows.map(([value,label])=>`<option value="${e(value)}" ${selected===value?'selected':''}>${e(label)}</option>`).join('');}
+  function textFromError(error){return String(error?.message||error||'不明なエラー');}
+  function asyncApi(type,payload={}){return iftyAccountApi(type,{token:iftySessionToken,...payload});}
+  function aiApi(type,payload={}){return iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,subject:'ENGLISH',orderScope:'chat',...payload})}).then(async res=>{
+    let json={};try{json=await res.json();}catch(_){}if(!res.ok||json.error)throw new Error(json.error||`HTTP ${res.status}`);return json;});}
+
+  function renderAiLog(){
+    const log=document.getElementById('ifty204AiLog');if(!log)return;
+    const atEnd=log.scrollHeight-log.scrollTop-log.clientHeight<75;
+    log.innerHTML=state.aiMessages.length
+      ? state.aiMessages.map((row,i)=>`<div class="ifty204-bubble ${row.role==='user'?'user':'ai'}"><div class="ifty204-chatmeta">${row.role==='user'?'あなた':'ALLIA'}</div>${e(row.content)}${row.role==='assistant'?`<div><button type="button" onclick="ifty204SpeakReply(${i})">🔊 聞く</button></div>`:''}</div>`).join('')
+      : '<div class="ifty204-muted">「会話を始める」を押すと、ALLIAが英語で質問します。マイクで英語を入力するか、キーボードで返答してください。</div>';
+    if(atEnd||state.aiMessages.length<3)log.scrollTop=log.scrollHeight;
+    const submit=document.getElementById('ifty204SendAi');if(submit)submit.disabled=state.aiBusy;
+    const begin=document.getElementById('ifty204BeginAi');if(begin){begin.disabled=state.aiBusy||state.aiStarted;begin.textContent=state.aiStarted?'会話中':'▶ 会話を始める';}
+    const review=document.getElementById('ifty204ReviewAi');if(review)review.disabled=state.aiBusy||!state.aiMessages.length;
+    const feedback=document.getElementById('ifty204Feedback');if(feedback){feedback.textContent=state.feedback;feedback.style.display=state.feedback?'block':'none';}
+  }
+  function renderAiPanel(){
+    const area=document.getElementById('ifty204Body');if(!area)return;
+    area.innerHTML=`
+      <div class="ifty204-panel">
+        <h2 style="margin:0 0 9px;color:#f1f5f9;font-size:1.14rem;">🤖 ALLIAと英会話</h2>
+        <div class="ifty204-muted">AIが質問し、英語で会話を続けます。話した内容は文字起こしして送信できます。発音そのものを採点しているわけではありません。</div>
+        <div class="ifty204-actions"><button class="ifty204-action primary" type="button" id="ifty204BeginAi" onclick="ifty204StartAi()">▶ 会話を始める</button>
+          <button class="ifty204-action" id="ifty204ReviewAi" type="button" onclick="ifty204ReviewAi()">📝 表現を振り返る</button>
+          <button class="ifty204-action" type="button" onclick="ifty204ClearAi()">↻ 会話をリセット</button></div>
+        <label class="ifty204-check" style="margin:9px 0 12px;"><input type="checkbox" id="ifty204AutoVoice" ${state.autoVoice?'checked':''} onchange="ifty204SetAutoVoice(this.checked)">ALLIAの返答を音声で読み上げる</label>
+        <div id="ifty204AiLog" class="ifty204-chat" role="log" aria-label="ALLIAとの英会話"></div>
+        <label class="ifty204-field" style="margin-top:10px;">英語で返答
+          <textarea id="ifty204Draft" maxlength="1400" placeholder="英語で話す／入力する（例：I think school uniforms should be optional.）" onkeydown="ifty204AiKey(event)"></textarea>
+        </label>
+        <div class="ifty204-actions">
+          <button class="ifty204-action" type="button" onclick="ifty204RecordAi()" id="ifty204Mic">🎤 マイクで入力</button>
+          <button class="ifty204-action purple" type="button" onclick="ifty204SendAi()" id="ifty204SendAi">送信</button>
+        </div>
+        <div class="ifty204-muted" style="margin-top:7px;">Ctrl/⌘＋Enterで送信。音声認識が使えない環境ではキーボードで練習できます。音声認識は端末・ブラウザのサービスを使用する場合があります。</div>
+        <div id="ifty204Feedback" class="ifty204-panel" style="display:none;background:#172033;margin:12px 0 0;white-space:pre-wrap;line-height:1.55;"></div>
+      </div>`;
+    renderAiLog();setStatus(state.lastStatus,state.statusError);
+    if(!(window.SpeechRecognition||window.webkitSpeechRecognition)){
+      const mic=document.getElementById('ifty204Mic');if(mic){mic.disabled=true;mic.title='このブラウザでは音声認識に対応していません。';}
+    }
+  }
+  function renderFriendPanel(){
+    const area=document.getElementById('ifty204Body');if(!area)return;
+    const ready=accountReady();
+    area.innerHTML=`<div class="ifty204-panel">
+      <h2 style="margin:0 0 9px;color:#f1f5f9;font-size:1.14rem;">👥 フレンドと英会話</h2>
+      <div class="ifty204-muted">相互承認済みフレンドだけを招待できます。両方がこの画面を開き、相手が承諾した場合に限り音声通話します。録音・公開マッチングはありません。</div>
+      <div class="ifty204-notsupported" style="margin-top:8px;">ネットワークによっては音声接続できません（無料STUNのみ、TURNサーバー未設定）。マイク許可とHTTPS接続が必要です。</div>
+      ${!ready?'<div class="ifty204-status" style="color:#fda4af;">フレンド通話にはIFTY IDでのログインが必要です。</div>':
+      `<div class="ifty204-actions"><button class="ifty204-action" onclick="ifty204RefreshFriends()">↻ フレンド・招待を更新</button><button class="ifty204-action" onclick="openIftyFriendsPage()">👥 フレンド管理</button></div>
+        <div id="ifty204CurrentCall"></div>
+        <div class="ifty204-row" style="display:block;"><div style="font-weight:900;color:#86efac;margin-bottom:5px;">会話カード（順番に答えて練習）</div>
+          <div id="ifty204PromptText" style="color:#f8fafc;line-height:1.55;"></div>
+          <button type="button" class="ifty204-action" style="margin-top:8px;" onclick="ifty204NextPrompt()">次の話題へ</button></div>
+        <h3 style="margin:15px 0 7px;font-size:.95rem;color:#f1f5f9;">届いた招待</h3>
+        <div id="ifty204Invites" class="ifty204-muted">確認中…</div>
+        <h3 style="margin:15px 0 7px;font-size:.95rem;color:#f1f5f9;">相互フレンド一覧</h3>
+        <div id="ifty204Friends" class="ifty204-muted">取得中…</div>`}
+    </div>`;
+    renderFriendData();setStatus(state.lastStatus,state.statusError);
+  }
+  function renderFriendData(){
+    const prompt=document.getElementById('ifty204PromptText');
+    if(prompt){const cards=promptCards[state.topic]||promptCards.daily;prompt.textContent=cards[state.promptIndex%cards.length];}
+    const calls=document.getElementById('ifty204CurrentCall');
+    if(calls){const c=state.call;
+      calls.innerHTML=c?`<div class="ifty204-row"><div><div style="font-weight:900;color:#f8fafc;">${e(c.partnerName||'フレンド')}との通話</div><div class="ifty204-muted">${e(c.status==='pending'?'招待の承認を待っています':c.connected?'音声接続中':c.status==='accepted'?'音声の接続を試行中です':'接続準備中')}</div></div><div class="ifty204-actions" style="margin:0;">
+        <button class="ifty204-action" type="button" onclick="ifty204ToggleMute()">${c.muted?'🎤 ミュート解除':'🔇 ミュート'}</button>
+        <button class="ifty204-action" type="button" onclick="ifty204PlayRemote()">🔊 相手の音声</button>
+        <button class="ifty204-action danger" type="button" onclick="ifty204EndCall()">通話終了</button>
+      </div></div>`:'';
+    }
+    const invites=document.getElementById('ifty204Invites');
+    if(invites)invites.innerHTML=state.incoming.length?state.incoming.map((invite,i)=>`<div class="ifty204-row"><div><b style="color:#f8fafc;">${e(invite.from)}</b><div class="ifty204-muted">トピック：${e(options.topics.find(x=>x[0]===invite.topic)?.[1]||'日常会話')}／${e(invite.level)}</div></div><div class="ifty204-actions" style="margin:0;"><button class="ifty204-action primary" type="button" ${state.call?'disabled':''} onclick="ifty204AnswerInvite(${i},true)">受ける</button><button class="ifty204-action" type="button" onclick="ifty204AnswerInvite(${i},false)">辞退</button></div></div>`).join(''):'現在、招待はありません。';
+    const friendEl=document.getElementById('ifty204Friends');
+    if(friendEl)friendEl.innerHTML=state.friends.length?state.friends.map((f,i)=>`<div class="ifty204-row"><div style="font-weight:800;">${e(f.username)}</div><button type="button" class="ifty204-action primary" ${state.call?'disabled':''} onclick="ifty204InviteFriend(${i})">🎧 通話に招待</button></div>`).join(''):state.friendsLoaded?'相互フレンドがいません。上の「フレンド管理」から追加できます。':'取得中…';
+  }
+  function renderPage(){
+    const host=getRoot();if(!host)return;
+    const current=state.mode;
+    const switcher=document.getElementById('ifty204Switch');
+    if(switcher)switcher.innerHTML=`<button type="button" aria-selected="${current==='ai'}" onclick="ifty204SetMode('ai')">🤖 ALLIA</button><button type="button" aria-selected="${current==='friends'}" onclick="ifty204SetMode('friends')">👥 フレンド通話</button>`;
+    if(current==='ai')renderAiPanel();else renderFriendPanel();
+    const topic=document.getElementById('ifty204Topic');if(topic)topic.value=state.topic;
+    const level=document.getElementById('ifty204Level');if(level)level.value=state.level;
+  }
+
+  window.openIftyConversation=function(){
+    showIftyHubContent(`<section class="ifty204-shell" id="ifty204ConversationPage"><div class="ifty204-header"><div><h1>🗣 ENGLISH CONVERSATION</h1><div class="ifty204-sub">ALLIAまたは相互フレンドと英会話を練習する独立ツール</div></div><button type="button" class="ifty204-action" onclick="openIftyHome()">HOMEへ</button></div>
+      <div class="ifty204-panel"><div class="ifty204-controls">
+        <label class="ifty204-field">話題<select id="ifty204Topic" onchange="ifty204UpdateTopic(this.value)">${selectRows(options.topics,state.topic)}</select></label>
+        <label class="ifty204-field">英語レベル<select id="ifty204Level" onchange="ifty204UpdateLevel(this.value)">${selectRows(options.levels,state.level)}</select></label>
+      </div><div class="ifty204-muted" style="margin-top:8px;">相手と話すテーマと難易度を選択します。フレンド通話はAI採点・録音を行いません。</div></div>
+      <div class="ifty204-switch" id="ifty204Switch"></div><div id="ifty204Body"></div>
+      <audio id="ifty204RemoteAudio" autoplay playsinline controls aria-label="フレンドの音声" style="display:none;"></audio>
+      <div id="ifty204Status" class="ifty204-status" role="status" aria-live="polite"></div>
+    </section>`,'conversation');
+    renderPage();
+    if(state.mode==='friends'){window.ifty204RefreshFriends();ifty204ScheduleInbox();}
+  };
+  window.ifty204UpdateTopic=function(topic){if(options.topics.some(x=>x[0]===topic)){state.topic=topic;state.promptIndex=0;renderFriendData();}};
+  window.ifty204NextPrompt=function(){state.promptIndex++;renderFriendData();};
+  window.ifty204UpdateLevel=function(level){if(options.levels.some(x=>x[0]===level))state.level=level;};
+  window.ifty204SetAutoVoice=function(value){state.autoVoice=!!value;};
+  window.ifty204SetMode=function(mode){
+    if(mode!=='ai'&&mode!=='friends')return;
+    if(state.call && mode!==state.mode){setStatus('通話中は先に通話を終了してください。',true);return;}
+    state.mode=mode;
+    if(state.inboxTimer){clearTimeout(state.inboxTimer);state.inboxTimer=null;}
+    renderPage();
+    if(mode==='friends'){window.ifty204RefreshFriends();ifty204ScheduleInbox();}
+  };
+  window.ifty204SpeakReply=function(index){
+    const row=state.aiMessages[index];if(!row||row.role!=='assistant')return;
+    if(!('speechSynthesis' in window)){setStatus('このブラウザは音声読み上げに対応していません。',true);return;}
+    try{
+      window.speechSynthesis.cancel();
+      const utter=new SpeechSynthesisUtterance(row.content);
+      utter.lang=state.voiceAccent;
+      utter.rate=state.level==='A2'?.84:state.level==='B1'?.9:.96;
+      const available=window.speechSynthesis.getVoices?.()||[];
+      const voice=available.find(v=>String(v.lang).toLowerCase()===state.voiceAccent.toLowerCase())||available.find(v=>String(v.lang).toLowerCase().startsWith('en'));
+      if(voice)utter.voice=voice;
+      window.speechSynthesis.speak(utter);
+    }catch(error){setStatus('読み上げに失敗しました：'+textFromError(error),true);}
+  };
+  function pushMessage(role,content){state.aiMessages.push({role,content:String(content||'')});if(state.aiMessages.length>60)state.aiMessages=state.aiMessages.slice(-60);renderAiLog();}
+  window.ifty204StartAi=async function(){
+    if(state.aiBusy||state.aiStarted)return;
+    state.aiBusy=true;renderAiLog();setStatus('ALLIAが質問を作成しています…');
+    try{
+      const data=await aiApi('conv_ai_turn',{topic:state.topic,level:state.level,start:true,history:[]});
+      state.aiStarted=true;pushMessage('assistant',String(data.reply||''));setStatus('英語で答えてみてください。');
+      if(state.autoVoice)window.ifty204SpeakReply(state.aiMessages.length-1);
+    }catch(error){setStatus(textFromError(error),true);}finally{state.aiBusy=false;renderAiLog();}
+  };
+  window.ifty204SendAi=async function(){
+    const input=document.getElementById('ifty204Draft');const text=String(input?.value||'').trim();
+    if(!text||state.aiBusy)return;
+    state.aiBusy=true;
+    if(input)input.value='';
+    const history=state.aiMessages.slice(-14).map(row=>({role:row.role,content:row.content}));
+    pushMessage('user',text);setStatus('ALLIAが返答しています…');
+    try{
+      const result=await aiApi('conv_ai_turn',{topic:state.topic,level:state.level,message:text,history});
+      state.aiStarted=true;pushMessage('assistant',String(result.reply||''));setStatus('次の英語を話してみてください。');
+      if(state.autoVoice)window.ifty204SpeakReply(state.aiMessages.length-1);
+    }catch(error){
+      if(input && !input.value.trim())input.value=text;
+      const last=state.aiMessages[state.aiMessages.length-1];
+      if(last?.role==='user'&&last.content===text)state.aiMessages.pop();
+      setStatus('返答を取得できませんでした。入力を残しました：'+textFromError(error),true);
+    }finally{state.aiBusy=false;renderAiLog();}
+  };
+  window.ifty204AiKey=function(event){if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();window.ifty204SendAi();}};
+  window.ifty204ClearAi=function(){if(state.aiMessages.length&&!confirm('この会話をリセットしますか？会話内容は保存されません。'))return;
+    window.speechSynthesis?.cancel?.();state.aiMessages=[];state.feedback='';state.aiStarted=false;renderAiPanel();setStatus('会話をリセットしました。');};
+  window.ifty204ReviewAi=async function(){
+    if(state.aiBusy||!state.aiMessages.length)return;state.aiBusy=true;renderAiLog();setStatus('表現を振り返っています…');
+    try{const data=await aiApi('conv_ai_feedback',{topic:state.topic,level:state.level,history:state.aiMessages.slice(-14)});
+      state.feedback=String(data.feedback||'');setStatus('振り返りを表示しました。');}
+    catch(error){setStatus(textFromError(error),true);}finally{state.aiBusy=false;renderAiLog();}
+  };
+  window.ifty204RecordAi=function(){
+    if(state.speechBusy){state.speech?.stop?.();return;}
+    const Ctor=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!Ctor){setStatus('音声認識に対応していません。テキスト入力で練習できます。',true);return;}
+    try{
+      const rec=new Ctor();state.speech=rec;state.speechBusy=true;
+      rec.lang=state.voiceAccent;rec.interimResults=false;rec.continuous=false;rec.maxAlternatives=1;
+      const btn=document.getElementById('ifty204Mic');if(btn)btn.textContent='⏹ 録音を止める';
+      rec.onresult=event=>{const transcript=String(event.results?.[0]?.[0]?.transcript||'').trim();
+        const input=document.getElementById('ifty204Draft');if(input&&transcript){input.value=((input.value.trim()?input.value.trim()+' ':'')+transcript).slice(0,1400);input.focus();}setStatus('文字起こししました。内容を確認して送信してください。');};
+      rec.onerror=event=>setStatus('音声認識エラー：'+String(event.error||'認識できませんでした'),true);
+      rec.onend=()=>{state.speechBusy=false;state.speech=null;const b=document.getElementById('ifty204Mic');if(b)b.textContent='🎤 マイクで入力';};
+      rec.start();setStatus('英語を話してください。終了後に確認して送信できます。');
+    }catch(error){state.speechBusy=false;state.speech=null;setStatus(textFromError(error),true);}
+  };
+
+  async function ifty204OpenMic(){
+    if(!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection)throw new Error('この環境ではブラウザ音声通話に対応していません。HTTPS・Safari最新版をご確認ください。');
+    return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+  }
+  function ifty204CloseLocalCall(remote=false){
+    const call=state.call;if(!call)return;
+    if(call.pollTimer)clearTimeout(call.pollTimer);
+    try{call.pc?.close();}catch(_){}
+    try{call.localStream?.getTracks().forEach(track=>track.stop());}catch(_){}
+    const audio=document.getElementById('ifty204RemoteAudio');if(audio){audio.pause();audio.srcObject=null;audio.style.display='none';}
+    state.call=null;state.callPollBusy=false;
+    if(remote)setStatus('相手が通話を終了したか、招待が期限切れになりました。');
+    renderFriendData();
+  }
+  function ifty204StopPolling(){
+    if(state.inboxTimer){clearTimeout(state.inboxTimer);state.inboxTimer=null;}
+    if(state.call?.pollTimer){clearTimeout(state.call.pollTimer);state.call.pollTimer=null;}
+  }
+  function ifty204SendSignal(call,kind,data){
+    if(!call||!state.call||call.id!==state.call.id)return Promise.resolve();
+    return asyncApi('conv_signal',{callId:call.id,kind,data}).catch(error=>{setStatus('通話接続に失敗：'+textFromError(error),true);});
+  }
+  function ifty204MakePeer(call){
+    if(call.pc)return;
+    const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+    call.pc=pc;call.iceQueue=[];
+    for(const track of call.localStream.getAudioTracks())pc.addTrack(track,call.localStream);
+    pc.ontrack=event=>{
+      const audio=document.getElementById('ifty204RemoteAudio');
+      if(audio){audio.srcObject=event.streams[0]||new MediaStream([event.track]);audio.style.display='block';audio.play().catch(()=>setStatus('「相手の音声」を押すと再生できます。'));}
+    };
+    pc.onicecandidate=event=>{
+      if(event.candidate)ifty204SendSignal(call,'ice',event.candidate.toJSON ? event.candidate.toJSON() : {
+        candidate:event.candidate.candidate,sdpMid:event.candidate.sdpMid,sdpMLineIndex:event.candidate.sdpMLineIndex});
+    };
+    pc.onconnectionstatechange=()=>{
+      if(state.call!==call)return;
+      call.connected=pc.connectionState==='connected';
+      if(['failed','disconnected'].includes(pc.connectionState))setStatus('音声接続が不安定です。ネットワークが違う場合はTURNサーバーが必要なことがあります。',true);
+      else if(call.connected)setStatus('音声通話が接続されました。');
+      renderFriendData();
+    };
+  }
+  async function ifty204HandleSignal(call,signal){
+    if(!call.pc||state.call!==call)return;
+    const pc=call.pc;
+    if(signal.kind==='sdp'){
+      const data=signal.data;
+      if(!data||!['offer','answer'].includes(data.type))return;
+      if(data.type==='offer'&&call.role==='callee'&&pc.signalingState==='stable'){
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+        await ifty204FlushIce(call);
+        const answer=await pc.createAnswer();await pc.setLocalDescription(answer);
+        await ifty204SendSignal(call,'sdp',{type:answer.type,sdp:answer.sdp});
+      }else if(data.type==='answer'&&call.role==='caller'&&pc.signalingState==='have-local-offer'){
+        await pc.setRemoteDescription(new RTCSessionDescription(data));await ifty204FlushIce(call);
+      }
+    }else if(signal.kind==='ice'&&signal.data?.candidate){
+      if(pc.remoteDescription){await pc.addIceCandidate(new RTCIceCandidate(signal.data));}
+      else call.iceQueue.push(signal.data);
+    }
+  }
+  async function ifty204FlushIce(call){
+    while(call.iceQueue.length){const next=call.iceQueue.shift();try{await call.pc.addIceCandidate(new RTCIceCandidate(next));}catch(_){}}
+  }
+  async function ifty204CheckCall(){
+    const call=state.call;if(!call||state.callPollBusy||!accountReady())return;
+    state.callPollBusy=true;
+    try{
+      const data=await asyncApi('conv_state',{callId:call.id,afterSeq:call.lastSeq||0});
+      if(state.call!==call)return;
+      if(['ended','declined','expired'].includes(data.status)){ifty204CloseLocalCall(true);return;}
+      if(data.status==='accepted'){
+        call.status='accepted';ifty204MakePeer(call);
+        if(call.role==='caller'&&!call.offerSent){call.offerSent=true;
+          const offer=await call.pc.createOffer();await call.pc.setLocalDescription(offer);
+          await ifty204SendSignal(call,'sdp',{type:offer.type,sdp:offer.sdp});
+        }
+      }
+      for(const signal of (data.signals||[])){
+        if(state.call!==call)break;
+        try{await ifty204HandleSignal(call,signal);}catch(error){setStatus('音声接続処理：'+textFromError(error),true);}
+        call.lastSeq=Math.max(call.lastSeq||0,Number(signal.seq)||0);
+      }
+      renderFriendData();
+    }catch(error){if(Number(error.status)===401||Number(error.status)===403){ifty204CloseLocalCall(true);}else setStatus('接続状態を確認できません：'+textFromError(error),true);}
+    finally{state.callPollBusy=false;if(state.call===call)call.pollTimer=setTimeout(ifty204CheckCall,2800);}
+  }
+  window.ifty204PlayRemote=function(){const audio=document.getElementById('ifty204RemoteAudio');if(audio?.srcObject)audio.play().catch(error=>setStatus('音声を再生できません：'+textFromError(error),true));else setStatus('相手の音声はまだ届いていません。');};
+  window.ifty204ToggleMute=function(){const call=state.call;if(!call)return;call.muted=!call.muted;
+    call.localStream?.getAudioTracks().forEach(track=>{track.enabled=!call.muted;});renderFriendData();};
+  window.ifty204EndCall=function(){const c=state.call;if(!c)return;ifty204CloseLocalCall();
+    asyncApi('conv_end',{callId:c.id}).catch(()=>{});setStatus('通話を終了しました。');window.ifty204RefreshFriends();};
+  window.ifty204InviteFriend=async function(index){
+    const friend=state.friends[index];if(!friend||state.call||!accountReady())return;
+    let localStream=null;
+    try{
+      localStream=await ifty204OpenMic();
+      const data=await asyncApi('conv_invite',{friendUserId:friend.userId,topic:state.topic,level:state.level});
+      state.call={id:data.callId,role:'caller',status:'pending',partnerName:friend.username,localStream,muted:false,connected:false,lastSeq:0,offerSent:false};
+      setStatus('招待を送信しました。相手がこの画面から承諾すると音声通話を開始します。');renderFriendData();ifty204CheckCall();
+    }catch(error){localStream?.getTracks().forEach(track=>track.stop());setStatus('招待に失敗：'+textFromError(error),true);}
+  };
+  window.ifty204AnswerInvite=async function(index,accept){
+    const invite=state.incoming[index];if(!invite)return;
+    if(!accept){
+      try{await asyncApi('conv_decline',{callId:invite.callId});setStatus('招待を辞退しました。');}
+      catch(error){setStatus(textFromError(error),true);}window.ifty204RefreshFriends();return;
+    }
+    if(state.call)return;
+    let localStream=null;
+    try{
+      localStream=await ifty204OpenMic();
+      const data=await asyncApi('conv_accept',{callId:invite.callId});
+      state.call={id:data.callId,role:'callee',status:'accepted',partnerName:invite.from,localStream,muted:false,connected:false,lastSeq:0,offerSent:false};
+      setStatus('承諾しました。音声通話の接続を開始します。');renderFriendData();ifty204CheckCall();
+    }catch(error){localStream?.getTracks().forEach(track=>track.stop());setStatus('招待に応答できません：'+textFromError(error),true);}
+  };
+  window.ifty204RefreshFriends=async function(){
+    if(!accountReady()||state.mode!=='friends'||!getRoot())return;
+    try{
+      const [friendData,inboxData]=await Promise.all([asyncApi('friends_list'),asyncApi('conv_inbox')]);
+      if(state.mode!=='friends'||!getRoot())return;
+      state.friends=Array.isArray(friendData.friends)?friendData.friends:[];
+      state.incoming=Array.isArray(inboxData.invitations)?inboxData.invitations:[];
+      state.friendsLoaded=true;renderFriendData();
+    }catch(error){state.friendsLoaded=true;setStatus('フレンド情報：'+textFromError(error),true);}
+  };
+  function ifty204ScheduleInbox(){
+    if(state.inboxTimer)clearTimeout(state.inboxTimer);
+    if(state.mode!=='friends'||!getRoot())return;
+    state.inboxTimer=setTimeout(async()=>{
+      if(state.mode!=='friends'||!getRoot())return;
+      if(accountReady()){
+        try{const data=await asyncApi('conv_inbox');state.incoming=Array.isArray(data.invitations)?data.invitations:[];renderFriendData();}
+        catch(error){setStatus('招待取得：'+textFromError(error),true);}
+      }
+      ifty204ScheduleInbox();
+    },5500);
+  }
+  function ifty204Shutdown(){
+    ifty204StopPolling();
+    try{state.speech?.abort?.();}catch(_){}
+    state.speechBusy=false;state.speech=null;
+    window.speechSynthesis?.cancel?.();
+    const c=state.call;
+    if(c){ifty204CloseLocalCall();if(accountReady())asyncApi('conv_end',{callId:c.id}).catch(()=>{});}
+  }
+  // Preserve all existing navigation and resume hooks. Stop the microphone when
+  // leaving the dedicated conversation page; do not interrupt other modules.
+  const originalHub=showIftyHubContent;
+  showIftyHubContent=function(html,pageName){
+    if(pageName!=='conversation'&&getRoot())ifty204Shutdown();
+    return originalHub.apply(this,arguments);
+  };
+  window.addEventListener('pagehide',ifty204Shutdown);
 })();
