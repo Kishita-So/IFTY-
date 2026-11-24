@@ -32,7 +32,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 206;
+const IFTY_APP_STEP = 213;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -553,6 +553,16 @@ let iftySocialVisualQuizState = {
 // シンプル / 時代 / 並べ替え / 説明 / 画像関連を、社会フォルダから直接出題する。
 let iftySocialPracticeSelectedFolderIds = new Set();
 let iftySocialPracticeSelectionInitialized = false;
+// STEP212: one validation rule for all PRACTICE question-count inputs.
+// No silent reset to 5 for valid non-preset values; cap at 999 to bound sessions.
+function ifty212QuestionCount(value, fallback = 5) {
+  const number = Number(value);
+  const base = Number(fallback);
+  const validFallback = Number.isFinite(base) && base >= 1 ? Math.max(1, Math.min(999, Math.trunc(base))) : 5;
+  return Number.isFinite(number) && Number.isInteger(number) && number >= 1
+    ? Math.min(999, number) : validFallback;
+}
+
 let iftySocialPracticeQuestionCount = 5;
 let iftySocialPracticeState = {
   mode: '',
@@ -761,6 +771,12 @@ let iftyCloudApplyingRemote = false;
 let iftyCloudSyncInFlight = false;
 let iftyCloudSyncQueued = false;
 let iftyCloudOnlineListenerInstalled = false;
+// STEP210: retain local changes that occur during an asynchronous cloud upload.
+let iftyCloudChangeSerial = 0;
+let ifty210CloudLoadInFlight = false;
+const ifty210FailedLocalWrites = new Set();
+let ifty210CorruptLocalData = false;
+let ifty210StorageAlertShown = false;
 let iftyAccountProfile = null;
 
 // STEP115：利用状況。D1には user_id と最終アクセス時刻だけを保存する。
@@ -2324,20 +2340,95 @@ function ifty181AttachOrder(init) {
   return { ...init, body: JSON.stringify(payload) };
 }
 
+// STEP213: local-only, account-isolated performance totals. Never persist prompts or answers.
+const IFTY213_STATS_PREFIX = 'ifty213_ai_perf_v1_';
+const IFTY213_TRANSLATION_PREFIX = 'ifty213_basic_translation_v1_';
+const IFTY213_TRANSLATION_TTL = 14 * 24 * 60 * 60 * 1000;
+function ifty213AccountKey(prefix) {
+  const id = String(typeof currentUser !== 'undefined' ? (currentUser || '') : '').trim();
+  return id ? prefix + encodeURIComponent(id) : '';
+}
+function ifty213ReadStats() {
+  const key = ifty213AccountKey(IFTY213_STATS_PREFIX);
+  const day = getIftyAlliaUsageDayKey();
+  if (!key) return {day, requests:0, successes:0, failures:0, totalMs:0, cacheHits:0};
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || 'null');
+    if (saved && saved.day === day) return {
+      day, requests:Math.max(0,Number(saved.requests)||0),
+      successes:Math.max(0,Number(saved.successes)||0),
+      failures:Math.max(0,Number(saved.failures)||0),
+      totalMs:Math.max(0,Number(saved.totalMs)||0),
+      cacheHits:Math.max(0,Number(saved.cacheHits)||0)
+    };
+  } catch (_) {}
+  return {day, requests:0, successes:0, failures:0, totalMs:0, cacheHits:0};
+}
+function ifty213RecordPerf(ms, ok, cacheHit = false) {
+  const key = ifty213AccountKey(IFTY213_STATS_PREFIX);
+  if (!key) return;
+  const st = ifty213ReadStats();
+  if (cacheHit) st.cacheHits += 1;
+  else {
+    st.requests += 1;
+    if (ok) st.successes += 1; else st.failures += 1;
+    st.totalMs += Math.max(0,Math.min(600000,Math.round(Number(ms)||0)));
+  }
+  try { localStorage.setItem(key,JSON.stringify(st)); } catch (_) {}
+}
+function ifty213ReadTranslation(sentence,note) {
+  const key = ifty213AccountKey(IFTY213_TRANSLATION_PREFIX);
+  if (!key) return '';
+  try {
+    const saved = JSON.parse(localStorage.getItem(key)||'[]');
+    if (!Array.isArray(saved)) return '';
+    const item = saved.find(row => row && row.en===sentence && row.note===note &&
+      Number.isFinite(row.at) && row.at <= Date.now() && Date.now()-row.at<IFTY213_TRANSLATION_TTL);
+    return item && typeof item.ja==='string' && item.ja.length<=2000 ? item.ja : '';
+  } catch (_) { return ''; }
+}
+function ifty213StoreTranslation(sentence,note,ja) {
+  const key = ifty213AccountKey(IFTY213_TRANSLATION_PREFIX);
+  if (!key || !sentence || !ja || sentence.length>1600 || note.length>350 || ja.length>2000) return;
+  try {
+    const rows=JSON.parse(localStorage.getItem(key)||'[]');
+    const list=(Array.isArray(rows)?rows:[]).filter(row=>row &&
+      typeof row.en==='string' && row.en.length<=1600 && typeof row.note==='string' &&
+      typeof row.ja==='string' && row.ja.length<=2000 &&
+      Number.isFinite(row.at) && Date.now()-row.at<IFTY213_TRANSLATION_TTL &&
+      (row.en!==sentence || row.note!==note));
+    list.unshift({en:sentence,note,ja,at:Date.now()});
+    localStorage.setItem(key,JSON.stringify(list.slice(0,30)));
+  } catch (_) { /* Cache is optional. Never alter saved learning data on failure. */ }
+}
+function ifty213ClearAccountCache(user) {
+  const id=String(user||'').trim();
+  if(!id)return;
+  try { localStorage.removeItem(IFTY213_STATS_PREFIX+encodeURIComponent(id)); } catch(_){}
+  try { localStorage.removeItem(IFTY213_TRANSLATION_PREFIX+encodeURIComponent(id)); } catch(_){}
+}
+
 async function iftyAlliaFetch(input, init) {
   if (String(input || '') === String(WORKER_URL)) init = ifty181AttachOrder(init);
   const type = getIftyAlliaRequestType(init);
   const shouldTrack = String(input || '') === String(WORKER_URL) && !!type && !IFTY_ALLIA_ACCOUNT_TYPES.has(type);
+  const started = shouldTrack ? Date.now() : 0;
+  let completedResponse = false;
   try {
     const response = await fetch(input, init);
     if (shouldTrack) {
+      completedResponse = true;
       recordIftyAlliaUsage(type, response.ok);
+      ifty213RecordPerf(Date.now()-started,response.ok);
       await inspectIftyAlliaLimitResponse(response, type);
       ifty192AfterAlliaCall();
     }
     return response;
   } catch (error) {
-    if (shouldTrack) recordIftyAlliaUsage(type, false);
+    if (shouldTrack && !completedResponse) {
+      recordIftyAlliaUsage(type, false);
+      ifty213RecordPerf(Date.now()-started,false);
+    }
     throw error;
   }
 }
@@ -2518,6 +2609,7 @@ function renderIftyAlliaUsageBarHtml(compact = false) {
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px;font-size:.74em;color:#cbd5e1;">
       <span>${escapeHtml(foot)}</span><span>この端末：今日 ${usage.total}回のリクエスト</span>
     </div>
+    ${(() => { const perf=ifty213ReadStats();return `<div style="color:#c7d2fe;font-size:.72em;margin-top:6px;overflow-wrap:anywhere;">この端末の通信平均 ${perf.requests ? Math.round(perf.totalMs/perf.requests)/1000+'秒' : '未測定'}（${perf.requests}回）／和訳の再利用 ${perf.cacheHits}回。通信平均はAI以外の待ち時間も含みます。</div>`; })()}
     <div style="font-size:.7em;color:#b9d5eb;margin-top:7px;">${direct
       ? 'Cloudflareの集計値です。反映遅延があり、直近のAI処理がまだ含まれない場合があります。Paidプランでは無料枠残量0でも利用できる場合があります。'
       : '取得できない場合は数値を推測しません。Workerの設定または通信を確認してください。'}
@@ -2843,10 +2935,8 @@ function saveIftySubjectOrders(options = {}) {
   iftySubjectOrders = normalizeIftySubjectOrders(iftySubjectOrders);
   iftySubjectOrderUpdatedAt = normalizeIftySubjectOrderMeta(iftySubjectOrderUpdatedAt);
 
-  try {
-    localStorage.setItem(getIftyOrderStorageKey(currentUser), JSON.stringify(iftySubjectOrders));
-    localStorage.setItem(getIftyOrderMetaStorageKey(currentUser), JSON.stringify(iftySubjectOrderUpdatedAt));
-  } catch (_) {}
+  ifty210SaveLocalJson(getIftyOrderStorageKey(currentUser), iftySubjectOrders, 'ORDER');
+  ifty210SaveLocalJson(getIftyOrderMetaStorageKey(currentUser), iftySubjectOrderUpdatedAt, 'ORDER更新日時');
 
   if (options.queueCloud !== false) {
     queueIftyCloudSave('ORDER更新');
@@ -6467,17 +6557,15 @@ function renderIftyYearEntries() {
 }
 
 window.createIftyYearFolder = function() {
-  const name = prompt('YEARSの新しいフォルダ名', '新しいフォルダ');
-  if (name === null) return;
-  const trimmed = String(name).trim();
-  if (!trimmed) return;
-  recordUndoState('YEARSフォルダ作成');
-  const folders = getIftyYearFolders();
-  const folder = normalizeIftyCollectionFolder({ id: makeId('yearfolder'), name: trimmed, order: folders.length, collapsed: false }, 'yearfolder', '未分類', folders.length);
-  folders.push(folder);
-  iftyYearActiveFolderId = folder.id;
-  savePracticeData();
-  renderIftyYearEntries();
+  openPracticeNamePrompt('YEARSの新しいフォルダ名', '新しいフォルダ', name => {
+    recordUndoState('YEARSフォルダ作成');
+    const folders = getIftyYearFolders();
+    const folder = normalizeIftyCollectionFolder({ id: makeId('yearfolder'), name, order: folders.length, collapsed: false }, 'yearfolder', '未分類', folders.length);
+    folders.push(folder);
+    iftyYearActiveFolderId = folder.id;
+    savePracticeData();
+    renderIftyYearEntries();
+  }, { selectImmediately: true, hidePracticeTools: true });
 };
 
 window.renameIftyYearFolder = function(folderId) {
@@ -8388,6 +8476,11 @@ function getIftySocialPracticeModeMeta(mode) {
       description: '説明を見て用語を自分で入力。通常は端末内で採点し、不正解時だけChallengeでALLIAを使えます。',
       color: '#1d4ed8'
     },
+    kanji_write: {
+      title: '漢字手書き',
+      description: '説明から漢字を含む用語を思い出し、指・ペンで書く。模範解答を見て自己採点。文字入力なら自動採点も可能。',
+      color: '#0d9488'
+    },
     era: {
       title: '時代',
       description: '用語→時代、または時代→用語。正解が複数になる問題にも対応します。',
@@ -8399,8 +8492,8 @@ function getIftySocialPracticeModeMeta(mode) {
       color: '#d97706'
     },
     explanation: {
-      title: '説明',
-      description: '提示された用語を、指定された語句を使って説明します。ALLIAが採点します。',
+      title: '定義記述',
+      description: '用語の定義と本質的な特徴を、自分の言葉で説明します。ALLIAが内容を採点。原因・経緯・比較は派生記述で出題します。',
       color: '#059669'
     },
     image: {
@@ -8452,7 +8545,7 @@ window.selectAllIftySocialPracticeFolders = function(selected) {
 
 window.setIftySocialPracticeQuestionCount = function(value) {
   const count = Number(value);
-  iftySocialPracticeQuestionCount = [5, 10, 15, 20, 25, 30].includes(count) ? count : 5;
+  iftySocialPracticeQuestionCount = ifty212QuestionCount(count);
   const practiceModal = document.getElementById('practiceModal');
   if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
   else renderIftySocialPracticeHome();
@@ -8485,6 +8578,7 @@ function renderIftySocialPracticeHome() {
     const meta = getIftySocialPracticeModeMeta(mode);
     let disabledReason = '';
     if (mode === 'image' && imageItems.length < 2) disabledReason = '画像付き項目が2件以上必要です。';
+    else if (mode === 'kanji_write' && !selectedItems.some(ifty208KanjiWriteIsEligible)) disabledReason = '漢字を含む用語と説明を登録してください。';
     else if (mode === 'simple' && selectedItems.length < 2) disabledReason = '項目が2件以上必要です。';
     else if (!selectedItems.length) disabledReason = '学習する項目を選択してください。';
     const disabled = !!disabledReason;
@@ -8521,20 +8615,14 @@ function renderIftySocialPracticeHome() {
 
       <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
         <strong style="color:#334155;">問題数</strong>
-        <select onchange="setIftySocialPracticeQuestionCount(this.value)" style="padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
-          <option value="5" ${iftySocialPracticeQuestionCount === 5 ? 'selected' : ''}>5問</option>
-          <option value="10" ${iftySocialPracticeQuestionCount === 10 ? 'selected' : ''}>10問</option>
-          <option value="15" ${iftySocialPracticeQuestionCount === 15 ? 'selected' : ''}>15問</option>
-          <option value="20" ${iftySocialPracticeQuestionCount === 20 ? 'selected' : ''}>20問</option>
-          <option value="25" ${iftySocialPracticeQuestionCount === 25 ? 'selected' : ''}>25問</option>
-          <option value="30" ${iftySocialPracticeQuestionCount === 30 ? 'selected' : ''}>30問</option>
-        </select>
+        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${iftySocialPracticeQuestionCount}" onchange="setIftySocialPracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
         <span style="font-size:.74em;color:#64748b;">時代・並べ替え・説明は開始時にALLIAが問題を作ります。</span>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:14px;">
         ${modeCard('simple')}
         ${modeCard('term_write')}
+        ${modeCard('kanji_write')}
         ${modeCard('era')}
         ${modeCard('order')}
         ${modeCard('explanation')}
@@ -8637,7 +8725,7 @@ function makeIftySocialPracticeImageQuestions(items, requestedCount) {
 }
 
 function serializeIftySocialPracticeItems(items) {
-  return items.slice(0, 60).map(ref => ({
+  return items.map(ref => ({
     id: String(ref.item.id || ''),
     title: String(ref.item.title || ref.item.topic || '').trim(),
     memoryText: String(ref.item.memoryText || '').trim(),
@@ -8694,8 +8782,8 @@ function normalizeIftySocialPracticeAiQuestions(mode, rawQuestions) {
       const referenceAnswer = String(source.referenceAnswer || '').trim();
       const gradingPoints = (Array.isArray(source.gradingPoints) ? source.gradingPoints : [])
         .map(value => String(value || '').trim()).filter(Boolean).slice(0, 5);
-      if (!base.prompt || !requiredTerms.length || !referenceAnswer) return null;
-      return { ...base, requiredTerms, referenceAnswer, gradingPoints };
+      if (!base.prompt || !referenceAnswer) return null;
+      return { ...base, requiredTerms: [], referenceAnswer, gradingPoints, definitionOnly: true };
     }
 
     return null;
@@ -8722,15 +8810,15 @@ function renderIftySocialPracticeLoading(mode) {
 }
 
 window.startIftySocialPractice = async function(mode) {
-  const normalizedMode = ['simple', 'term_write', 'era', 'order', 'explanation', 'image'].includes(mode) ? mode : 'simple';
+  const normalizedMode = ['simple', 'term_write', 'kanji_write', 'era', 'order', 'explanation', 'image'].includes(mode) ? mode : 'simple';
   const items = getIftySocialPracticeItems();
   if (!items.length) {
     alert('出題するフォルダを選択してください。');
     return;
   }
 
-  if (normalizedMode === 'term_write') {
-    window.startIftySubjectTermWritePractice('SOCIAL STUDIES');
+  if (normalizedMode === 'term_write' || normalizedMode === 'kanji_write') {
+    window.startIftySubjectTermWritePractice('SOCIAL STUDIES', normalizedMode);
     return;
   }
 
@@ -8745,22 +8833,29 @@ window.startIftySocialPractice = async function(mode) {
     try {
       const selectedFolders = getIftySocialPracticeSelectedFolders();
       const subjects = [...new Set(selectedFolders.flatMap(folder => normalizeIftySocialSubjects(folder.subjects)))];
-      const response = await iftyAlliaFetch(WORKER_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'social_practice_generate',
-          mode: normalizedMode,
-          count: iftySocialPracticeQuestionCount,
-          items: serializeIftySocialPracticeItems(items),
-          subjects,
-          subject: 'SOCIAL STUDIES',
-          order: ifty135PracticeThemeOrder('SOCIAL STUDIES',selectedFolders)
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) throw alliaHttpError(response, data, '社会PRACTICEの問題生成に失敗しました。');
-      questions = normalizeIftySocialPracticeAiQuestions(normalizedMode, data.questions);
+      const serialized = serializeIftySocialPracticeItems(items);
+      const requested = Math.min(ifty212QuestionCount(iftySocialPracticeQuestionCount), serialized.length);
+      // Worker generates up to 30 per request. Split large practice sessions safely.
+      const ordered = shuffleArray(serialized);
+      const all = [];
+      for (let offset = 0; offset < requested; offset += 30) {
+        const batch = ordered.slice(offset, Math.min(offset + 30, requested));
+        const support = ordered.filter(row => !batch.includes(row)).slice(0, Math.max(0, 4 - batch.length));
+        const response = await iftyAlliaFetch(WORKER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'social_practice_generate', mode: normalizedMode,
+            count: batch.length, items: [...batch, ...support], subjects,
+            subject: 'SOCIAL STUDIES',
+            order: ifty135PracticeThemeOrder('SOCIAL STUDIES',selectedFolders)
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw alliaHttpError(response, data, '社会PRACTICEの問題生成に失敗しました。');
+        all.push(...normalizeIftySocialPracticeAiQuestions(normalizedMode, data.questions));
+      }
+      questions = all.slice(0, requested);
     } catch (error) {
 console.error('社会PRACTICE問題生成エラー:', error);
       alert(String(error.message || error));
@@ -8915,9 +9010,8 @@ function renderIftySocialPracticeExplanationQuestion(question) {
   const required = (question.requiredTerms || []).map(term => `<span style="display:inline-block;padding:5px 8px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:900;font-size:.82em;">${escapeHtml(term)}</span>`).join(' ');
   return `
     <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
-    <div style="margin-top:10px;padding:10px;border:1px solid #bbf7d0;border-radius:9px;background:#f0fdf4;">
-      <div style="font-size:.76em;color:#166534;font-weight:900;margin-bottom:6px;">必ず使う語句</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">${required}</div>
+    <div style="margin-top:10px;padding:10px;border:1px solid #bbf7d0;border-radius:9px;background:#f0fdf4;color:#166534;font-size:.81em;line-height:1.55;">
+      単語の丸暗記だけでなく、「何を指す用語か」と「他と区別するための核となる特徴」を説明してください。原因・影響・類似用語との比較は派生記述で扱います。
     </div>
     ${state.answered ? `<div style="margin-top:12px;padding:11px;border:1px solid ${state.correctLast ? '#86efac' : '#fda4af'};background:${state.correctLast ? '#ecfdf5' : '#fff1f2'};border-radius:9px;">
       <div style="font-weight:900;color:${state.correctLast ? '#166534' : '#9f1239'};">${state.unknownLast?'？ 分からない':state.correctLast ? '正解' : '要復習'}${Number.isFinite(Number(state.score)) ? `　${Math.round(Number(state.score))}点` : ''}</div>
@@ -10543,6 +10637,11 @@ function getIftySciencePracticeModeMeta(mode) {
       description: '説明・公式などを見て用語を自分で入力。通常は端末内で採点し、不正解時だけChallengeでALLIAを使えます。',
       color: '#1d4ed8'
     },
+    kanji_write: {
+      title: '漢字手書き',
+      description: '説明から漢字を含む用語を思い出し、指・ペンで書く。模範解答を見て自己採点。文字入力なら自動採点も可能。',
+      color: '#0d9488'
+    },
     formula: {
       title: '公式・単位',
       description: '用語→公式・単位、または公式・単位→用語。複数正解にも対応します。',
@@ -10554,8 +10653,8 @@ function getIftySciencePracticeModeMeta(mode) {
       color: '#d97706'
     },
     explanation: {
-      title: '説明',
-      description: '提示された用語を、指定された語句を使って説明します。ALLIAが採点します。',
+      title: '定義記述',
+      description: '用語の定義と本質的な特徴を、自分の言葉で説明します。ALLIAが内容を採点。原因・経緯・比較は派生記述で出題します。',
       color: '#059669'
     },
     image: {
@@ -10607,7 +10706,7 @@ window.selectAllIftySciencePracticeFolders = function(selected) {
 
 window.setIftySciencePracticeQuestionCount = function(value) {
   const count = Number(value);
-  iftySciencePracticeQuestionCount = [5, 10, 15, 20, 25, 30].includes(count) ? count : 5;
+  iftySciencePracticeQuestionCount = ifty212QuestionCount(count);
   const practiceModal = document.getElementById('practiceModal');
   if (practiceModal && practiceModal.style.display !== 'none') renderPracticeHome();
   else renderIftySciencePracticeHome();
@@ -10640,6 +10739,7 @@ function renderIftySciencePracticeHome() {
     const meta = getIftySciencePracticeModeMeta(mode);
     let disabledReason = '';
     if (mode === 'image' && imageItems.length < 2) disabledReason = '画像付き項目が2件以上必要です。';
+    else if (mode === 'kanji_write' && !selectedItems.some(ifty208KanjiWriteIsEligible)) disabledReason = '漢字を含む用語と説明を登録してください。';
     else if (mode === 'simple' && selectedItems.length < 2) disabledReason = '項目が2件以上必要です。';
     else if (!selectedItems.length) disabledReason = '学習する項目を選択してください。';
     const disabled = !!disabledReason;
@@ -10676,20 +10776,14 @@ function renderIftySciencePracticeHome() {
 
       <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
         <strong style="color:#334155;">問題数</strong>
-        <select onchange="setIftySciencePracticeQuestionCount(this.value)" style="padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
-          <option value="5" ${iftySciencePracticeQuestionCount === 5 ? 'selected' : ''}>5問</option>
-          <option value="10" ${iftySciencePracticeQuestionCount === 10 ? 'selected' : ''}>10問</option>
-          <option value="15" ${iftySciencePracticeQuestionCount === 15 ? 'selected' : ''}>15問</option>
-          <option value="20" ${iftySciencePracticeQuestionCount === 20 ? 'selected' : ''}>20問</option>
-          <option value="25" ${iftySciencePracticeQuestionCount === 25 ? 'selected' : ''}>25問</option>
-          <option value="30" ${iftySciencePracticeQuestionCount === 30 ? 'selected' : ''}>30問</option>
-        </select>
+        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${iftySciencePracticeQuestionCount}" onchange="setIftySciencePracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
         <span style="font-size:.74em;color:#64748b;">公式・単位・並べ替え・説明は開始時にALLIAが問題を作ります。</span>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:14px;">
         ${modeCard('simple')}
         ${modeCard('term_write')}
+        ${modeCard('kanji_write')}
         ${modeCard('formula')}
         ${modeCard('order')}
         ${modeCard('explanation')}
@@ -10792,7 +10886,7 @@ function makeIftySciencePracticeImageQuestions(items, requestedCount) {
 }
 
 function serializeIftySciencePracticeItems(items) {
-  return items.slice(0, 60).map(ref => ({
+  return items.map(ref => ({
     id: String(ref.item.id || ''),
     title: String(ref.item.title || ref.item.topic || '').trim(),
     memoryText: String(ref.item.memoryText || '').trim(),
@@ -10852,8 +10946,8 @@ function normalizeIftySciencePracticeAiQuestions(mode, rawQuestions) {
       const referenceAnswer = String(source.referenceAnswer || '').trim();
       const gradingPoints = (Array.isArray(source.gradingPoints) ? source.gradingPoints : [])
         .map(value => String(value || '').trim()).filter(Boolean).slice(0, 5);
-      if (!base.prompt || !requiredTerms.length || !referenceAnswer) return null;
-      return { ...base, requiredTerms, referenceAnswer, gradingPoints };
+      if (!base.prompt || !referenceAnswer) return null;
+      return { ...base, requiredTerms: [], referenceAnswer, gradingPoints, definitionOnly: true };
     }
 
     return null;
@@ -10880,15 +10974,15 @@ function renderIftySciencePracticeLoading(mode) {
 }
 
 window.startIftySciencePractice = async function(mode) {
-  const normalizedMode = ['simple', 'term_write', 'formula', 'order', 'explanation', 'image'].includes(mode) ? mode : 'simple';
+  const normalizedMode = ['simple', 'term_write', 'kanji_write', 'formula', 'order', 'explanation', 'image'].includes(mode) ? mode : 'simple';
   const items = getIftySciencePracticeItems();
   if (!items.length) {
     alert('出題するフォルダを選択してください。');
     return;
   }
 
-  if (normalizedMode === 'term_write') {
-    window.startIftySubjectTermWritePractice('SCIENCE');
+  if (normalizedMode === 'term_write' || normalizedMode === 'kanji_write') {
+    window.startIftySubjectTermWritePractice('SCIENCE', normalizedMode);
     return;
   }
 
@@ -10903,22 +10997,29 @@ window.startIftySciencePractice = async function(mode) {
     try {
       const selectedFolders = getIftySciencePracticeSelectedFolders();
       const subjects = [...new Set(selectedFolders.flatMap(folder => normalizeIftyScienceSubjects(folder.subjects)))];
-      const response = await iftyAlliaFetch(WORKER_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'science_practice_generate',
-          mode: normalizedMode,
-          count: iftySciencePracticeQuestionCount,
-          items: serializeIftySciencePracticeItems(items),
-          subjects,
-          subject: 'SCIENCE',
-          order: ifty135PracticeThemeOrder('SCIENCE',selectedFolders)
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) throw alliaHttpError(response, data, '理科PRACTICEの問題生成に失敗しました。');
-      questions = normalizeIftySciencePracticeAiQuestions(normalizedMode, data.questions);
+      const serialized = serializeIftySciencePracticeItems(items);
+      const requested = Math.min(ifty212QuestionCount(iftySciencePracticeQuestionCount), serialized.length);
+      // Keep the Worker 30-question safeguard; generate larger sets in separate batches.
+      const ordered = shuffleArray(serialized);
+      const all = [];
+      for (let offset = 0; offset < requested; offset += 30) {
+        const batch = ordered.slice(offset, Math.min(offset + 30, requested));
+        const support = ordered.filter(row => !batch.includes(row)).slice(0, Math.max(0, 4 - batch.length));
+        const response = await iftyAlliaFetch(WORKER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'science_practice_generate', mode: normalizedMode,
+            count: batch.length, items: [...batch, ...support], subjects,
+            subject: 'SCIENCE',
+            order: ifty135PracticeThemeOrder('SCIENCE',selectedFolders)
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw alliaHttpError(response, data, '理科PRACTICEの問題生成に失敗しました。');
+        all.push(...normalizeIftySciencePracticeAiQuestions(normalizedMode, data.questions));
+      }
+      questions = all.slice(0, requested);
     } catch (error) {
       console.error('理科PRACTICE問題生成エラー:', error);
       alert(String(error.message || error));
@@ -11068,9 +11169,8 @@ function renderIftySciencePracticeExplanationQuestion(question) {
   const required = (question.requiredTerms || []).map(term => `<span style="display:inline-block;padding:5px 8px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:900;font-size:.82em;">${escapeHtml(term)}</span>`).join(' ');
   return `
     <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
-    <div style="margin-top:10px;padding:10px;border:1px solid #bbf7d0;border-radius:9px;background:#f0fdf4;">
-      <div style="font-size:.76em;color:#166534;font-weight:900;margin-bottom:6px;">必ず使う語句</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">${required}</div>
+    <div style="margin-top:10px;padding:10px;border:1px solid #bbf7d0;border-radius:9px;background:#f0fdf4;color:#166534;font-size:.81em;line-height:1.55;">
+      単語の丸暗記だけでなく、「何を指す用語か」と「他と区別するための核となる特徴」を説明してください。原因・影響・類似用語との比較は派生記述で扱います。
     </div>
     ${state.answered ? `<div style="margin-top:12px;padding:11px;border:1px solid ${state.correctLast ? '#86efac' : '#fda4af'};background:${state.correctLast ? '#ecfdf5' : '#fff1f2'};border-radius:9px;">
       <div style="font-weight:900;color:${state.correctLast ? '#166534' : '#9f1239'};">${state.unknownLast?'？ 分からない':state.correctLast ? '正解' : '要復習'}${Number.isFinite(Number(state.score)) ? `　${Math.round(Number(state.score))}点` : ''}</div>
@@ -14654,10 +14754,22 @@ async function applyIftyRecoveryPayload(payload) {
     undoStack = [];
     redoStack = [];
 
-    saveUserData();
-    savePracticeData();
-    saveChatSessions();
+    // STEP210: validated backup recovery is allowed to clear a corrupt-local-data lock.
+    const wasCorrupt = ifty210CorruptLocalData;
+    ifty210CorruptLocalData = false;
+    const savedVocab = saveUserData();
+    const savedPractice = savePracticeData();
+    const savedChat = saveChatSessions();
     saveIftySubjectOrders({ queueCloud: false });
+    if (!savedVocab || !savedPractice || !savedChat) {
+      ifty210CorruptLocalData = wasCorrupt;
+      throw new Error('バックアップ内容の端末保存に失敗しました。データを書き出して容量を確認してください。');
+    }
+    if (wasCorrupt && iftyAccount && iftySessionToken) {
+      iftyCloudSaveEnabled = true;
+      queueIftyCloudSave('バックアップから復旧');
+      startIftyAutoBackup();
+    }
     applyIftyTheme();
     applyIftyProfileVisual();
     applyIftyHomeIcon();
@@ -15223,12 +15335,17 @@ function storeIftyAccountSession(account, token) {
 }
 
 function clearIftyAccountSession() {
+  ifty213ClearAccountCache(currentUser);
   stopIftyActivityHeartbeat();
   stopIftyAdminUsageAutoRefresh();
   iftyAccount = null;
   iftySessionToken = '';
   iftyCloudRevision = 0;
   iftyCloudSaveEnabled = false;
+  iftyCloudChangeSerial = 0;
+  ifty210CloudLoadInFlight = false;
+  if (iftyCloudSaveTimer) clearTimeout(iftyCloudSaveTimer);
+  iftyCloudSaveTimer = null;
   localStorage.removeItem(IFTY_SESSION_TOKEN_KEY);
   localStorage.removeItem(IFTY_ACCOUNT_META_KEY);
   localStorage.removeItem('currentUser');
@@ -16007,6 +16124,7 @@ window.logoutAllIftySessions = async function() {
 async function purgeIftyLocalAccountData(username) {
   const user = String(username || '');
   if (!user) return;
+  ifty213ClearAccountCache(user);
 
   localStorage.removeItem('vocab_user_' + user);
   localStorage.removeItem('practice_user_' + user);
@@ -16144,7 +16262,9 @@ function hasMeaningfulIftyPayload(payload) {
 }
 
 async function applyIftyCloudPayload(payload, options = {}) {
-  if (!payload || typeof payload !== 'object') throw new Error('クラウドセーブデータが不正です。');
+  if (!payload || typeof payload !== 'object' || !Array.isArray(payload.folders) ||
+      !payload.practiceData || typeof payload.practiceData !== 'object' ||
+      Array.isArray(payload.practiceData)) throw new Error('クラウドセーブデータが不正です。端末データは保持します。');
 
   const remoteOrders = normalizeIftySubjectOrders(payload.subjectOrders);
   const remoteOrderMeta = normalizeIftySubjectOrderMeta(payload.subjectOrderUpdatedAt);
@@ -16267,14 +16387,146 @@ async function applyIftyCloudPayload(payload, options = {}) {
   return { orderMergeChangedRemote, visualMergeChangedRemote };
 }
 
+// STEP210: critical local writes must not fail silently.  In particular,
+// QuotaExceededError must never be mistaken for a successful local save.
+function ifty210ClearResolvedWarning() {
+  if (ifty210FailedLocalWrites.size || ifty210CorruptLocalData) return;
+  try {
+    if (localStorage.getItem(getIftyCloudDirtyKey()) === '1') return;
+  } catch (_) { return; }
+  document.getElementById('ifty210DataWarning')?.remove();
+}
+
+function ifty210ShowDataWarning(message) {
+  const text = String(message || '学習データの保存状態を確認してください。');
+  console.error('IFTY データ保護:', text);
+  let banner = document.getElementById('ifty210DataWarning');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'ifty210DataWarning';
+    banner.setAttribute('role', 'alert');
+    banner.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:2147483600;max-width:680px;margin:0 auto;padding:12px 15px;border:2px solid #fbbf24;border-radius:11px;background:#451a03;color:#fff7ed;-webkit-text-fill-color:#fff7ed;box-shadow:0 8px 22px #0008;font-size:14px;line-height:1.5;overflow-wrap:anywhere;';
+    (document.body || document.documentElement).appendChild(banner);
+  }
+  banner.textContent = '⚠ IFTY：' + text;
+  setIftyCloudStatus('☁️ 保存に注意が必要', 'error');
+}
+
+function ifty210SaveLocalJson(key, value, section) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    ifty210FailedLocalWrites.delete(key);
+    if (!ifty210FailedLocalWrites.size && !ifty210CorruptLocalData) {
+      const banner = document.getElementById('ifty210DataWarning');
+      if (banner && banner.dataset.ifty210StorageFailure === '1') banner.remove();
+    }
+    return true;
+  } catch (error) {
+    ifty210FailedLocalWrites.add(key);
+    ifty210ShowDataWarning(section + 'の端末保存に失敗しました。通信中・オフライン中にアプリを閉じず、バックアップを書き出してください。' + (error && error.name ? '（' + error.name + '）' : ''));
+    const banner = document.getElementById('ifty210DataWarning');
+    if (banner) banner.dataset.ifty210StorageFailure = '1';
+    if (!ifty210StorageAlertShown) {
+      ifty210StorageAlertShown = true;
+      alert('IFTYの端末保存に失敗しました。単語が失われる危険があります。アプリを閉じず、バックアップをファイルへ書き出してください。');
+    }
+    return false;
+  }
+}
+
+function ifty210ReadLocalJson(key, fallback, label) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return { value: fallback, valid: true };
+    const parsed = JSON.parse(raw);
+    if (parsed === null || (Array.isArray(fallback) ? !Array.isArray(parsed) : (typeof parsed !== 'object' || Array.isArray(parsed)))) {
+      throw new Error('データ構造が不正です');
+    }
+    return { value: parsed, valid: true };
+  } catch (error) {
+    ifty210CorruptLocalData = true;
+    ifty210ShowDataWarning(label + 'の端末データを読めません。元データを保護するため、この端末からの自動保存・同期を停止しました。バックアップからの復旧を確認してください。');
+    return { value: fallback, valid: false };
+  }
+}
+
+// Only protect the actual saved learning items, not UI flags or quiz results.
+// Do not automatically re-add terms deliberately deleted on another device.
+function ifty210CollectLearningItemKeys(payload) {
+  const keys = new Set();
+  const source = payload && typeof payload === 'object' ? payload : {};
+  const modules = source.practiceData && source.practiceData.modules || {};
+  const add = (moduleName, entries) => {
+    if (!Array.isArray(entries)) return;
+    entries.forEach(entry => {
+      if (!entry || typeof entry !== 'object') return;
+      const id = String(entry.id || '').trim();
+      if (id) keys.add(moduleName + ':' + id);
+    });
+  };
+  const collectFolderItems = (moduleName, list, field) => {
+    if (!Array.isArray(list)) return;
+    list.forEach(folder => add(moduleName, folder && folder[field]));
+  };
+  collectFolderItems('english', source.folders, 'words');
+  ['socialStudies', 'science', 'ancient', 'kanbun', 'kanji', 'others'].forEach(name => {
+    collectFolderItems(name, modules[name] && modules[name].folders, 'items');
+  });
+  add('basicSentences', modules.basicSentences && modules.basicSentences.items);
+  add('years', modules.years && modules.years.entries);
+  return keys;
+}
+
+function ifty210CountMissingLocalItems(localPayload, remotePayload) {
+  const local = ifty210CollectLearningItemKeys(localPayload);
+  const remote = ifty210CollectLearningItemKeys(remotePayload);
+  let missing = 0;
+  for (const key of local) if (!remote.has(key)) missing++;
+  return missing;
+}
+
+async function ifty210AuthorizeRemoteReplacement(remotePayload, sourceLabel) {
+  const missing = ifty210CountMissingLocalItems(captureIftyCloudPayload(), remotePayload);
+  if (!missing) return true;
+  try {
+    const backup = await createIftyRecoverySnapshot('STEP210: クラウド上書き前 (' + missing + '件差分)', { force: true, kind: 'MANUAL' });
+    if (!backup) throw new Error('バックアップが保存されませんでした。');
+  } catch (error) {
+    ifty210ShowDataWarning('クラウドに存在しない学習項目が' + missing + '件ありますが、上書き前バックアップを作れません。端末データを保護し、自動上書きを中止しました。');
+    markIftyCloudDirty();
+    return false;
+  }
+  const approved = confirm(
+    '【データ保護】' + String(sourceLabel || 'クラウド同期') + '\n' +
+    'この端末にある学習項目のうち ' + missing + ' 件がクラウドにはありません。\n' +
+    '端末データはバックアップに保存済みです。\n\n' +
+    'OK：クラウド側へ切り替える（該当項目が画面から消えます）\n' +
+    'キャンセル：端末データを維持し、今回の上書きを中止する\n\n' +
+    'どちらが新しいか不明な場合は「キャンセル」を選んでください。'
+  );
+  if (!approved) {
+    markIftyCloudDirty();
+    iftyCloudSyncQueued = false;
+    if (iftyCloudSaveTimer) clearTimeout(iftyCloudSaveTimer);
+    iftyCloudSaveTimer = null;
+    setIftyCloudStatus('☁️ 差分を保護中・同期保留', 'error');
+  }
+  return approved;
+}
+
 function markIftyCloudDirty() {
   if (!iftyAccount) return;
-  localStorage.setItem(getIftyCloudDirtyKey(), '1');
+  iftyCloudChangeSerial++;
+  try { localStorage.setItem(getIftyCloudDirtyKey(), '1'); }
+  catch (error) {
+    ifty210ShowDataWarning('同期待ち状態を端末に保存できません。データのファイル書き出しを行ってください。');
+  }
 }
 
 function queueIftyCloudSave(reason = '変更') {
   if (!iftyCloudSaveEnabled || iftyCloudApplyingRemote || !iftyAccount || !iftySessionToken) return;
   markIftyCloudDirty();
+  if (ifty210CorruptLocalData) return;
 
   if (!isIftyOnline()) {
     setIftyCloudStatus('☁️ オフライン：端末に一時保存', 'offline');
@@ -16293,57 +16545,102 @@ function queueIftyCloudSave(reason = '変更') {
 async function resolveIftyCloudConflict(conflictState) {
   const remoteRevision = Number(conflictState && conflictState.revision || 0);
   const remotePayload = conflictState && conflictState.payload;
-  try { await createIftyRecoverySnapshot('クラウド競合前の端末保存', { force: true, kind: 'MANUAL' }); } catch (_) {}
-
-  const useCloud = confirm('別の端末で更新されたクラウドセーブを検出しました。\n\nOK：クラウド版をこの端末へ読み込む\nキャンセル：この端末版をクラウドへ上書きする\n\nどちらを選んでも、この端末の現在状態は復元用バックアップへ保存しています。');
+  const startSerial = iftyCloudChangeSerial;
+  try {
+    const backup = await createIftyRecoverySnapshot('クラウド競合前の端末保存', { force: true, kind: 'MANUAL' });
+    if (!backup) throw new Error('バックアップなし');
+  } catch (error) {
+    ifty210ShowDataWarning('競合時のバックアップに失敗したため、自動上書きを停止しました。');
+    return;
+  }
+  // Do not act on a state that became stale while the backup was running.
+  if (startSerial !== iftyCloudChangeSerial) {
+    iftyCloudSyncQueued = true;
+    setIftyCloudStatus('☁️ 新しい変更を保護中', 'offline');
+    return;
+  }
+  const useCloud = confirm('別の端末で更新されたクラウドセーブを検出しました。\n\nOK：クラウド版をこの端末へ読み込む\nキャンセル：この端末版をクラウドへ保存する\n\n現在の端末データは復元用バックアップへ保存しました。');
   if (useCloud) {
+    if (!await ifty210AuthorizeRemoteReplacement(remotePayload || {}, '同期競合')) return;
+    if (startSerial !== iftyCloudChangeSerial) {
+      iftyCloudSyncQueued = true;
+      return;
+    }
     await applyIftyCloudPayload(remotePayload || {}, { mergeOrders: false });
     iftyCloudRevision = remoteRevision;
     localStorage.setItem(getIftyCloudRevisionKey(), String(iftyCloudRevision));
     localStorage.removeItem(getIftyCloudDirtyKey());
+    ifty210ClearResolvedWarning();
     setIftyCloudStatus('☁️ 同期済み', 'ok');
     return;
   }
 
+  const sentSerial = iftyCloudChangeSerial;
+  const payload = captureIftyCloudPayload();
+  // The Worker still checks expectedRevision even for user-approved overwrites.
   const forced = await iftyAccountApi('cloud_save', {
     token: iftySessionToken,
     expectedRevision: remoteRevision,
     force: true,
-    payload: captureIftyCloudPayload()
+    payload
   });
   iftyCloudRevision = Number(forced.revision || remoteRevision + 1);
   localStorage.setItem(getIftyCloudRevisionKey(), String(iftyCloudRevision));
-  localStorage.removeItem(getIftyCloudDirtyKey());
-  setIftyCloudStatus('☁️ 同期済み', 'ok');
+  if (sentSerial === iftyCloudChangeSerial) {
+    localStorage.removeItem(getIftyCloudDirtyKey());
+    ifty210ClearResolvedWarning();
+    setIftyCloudStatus('☁️ 同期済み', 'ok');
+  } else {
+    localStorage.setItem(getIftyCloudDirtyKey(), '1');
+    iftyCloudSyncQueued = true;
+    setIftyCloudStatus('☁️ 追加変更の保存待ち', 'offline');
+  }
 }
 
 async function flushIftyCloudSave(options = {}) {
-  if (!iftyCloudSaveEnabled || !iftyAccount || !iftySessionToken) return;
+  if (!iftyCloudSaveEnabled || !iftyAccount || !iftySessionToken || ifty210CorruptLocalData) return;
+  if (ifty210CloudLoadInFlight && !options.fromCloudLoad) {
+    iftyCloudSyncQueued = true;
+    return;
+  }
   if (!isIftyOnline()) {
     markIftyCloudDirty();
     setIftyCloudStatus('☁️ オフライン：端末に一時保存', 'offline');
     return;
   }
-
   if (iftyCloudSyncInFlight) {
     iftyCloudSyncQueued = true;
     return;
   }
 
   iftyCloudSyncInFlight = true;
+  const sentSerial = iftyCloudChangeSerial;
+  const sendingUser = currentUser;
+  const sendingToken = iftySessionToken;
+  const sentPayload = captureIftyCloudPayload();
   setIftyCloudStatus('☁️ 保存中…');
   try {
     const data = await iftyAccountApi('cloud_save', {
-      token: iftySessionToken,
+      token: sendingToken,
       expectedRevision: iftyCloudRevision,
       force: !!options.force,
-      payload: captureIftyCloudPayload()
+      payload: sentPayload
     });
+    // Account may have changed during the await.
+    if (sendingUser !== currentUser || sendingToken !== iftySessionToken) return;
     iftyCloudRevision = Number(data.revision || iftyCloudRevision + 1);
     localStorage.setItem(getIftyCloudRevisionKey(), String(iftyCloudRevision));
-    localStorage.removeItem(getIftyCloudDirtyKey());
-    setIftyCloudStatus('☁️ 同期済み', 'ok');
+    if (sentSerial === iftyCloudChangeSerial && !iftyCloudSyncQueued) {
+      localStorage.removeItem(getIftyCloudDirtyKey());
+      ifty210ClearResolvedWarning();
+      if (!ifty210FailedLocalWrites.size) setIftyCloudStatus('☁️ 同期済み', 'ok');
+    } else {
+      localStorage.setItem(getIftyCloudDirtyKey(), '1');
+      iftyCloudSyncQueued = true;
+      setIftyCloudStatus('☁️ 追加変更の保存待ち', 'offline');
+    }
   } catch (error) {
+    if (sendingUser !== currentUser || sendingToken !== iftySessionToken) return;
     if (error.status === 409 && error.data && error.data.state) {
       await resolveIftyCloudConflict(error.data.state);
     } else if (error.status === 401) {
@@ -16353,71 +16650,100 @@ async function flushIftyCloudSave(options = {}) {
       renderIftyAccountLanding('ログインし直してください。');
     } else {
       markIftyCloudDirty();
-      setIftyCloudStatus('☁️ 同期待ち', 'offline');
+      const permanent = error.status === 413;
+      setIftyCloudStatus(permanent ? '☁️ 容量上限で未同期' : '☁️ 保存失敗・未同期', 'error');
+      ifty210ShowDataWarning(permanent
+        ? 'クラウド容量上限のため同期できません。バックアップを書き出し、不要なチャット・画像等を確認してください。'
+        : 'クラウド保存に失敗しました。端末データを保護しています。通信が回復したら再同期してください。');
       throw error;
     }
   } finally {
     iftyCloudSyncInFlight = false;
-    if (iftyCloudSyncQueued) {
+    if (iftyCloudSyncQueued && sendingUser === currentUser && sendingToken === iftySessionToken) {
       iftyCloudSyncQueued = false;
-      setTimeout(() => flushIftyCloudSave().catch(() => {}), 200);
+      setTimeout(() => flushIftyCloudSave().catch(error => console.warn('IFTY再保存エラー:', error)), 200);
     }
   }
 }
 
 async function syncIftyCloudAfterLogin() {
-  if (!iftyAccount || !iftySessionToken || !isIftyOnline()) {
-    setIftyCloudStatus('☁️ オフライン：端末キャッシュ使用', 'offline');
+  if (!iftyAccount || !iftySessionToken || !isIftyOnline() || ifty210CorruptLocalData) {
+    if (!ifty210CorruptLocalData) setIftyCloudStatus('☁️ オフライン：端末キャッシュ使用', 'offline');
     return;
   }
+  if (ifty210CloudLoadInFlight) return;
+  if (iftyCloudSyncInFlight) {
+    iftyCloudSyncQueued = true;
+    return;
+  }
+  ifty210CloudLoadInFlight = true;
+  const syncSerial = iftyCloudChangeSerial;
+  const syncUser = currentUser;
+  const syncToken = iftySessionToken;
+  try {
+    setIftyCloudStatus('☁️ クラウド確認中…');
+    const localRevision = Number(localStorage.getItem(getIftyCloudRevisionKey()) || 0);
+    const cloud = await iftyAccountApi('cloud_load', { token: syncToken });
+    if (syncUser !== currentUser || syncToken !== iftySessionToken) return;
+    const localDirty = localStorage.getItem(getIftyCloudDirtyKey()) === '1' || syncSerial !== iftyCloudChangeSerial;
 
-  setIftyCloudStatus('☁️ クラウド確認中…');
-  const localRevision = Number(localStorage.getItem(getIftyCloudRevisionKey()) || 0);
-  const localDirty = localStorage.getItem(getIftyCloudDirtyKey()) === '1';
-  const cloud = await iftyAccountApi('cloud_load', { token: iftySessionToken });
+    if (cloud.exists) {
+      const remoteRevision = Number(cloud.revision || 0);
+      if (localDirty) {
+        iftyCloudRevision = localRevision;
+        if (localRevision !== remoteRevision) {
+          await resolveIftyCloudConflict({ revision: remoteRevision, payload: cloud.payload });
+        } else {
+          await flushIftyCloudSave({ fromCloudLoad: true });
+        }
+        return;
+      }
 
-  if (cloud.exists) {
-    const remoteRevision = Number(cloud.revision || 0);
-    if (localDirty) {
-      iftyCloudRevision = localRevision;
-      if (localRevision !== remoteRevision) {
-        await resolveIftyCloudConflict({ revision: remoteRevision, payload: cloud.payload });
+      // A clean flag alone is not enough: older versions could lose it while
+      // saving. Never silently remove items which only exist on this device.
+      if (!await ifty210AuthorizeRemoteReplacement(cloud.payload || {}, 'ログイン時のクラウド読み込み')) return;
+      if (syncSerial !== iftyCloudChangeSerial) {
+        setIftyCloudStatus('☁️ 端末の新しい変更を保護中', 'offline');
+        return;
+      }
+      iftyCloudRevision = remoteRevision;
+      const applyResult = await applyIftyCloudPayload(cloud.payload || {});
+      localStorage.setItem(getIftyCloudRevisionKey(), String(iftyCloudRevision));
+
+      if (applyResult && (applyResult.orderMergeChangedRemote || applyResult.visualMergeChangedRemote)) {
+        markIftyCloudDirty();
+        await flushIftyCloudSave({ reason: 'カスタマイズ同期補正', fromCloudLoad: true });
       } else {
-        await flushIftyCloudSave();
+        localStorage.removeItem(getIftyCloudDirtyKey());
+        ifty210ClearResolvedWarning();
+        if (!ifty210FailedLocalWrites.size) setIftyCloudStatus('☁️ 同期済み', 'ok');
       }
       return;
     }
 
-    iftyCloudRevision = remoteRevision;
-    const applyResult = await applyIftyCloudPayload(cloud.payload || {});
-    localStorage.setItem(getIftyCloudRevisionKey(), String(iftyCloudRevision));
-
-    if (applyResult && (applyResult.orderMergeChangedRemote || applyResult.visualMergeChangedRemote)) {
-      // 端末側のORDER / カスタマイズ表示を救済した場合、その状態をクラウドにも即時反映して
-      // 次の端末で再び消えることを防ぐ。
-      markIftyCloudDirty();
-      await flushIftyCloudSave({ reason: 'カスタマイズ同期補正' });
-    } else {
-      localStorage.removeItem(getIftyCloudDirtyKey());
-      setIftyCloudStatus('☁️ 同期済み', 'ok');
+    let initialPayload = captureIftyCloudPayload();
+    if (!hasMeaningfulIftyPayload(initialPayload)) {
+      const legacy = readIftyLocalPayloadForUser('default_user');
+      if (hasMeaningfulIftyPayload(legacy)) {
+        await applyIftyCloudPayload(legacy);
+        initialPayload = captureIftyCloudPayload();
+        try { await createIftyRecoverySnapshot('旧default_userデータをアカウントへ移行', { force: true, kind: 'MANUAL' }); } catch (_) {}
+      }
     }
-    return;
-  }
 
-  let initialPayload = captureIftyCloudPayload();
-  if (!hasMeaningfulIftyPayload(initialPayload)) {
-    const legacy = readIftyLocalPayloadForUser('default_user');
-    if (hasMeaningfulIftyPayload(legacy)) {
-      await applyIftyCloudPayload(legacy);
-      initialPayload = captureIftyCloudPayload();
-      try { await createIftyRecoverySnapshot('旧default_userデータをアカウントへ移行', { force: true, kind: 'MANUAL' }); } catch (_) {}
+    iftyCloudRevision = 0;
+    localStorage.setItem(getIftyCloudRevisionKey(), '0');
+    markIftyCloudDirty();
+    await flushIftyCloudSave({ fromCloudLoad: true });
+  } finally {
+    ifty210CloudLoadInFlight = false;
+    if (iftyCloudSyncQueued && iftyAccount && iftySessionToken && !iftyCloudSyncInFlight) {
+      iftyCloudSyncQueued = false;
+      if (localStorage.getItem(getIftyCloudDirtyKey()) === '1') {
+        setTimeout(() => flushIftyCloudSave().catch(error => console.warn('IFTY再保存エラー:', error)), 200);
+      }
     }
   }
-
-  iftyCloudRevision = 0;
-  localStorage.setItem(getIftyCloudRevisionKey(), '0');
-  markIftyCloudDirty();
-  await flushIftyCloudSave();
 }
 
 function installIftyCloudOnlineListener() {
@@ -16480,6 +16806,9 @@ async function enterIftyAccount(account, options = {}) {
   ensureIftyCloudStatusUi();
 
   iftyCloudSaveEnabled = false;
+  iftyCloudChangeSerial = 0;
+  ifty210CorruptLocalData = false;
+  ifty210FailedLocalWrites.clear();
   loadUserData(currentUser);
   loadPracticeData(currentUser);
   initChatSystem();
@@ -16491,8 +16820,8 @@ async function enterIftyAccount(account, options = {}) {
   loadIftyAutosavePreference();
   loadIftySpellingAutoAcceptPreference();
   loadIftyDailyGoalPreference();
-  startIftyAutoBackup();
-  iftyCloudSaveEnabled = true;
+  if (!ifty210CorruptLocalData) startIftyAutoBackup();
+  iftyCloudSaveEnabled = !ifty210CorruptLocalData;
 
   if (options.offline) {
     iftyCloudRevision = Number(localStorage.getItem(getIftyCloudRevisionKey()) || 0);
@@ -17173,7 +17502,7 @@ function getIftyOthersPracticeModeMeta(mode){
   const map={
     simple:{title:'シンプル',description:'用語と説明を4択で確認。',color:'#0f766e'},
     term_write:{title:'用語記述',description:'説明から用語を自分で入力。表記ゆれはALLIAでChallenge可能。',color:'#2563eb'},
-    explanation:{title:'説明記述',description:'用語を自分の言葉で説明し、ALLIAが内容を採点。',color:'#7c3aed'}
+    explanation:{title:'定義の説明',description:'用語が何を意味するか、定義と核になる特徴を自分の言葉で記述。ALLIA採点。',color:'#7c3aed'}
   };
   return map[mode]||map.simple;
 }
@@ -17258,7 +17587,7 @@ window.generateIftyOthersItem=async function(folderId){
 };
 
 function getIftyOthersPracticeRefs(){if(iftySubjectQuizRunOverride?.subject==='OTHERS'){const ids=new Set((iftySubjectQuizRunOverride.itemIds||[]).map(String));return getIftyOthersModule().folders.flatMap(folder=>(folder.items||[]).filter(item=>ids.has(String(item.id))).map(item=>({folder,item})));}return getIftyOthersModule().folders.flatMap(folder=>(folder.items||[]).map(item=>({folder,item})));}
-function buildIftyOthersPracticeQuestions(modes,count){const refs=shuffleArray(getIftyOthersPracticeRefs());const out=[];const usableModes=modes.length?modes:['simple'];for(let i=0;i<Math.min(count,refs.length);i++){const ref=refs[i];const mode=usableModes[i%usableModes.length];if(mode==='simple'){const distract=ifty147RankRelated(ref,refs.filter(x=>x.item.id!==ref.item.id)).slice(0,3).map(x=>x.item.title);const options=shuffleArray([ref.item.title,...distract]);if(options.length<2){out.push({mode:'term_write',targetItemId:ref.item.id,prompt:ref.item.memoryText||ref.item.title,answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});}else out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この説明に当てはまる用語は？',options,answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});}else if(mode==='term_write')out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この項目名を書いてください。',answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});else out.push({mode:'explanation',targetItemId:ref.item.id,prompt:`「${ref.item.title}」を簡潔に説明してください。`,referenceAnswer:ref.item.memoryText,keyPoints:ref.item.keyPoints||[]});}return out;}
+function buildIftyOthersPracticeQuestions(modes,count){const refs=shuffleArray(getIftyOthersPracticeRefs());const out=[];const usableModes=modes.length?modes:['simple'];for(let i=0;i<Math.min(count,refs.length);i++){const ref=refs[i];const mode=usableModes[i%usableModes.length];if(mode==='simple'){const distract=ifty147RankRelated(ref,refs.filter(x=>x.item.id!==ref.item.id)).slice(0,3).map(x=>x.item.title);const options=shuffleArray([ref.item.title,...distract]);if(options.length<2){out.push({mode:'term_write',targetItemId:ref.item.id,prompt:ref.item.memoryText||ref.item.title,answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});}else out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この説明に当てはまる用語は？',options,answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});}else if(mode==='term_write')out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この項目名を書いてください。',answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});else out.push({mode:'explanation',targetItemId:ref.item.id,prompt:`「${ref.item.title}」とは何か。定義と本質的な特徴を自分の言葉で説明してください。`,referenceAnswer:ref.item.memoryText,keyPoints:ref.item.keyPoints||[]});}return out;}
 window.startIftyOthersPractice=async function(modes){const refs=getIftyOthersPracticeRefs();if(!refs.length)return alert('出題できるOTHERS項目がありません。');const ms=[...new Set((Array.isArray(modes)?modes:[modes]).filter(Boolean))];iftyOthersPracticeState={modes:ms,questions:buildIftyOthersPracticeQuestions(ms,iftyOthersPracticeQuestionCount),index:0,correct:0,wrong:0,answered:false,feedback:'',modelAnswer:'',last:null};closePracticeModal();renderIftyOthersPracticePlayer();};
 function renderIftyOthersPracticePlayer(){const st=iftyOthersPracticeState;if(!st)return;let modal=document.getElementById('practiceModal');if(!modal){modal=document.createElement('div');modal.id='practiceModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;justify-content:center;align-items:center;padding:18px;box-sizing:border-box;z-index:10030;';document.body.appendChild(modal);}modal.style.display='flex';if(st.index>=st.questions.length){if(advanceIftySubjectQuizSequence124('OTHERS',st))return;setIftyPracticeQuestionActive(modal,false);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:22px;text-align:center;"><h2>OTHERS PRACTICE 完了</h2><div style="font-size:1.2em;font-weight:900;color:#0f766e;">正解 ${st.correct} / ${st.questions.length} ・ 分からない ${st.unknown||0}</div>${ifty182Summary(st.history182)}<button onclick="openPracticeHome('OTHERS')" style="margin-top:14px;border:none;background:#334155;color:white;border-radius:8px;padding:10px 14px;font-weight:900;">PRACTICEへ戻る</button></div>`;return;}setIftyPracticeQuestionActive(modal,true);const q=st.questions[st.index],meta=getIftyOthersPracticeModeMeta(q.mode);const result=st.answered?`<div style="margin-top:12px;padding:10px;border-radius:8px;background:${st.last?.correct?'#f0fdf4':'#fef2f2'};color:${st.last?.correct?'#166534':'#991b1b'};"><b>${st.last?.unknown?'？ 分からない':st.last?.correct?'⭕ 正解':'❌ 要復習'}</b>${st.feedback?`<div style="margin-top:5px;white-space:pre-wrap;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:6px;color:#475569;"><b>基準：</b>${escapeHtml(st.modelAnswer)}</div>`:''}<button onclick="nextIftyOthersPracticeQuestion()" style="width:100%;margin-top:10px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px;font-weight:900;">次へ</button></div>`:'';const answer=st.answered?'':(q.mode==='simple'?`<div style="display:grid;gap:8px;margin-top:12px;">${q.options.map(o=>`<button onclick="submitIftyOthersPracticeAnswer(${JSON.stringify(o).replace(/"/g,'&quot;')})" style="border:1px solid #cbd5e1;background:white;border-radius:8px;padding:10px;text-align:left;font-weight:800;">${escapeHtml(o)}</button>`).join('')}</div>`:`<textarea id="iftyOthersPracticeAnswer" rows="4" placeholder="回答を入力" style="width:100%;box-sizing:border-box;margin-top:12px;padding:10px;border:1px solid #c4b5fd;border-radius:8px;"></textarea><button onclick="submitIftyOthersPracticeAnswer()" style="width:100%;margin-top:8px;border:none;background:${meta.color};color:white;border-radius:8px;padding:10px;font-weight:900;">回答する</button>`);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(680px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><b style="color:${meta.color};">OTHERS ・ ${meta.title} ・ ${st.index+1}/${st.questions.length}</b><button onclick="openPracticeHome('OTHERS')" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;">終了</button></div><div style="margin-top:14px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:9px;line-height:1.65;white-space:pre-wrap;">${escapeHtml(q.prompt)}</div>${answer}${result}</div>`;if(!st.answered){const btn=document.createElement('button');btn.type='button';btn.textContent='？ 分からない（答えを見る）';btn.style.cssText='display:block;width:calc(100% - 40px);margin:0 20px 16px;padding:12px;background:#475569;color:white;border:1px solid #94a3b8;border-radius:9px;font-weight:800';btn.onclick=()=>window.ifty182UnknownOthers();modal.firstElementChild?.appendChild(btn);}}
 window.submitIftyOthersPracticeAnswer=async function(choice){const st=iftyOthersPracticeState;if(!st||st.answered)return;const q=st.questions[st.index];const ref=getIftyOthersItemById(q.targetItemId);if(!ref)return;const user=choice!==undefined?String(choice):String(document.getElementById('iftyOthersPracticeAnswer')?.value||'').trim();if(!user)return;let correct=false,feedback='',model=q.answer||q.referenceAnswer||'';if(q.mode==='simple'||q.mode==='term_write'){const accepted=[q.answer,...(q.aliases||[])].map(x=>String(x||'').trim().toLowerCase());correct=accepted.includes(user.trim().toLowerCase());feedback=correct?'登録内容と一致しました。':'登録内容とは一致しませんでした。';}else{if(!ensureIftyOnline('OTHERS記述採点'))return;try{const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_grade',quizType:'others_explanation',direction:'term_to_explanation',question:q.prompt,referenceAnswer:q.referenceAnswer||'',userAnswer:user,word:{word:ref.item.title,meanings:[ref.item.memoryText],details:(ref.item.keyPoints||[]).join(' / ')},subject:'OTHERS',order:getIftySubjectOrder('OTHERS')})});const data=await response.json().catch(()=>({}));if(!response.ok)throw alliaHttpError(response,data,'採点に失敗しました。');correct=data.correct===true;feedback=data.feedback||'';model=data.modelAnswer||model;}catch(e){return alert(String(e.message||e));}}st.answered=true;st.last={correct,userAnswer:user};st.feedback=feedback;st.modelAnswer=model;ifty182Record(st,st.index,q.prompt||'その他の問題',correct,user,model||q.answer||'',feedback);if(correct)st.correct++;else st.wrong++;recordIftySubjectStudyEvent('OTHERS',q.targetItemId,correct,`others_${q.mode}`);enrollIftyEntityReviewFromStudy(ref.item,correct);savePracticeData();renderIftyOthersPracticePlayer();};
@@ -19167,6 +19496,7 @@ window.openIftyBasicSentenceEditor = function(sentenceId = '', preferredFolderId
         <label style="display:grid;gap:5px;font-weight:800;color:#f1f5f9;">和訳（任意・後から編集可能）<textarea id="iftyBasicSentenceJa" rows="3" placeholder="日本語訳" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.ja : '')}</textarea></label>
         <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:-5px;">
           <button type="button" id="ifty205BasicTranslateButton" onclick="ifty205TranslateBasicSentence()" style="border:1px solid #38bdf8;border-radius:8px;background:#075985;color:white;padding:10px 13px;font:inherit;font-size:.86em;font-weight:900;min-height:42px;cursor:pointer;">✨ ALLIAで和訳を生成</button>
+          <button type="button" id="ifty213BasicTranslateForceButton" onclick="ifty205TranslateBasicSentence(true)" style="border:1px solid #64748b;border-radius:8px;background:#334155;color:#f8fafc;padding:9px 12px;font:inherit;font-size:.82em;min-height:42px;cursor:pointer;">↻ AIで再生成</button>
           <span style="color:#cbd5e1;font-size:.76em;line-height:1.5;">英文を日本語に翻訳します。生成結果を確認してから保存してください（ALLIA利用枠を消費）。</span>
         </div>
         <label style="display:grid;gap:5px;font-weight:800;color:#f1f5f9;">メモ<textarea id="iftyBasicSentenceNote" rows="2" placeholder="文法・語法・覚え方など（任意）" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.note : '')}</textarea></label>
@@ -19195,7 +19525,7 @@ window.ifty205TranslateExistingBasicSentence = function(sentenceId) {
   window.ifty205TranslateBasicSentence();
 };
 
-window.ifty205TranslateBasicSentence = async function() {
+window.ifty205TranslateBasicSentence = async function(forceRefresh = false) {
   const modal=document.getElementById('iftyBasicSentenceModal');
   if(!modal || modal.style.display==='none')return;
   const enInput=document.getElementById('iftyBasicSentenceEn');
@@ -19208,24 +19538,31 @@ window.ifty205TranslateBasicSentence = async function() {
   if(!sentence){alert('先に英文を入力してください。');enInput.focus();return;}
   if(sentence.length>1600){alert('英文が長すぎます。1600文字以内にしてください。');return;}
   if(button.disabled)return;
-  if(!ensureIftyOnline('ALLIAによる和訳生成'))return;
+  const note=String(noteInput?.value||'').trim().slice(0,350);
+  const reusable=forceRefresh ? '' : ifty213ReadTranslation(sentence,note);
+  if(!reusable && !ensureIftyOnline('ALLIAによる和訳生成'))return;
   const previousJa=String(jaInput.value||'');
   if(previousJa.trim()&&!confirm('入力済みの和訳をALLIAの生成文で置き換えますか？\n保存するまでは元データは変更されません。'))return;
   const seq=String((Number(modal.dataset.ifty205TranslationSeq)||0)+1);
   modal.dataset.ifty205TranslationSeq=seq;
   button.disabled=true;
+  const forceButton=document.getElementById('ifty213BasicTranslateForceButton');
+  if(forceButton)forceButton.disabled=true;
   button.style.opacity='.65';
   button.textContent='ALLIAが和訳を生成中…';
   status.textContent='英文を翻訳しています。結果は和訳欄に入ります。';
   status.style.color='#bae6fd';
   try {
-    const response=await iftyAlliaFetch(WORKER_URL,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({type:'basic_sentence_translate',subject:'BASIC SENTENCES',sentence,note:String(noteInput?.value||'').trim().slice(0,350)})
-    });
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok || data.error)throw alliaHttpError(response,data,'和訳を生成できませんでした。');
-    const translation=String(data.ja||'').trim();
+    let translation=reusable;
+    if(!translation){
+      const response=await iftyAlliaFetch(WORKER_URL,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({type:'basic_sentence_translate',subject:'BASIC SENTENCES',sentence,note})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok || data.error)throw alliaHttpError(response,data,'和訳を生成できませんでした。');
+      translation=String(data.ja||'').trim();
+    }
     if(!translation || translation.length>2000)throw new Error('有効な和訳が取得できませんでした。');
     if(modal.style.display==='none' || modal.dataset.ifty205TranslationSeq!==seq)return;
     if(String(enInput.value||'').trim()!==sentence || String(jaInput.value||'')!==previousJa){
@@ -19234,8 +19571,10 @@ window.ifty205TranslateBasicSentence = async function() {
       return;
     }
     jaInput.value=translation;
+    if(reusable) ifty213RecordPerf(0,true,true);
+    else ifty213StoreTranslation(sentence,note,translation);
     modal.dataset.ifty196Dirty='1';
-    status.textContent='和訳を生成しました。内容を確認し、「保存して終了」または「保存して次へ」で確定してください。';
+    status.textContent=(reusable ? '端末に保存した同一英文の和訳を再利用しました（ALLIAの消費なし）。' : '和訳を生成しました。')+' 内容を確認し、保存操作で確定してください。';
     status.style.color='#86efac';
     jaInput.focus();
   }catch(error){
@@ -19246,6 +19585,8 @@ window.ifty205TranslateBasicSentence = async function() {
     if(modal.dataset.ifty205TranslationSeq===seq){
       const activeButton=document.getElementById('ifty205BasicTranslateButton');
       if(activeButton){activeButton.disabled=false;activeButton.style.opacity='1';activeButton.textContent='✨ ALLIAで和訳を生成';}
+      const forceButton=document.getElementById('ifty213BasicTranslateForceButton');
+      if(forceButton)forceButton.disabled=false;
     }
   }
 };
@@ -19353,15 +19694,15 @@ window.clearIftyBasicSentenceSearch = function() {
 };
 
 window.createIftyBasicSentenceFolder = function() {
-  const name = prompt('BASIC SENTENCESの新しいフォルダ名', '新しいフォルダ');
-  if (name === null || !String(name).trim()) return;
-  recordUndoState('BASIC SENTENCEフォルダ作成');
-  const folders = getIftyBasicSentenceFolders();
-  const folder = normalizeIftyCollectionFolder({ id: makeId('basicsentencefolder'), name: String(name).trim(), order: folders.length, collapsed: false }, 'basicsentencefolder', '未分類', folders.length);
-  folders.push(folder);
-  iftyBasicSentenceActiveFolderId = folder.id;
-  savePracticeData();
-  renderIftyBasicSentenceList();
+  openPracticeNamePrompt('BASIC SENTENCESの新しいフォルダ名', '新しいフォルダ', name => {
+    recordUndoState('BASIC SENTENCEフォルダ作成');
+    const folders = getIftyBasicSentenceFolders();
+    const folder = normalizeIftyCollectionFolder({ id: makeId('basicsentencefolder'), name, order: folders.length, collapsed: false }, 'basicsentencefolder', '未分類', folders.length);
+    folders.push(folder);
+    iftyBasicSentenceActiveFolderId = folder.id;
+    savePracticeData();
+    renderIftyBasicSentenceList();
+  }, { selectImmediately: true, hidePracticeTools: true });
 };
 
 window.renameIftyBasicSentenceFolder = function(folderId) {
@@ -19581,13 +19922,13 @@ let iftyBasicPracticeState = null;
 
 function getIftyBasicPracticeQuestionCount() {
   const count = Number(practiceData?.modules?.basicSentences?.practiceQuestionCount);
-  return [5,10,15,20,25,30].includes(count) ? count : 5;
+  return ifty212QuestionCount(count);
 }
 
 window.setIftyBasicPracticeQuestionCount = function(value) {
   normalizePracticeData();
   const count = Number(value);
-  practiceData.modules.basicSentences.practiceQuestionCount = [5,10,15,20,25,30].includes(count) ? count : 5;
+  practiceData.modules.basicSentences.practiceQuestionCount = ifty212QuestionCount(count);
   savePracticeData();
 };
 
@@ -19949,7 +20290,7 @@ window.setIftyBasicPracticeSetQuestionCount = function(setId, value) {
   const set = getIftyBasicPracticeSet(setId);
   if (!set) return;
   const count = Number(value);
-  set.questionCount = [5,10,15,20,25,30].includes(count) ? count : 5;
+  set.questionCount = ifty212QuestionCount(count);
   set.updatedAt = Date.now();
   savePracticeData();
 };
@@ -20108,9 +20449,7 @@ window.openIftyBasicPracticeSet = function(setId) {
 
     <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
       <b style="color:#334155;">2. 問題数</b>
-      <select onchange="setIftyBasicPracticeSetQuestionCount('${set.id}',this.value)" style="padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
-        ${[5,10,15,20,25,30].map(n=>`<option value="${n}" ${set.questionCount===n?'selected':''}>${n}問</option>`).join('')}
-      </select>
+      <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${set.questionCount}" onchange="setIftyBasicPracticeSetQuestionCount('${set.id}',this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
       <span style="font-size:.76em;color:#64748b;">登録英文が少ない場合は、ある分だけ出題します。</span>
     </div>
 
@@ -20504,25 +20843,20 @@ function normalizeFoldersData() {
 function loadUserData(username) {
   iftyGlobalVocabSearchQuery = '';
   iftyFolderSearchQueries = {};
-  try {
-    const saved = localStorage.getItem("vocab_user_" + username);
-    folders = saved ? JSON.parse(saved) : [];
-  } catch (e) {
-    folders = [];
-  }
-normalizeFoldersData();
-  saveUserData();
+  const result = ifty210ReadLocalJson('vocab_user_' + username, [], '単語帳');
+  folders = result.value;
+  normalizeFoldersData();
+  if (result.valid) saveUserData();
   renderFolders();
 }
 
 function saveUserData() {
-  try {
-    normalizeFoldersData();
-    localStorage.setItem("vocab_user_" + currentUser, JSON.stringify(folders));
-    queueIftyCloudSave('単語帳更新');
-  } catch (e) {}
+  if (ifty210CorruptLocalData) return false;
+  normalizeFoldersData();
+  const saved = ifty210SaveLocalJson('vocab_user_' + currentUser, folders, '単語帳');
+  queueIftyCloudSave('単語帳更新');
+  return saved;
 }
-
 
 function normalizeIftyAncientExample(value) {
   if (!value) return null;
@@ -20812,7 +21146,7 @@ function ifty149ConfigPanel(subject,set,rows,allowedModes){
   const key=String(subject);
   const required=new Set(ifty149ForceIds(set.forcedIds));
   const chosen=ifty149ModeMap(set.itemModes);
-  const fixable=new Set(['year_written','derived','term_write','simple','choice','simple_meaning','write_typing','reading_write','meaning_write','explanation','meaning_explain','grammar_explain']);
+  const fixable=new Set(['year_written','derived','term_write','kanji_write','simple','choice','simple_meaning','write_typing','reading_write','meaning_write','explanation','meaning_explain','grammar_explain']);
   const safeModes=key==='ENGLISH'||key==='YEARS'||key==='BASIC SENTENCES'?allowedModes:allowedModes.filter(([value])=>fixable.has(value));
   const allModes=[['','自動（フォルダ設定）'],...safeModes];
   const showDerived=key!=='BASIC SENTENCES'&&key!=='YEARS';
@@ -20891,9 +21225,9 @@ function normalizeIftySubjectQuizSet(value, index = 0, subject = '') {
   const key = normalizeIftySubject(subject);
   const source = value && typeof value === 'object' ? value : {};
   const allowed = key === 'SOCIAL STUDIES'
-    ? ['simple','term_write','year_written','era','order','explanation','derived','image']
+    ? ['simple','term_write','kanji_write','year_written','era','order','explanation','derived','image']
     : (key === 'SCIENCE'
-        ? ['simple','term_write','formula','order','explanation','derived','image']
+        ? ['simple','term_write','kanji_write','formula','order','explanation','derived','image']
         : (key === 'KANBUN'
             ? ['simple','translation','kundoku','cloze','kaeriten','same_meaning','derived']
             : (key === 'KANJI'
@@ -20916,7 +21250,7 @@ function normalizeIftySubjectQuizSet(value, index = 0, subject = '') {
     derivedKinds: ifty149DerivedKinds(source.derivedKinds),
     mode: modes[0],
     modes,
-    questionCount: [5, 10, 15, 20, 25, 30].includes(Number(source.questionCount)) ? Number(source.questionCount) : 5,
+    questionCount: ifty212QuestionCount(source.questionCount),
     random: source.random !== false,
     createdAt: Math.max(0, Number(source.createdAt || Date.now())),
     updatedAt: Math.max(0, Number(source.updatedAt || source.createdAt || Date.now()))
@@ -20948,7 +21282,7 @@ function normalizeIftyBasicPracticeSet(value, index = 0) {
     direction,
     clozeBlankCount: Math.max(1,Math.min(5,Math.trunc(Number(source.clozeBlankCount)||1))),
     clozeSelection: source.clozeSelection==='legacy'?'legacy':'smart',
-    questionCount: [5,10,15,20,25,30].includes(Number(source.questionCount)) ? Number(source.questionCount) : 5,
+    questionCount: ifty212QuestionCount(source.questionCount),
     random: source.random !== false,
     createdAt: Math.max(0, Number(source.createdAt || Date.now())),
     updatedAt: Math.max(0, Number(source.updatedAt || source.createdAt || Date.now()))
@@ -20995,7 +21329,7 @@ function normalizePracticeData() {
     });
     if (!Object.values(set.types).some(Boolean)) set.types.simple = true;
     if (typeof set.random !== 'boolean') set.random = true;
-    if (![5, 10, 15, 20, 25, 30].includes(Number(set.questionCount))) set.questionCount = 5;
+    set.questionCount = ifty212QuestionCount(set.questionCount);
     if (!set.progress || typeof set.progress !== 'object') set.progress = null;
     if (!Array.isArray(set.reviewWordIds)) set.reviewWordIds = [];
     if (!set.mistakeCounts || typeof set.mistakeCounts !== 'object') set.mistakeCounts = {};
@@ -21014,7 +21348,7 @@ function normalizePracticeData() {
   if (!Array.isArray(practiceData.modules.basicSentences.folders)) practiceData.modules.basicSentences.folders = [];
   if (!Array.isArray(practiceData.modules.basicSentences.practiceSets)) practiceData.modules.basicSentences.practiceSets = [];
   practiceData.modules.basicSentences.practiceSets = practiceData.modules.basicSentences.practiceSets.map((set, index) => normalizeIftyBasicPracticeSet(set, index));
-  if (![5, 10, 15, 20, 25, 30].includes(Number(practiceData.modules.basicSentences.practiceQuestionCount))) practiceData.modules.basicSentences.practiceQuestionCount = 5;
+  practiceData.modules.basicSentences.practiceQuestionCount = ifty212QuestionCount(practiceData.modules.basicSentences.practiceQuestionCount);
   if (!practiceData.modules.basicSentences.folders.length) {
     practiceData.modules.basicSentences.folders.push(normalizeIftyCollectionFolder({ id: 'basic_sentence_default', name: '未分類', order: 0, collapsed: false }, 'basicsentencefolder', '未分類', 0));
   }
@@ -21193,20 +21527,19 @@ function normalizePracticeData() {
 
 }
 function loadPracticeData(username) {
-  try {
-    const saved = localStorage.getItem("practice_user_" + username);
-    if (saved) practiceData = JSON.parse(saved);
-  } catch (e) {}
+  const result = ifty210ReadLocalJson('practice_user_' + username,
+    { schemaVersion: 1, modules: {} }, '実践データ');
+  practiceData = result.value;
   normalizePracticeData();
-  savePracticeData();
+  if (result.valid) savePracticeData();
 }
 
 function savePracticeData() {
-  try {
-    normalizePracticeData();
-    localStorage.setItem("practice_user_" + currentUser, JSON.stringify(practiceData));
-    queueIftyCloudSave('実践データ更新');
-  } catch (e) {}
+  if (ifty210CorruptLocalData) return false;
+  normalizePracticeData();
+  const saved = ifty210SaveLocalJson('practice_user_' + currentUser, practiceData, '実践データ');
+  queueIftyCloudSave('実践データ更新');
+  return saved;
 }
 
 // 3. フォルダ管理
@@ -23515,9 +23848,9 @@ function getIftySubjectQuizSet(subject, setId) {
 function getIftySubjectQuizModeOptions(subject) {
   const key = normalizeIftySubject(subject);
   const modes = key === 'SOCIAL STUDIES'
-    ? ['simple','term_write','year_written','era','order','explanation','derived','image']
+    ? ['simple','term_write','kanji_write','year_written','era','order','explanation','derived','image']
     : (key === 'SCIENCE'
-        ? ['simple','term_write','formula','order','explanation','derived','image']
+        ? ['simple','term_write','kanji_write','formula','order','explanation','derived','image']
         : (key === 'KANBUN'
             ? ['simple','translation','kundoku','cloze','kaeriten','same_meaning','derived']
             : (key === 'KANJI'
@@ -23661,14 +23994,7 @@ window.openIftySubjectQuizSet = function(subject, setId) {
 
     <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
       <b style="color:#334155;">2. 問題数</b>
-      <select onchange="setIftySubjectQuizQuestionCount('${key}','${set.id}',this.value)" style="padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
-        <option value="5" ${set.questionCount===5?'selected':''}>5問</option>
-        <option value="10" ${set.questionCount===10?'selected':''}>10問</option>
-        <option value="15" ${set.questionCount===15?'selected':''}>15問</option>
-        <option value="20" ${set.questionCount===20?'selected':''}>20問</option>
-        <option value="25" ${set.questionCount===25?'selected':''}>25問</option>
-        <option value="30" ${set.questionCount===30?'selected':''}>30問</option>
-      </select>
+      <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${set.questionCount}" onchange="setIftySubjectQuizQuestionCount('${key}','${set.id}',this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
       <span style="font-size:.76em;color:#64748b;">登録項目が少ない場合は、ある分だけ出題します。</span>
     </div>
 
@@ -23747,7 +24073,7 @@ window.filterIftySubjectQuizSetItemList = function(setId,query){
 window.renameIftySubjectQuizSet = function(subject,setId){ const key=normalizeIftySubject(subject); const set=getIftySubjectQuizSet(key,setId); if(!set)return; openPracticeNamePrompt('クイズフォルダ名を変更',set.name,name=>{recordUndoState(`${getIftySubjectDisplayName(key)} クイズ名変更`);set.name=name;set.updatedAt=Date.now();savePracticeData();openIftySubjectQuizSet(key,setId);}); };
 window.setIftySubjectQuizMode = function(subject,setId,mode){ const key=normalizeIftySubject(subject); const set=getIftySubjectQuizSet(key,setId); if(!set)return; if(!getIftySubjectQuizModeOptions(key).some(row=>row.mode===mode))return; set.mode=mode;set.modes=[mode];set.updatedAt=Date.now();savePracticeData(); };
 window.toggleIftySubjectQuizMode = function(subject,setId,mode,checked){ const key=normalizeIftySubject(subject);const set=getIftySubjectQuizSet(key,setId);if(!set)return;const allowed=getIftySubjectQuizModeOptions(key).map(row=>row.mode);if(!allowed.includes(mode))return;const modes=new Set(getIftySubjectQuizSetModes(key,set));if(checked)modes.add(mode);else modes.delete(mode);if(!modes.size){alert('問題形式を1つ以上選択してください。');openIftySubjectQuizSet(key,setId);return;}set.modes=[...modes];set.mode=set.modes[0];set.updatedAt=Date.now();savePracticeData();openIftySubjectQuizSet(key,setId); };
-window.setIftySubjectQuizQuestionCount = function(subject,setId,value){ const set=getIftySubjectQuizSet(subject,setId); if(!set)return;const count=Number(value);set.questionCount=[5,10,15,20,25,30].includes(count)?count:5;set.updatedAt=Date.now();savePracticeData(); };
+window.setIftySubjectQuizQuestionCount = function(subject,setId,value){ const set=getIftySubjectQuizSet(subject,setId); if(!set)return;const count=Number(value);set.questionCount=ifty212QuestionCount(count);set.updatedAt=Date.now();savePracticeData(); };
 window.toggleIftySubjectQuizSetItem = function(subject,setId,itemId,checked){ const key=normalizeIftySubject(subject);const set=getIftySubjectQuizSet(key,setId);if(!set)return;const ids=new Set((set.itemIds||[]).map(String));if(checked)ids.add(String(itemId));else ids.delete(String(itemId));set.itemIds=uniqueIftySubjectFlashcardIds(key,[...ids]);set.updatedAt=Date.now();savePracticeData();openIftySubjectQuizSet(key,setId); };
 window.addCheckedToIftySubjectQuizSet = function(subject,setId){ const key=normalizeIftySubject(subject);const set=getIftySubjectQuizSet(key,setId);if(!set)return;const refs=getIftySelectedSubjectFlashcardRefs(key);if(!refs.length){alert('教科画面で追加したい項目にチェックを入れてください。');return;}set.itemIds=uniqueIftySubjectFlashcardIds(key,[...(set.itemIds||[]),...refs.map(ref=>String(ref.item.id))]);set.updatedAt=Date.now();savePracticeData();openIftySubjectQuizSet(key,setId); };
 window.addIftySubjectFolderToQuizSet = function(subject,setId,folderId){ const key=normalizeIftySubject(subject);const set=getIftySubjectQuizSet(key,setId);if(!set)return;const module=getIftySubjectFlashcardModule(key);const folder=(module?.folders||[]).find(row=>String(row?.id||'')===String(folderId));if(!folder)return;const ids=(folder.items||[]).map(item=>String(item.id));set.itemIds=uniqueIftySubjectFlashcardIds(key,[...(set.itemIds||[]),...ids]);set.updatedAt=Date.now();savePracticeData();openIftySubjectQuizSet(key,setId); };
@@ -23768,10 +24094,10 @@ async function startIftySubjectQuizSequencePart124() {
   const count = iftySubjectQuizSequenceCount124(seq);
   const mode = seq.modes[seq.position];
   const managedModes = new Set(['truefalse','year_written','derived']);
-  const specialModes = new Set(['image','write_handwriting','kaeriten','order','era','formula','relations','same_meaning','grammar_table']);
+  const specialModes = new Set(['image','write_handwriting','kanji_write','kaeriten','order','era','formula','relations','same_meaning','grammar_table']);
   const managed = managedModes.has(mode) || (seq.enhanced && !specialModes.has(mode));
   const getState = () => managed ? ifty149Run
-    : mode === 'term_write' && ['SOCIAL STUDIES','SCIENCE'].includes(seq.subject) ? iftySubjectTermWriteState
+    : (mode === 'term_write' || mode === 'kanji_write') && ['SOCIAL STUDIES','SCIENCE'].includes(seq.subject) ? iftySubjectTermWriteState
     : seq.subject === 'SOCIAL STUDIES' ? iftySocialPracticeState
     : seq.subject === 'SCIENCE' ? iftySciencePracticeState
     : seq.subject === 'ANCIENT' ? iftyAncientPracticeState
@@ -23855,7 +24181,7 @@ window.startIftySubjectQuizSet = async function(subject,setId){
   const overrides=ifty149ModeMap(set.itemModes);
   if(forced.length>Number(set.questionCount||5)){alert('必出指定が問題数を超えています。');return;}
   const enhanced=modes.includes('derived')||modes.includes('year_written')||forced.length||Object.keys(overrides).some(id=>ids.includes(id))||ifty149Difficulty(set.difficulty)!=='normal';
-  const specialModes=new Set(['image','write_handwriting','kaeriten','order','era','formula','relations','same_meaning','grammar_table']);
+  const specialModes=new Set(['image','write_handwriting','kanji_write','kaeriten','order','era','formula','relations','same_meaning','grammar_table']);
   // STEP150: Special-mode quizzes must not be blocked by an unrelated difficulty setting.
   // Preserve the legacy engine whenever only special formats can be used.
   const compatibleModes=modes.filter(mode=>!specialModes.has(mode));
@@ -24940,7 +25266,7 @@ window.selectAllIftyAncientPracticeFolders = function(select) {
 };
 
 window.setIftyAncientPracticeQuestionCount = function(value) {
-  iftyAncientPracticeQuestionCount = [5, 10, 15, 20, 25, 30].includes(Number(value)) ? Number(value) : 5;
+  iftyAncientPracticeQuestionCount = ifty212QuestionCount(value);
   renderPracticeHome();
 };
 
@@ -25235,14 +25561,7 @@ function renderIftyUnifiedAncientPracticeHome(modal) {
 
       <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
         <strong style="color:#334155;">問題数</strong>
-        <select onchange="setIftyAncientPracticeQuestionCount(this.value)" style="padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
-          <option value="5" ${iftyAncientPracticeQuestionCount === 5 ? 'selected' : ''}>5問</option>
-          <option value="10" ${iftyAncientPracticeQuestionCount === 10 ? 'selected' : ''}>10問</option>
-          <option value="15" ${iftyAncientPracticeQuestionCount === 15 ? 'selected' : ''}>15問</option>
-          <option value="20" ${iftyAncientPracticeQuestionCount === 20 ? 'selected' : ''}>20問</option>
-          <option value="25" ${iftyAncientPracticeQuestionCount === 25 ? 'selected' : ''}>25問</option>
-          <option value="30" ${iftyAncientPracticeQuestionCount === 30 ? 'selected' : ''}>30問</option>
-        </select>
+        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${iftyAncientPracticeQuestionCount}" onchange="setIftyAncientPracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
         <span style="font-size:.74em;color:#64748b;">リスニングは古文単語では使用しません。</span>
       </div>
 
@@ -25772,6 +26091,7 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
     const meta = getIftySocialPracticeModeMeta(mode);
     let disabledReason = '';
     if (mode === 'image' && imageItems.length < 2) disabledReason = '画像付き項目が2件以上必要です。';
+    else if (mode === 'kanji_write' && !selectedItems.some(ifty208KanjiWriteIsEligible)) disabledReason = '漢字を含む用語と説明を登録してください。';
     else if (mode === 'simple' && selectedItems.length < 2) disabledReason = '項目が2件以上必要です。';
     else if (!selectedItems.length) disabledReason = '学習する項目を選択してください。';
     const disabled = !!disabledReason;
@@ -25815,14 +26135,7 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
 
       <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
         <strong style="color:#334155;">問題数</strong>
-        <select onchange="setIftySocialPracticeQuestionCount(this.value)" style="padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
-          <option value="5" ${iftySocialPracticeQuestionCount === 5 ? 'selected' : ''}>5問</option>
-          <option value="10" ${iftySocialPracticeQuestionCount === 10 ? 'selected' : ''}>10問</option>
-          <option value="15" ${iftySocialPracticeQuestionCount === 15 ? 'selected' : ''}>15問</option>
-          <option value="20" ${iftySocialPracticeQuestionCount === 20 ? 'selected' : ''}>20問</option>
-          <option value="25" ${iftySocialPracticeQuestionCount === 25 ? 'selected' : ''}>25問</option>
-          <option value="30" ${iftySocialPracticeQuestionCount === 30 ? 'selected' : ''}>30問</option>
-        </select>
+        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${iftySocialPracticeQuestionCount}" onchange="setIftySocialPracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
         <span style="font-size:.74em;color:#64748b;">時代・並べ替え・説明は開始時にALLIAが問題を作ります。</span>
       </div>
 
@@ -25830,6 +26143,7 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:14px;">
         ${modeCard('simple')}
+        ${modeCard('kanji_write')}
         ${modeCard('era')}
         ${modeCard('order')}
         ${modeCard('explanation')}
@@ -25862,6 +26176,7 @@ function renderIftyUnifiedSciencePracticeHome(modal) {
     const meta = getIftySciencePracticeModeMeta(mode);
     let disabledReason = '';
     if (mode === 'image' && imageItems.length < 2) disabledReason = '画像付き項目が2件以上必要です。';
+    else if (mode === 'kanji_write' && !selectedItems.some(ifty208KanjiWriteIsEligible)) disabledReason = '漢字を含む用語と説明を登録してください。';
     else if (mode === 'simple' && selectedItems.length < 2) disabledReason = '項目が2件以上必要です。';
     else if (!selectedItems.length) disabledReason = '学習する項目を選択してください。';
     const disabled = !!disabledReason;
@@ -25904,14 +26219,7 @@ function renderIftyUnifiedSciencePracticeHome(modal) {
 
       <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
         <strong style="color:#334155;">問題数</strong>
-        <select onchange="setIftySciencePracticeQuestionCount(this.value)" style="padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
-          <option value="5" ${iftySciencePracticeQuestionCount === 5 ? 'selected' : ''}>5問</option>
-          <option value="10" ${iftySciencePracticeQuestionCount === 10 ? 'selected' : ''}>10問</option>
-          <option value="15" ${iftySciencePracticeQuestionCount === 15 ? 'selected' : ''}>15問</option>
-          <option value="20" ${iftySciencePracticeQuestionCount === 20 ? 'selected' : ''}>20問</option>
-          <option value="25" ${iftySciencePracticeQuestionCount === 25 ? 'selected' : ''}>25問</option>
-          <option value="30" ${iftySciencePracticeQuestionCount === 30 ? 'selected' : ''}>30問</option>
-        </select>
+        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${iftySciencePracticeQuestionCount}" onchange="setIftySciencePracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
         <span style="font-size:.74em;color:#64748b;">公式・単位・並べ替え・説明は開始時にALLIAが問題を作ります。</span>
       </div>
 
@@ -25919,6 +26227,7 @@ function renderIftyUnifiedSciencePracticeHome(modal) {
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:14px;">
         ${modeCard('simple')}
+        ${modeCard('kanji_write')}
         ${modeCard('formula')}
         ${modeCard('order')}
         ${modeCard('explanation')}
@@ -25988,12 +26297,205 @@ function buildIftySubjectTermWritePrompt(subject, ref) {
   return lines.join('\n').trim() || '登録済みの説明に対応する用語を答えてください。';
 }
 
-window.startIftySubjectTermWritePractice = function(subject) {
+
+// ============================================================================
+// STEP208: SOC / SCIENCE kanji handwriting practice (new mode: kanji_write).
+// No OCR guesswork: pen/finger writing is self-marked after revealing the stored
+// term; optional keyboard entry uses the existing local strict term checker.
+// ============================================================================
+let ifty208InkCanvasResizeObserver = null;
+function ifty208KanjiWriteIsEligible(ref) {
+  const item = ref?.item || {};
+  const word = String(item.title || item.topic || '');
+  return /[\p{Script=Han}々]/u.test(word) && !!(String(item.memoryText || '').trim()
+    || String(item.formula || '').trim() || (Array.isArray(item.keyPoints) && item.keyPoints.length));
+}
+function ifty208DrawCanvas(st, canvas) {
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(1, rect.width || 360), h = Math.max(1, rect.height || 240);
+  const dpr = Math.min(3, Math.max(1, Number(window.devicePixelRatio) || 1));
+  const pw = Math.round(w*dpr), ph = Math.round(h*dpr);
+  if (canvas.width !== pw || canvas.height !== ph) { canvas.width = pw; canvas.height = ph; }
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle = '#f8fafc'; ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle = '#dbeafe'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0,h*.5);ctx.lineTo(w,h*.5);ctx.moveTo(w*.5,0);ctx.lineTo(w*.5,h);ctx.stroke();
+  ctx.strokeStyle = '#102338'; ctx.fillStyle = '#102338';
+  ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const stroke of st.inkStrokes || []) {
+    if (!stroke.length) continue;
+    ctx.beginPath(); ctx.moveTo(stroke[0].x*w,stroke[0].y*h);
+    if (stroke.length === 1) {
+      ctx.arc(stroke[0].x*w,stroke[0].y*h,2,0,Math.PI*2);ctx.fill();
+    } else {
+      for (let i=1;i<stroke.length;i++) ctx.lineTo(stroke[i].x*w,stroke[i].y*h);
+      ctx.stroke();
+    }
+  }
+}
+function ifty208InitKanjiCanvas() {
+  if (ifty208InkCanvasResizeObserver) { ifty208InkCanvasResizeObserver.disconnect(); ifty208InkCanvasResizeObserver = null; }
+  const st = iftySubjectTermWriteState;
+  const canvas = document.getElementById('ifty208KanjiWritingCanvas');
+  if (!st || st.mode !== 'kanji_write' || !canvas || st.revealed || st.answered) return;
+  if (!Array.isArray(st.inkStrokes)) st.inkStrokes=[];
+  const point = e => {
+    const r=canvas.getBoundingClientRect();
+    return {x:Math.max(0,Math.min(1,(e.clientX-r.left)/Math.max(1,r.width))),
+      y:Math.max(0,Math.min(1,(e.clientY-r.top)/Math.max(1,r.height)))};
+  };
+  let pointer = null;
+  canvas.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='mouse' && e.button!==0)return;
+    e.preventDefault(); pointer=e.pointerId;
+    canvas.setPointerCapture?.(e.pointerId);
+    st.inkStrokes.push([point(e)]);
+    ifty208DrawCanvas(st,canvas);
+  });
+  canvas.addEventListener('pointermove',e=>{
+    if(pointer!==e.pointerId)return;
+    e.preventDefault();
+    st.inkStrokes[st.inkStrokes.length-1].push(point(e));
+    ifty208DrawCanvas(st,canvas);
+  });
+  const finish=e=>{if(pointer===e.pointerId){pointer=null;try{canvas.releasePointerCapture?.(e.pointerId);}catch(_){}}};
+  canvas.addEventListener('pointerup',finish);
+  canvas.addEventListener('pointercancel',finish);
+  if (typeof ResizeObserver === 'function') {
+    ifty208InkCanvasResizeObserver = new ResizeObserver(()=>ifty208DrawCanvas(st,canvas));
+    ifty208InkCanvasResizeObserver.observe(canvas);
+  }
+  ifty208DrawCanvas(st,canvas);
+}
+window.ifty208KanjiInkUndo = function() {
+  const st=iftySubjectTermWriteState;
+  if(!st || st.mode!=='kanji_write' || st.revealed || st.answered)return;
+  st.inkStrokes?.pop();
+  ifty208DrawCanvas(st,document.getElementById('ifty208KanjiWritingCanvas'));
+};
+window.ifty208KanjiInkClear = function() {
+  const st=iftySubjectTermWriteState;
+  if(!st || st.mode!=='kanji_write' || st.revealed || st.answered)return;
+  st.inkStrokes=[];
+  ifty208DrawCanvas(st,document.getElementById('ifty208KanjiWritingCanvas'));
+};
+function ifty208KanjiWriteFinish(correct, unknown, user, reason) {
+  const st=iftySubjectTermWriteState;
+  if(!st || st.mode!=='kanji_write' || st.answered)return;
+  const q=st.queue[st.index];
+  st.answered=true; st.revealed=true;
+  if(unknown)st.unknown=(st.unknown||0)+1;
+  else if(correct)st.correct++;
+  else st.wrong++;
+  st.last={correct:!!correct,unknown:!!unknown,userAnswer:String(user||'').trim(),challenged:false};
+  st.modelAnswer=q.answer;
+  ifty182Record(st,st.index,q.prompt,unknown?null:!!correct,user||'',q.answer,reason||'');
+  recordIftySubjectStudyEvent(st.subject,q.itemId,!!correct,'kanji_write');
+  renderIfty208KanjiWriteQuestion();
+}
+window.ifty208KanjiShowAnswer = function() {
+  const st=iftySubjectTermWriteState;
+  if(!st || st.mode!=='kanji_write' || st.revealed || st.answered)return;
+  const input=document.getElementById('ifty208KanjiTypedInput');
+  st.typedDraft=String(input?.value||'').trim();
+  const canvas=document.getElementById('ifty208KanjiWritingCanvas');
+  try {st.inkImage=st.inkStrokes?.length ? (canvas?.toDataURL('image/png')||'') : '';}catch(_){st.inkImage='';}
+  st.revealed=true;
+  renderIfty208KanjiWriteQuestion();
+};
+window.ifty208KanjiMark = function(result) {
+  const st=iftySubjectTermWriteState;
+  if(!st || st.mode!=='kanji_write' || !st.revealed || st.answered)return;
+  const user=st.typedDraft || (st.inkStrokes?.length ? '手書き回答（自己判定）' : '');
+  if(result==='unknown')ifty208KanjiWriteFinish(false,true,user,'分からないため模範解答を確認しました。');
+  else if(result==='correct')ifty208KanjiWriteFinish(true,false,user,'登録済みの漢字表記と照合して正解と自己判定しました。');
+  else if(result==='wrong')ifty208KanjiWriteFinish(false,false,user,'登録済みの漢字表記と照合して要復習と自己判定しました。');
+};
+window.ifty208KanjiTypedGrade = function() {
+  const st=iftySubjectTermWriteState;
+  if(!st || st.mode!=='kanji_write' || st.answered || st.revealed)return;
+  const q=st.queue[st.index];
+  const input=document.getElementById('ifty208KanjiTypedInput');
+  const value=String(input?.value||'').trim();
+  if(!value){input?.focus();return;}
+  const accepted=[q.answer,...ifty132Aliases(q.aliases),...ifty132Aliases(q.alternateSpellings)];
+  const correct=accepted.some(term=>normalizeIftyLocalTermAnswer(term)===normalizeIftyLocalTermAnswer(value));
+  st.typedDraft=value;st.inkImage='';
+  ifty208KanjiWriteFinish(correct,false,value,correct?'登録用語と一致しました。':'登録用語と一致しませんでした。手書きの場合は模範解答を見て自己判定してください。');
+};
+function renderIfty208KanjiWriteQuestion() {
+  const st=iftySubjectTermWriteState;
+  if(!st || st.mode!=='kanji_write')return;
+  if (ifty208InkCanvasResizeObserver) {ifty208InkCanvasResizeObserver.disconnect();ifty208InkCanvasResizeObserver=null;}
+  if(st.index>=st.queue.length){
+    // Same multi-format quiz runner; do not double count unknown answers as wrong.
+    if(advanceIftySubjectQuizSequence124(st.subject,st))return;
+    const n=st.correct+st.wrong+(st.unknown||0);
+    showIftyHubContent(`<section class="ifty-portal-shell" style="color:#f8fafc;max-width:800px;margin:auto;">
+      <h1 style="color:#f8fafc">漢字手書き 完了</h1>
+      <p style="color:#dbeafe">正解 ${st.correct} / ${n}　要復習 ${st.wrong}　分からない ${st.unknown||0}</p>
+      ${ifty182Summary(st.history182)}
+      <button onclick="openPracticeHome('${st.subject}')" type="button" style="min-height:44px;padding:11px 16px;margin-top:16px;background:#0f766e;color:white;border:0;border-radius:10px;font-weight:900">PRACTICEへ戻る</button>
+    </section>`,'kanji-write-practice');return;
+  }
+  const q=st.queue[st.index];
+  const result=st.answered?`<div style="background:${st.last?.correct?'#064e3b':'#3b2532'};border:1px solid ${st.last?.correct?'#34d399':'#fb7185'};border-radius:12px;padding:14px;margin-top:12px;color:#fff">
+      <div style="font-size:1.08em;font-weight:900">${st.last?.unknown?'分からない':st.last?.correct?'正解':'要復習'}</div>
+      <div style="margin-top:6px;overflow-wrap:anywhere">登録済みの用語：<strong>${escapeHtml(q.answer)}</strong></div>
+      <button onclick="nextIftySubjectTermWriteQuestion()" data-ifty-enter-primary="true" type="button" style="margin-top:12px;width:100%;min-height:46px;border-radius:9px;border:0;background:#2563eb;color:white;font-weight:900">次へ</button>
+    </div>`:st.revealed?`<div style="background:#102b3a;border:1px solid #2dd4bf;padding:14px;border-radius:12px;margin-top:12px;color:#f8fafc">
+      <div style="color:#a7f3d0;font-weight:800">模範解答（登録済み）</div>
+      <div style="font-size:clamp(22px,5vw,32px);font-weight:900;letter-spacing:.06em;margin:10px 0;overflow-wrap:anywhere">${escapeHtml(q.answer)}</div>
+      <div style="font-size:.82em;color:#cbd5e1;margin-bottom:10px">自分の手書きと比較して判定してください。手書きはAIによる自動認識をしていません。</div>
+      ${st.inkImage?`<img src="${st.inkImage}" alt="あなたが書いた文字" style="display:block;width:100%;max-height:200px;object-fit:contain;background:#f8fafc;border-radius:7px;margin-bottom:12px">`:''}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px">
+        <button type="button" onclick="ifty208KanjiMark('correct')" style="min-height:48px;padding:12px;border:0;border-radius:8px;background:#059669;color:white;font-weight:900">正しく書けた</button>
+        <button type="button" onclick="ifty208KanjiMark('wrong')" style="min-height:48px;padding:12px;border:0;border-radius:8px;background:#b91c1c;color:white;font-weight:900">書き間違えた</button>
+        <button type="button" onclick="ifty208KanjiMark('unknown')" style="min-height:48px;padding:12px;border:1px solid #fbbf24;border-radius:8px;background:#374151;color:#fde68a;font-weight:900">分からなかった</button>
+      </div></div>`:null;
+  const answerArea=st.revealed||st.answered?'':`<div style="margin-top:13px">
+    <p style="color:#dbeafe;font-size:.86em;margin:0 0 8px">指やペンで漢字を書いてください。ペン入力が難しければ下の文字入力も使えます。</p>
+    <canvas id="ifty208KanjiWritingCanvas" aria-label="漢字手書き欄" width="960" height="480" style="display:block;width:100%;height:clamp(190px,35vh,280px);border:2px solid #94a3b8;background:#f8fafc;border-radius:12px;touch-action:none;box-sizing:border-box;cursor:crosshair"></canvas>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
+      <button type="button" onclick="ifty208KanjiInkUndo()" style="flex:1;min-height:44px;padding:10px;border:1px solid #64748b;border-radius:9px;background:#30445e;color:#fff;font-weight:800">一画戻す</button>
+      <button type="button" onclick="ifty208KanjiInkClear()" style="flex:1;min-height:44px;padding:10px;border:1px solid #64748b;border-radius:9px;background:#30445e;color:#fff;font-weight:800">全消去</button>
+    </div>
+    <button type="button" onclick="ifty208KanjiShowAnswer()" style="width:100%;min-height:48px;margin-top:12px;border:0;border-radius:9px;background:#0f766e;color:white;font-weight:900">模範解答を表示して自己採点</button>
+    <div style="margin-top:16px;padding:11px;border:1px solid #536d88;border-radius:10px;background:#13273e">
+      <label for="ifty208KanjiTypedInput" style="color:#e2e8f0;font-weight:800">キーボードで入力（任意・自動採点）</label>
+      <input id="ifty208KanjiTypedInput" lang="ja" autocomplete="off" autocapitalize="off" enterkeyhint="done" placeholder="日本語の用語を入力" style="display:block;box-sizing:border-box;width:100%;min-height:45px;margin:8px 0;padding:10px;border:1px solid #8298b2;border-radius:8px;background:#0e1c30;color:white;font-size:16px">
+      <button type="button" onclick="ifty208KanjiTypedGrade()" style="width:100%;min-height:44px;border:none;border-radius:9px;background:#2563eb;color:white;font-weight:900">入力した用語を自動採点</button>
+    </div></div>`;
+  showIftyHubContent(`<section class="ifty-portal-shell" style="max-width:860px;margin:0 auto;color:#f8fafc;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div><h1 class="ifty-portal-title" style="color:#5eead4">漢字手書き</h1>
+      <p class="ifty-portal-subtitle" style="color:#cbd5e1">${escapeHtml(getIftySubjectDisplayName(st.subject))} ・ ${st.index+1}/${st.queue.length} ・ 正解 ${st.correct} ・ 要復習 ${st.wrong}</p></div>
+      <button type="button" onclick="openPracticeHome('${st.subject}')" style="background:#334155;color:white;min-height:44px;border:1px solid #94a3b8;border-radius:9px;padding:10px 14px;font-weight:800">終了</button>
+    </div>
+    <div style="margin-top:14px;background:#162b40;color:#f8fafc;border:1px solid #6b829d;padding:16px;border-radius:12px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(q.prompt)}</div>
+    ${answerArea||''}${result||''}
+  </section>`,'kanji-write-practice');
+  if(!st.revealed && !st.answered){
+    ifty208InitKanjiCanvas();
+    const input=document.getElementById('ifty208KanjiTypedInput');
+    if(input){input.value=st.typedDraft||'';input.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();window.ifty208KanjiTypedGrade();}};}
+  }
+}
+
+window.startIftySubjectTermWritePractice = function(subject, mode = 'term_write') {
   const key = normalizeIftySubject(subject);
+  const isKanjiWrite = mode === 'kanji_write';
   const refs = getIftySubjectTermWriteRefs(key)
-    .filter(ref => String(ref?.item?.title || ref?.item?.topic || '').trim());
+    .filter(ref => String(ref?.item?.title || ref?.item?.topic || '').trim())
+    .filter(ref => !isKanjiWrite || (/[\p{Script=Han}々]/u.test(String(ref.item.title || ref.item.topic || ''))
+      && (String(ref.item.memoryText || '').trim() || String(ref.item.formula || '').trim()
+        || (Array.isArray(ref.item.keyPoints) && ref.item.keyPoints.length))));
   if (!refs.length) {
-    alert('用語記述に使える項目がありません。');
+    alert(isKanjiWrite ? '漢字を含む用語と説明を登録してください。' : '用語記述に使える項目がありません。');
     return;
   }
 
@@ -26002,6 +26504,8 @@ window.startIftySubjectTermWritePractice = function(subject) {
 
   iftySubjectTermWriteState = {
     subject: key,
+    mode: isKanjiWrite ? 'kanji_write' : 'term_write',
+    unknown: 0,
     queue: picked.map(ref => ({
       itemId: String(ref.item.id),
       folderId: String(ref.folder.id),
@@ -26025,6 +26529,7 @@ window.startIftySubjectTermWritePractice = function(subject) {
 function renderIftySubjectTermWriteQuestion() {
   const st = iftySubjectTermWriteState;
   if (!st) return;
+  if (st.mode === 'kanji_write') { renderIfty208KanjiWriteQuestion(); return; }
 
   if (st.index >= st.queue.length) {
     const total = st.correct + st.wrong;
@@ -26177,13 +26682,17 @@ window.nextIftySubjectTermWriteQuestion = function() {
   if (!st) return;
   st.index += 1;
   st.answered = false;
+  st.revealed = false;
   st.last = null;
+  st.inkStrokes = [];
+  st.typedDraft = '';
+  st.inkImage = '';
   renderIftySubjectTermWriteQuestion();
 };
 
 
 
-function openPracticeNamePrompt(title, defaultValue, onConfirm) {
+function openPracticeNamePrompt(title, defaultValue, onConfirm, options = {}) {
   let modal = document.getElementById('practiceNameModal');
   if (!modal) {
     modal = document.createElement('div');
@@ -26214,9 +26723,15 @@ function openPracticeNamePrompt(title, defaultValue, onConfirm) {
   if (confirmBtn) confirmBtn.onclick = finish;
   if (input) {
     input.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); finish(); } };
-    setTimeout(() => { input.focus(); input.select(); }, 30);
+    if (options.selectImmediately) {
+      // Runs synchronously in the tap/click handler so iOS can open the keyboard.
+      input.focus();
+      input.select();
+    } else {
+      setTimeout(() => { input.focus(); input.select(); }, 30);
+    }
   }
-  injectIftyPracticeTools(modal, 'ENGLISH');
+  if (!options.hidePracticeTools) injectIftyPracticeTools(modal, 'ENGLISH');
 }
 
 window.createPracticeFlashcardSet = function() {
@@ -26745,14 +27260,7 @@ window.openQuizSet = function(setId) {
 
       <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
         <b style="color:#334155;">3. 問題数</b>
-        <select onchange="setQuizQuestionCount('${set.id}',this.value)" style="padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
-          <option value="5" ${set.questionCount === 5 ? 'selected' : ''}>5問</option>
-          <option value="10" ${set.questionCount === 10 ? 'selected' : ''}>10問</option>
-          <option value="15" ${set.questionCount === 15 ? 'selected' : ''}>15問</option>
-          <option value="20" ${set.questionCount === 20 ? 'selected' : ''}>20問</option>
-          <option value="25" ${set.questionCount === 25 ? 'selected' : ''}>25問</option>
-          <option value="30" ${set.questionCount === 30 ? 'selected' : ''}>30問</option>
-        </select>
+        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${set.questionCount}" onchange="setQuizQuestionCount('${set.id}',this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
         <span style="font-size:.76em;color:#64748b;">登録語数が少ない場合は、ある分だけ出題します。</span>
       </div>
 
@@ -26826,7 +27334,7 @@ window.setQuizQuestionCount = function(setId, value) {
   if (!set) return;
   const count = Number(value);
   recordUndoState('クイズ問題数変更');
-  set.questionCount = [5, 10, 15, 20, 25, 30].includes(count) ? count : 5;
+  set.questionCount = ifty212QuestionCount(count);
   set.progress = null;
   savePracticeData();
   openQuizSet(setId);
@@ -26906,7 +27414,7 @@ window.startQuizSet = function(setId, restart=false, reviewOnly=false) {
     validIds=validIds.filter(id=>ifty203IsAccentCandidate(getWordById(id)?.word));
   if(!validIds.length){ alert(reviewOnly?'復習対象の単語がありません。':'このクイズフォルダに利用できる単語がありません。'); return; }
   if(restart || !set.progress || !!set.progress.reviewOnly!==!!reviewOnly){
-    const questionCount = set.systemReview ? validIds.length : ([5, 10, 15, 20, 25, 30].includes(Number(set.questionCount)) ? Number(set.questionCount) : 5);
+    const questionCount = set.systemReview ? validIds.length : ifty212QuestionCount(set.questionCount);
     const required=reviewOnly||set.systemReview?[]:ifty149ForceIds(set.forcedIds).filter(id=>validIds.includes(id));
     if(required.length>questionCount){alert(`必出指定${required.length}語に対し問題数${questionCount}問です。問題数を増やしてください。`);return;}
     let queue=ifty149Queue(validIds,required,Math.min(questionCount,validIds.length),set.random);
@@ -27766,10 +28274,10 @@ window.deleteCurrentChatSession = function() {
 };
 
 function saveChatSessions() {
-  try {
-    localStorage.setItem("chat_sessions_" + currentUser, JSON.stringify(chatSessions));
-    queueIftyCloudSave('チャット更新');
-  } catch(e) {}
+  if (ifty210CorruptLocalData) return false;
+  const saved = ifty210SaveLocalJson('chat_sessions_' + currentUser, chatSessions, 'チャット');
+  queueIftyCloudSave('チャット更新');
+  return saved;
 }
 
 function updateChatSessionSelect() {
@@ -29426,7 +29934,7 @@ touch-action: none;
               <ul>
                 <li>問題形式・出題順・問題数などを設定して開始します。</li>
                 <li>必要な項目だけ選ぶ、フォルダ単位で追加する、全項目から出す、といった使い分けができます。</li>
-                <li>短いセットを何度も回す場合と、最大30問でまとめて確認する場合を使い分けます。</li>
+                <li>短いセットと、登録数に応じた長いセットを使い分けられます。</li>
               </ul>
             </div>
           </details>
@@ -32606,7 +33114,7 @@ function ifty144YearEnsureSelection(){
 }
 window.ifty144YearToggleFolder=function(id,checked){ifty144YearSelectionInitialized=true;if(checked)ifty144YearSelection.add(String(id));else ifty144YearSelection.delete(String(id));ifty144RenderYearPracticeHome();};
 window.ifty144YearSetConfig=function(prop,value){
-  if(prop==='count')ifty144YearSetup.count=Math.min(30,Math.max(1,Number(value)||10));
+  if(prop==='count')ifty144YearSetup.count=ifty212QuestionCount(value,10);
   else if(prop==='random')ifty144YearSetup.random=!!value;
   ifty144RenderYearPracticeHome();
 };
@@ -32642,7 +33150,7 @@ function ifty144RenderYearPracticeHome(){
       <fieldset style="border:0;padding:0;margin:0 0 12px;"><legend><b>回答方式</b></legend>
         ${[['choice','四択'],['written','記述']].map(([key,label])=>`<label style="display:inline-flex;gap:5px;align-items:center;margin:5px 15px 5px 0;"><input type="checkbox" onchange="ifty144YearToggleMode('formats','${key}',this.checked)" ${ifty144YearSetup.formats.includes(key)?'checked':''}>${label}</label>`).join('')}
       </fieldset>
-      <label>問題数 <select onchange="ifty144YearSetConfig('count',this.value)" style="padding:8px;border-radius:8px;min-height:40px;">${[5,10,15,20,25,30].map(n=>`<option value="${n}" ${ifty144YearSetup.count===n?'selected':''}>${n}問</option>`).join('')}</select></label>
+      <label>問題数 <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${ifty144YearSetup.count}" onchange="ifty144YearSetConfig('count',this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px;border-radius:8px;min-height:40px;"></label>
       <label style="margin-left:14px;"><input type="checkbox" ${ifty144YearSetup.random?'checked':''} onchange="ifty144YearSetConfig('random',this.checked)">ランダム出題</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;"><button type="button" onclick="ifty144StartYearPractice()" ${!selected.length||!ifty144YearSetup.modes.length||!ifty144YearSetup.formats.length?'disabled':''} style="background:#7c3aed;color:white;border:0;border-radius:8px;padding:12px 19px;font-weight:900;">▶ 練習開始</button><button type="button" onclick="ifty144SaveYearPracticeSet()" ${!selected.length?'disabled':''} style="background:#0f766e;color:#fff;border:0;border-radius:8px;padding:12px;">設定をクイズフォルダとして保存</button></div>
     </div>
@@ -32663,7 +33171,7 @@ window.ifty144LoadYearPracticeSet=function(id){
   const set=ifty144GetSet(id);if(!set)return;
   const ids=new Set(set.itemIds||[]);
   ifty144YearSelectionInitialized=true;ifty144YearSelection=new Set(getIftySortedYearFolders().filter(f=>getIftyYearEntriesForFolder(f.id).some(e=>ids.has(String(e.id)))).map(f=>String(f.id)));
-  ifty144YearSetup={formats:(set.formats||['written']).filter(x=>['choice','written'].includes(x)),modes:(set.modes||['event_year']).filter(x=>['event_year','year_event','year_period'].includes(x)),count:Number(set.count)||10,random:set.random!==false};
+  ifty144YearSetup={formats:(set.formats||['written']).filter(x=>['choice','written'].includes(x)),modes:(set.modes||['event_year']).filter(x=>['event_year','year_event','year_period'].includes(x)),count:ifty212QuestionCount(set.count,10),random:set.random!==false};
   ifty144RenderYearPracticeHome();
 };
 window.ifty144RunYearPracticeSet=function(id){
@@ -32680,11 +33188,11 @@ window.ifty149EditYearSet=function(id){
  const modes=[['event_year|choice','出来事 → 年号（四択）'],['event_year|written','出来事 → 年号（記述）'],['year_event|choice','年号 → 出来事（四択）'],['year_event|written','年号 → 出来事（記述）'],['year_period|choice','年号 → 時代（四択）'],['year_period|written','年号 → 時代（記述）']];
  modal.innerHTML=`<section class="ifty144-years-modal" style="width:min(850px,100%);max-height:92vh;overflow:auto;padding:14px;background:#fff;color:#0f172a;border-radius:12px;box-sizing:border-box;">
  <button onclick="ifty144RenderYearPracticeHome()">◀ 一覧へ戻る</button><h2>${escapeHtml(set.name)}・詳細設定</h2>
- <label>問題数 <select onchange="ifty149YearCount('${escapeHtml(id)}',this.value)">${[5,10,15,20,25,30].map(n=>`<option value="${n}" ${Number(set.count)===n?'selected':''}>${n}問</option>`).join('')}</select></label>
+ <label>問題数 <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${ifty212QuestionCount(set.count,10)}" onchange="ifty149YearCount('${escapeHtml(id)}',this.value)"></label>
  ${ifty149ConfigPanel('YEARS',set,rows,modes)}<p>年号データだけで出題します。難易度は出題形式・関連性の優先順に反映されます。</p>
  </section>`;
 };
-window.ifty149YearCount=function(id,value){const set=ifty144GetSet(id);if(!set)return;set.count=Number(value)||10;savePracticeData();};
+window.ifty149YearCount=function(id,value){const set=ifty144GetSet(id);if(!set)return;set.count=ifty212QuestionCount(value,10);savePracticeData();};
 function ifty147RankYearChoices(mode, row, choices, rows) {
   const targetYear = Number(row.year) || 0;
   const era = normalizeIftyYearEra(row.era);
@@ -32772,7 +33280,7 @@ window.ifty144StartYearPractice=function(givenRows=null,givenSettings=null){
   const pool=ifty144YearQuestionBank(rows,poolModes,poolFormats);
   if(!pool.length){alert('出題可能な問題がありません。出来事や時代区分を保存するか、問題形式を変更してください。四択には正解以外の候補が3件必要です。');return;}
   let seq=config.random!==false?ifty144Shuffle(pool):pool;
-  const count=Math.max(1,Math.min(30,Number(config.count)||10));
+  const count=ifty212QuestionCount(config.count,10);
   if(Array.isArray(config.itemIds)){
     const mandatory=ifty149ForceIds(config.forcedIds).filter(id=>config.itemIds.map(String).includes(id));
     if(mandatory.length>count){alert('必出指定が問題数を超えています。');return;}
@@ -33498,7 +34006,7 @@ window.ifty151OpenSetup=function(subject){
   if(!prev||!sources.some(s=>ifty151Setup.folderIds.has(s.id)))ifty151Setup.folderIds=new Set(sources.map(s=>s.id));
   ifty151DrawSetup();
 };
-window.ifty151SetCount=function(value){if(ifty151Setup)ifty151Setup.count=Math.max(1,Math.min(30,Number(value)||5));};
+window.ifty151SetCount=function(value){if(ifty151Setup)ifty151Setup.count=ifty212QuestionCount(value);};
 window.ifty151SetDifficulty=function(value){if(ifty151Setup&&['easy','normal','hard','extreme'].includes(value))ifty151Setup.difficulty=value;};
 window.ifty151ToggleFolder=function(folderId,checked){
   if(!ifty151Setup)return;
@@ -33519,7 +34027,7 @@ function ifty151DrawSetup(){
       <p style="font-size:.85rem;color:#64748b;margin:10px 0 0;">選択項目：<b id="ifty151SelectedCount">${sources.filter(s=>state.folderIds.has(s.id)).reduce((n,s)=>n+s.refs.length,0)}</b> 件</p>
     </div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;align-items:end;">
-      <label style="min-width:115px;flex:1;color:#334155;font-weight:850;">問題数<select onchange="ifty151SetCount(this.value)" style="display:block;width:100%;font-size:16px;padding:10px;border:1px solid #94a3b8;border-radius:8px;margin-top:6px;">${[5,10,15,20,25,30].map(n=>`<option value="${n}" ${state.count===n?'selected':''}>${n}問</option>`).join('')}</select></label>
+      <label style="min-width:115px;flex:1;color:#334155;font-weight:850;">問題数<input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${state.count}" onchange="ifty151SetCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;display:block;width:100%;font-size:16px;padding:10px;border:1px solid #94a3b8;border-radius:8px;margin-top:6px;"></label>
       <label style="min-width:180px;flex:2;color:#334155;font-weight:850;">難易度<select onchange="ifty151SetDifficulty(this.value)" style="display:block;width:100%;font-size:16px;padding:10px;border:1px solid #94a3b8;border-radius:8px;margin-top:6px;">${[['easy','easy'],['normal','normal'],['hard','hard'],['extreme','extreme']].map(([v,t])=>`<option value="${v}" ${v===state.difficulty?'selected':''}>${t}</option>`).join('')}</select></label>
     </div>
     <div style="font-size:.82rem;color:#64748b;margin:10px 0 12px;">正しい問題と誤った問題を混ぜて出題します。記述の表現差はALLIAが判定します。</div>
@@ -33534,7 +34042,7 @@ window.ifty151StartSavedSet=function(subject,setId){
   const all=ifty151Sources(key).flatMap(s=>s.refs);
   const allowed=new Set((set.itemIds||[]).map(String));
   const filtered=all.filter(row=>allowed.has(String(row.id)));
-  const count=Math.max(1,Math.min(30,Number(set.questionCount||set.count)||5));
+  const count=ifty212QuestionCount(set.questionCount||set.count);
   const required=ifty149ForceIds(set.forcedIds).filter(id=>filtered.some(row=>row.id===id));
   if(required.length>count){alert('必出指定が問題数を超えています。');return;}
   if(!filtered.length){alert('出題できる教材が登録されていません。');return;}
@@ -33829,8 +34337,8 @@ function ifty162CaptureSubjectMistake(subject, itemId, source) {
   const key=String(subject||'').toUpperCase();
   const sourceKey=String(source||'');
   let st=null, q=null, mode='';
-  if (sourceKey==='term_write') {
-    st=iftySubjectTermWriteState; q=st?.queue?.[st.index];mode='term_write';
+  if (sourceKey==='term_write' || sourceKey==='kanji_write') {
+    st=iftySubjectTermWriteState; q=st?.queue?.[st.index];mode=sourceKey;
   } else if (sourceKey==='social_image_quiz' || sourceKey==='science_image_quiz') {
     st=key==='SOCIAL STUDIES'?iftySocialVisualQuizState:iftyScienceVisualQuizState;
     const targetId=st?.queue?.[st.index];
@@ -34752,7 +35260,16 @@ function ifty175Entries(subject='',setId=''){
 // previously saved question of the SAME subject and compatible format.
 function ifty175Pick(subject,{sourceId='',setId='',mode='',exclude=[]}={}){
  const excluded=new Set(exclude.map(String));
- const candidates=ifty175Entries(subject).filter(row=>!excluded.has(row.id)&&ifty175ModeMatches(mode,row.question,row));
+ const candidates=ifty175Entries(subject).filter(row=>{
+   if(excluded.has(row.id)||!ifty175ModeMatches(mode,row.question,row))return false;
+   if(mode==='explanation'){
+     const q=row.question||{};
+     // STEP209: keep legacy saved quizzes for review, but do not present an
+     // old cause/comparison question as a new definition exercise.
+     if(q.definitionOnly!==true && !/とは何か|定義|何を意味/.test(String(q.question||'')))return false;
+   }
+   return true;
+ });
  if(!candidates.length)return null;
  const rank=row=>(sourceId&&row.sourceId===String(sourceId)?100:0)+(setId&&row.setId===String(setId)?30:0)+(row.origin==='manual'?8:0);
  candidates.sort((a,b)=>rank(b)-rank(a)||Number(a.lastSeenAt||0)-Number(b.lastSeenAt||0));
@@ -35026,7 +35543,7 @@ function ifty177PracticeHomeSection(){
     <div style="font-size:.83em;color:#c7e2fb;margin:4px 0 12px;">フラッシュカードで単語をめくり、録音してALLIAに発音を添削してもらえます。</div>
     <div style="display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));">
       <label style="font-weight:800;font-size:.88em;">フォルダから練習<select id="ifty177Folder" style="${formStyle}">${choices||'<option value="">単語のあるフォルダがありません</option>'}</select></label>
-      <label style="font-weight:800;font-size:.88em;">問題数<select id="ifty177Count" style="${formStyle}"><option value="5">5問</option><option value="10" selected>10問</option><option value="20">20問</option><option value="30">30問</option></select></label>
+      <label style="font-weight:800;font-size:.88em;">問題数<input id="ifty177Count" type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="10" style="${formStyle}"></label>
     </div>
     <button type="button" onclick="ifty177StartFolder()" ${choices?'':'disabled'} style="margin-top:9px;width:100%;border:0;border-radius:9px;background:#2563eb;color:#fff;padding:12px;min-height:46px;font-weight:900;cursor:pointer;">📇 このフォルダの発音練習</button>
     <div style="border-top:1px solid #537391;margin:15px 0 11px;"></div>
@@ -35077,14 +35594,14 @@ window.ifty177StartFolder=function(){
   if(!source)return alert('単語のあるフォルダを選択してください。');
   const folder=ifty177PrepareFolder(source);
   if(!folder.items.length)return alert('発音練習できる単語がありません。');
-  const count=Math.min(30,Math.max(1,Number(document.getElementById('ifty177Count')?.value)||10));
+  const count=ifty212QuestionCount(document.getElementById('ifty177Count')?.value,10);
   ifty177Session={mode:'folder',folderId:folder.id,ids:ifty177Shuffled(folder.items).slice(0,count).map(item=>item.id),index:0,startedAt:Date.now(),sourceName:String(source.name||'フォルダ'),difficulty:'',kind:'word'};
   ifty177Render();
 };
 window.ifty177StartRandom=function(){
   const kind=document.getElementById('ifty177Kind')?.value||'word';
   const difficulty=document.getElementById('ifty177Difficulty')?.value||'normal';
-  const count=Math.min(30,Math.max(1,Number(document.getElementById('ifty177Count')?.value)||10));
+  const count=ifty212QuestionCount(document.getElementById('ifty177Count')?.value,10);
   const pool=IFTY177_RANDOM_BANK[difficulty]||IFTY177_RANDOM_BANK.normal;
   const rows=kind==='mix'?[...pool.word,...pool.sentence]:kind==='sentence'?pool.sentence:pool.word;
   const store=getIftyPronunciationModule();
@@ -35693,7 +36210,7 @@ window.ifty197StartTruthPart=function(setId,count){
   if(!set)return;
   const original=set.questionCount;
   try{
-    set.questionCount=Math.max(1,Math.min(30,Number(count)||1));
+    set.questionCount=ifty212QuestionCount(count,1);
     window.ifty151StartSavedSet('BASIC SENTENCES',setId);
   }finally{set.questionCount=original;}
 };
