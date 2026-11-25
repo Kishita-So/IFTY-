@@ -32,7 +32,7 @@
 // Q3 STEP111：クラス配布用UX
 // 初回ガイド / STEP表示 / 更新検知 / 不具合報告
 // ==========================================
-const IFTY_APP_STEP = 213;
+const IFTY_APP_STEP = 216;
 const IFTY_FIRST_RUN_GUIDE_VERSION = 1;
 let iftyRemoteAppStep = 0;
 let iftyUpdateCheckPromise = null;
@@ -104,7 +104,7 @@ function renderIftyFirstRunGuideStep(index) {
   count.textContent = `${i + 1} / ${steps.length}`;
   prev.disabled = i === 0;
   prev.style.opacity = i === 0 ? '.45' : '1';
-  next.textContent = i === steps.length - 1 ? '使い始める' : '次へ';
+  next.textContent = i === steps.length - 1 ? ifty216T("使い始める","Get started") : ifty216T("次へ","Next");
 }
 
 window.moveIftyFirstRunGuide = function(delta) {
@@ -147,15 +147,15 @@ function maybeShowIftyFirstRunGuide(options = {}) {
           <div style="color:#38bdf8;font-size:.72em;font-weight:950;letter-spacing:.12em;">WELCOME TO IFTY</div>
           <div id="iftyFirstRunGuideTitle" style="font-size:1.25em;font-weight:950;margin-top:3px;">最初の5ステップ</div>
         </div>
-        <button type="button" onclick="closeIftyFirstRunGuide()" style="border:1px solid #475569;background:#1e293b;color:#e2e8f0;border-radius:9px;padding:8px 10px;font-weight:900;cursor:pointer;">スキップ</button>
+        <button type="button" onclick="closeIftyFirstRunGuide()" style="border:1px solid #475569;background:#1e293b;color:#e2e8f0;border-radius:9px;padding:8px 10px;font-weight:900;cursor:pointer;">${ifty216Markup("スキップ","Skip")}</button>
       </div>
       <div id="iftyFirstRunGuideBody" style="padding:20px 18px 15px;"></div>
       <div style="padding:12px 16px 16px;border-top:1px solid #334155;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
           <span id="iftyFirstRunCount" style="color:#94a3b8;font-size:.8em;font-weight:800;"></span>
           <div style="display:flex;gap:8px;">
-            <button id="iftyFirstRunPrev" type="button" onclick="moveIftyFirstRunGuide(-1)" style="border:1px solid #475569;background:#1e293b;color:#e2e8f0;border-radius:9px;padding:9px 12px;font-weight:900;cursor:pointer;">戻る</button>
-            <button id="iftyFirstRunNext" type="button" onclick="moveIftyFirstRunGuide(1)" style="border:none;background:#0284c7;color:white;border-radius:9px;padding:9px 14px;font-weight:950;cursor:pointer;">次へ</button>
+            <button id="iftyFirstRunPrev" type="button" onclick="moveIftyFirstRunGuide(-1)" style="border:1px solid #475569;background:#1e293b;color:#e2e8f0;border-radius:9px;padding:9px 12px;font-weight:900;cursor:pointer;">${ifty216Markup("戻る","Back")}</button>
+            <button id="iftyFirstRunNext" type="button" onclick="moveIftyFirstRunGuide(1)" style="border:none;background:#0284c7;color:white;border-radius:9px;padding:9px 14px;font-weight:950;cursor:pointer;">${ifty216Markup("次へ","Next")}</button>
           </div>
         </div>
         <label for="iftyFirstRunNeverAgain" style="margin-top:12px;display:flex;align-items:center;gap:9px;padding:10px 11px;border:1px solid #475569;border-radius:10px;background:#0b1220;color:#e2e8f0;font-size:.84em;font-weight:850;cursor:pointer;user-select:none;">
@@ -300,7 +300,7 @@ window.openIftyBugReport = function() {
     <div role="dialog" aria-modal="true" style="width:min(620px,100%);max-height:92vh;overflow:auto;background:#111827;color:#f8fafc;border:1px solid #475569;border-radius:17px;padding:17px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
         <div>
-          <div style="font-weight:950;font-size:1.15em;">🐞 不具合を報告</div>
+          <div style="font-weight:950;font-size:1.15em;">${ifty216Markup("🐞 不具合を報告","🐞 Report an issue")}</div>
           <div style="color:#94a3b8;font-size:.78em;margin-top:4px;">STEP番号・画面・端末情報を自動でまとめます。</div>
         </div>
         <button type="button" onclick="document.getElementById('iftyBugReportModal')?.remove()" style="border:1px solid #475569;background:#1e293b;color:white;border-radius:8px;width:34px;height:34px;font-weight:900;cursor:pointer;">×</button>
@@ -420,18 +420,11 @@ function isIftyPracticeQuestionActive(modal) {
   return !!(modal && modal.getAttribute('data-ifty-question-active') === 'true');
 }
 
-// IFTY STEP192: Cloudflare GraphQL Neurons usage (independent of local request count).
-const IFTY_ALLIA_USAGE_STORAGE_PREFIX = 'ifty_allia_usage_';
-const IFTY_ALLIA_USAGE_RESET_HOUR_JST = 9;
-const IFTY_ALLIA_LIMIT_STATE_PREFIX = 'ifty_allia_limit_state_';
-const IFTY_ALLIA_LIMIT_LEARNED_PREFIX = 'ifty_allia_limit_learned_';
-const IFTY_ALLIA_NEAR_RATIO = 0.15;
-const IFTY_ALLIA_ESTIMATED_NEAR_RATIO = 0.82;
+// STEP215: no Cloudflare quota monitoring. Keep only local performance metrics.
 const IFTY_ALLIA_ACCOUNT_TYPES = new Set([
   'account_register','account_login','account_session','account_logout','account_profile',
   'account_username_change','account_email_request','account_email_verify','account_recovery_code_generate','account_password_change',
   'account_sessions','account_session_revoke','account_logout_all','account_delete',
-  'allia_usage_status',
   'password_reset_request','password_reset_confirm','password_reset_recovery','cloud_load','cloud_save','activity_heartbeat','activity_stats',
   'friends_list','friend_request_send','friend_request_accept','friend_request_decline','friend_request_cancel','friend_remove','friend_activity_visibility',
   'class_list','class_create','class_join','class_leave','class_delete','class_members','class_avatar_save',
@@ -1604,7 +1597,7 @@ function renderIftySideMenu() {
   overlay.innerHTML = `
     <nav id="iftySideMenuDrawer" aria-label="IFTYメニュー" onclick="event.stopPropagation()">
       <div class="ifty-side-menu-header">
-        <img class="ifty-side-menu-logo" src="${getIftyProfileImageSrc()}" alt="プロフィール">
+        <img class="ifty-side-menu-logo" src="${getIftyProfileImageSrc()}" alt="${ifty216Markup("プロフィール","Profile")}">
         <div style="min-width:0;">
           <div class="ifty-side-menu-title">IFTY</div>
           <div class="ifty-side-menu-user">${accountName}</div>
@@ -1629,7 +1622,7 @@ function renderIftySideMenu() {
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyExampleBank();">📚 ${escapeHtml(getIftySideMenuDisplayText('examples'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPronunciation();">🗣 ${escapeHtml(getIftySideMenuDisplayText('pronunciation'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyBasicSentences();">📝 ${escapeHtml(getIftySideMenuDisplayText('basicSentences'))}</button>
-      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyConversation();">🗣 ENGLISH CONVERSATION</button>
+      <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyConversation();">${ifty216Markup("🗣 英会話","🗣 ENGLISH CONVERSATION")}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyYears();">📅 ${escapeHtml(getIftySideMenuDisplayText('years'))}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openIftyPlaces();">🗺️ ${escapeHtml(getIftyHomeSubjectNameMode()==='ja'?'地図・地名':'PLACES')}</button>
       <button class="ifty-side-menu-item" type="button" onclick="closeIftySideMenu(); openPracticeHome(currentIftySubject);">⚔️ ${escapeHtml(getIftySideMenuDisplayText('practice'))}</button>
@@ -1843,22 +1836,22 @@ window.openIftyPatchNotes = function() {
   overlay.tabIndex = -1;
   overlay.setAttribute('role','presentation');
   overlay.innerHTML = `
-    <section id="iftyPatchNotesPanel" role="dialog" aria-modal="true" aria-label="IFTY パッチノート">
+    <section id="iftyPatchNotesPanel" role="dialog" aria-modal="true" aria-label="${ifty216Markup("IFTY パッチノート","IFTY patch notes")}">
       <div class="ifty-patch-header">
         <div>
-          <div class="ifty-patch-title">📰 パッチノート</div>
-          <div class="ifty-patch-subtitle">IFTYの更新履歴・追加機能・改善内容</div>
+          <div class="ifty-patch-title">${ifty216Markup("📰 パッチノート","📰 Patch notes")}</div>
+          <div class="ifty-patch-subtitle">${ifty216Markup("IFTYの更新履歴・追加機能・改善内容","IFTY updates, new features and improvements")}</div>
         </div>
-        <button class="ifty-patch-close" type="button" aria-label="閉じる" onclick="closeIftyPatchNotes()">×</button>
+        <button class="ifty-patch-close" type="button" aria-label="${ifty216Markup("閉じる","Close")}" onclick="closeIftyPatchNotes()">×</button>
       </div>
-      <div class="ifty-patch-heading">更新履歴</div>
+      <div class="ifty-patch-heading">${ifty216Markup("更新履歴","Update history")}</div>
       <div id="iftyPatchNotesList">${iftyPatchRenderItems(IFTY_PATCH_NOTES_FALLBACK)}</div>
       <section class="ifty-patch-openchat" aria-label="IFTYオープンチャット">
-        <div class="ifty-patch-heading" style="margin:0 0 6px;">💬 オープンチャット</div>
+        <div class="ifty-patch-heading" style="margin:0 0 6px;">${ifty216Markup("💬 オープンチャット","💬 Open chat")}</div>
         <div style="color:#d6e2f3;font-size:.85rem;line-height:1.6;">IFTYに関する情報交換・更新のお知らせはこちら。</div>
         <img class="ifty-patch-qr" id="iftyPatchQrImage" src="openchat-qr.png" alt="オープンチャット参加用QRコード" loading="lazy" onload="iftyPatchQrLoaded()" onerror="iftyPatchQrMissing(this)">
-        <p id="iftyPatchOpenChatMessage" class="ifty-patch-message" aria-live="polite">QRコードを読み込み中…</p>
-        <a id="iftyPatchOpenChatLink" class="ifty-patch-openchat-link" href="#" target="_blank" rel="noopener noreferrer" hidden>LINEオープンチャットを開く ↗</a>
+        <p id="iftyPatchOpenChatMessage" class="ifty-patch-message" aria-live="polite">${ifty216Markup("QRコードを読み込み中…","Loading QR code…")}</p>
+        <a id="iftyPatchOpenChatLink" class="ifty-patch-openchat-link" href="#" target="_blank" rel="noopener noreferrer" hidden>${ifty216Markup("LINEオープンチャットを開く ↗","Open LINE OpenChat ↗")}</a>
       </section>
     </section>`;
   overlay.addEventListener('click', event => {
@@ -1929,334 +1922,9 @@ window.closeIftyPracticeOrder = function() {
   document.getElementById('iftyPracticeOrderModal')?.remove();
 };
 
-// Q3 STEP87：ALLIAの日次使用状況。Cloudflare側の残量推測ではなく、この端末から実際に送ったAI呼び出しを記録する。
-// Workers AIの利用日切替（JST 09:00）に合わせ、9:00〜翌8:59を1日として表示する。
+// STEP215: preserve STEP213's existing daily performance grouping (UTC day).
 function getIftyAlliaUsageDayKey(now = new Date()) {
-  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  if (jst.getUTCHours() < IFTY_ALLIA_USAGE_RESET_HOUR_JST) jst.setUTCDate(jst.getUTCDate() - 1);
-  return `${jst.getUTCFullYear()}-${String(jst.getUTCMonth()+1).padStart(2,'0')}-${String(jst.getUTCDate()).padStart(2,'0')}`;
-}
-
-
-// STEP156: ALLIAのAI利用枠は同じ端末のIFTY ID切替で初期化してはならない。
-// 認証や学習記録は引き続きユーザー別。ALLIA表示用のカウントと状態のみ端末共通にする。
-// 古いID別キーは削除せず、初回だけ現在の利用日に合算・移行する。
-const IFTY_ALLIA_DEVICE_USAGE_PREFIX = 'ifty_allia_device_usage_v1_';
-const IFTY_ALLIA_DEVICE_STATE_PREFIX = 'ifty_allia_device_limit_state_v1_';
-const IFTY_ALLIA_DEVICE_LEARNED_KEY = 'ifty_allia_device_limit_learned_v1';
-// STEP159: 旧バージョンの「429=日次上限」誤判定による学習値は引き継がない。
-// 旧データは削除せず、確認できた日次上限からのみ新しい学習値を作る。
-const IFTY_ALLIA_CONFIRMED_LEARNED_KEY = 'ifty_allia_device_confirmed_daily_limit_v2';
-
-function ifty156LegacyKeys(prefix, dayKey = null) {
-  const keys = [];
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith(prefix) && (dayKey === null || key.endsWith('_' + dayKey))) keys.push(key);
-    }
-  } catch (_) {}
-  return keys;
-}
-
-function ifty156MigrateUsage(dayKey) {
-  const dest = `${IFTY_ALLIA_DEVICE_USAGE_PREFIX}${dayKey}`;
-  try {
-    if (localStorage.getItem(dest) !== null) return;
-    const sum = { dayKey, total:0, failed:0, byHour:{}, byType:{} };
-    let found = false;
-    for (const key of ifty156LegacyKeys(IFTY_ALLIA_USAGE_STORAGE_PREFIX, dayKey)) {
-      let old;
-      try { old = JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { continue; }
-      if (!old || typeof old !== 'object') continue;
-      found = true;
-      sum.total += Math.max(0, Number(old.total) || 0);
-      sum.failed += Math.max(0, Number(old.failed) || 0);
-      for (const field of ['byHour','byType']) {
-        if (!old[field] || typeof old[field] !== 'object' || Array.isArray(old[field])) continue;
-        for (const [name,value] of Object.entries(old[field])) {
-          sum[field][name] = (Number(sum[field][name]) || 0) + Math.max(0, Number(value) || 0);
-        }
-      }
-    }
-    if (found) localStorage.setItem(dest, JSON.stringify(sum));
-  } catch (_) { /* storage unavailable: previous fallback remains */ }
-}
-
-function ifty156MigrateLimitState(dayKey) {
-  const dest = `${IFTY_ALLIA_DEVICE_STATE_PREFIX}${dayKey}`;
-  try {
-    if (localStorage.getItem(dest) !== null) return;
-    let latest = null;
-    for (const key of ifty156LegacyKeys(IFTY_ALLIA_LIMIT_STATE_PREFIX, dayKey)) {
-      let old;
-      try { old = JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { continue; }
-      if (!old || typeof old !== 'object' || !['normal','near','reached','rate_limited','unknown'].includes(old.status)) continue;
-      if (!latest || (Number(old.updatedAt) || 0) > (Number(latest.updatedAt) || 0)) latest = old;
-    }
-    if (latest) localStorage.setItem(dest, JSON.stringify(latest));
-  } catch (_) {}
-}
-
-function ifty156MigrateLearnedLimit() {
-  try {
-    if (localStorage.getItem(IFTY_ALLIA_DEVICE_LEARNED_KEY) !== null) return;
-    const learned = ifty156LegacyKeys(IFTY_ALLIA_LIMIT_LEARNED_PREFIX)
-      .map(key => Number(localStorage.getItem(key)))
-      .filter(value => Number.isFinite(value) && value >= 2);
-    if (learned.length) localStorage.setItem(IFTY_ALLIA_DEVICE_LEARNED_KEY, String(Math.min(...learned)));
-  } catch (_) {}
-}
-
-function getIftyAlliaLimitStateStorageKey(dayKey = getIftyAlliaUsageDayKey()) {
-  ifty156MigrateLimitState(dayKey);
-  return `${IFTY_ALLIA_DEVICE_STATE_PREFIX}${dayKey}`;
-}
-
-function getIftyAlliaLimitLearnedStorageKey() {
-  return IFTY_ALLIA_CONFIRMED_LEARNED_KEY;
-}
-
-function loadIftyAlliaLimitState() {
-try {
-    const raw = JSON.parse(localStorage.getItem(getIftyAlliaLimitStateStorageKey()) || '{}');
-    return {
-      dayKey: getIftyAlliaUsageDayKey(),
-      // STEP159: 古い「reached」は429の誤判定で保存された可能性がある。
-      // 新版で日次と確認したもの（limitKind=daily）以外は日次上限にしない。
-      status: raw.status === 'reached' && raw.limitKind !== 'daily' ? 'rate_limited' :
-        (['normal','near','reached','rate_limited'].includes(raw.status) ? raw.status : 'unknown'),
-      remaining: raw.remaining !== null && raw.remaining !== undefined && Number.isFinite(Number(raw.remaining)) ? Number(raw.remaining) : null,
-      limit: raw.limit !== null && raw.limit !== undefined && Number.isFinite(Number(raw.limit)) ? Number(raw.limit) : null,
-      retryAt: raw.status === 'reached' && raw.limitKind !== 'daily' ? 0 : Number(raw.retryAt) || 0,
-      limitKind: ['daily','temporary','unconfirmed'].includes(raw.limitKind) ? raw.limitKind : 'unconfirmed',
-      message: raw.status === 'reached' && raw.limitKind !== 'daily'
-        ? '以前の上限警告は種類を確認できないため、再試行して確認してください。'
-        : String(raw.message || ''),
-      updatedAt: Number(raw.updatedAt) || 0
-    };
-  } catch (_) {
-    return { dayKey:getIftyAlliaUsageDayKey(), status:'unknown', remaining:null, limit:null, retryAt:0, message:'', updatedAt:0 };
-  }
-}
-
-function saveIftyAlliaLimitState(patch = {}) {
-  const current = loadIftyAlliaLimitState();
-  const next = { ...current, ...patch, dayKey:getIftyAlliaUsageDayKey(), updatedAt:Date.now() };
-  localStorage.setItem(getIftyAlliaLimitStateStorageKey(), JSON.stringify(next));
-  return next;
-}
-
-function loadIftyAlliaLearnedLimit() {
-  const value = Number(localStorage.getItem(getIftyAlliaLimitLearnedStorageKey()));
-  return Number.isFinite(value) && value >= 2 ? Math.round(value) : 0;
-}
-
-function learnIftyAlliaReachedCount() {
-  const usage = loadIftyAlliaUsage();
-  const current = Math.max(1, Number(usage.total) || 0);
-  const previous = loadIftyAlliaLearnedLimit();
-  // Request cost varies, so retain a conservative observed threshold rather than pretending it is a fixed quota.
-  const learned = previous ? Math.max(2, Math.round(previous * 0.6 + current * 0.4)) : current;
-  localStorage.setItem(getIftyAlliaLimitLearnedStorageKey(), String(learned));
-  return learned;
-}
-
-function readIftyNumericHeader(response, names) {
-  if (!response || !response.headers) return null;
-  for (const name of names) {
-    const raw = response.headers.get(name);
-    if (raw === null || raw === '') continue;
-    const value = Number(String(raw).replace(/[^\d.\-]/g, ''));
-    if (Number.isFinite(value)) return value;
-  }
-  return null;
-}
-
-function getNextIftyAlliaResetAt() {
-  const now = new Date();
-  const jstNowMs = now.getTime() + 9 * 60 * 60 * 1000;
-  const jst = new Date(jstNowMs);
-  const resetUtc = Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate(), IFTY_ALLIA_USAGE_RESET_HOUR_JST, 0, 0);
-  const nextResetJstMs = jstNowMs < resetUtc ? resetUtc : resetUtc + 24 * 60 * 60 * 1000;
-  return nextResetJstMs - 9 * 60 * 60 * 1000;
-}
-
-// STEP159: 数値・HTTP-date・WorkerがJSONで伝えたRetry-Afterに対応する。
-function ifty159GetRetryAt(response, data) {
-  const candidate = data?.retryAfterSeconds ?? response?.headers?.get('retry-after');
-  if (candidate === null || candidate === undefined || candidate === '') return 0;
-  const numeric = Number(candidate);
-  const seconds = Number.isFinite(numeric) ? numeric : (Date.parse(String(candidate)) - Date.now()) / 1000;
-  return Number.isFinite(seconds) && seconds > 0 ? Date.now() + Math.min(604800, seconds) * 1000 : 0;
-}
-
-async function inspectIftyAlliaLimitResponse(response, type) {
-  if (!response) return;
-
-  const remaining = readIftyNumericHeader(response, [
-    'x-ratelimit-remaining',
-    'ratelimit-remaining',
-    'x-rate-limit-remaining',
-    'cf-ai-remaining',
-    'cf-ai-neurons-remaining',
-    'x-ai-quota-remaining'
-  ]);
-  const limit = readIftyNumericHeader(response, [
-    'x-ratelimit-limit',
-    'ratelimit-limit',
-    'x-rate-limit-limit',
-    'cf-ai-limit',
-    'cf-ai-neurons-limit',
-    'x-ai-quota-limit'
-  ]);
-
-  let data = null;
-  if (!response.ok) {
-    try { data = await response.clone().json(); } catch (_) {}
-  }
-
-  const details = `${data?.error || ''} ${data?.details || ''} ${data?.message || ''} ${data?.code || ''}`.toLowerCase();
-  // 古いWorkerのALLIA_QUOTA_LIMITは日次・一時両方に使われていたため証拠にしない。
-  const dailyConfirmed = data?.code === 'ALLIA_DAILY_QUOTA_LIMIT' ||
-    (data?.limitKind === 'daily' && response.status === 429);
-
-  if (dailyConfirmed && response.status === 429) {
-    learnIftyAlliaReachedCount();
-    saveIftyAlliaLimitState({
-      status: 'reached', limitKind: 'daily',
-      remaining: 0, limit,
-      retryAt: ifty159GetRetryAt(response, data),
-      message: 'AIサービスから日次上限が報告されました。解除時刻は未確認です。'
-    });
-    refreshIftyAlliaUsageDisplays();
-    return;
-  }
-
-  if (response.status === 429) {
-    const kind = data?.code === 'ALLIA_RATE_LIMIT' || data?.limitKind === 'temporary'
-      ? 'temporary' : 'unconfirmed';
-    saveIftyAlliaLimitState({
-      status: 'rate_limited', limitKind: kind,
-      remaining: null, limit: null,
-      retryAt: ifty159GetRetryAt(response, data),
-      message: kind === 'temporary'
-        ? 'AIサービスで一時的な制限が発生しています。'
-        : 'AIサービスの制限を検出しました。日次か一時的かは未確認です。'
-    });
-    refreshIftyAlliaUsageDisplays();
-    return;
-  }
-
-  // 成功すれば以前の429警告を必ず解除する（残量ヘッダーがなくても）。
-  if (response.ok) {
-    const current = loadIftyAlliaLimitState();
-    if (remaining !== null) {
-      const ratio = limit && limit > 0 ? remaining / limit : null;
-      const near = (ratio !== null && ratio <= IFTY_ALLIA_NEAR_RATIO) || (limit === null && remaining <= 3);
-      saveIftyAlliaLimitState({
-        status: near ? 'near' : 'normal', limitKind: 'unconfirmed',
-        remaining, limit, retryAt: 0,
-        message: near ? 'APIから返された残量が少なくなっています（対象期間は未確認）。' : ''
-      });
-    } else if (['reached','rate_limited','near'].includes(current.status)) {
-      saveIftyAlliaLimitState({status:'unknown', limitKind:'unconfirmed',
-        remaining:null, limit:null, retryAt:0, message:''});
-    }
-    refreshIftyAlliaUsageDisplays();
-  }
-}
-
-function getIftyAlliaEffectiveLimitState() {
-  const state = loadIftyAlliaLimitState();
-  if (state.status === 'rate_limited' && (
-    (state.retryAt > 0 && Date.now() >= state.retryAt) ||
-    (!state.retryAt && state.updatedAt > 0 && Date.now() - state.updatedAt >= 300000)
-  )) return { ...state, status:'unknown', estimated:false, message:'前回の制限は再確認が必要です。' };
-  // Confirmed AI refusals take priority over delayed Analytics readings.
-  if (state.status === 'reached' || state.status === 'rate_limited') return { ...state, estimated:false };
-  const cloud = ifty192GetNeuronSnapshot();
-  if (cloud?.available === true && typeof cloud.limitNeurons === 'number' &&
-      typeof cloud.remainingNeurons === 'number' && cloud.limitNeurons > 0) {
-    return { ...state, status: cloud.remainingNeurons / cloud.limitNeurons <= IFTY_ALLIA_NEAR_RATIO ? 'near' : 'normal',
-      estimated:false, message:'Cloudflare Analyticsによる無料枠の集計値です。' };
-  }
-  // A past request count or unrelated rate-limit header is not proof that
-  // today's Workers AI Neurons are almost exhausted.
-  return { ...state, status: 'unknown', estimated:false };
-}
-
-function ensureIftyAlliaLimitBadge() {
-  let badge = document.getElementById('iftyAlliaLimitBadge');
-  if (!badge) {
-    badge = document.createElement('button');
-    badge.id = 'iftyAlliaLimitBadge';
-    badge.type = 'button';
-    badge.onclick = () => { if (typeof window.openMainLauncher === 'function') window.openMainLauncher(); };
-    badge.style.cssText = 'display:none;position:fixed;right:14px;bottom:14px;z-index:10230;border:none;border-radius:999px;padding:9px 12px;font-size:.78em;font-weight:900;box-shadow:0 8px 22px rgba(0,0,0,.25);cursor:pointer;max-width:min(82vw,360px);';
-    document.body.appendChild(badge);
-  }
-  return badge;
-}
-
-function updateIftyAlliaLimitBadge() {
-  const badge = ensureIftyAlliaLimitBadge();
-  const state = getIftyAlliaEffectiveLimitState();
-  if (state.status === 'reached') {
-    badge.textContent = '⛔ ALLIA 本日の上限に到達';
-    badge.style.background = '#b91c1c';
-    badge.style.color = '#fff';
-    badge.style.display = 'block';
-  } else if (state.status === 'rate_limited') {
-    badge.textContent = state.limitKind === 'temporary'
-      ? '⏳ ALLIA 一時的に制限中' : '⏳ ALLIA 利用制限中（種類未確認）';
-    badge.style.background = '#c2410c';
-    badge.style.color = '#fff';
-    badge.style.display = 'block';
-  } else if (state.status === 'near') {
-    badge.textContent = ifty192GetNeuronSnapshot()?.available ? '⚠️ ALLIA 無料枠の残量が少なめ（集計値）' : '⚠️ ALLIA 上限が近い';
-    badge.style.background = '#f59e0b';
-    badge.style.color = '#422006';
-    badge.style.display = 'block';
-  } else {
-    badge.style.display = 'none';
-  }
-  // STEP153: update MANUAL position only when a fixed ALLIA notice is visible.
-  document.body?.classList.toggle('ifty-allia-badge-visible', badge.style.display !== 'none');
-}
-
-
-function getIftyAlliaUsageStorageKey(dayKey = getIftyAlliaUsageDayKey()) {
-  ifty156MigrateUsage(dayKey);
-  return `${IFTY_ALLIA_DEVICE_USAGE_PREFIX}${dayKey}`;
-}
-
-function loadIftyAlliaUsage() {
-  try {
-    const value = JSON.parse(localStorage.getItem(getIftyAlliaUsageStorageKey()) || '{}');
-    return {
-      dayKey: getIftyAlliaUsageDayKey(),
-      total: Math.max(0, Number(value.total) || 0),
-      failed: Math.max(0, Number(value.failed) || 0),
-      byHour: value.byHour && typeof value.byHour === 'object' ? value.byHour : {},
-      byType: value.byType && typeof value.byType === 'object' ? value.byType : {}
-    };
-  } catch (_) {
-    return { dayKey:getIftyAlliaUsageDayKey(), total:0, failed:0, byHour:{}, byType:{} };
-  }
-}
-
-function recordIftyAlliaUsage(type, ok) {
-  const usage = loadIftyAlliaUsage();
-  const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  const hour = String(jst.getUTCHours()).padStart(2, '0');
-  usage.total += 1;
-  if (!ok) usage.failed += 1;
-  usage.byHour[hour] = (Number(usage.byHour[hour]) || 0) + 1;
-  const safeType = String(type || 'unknown');
-  usage.byType[safeType] = (Number(usage.byType[safeType]) || 0) + 1;
-  localStorage.setItem(getIftyAlliaUsageStorageKey(), JSON.stringify(usage));
-  refreshIftyAlliaUsageDisplays();
+  return now.toISOString().slice(0,10);
 }
 
 function getIftyAlliaRequestType(init) {
@@ -2315,6 +1983,7 @@ function ifty181AttachOrder(init) {
   try { body = JSON.parse(init.body); } catch (_) { return init; }
   if (!body || typeof body !== 'object' || Array.isArray(body) || !body.type) return init;
   const type = String(body.type).toLowerCase();
+  if (type === 'ifty216_quiz_translate') return init;
   if (typeof IFTY_ALLIA_ACCOUNT_TYPES !== 'undefined' && IFTY_ALLIA_ACCOUNT_TYPES.has(type)) return init;
   const subject = ifty181InferOrderSubject(body);
   if (!subject) return init;
@@ -2375,6 +2044,7 @@ function ifty213RecordPerf(ms, ok, cacheHit = false) {
     st.totalMs += Math.max(0,Math.min(600000,Math.round(Number(ms)||0)));
   }
   try { localStorage.setItem(key,JSON.stringify(st)); } catch (_) {}
+  try { refreshIfty213PerformanceDisplays(); } catch (_) {}
 }
 function ifty213ReadTranslation(sentence,note) {
   const key = ifty213AccountKey(IFTY213_TRANSLATION_PREFIX);
@@ -2418,221 +2088,29 @@ async function iftyAlliaFetch(input, init) {
     const response = await fetch(input, init);
     if (shouldTrack) {
       completedResponse = true;
-      recordIftyAlliaUsage(type, response.ok);
       ifty213RecordPerf(Date.now()-started,response.ok);
-      await inspectIftyAlliaLimitResponse(response, type);
-      ifty192AfterAlliaCall();
     }
     return response;
   } catch (error) {
     if (shouldTrack && !completedResponse) {
-      recordIftyAlliaUsage(type, false);
       ifty213RecordPerf(Date.now()-started,false);
     }
     throw error;
   }
 }
 
-// STEP192: Cloudflare analytics status is shared by the entire Cloudflare account.
-// This endpoint does not invoke AI and does not count as a learning request.
-const IFTY192_NEURON_CACHE_PREFIX = 'ifty192_neuron_usage_';
-let ifty192NeuronSnapshot = null;
-let ifty192NeuronFetching = null;
-let ifty192NeuronLastAttempt = 0;
-let ifty192NeuronQueued = false;
-let ifty192NeuronError = '';
-function ifty192UsageUtcDay() { return new Date().toISOString().slice(0,10); }
-function ifty192GetNeuronSnapshot() {
-  const day = ifty192UsageUtcDay();
-  if (ifty192NeuronSnapshot?.periodStart?.slice(0,10) === day) return ifty192NeuronSnapshot;
-  ifty192NeuronSnapshot = null;
-  try {
-    const cached = JSON.parse(localStorage.getItem(IFTY192_NEURON_CACHE_PREFIX + day) || 'null');
-    if (cached?.periodStart?.slice(0,10) === day && Number.isFinite(Date.parse(cached.checkedAt))) {
-      ifty192NeuronSnapshot = cached;
-    }
-  } catch (_) {}
-  return ifty192NeuronSnapshot;
+// STEP215: small independent performance line, no quota information or network polling.
+function renderIfty213PerformanceHtml() {
+  const perf = ifty213ReadStats();
+  const average = perf.requests ? Math.round(perf.totalMs / perf.requests) / 1000 + ifty216T('秒',' s') : ifty216T('未測定','Not measured');
+  return `<div data-ifty213-performance style="font-size:.76em;line-height:1.55;color:#cbd5e1;background:#1e293b;border-radius:8px;padding:8px 10px;overflow-wrap:anywhere;">${ifty216T('ALLIA 通信平均','ALLIA mean request time')} ${average}（${perf.requests}${ifty216T('回',' requests')}）／${ifty216T('和訳の再利用','Translation cache hits')} ${perf.cacheHits}<br><span style="font-size:.9em;">このIFTY ID・端末の記録。通信時間にはAI以外の待ち時間も含みます。</span></div>`;
 }
-function ifty192RequestNeuronRefresh(force = false) {
-  const now = Date.now();
-  if (ifty192NeuronFetching) return ifty192NeuronFetching;
-  // A single tab polls at most once every 90 s, except when explicitly refreshed.
-  if (!force && now - ifty192NeuronLastAttempt < 90000) return Promise.resolve(ifty192GetNeuronSnapshot());
-  ifty192NeuronLastAttempt = now;
-  ifty192NeuronFetching = (async () => {
-    try {
-      const response = await fetch(WORKER_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'allia_usage_status' }),
-        cache: 'no-store'
-      });
-      const data = await response.json();
-      if (!response.ok || !data || data.source !== 'cloudflare_graphql_analytics') {
-        throw new Error('WorkerがSTEP192の使用量APIに対応していません。Workerを更新してください。');
-      }
-      if (data.available === true) {
-        const used = Number(data.usedNeurons);
-        const limit = Number(data.limitNeurons);
-        const left = Number(data.remainingNeurons);
-        if (data.usedNeurons == null || data.remainingNeurons == null || data.limitNeurons == null ||
-            !Number.isFinite(used) || used < 0 || !Number.isFinite(limit) || limit <= 0 ||
-            !Number.isFinite(left) || left < 0 || Math.abs(left - Math.max(0, limit-used)) > 0.01 ||
-            String(data.periodStart || '').slice(0,10) !== ifty192UsageUtcDay() ||
-            !Number.isFinite(Date.parse(data.checkedAt))) {
-          throw new Error('Cloudflareの使用量データを確認できませんでした。');
-        }
-      }
-      ifty192NeuronSnapshot = data;
-      ifty192NeuronError = '';
-      try { localStorage.setItem(IFTY192_NEURON_CACHE_PREFIX + ifty192UsageUtcDay(), JSON.stringify(data)); } catch (_) {}
-    } catch (error) {
-      ifty192NeuronError = String(error?.message || '使用量の取得に失敗しました。').slice(0,160);
-    } finally {
-      ifty192NeuronFetching = null;
-      refreshIftyAlliaUsageDisplays();
-    }
-    return ifty192GetNeuronSnapshot();
-  })();
-  return ifty192NeuronFetching;
-}
-window.ifty192RefreshAlliaQuota = function() { return ifty192RequestNeuronRefresh(true); };
-function ifty192QueueNeuronRefresh() {
-  if (ifty192NeuronQueued) return;
-  ifty192NeuronQueued = true;
-  setTimeout(() => {
-    ifty192NeuronQueued = false;
-    ifty192RequestNeuronRefresh().catch(() => {});
-  }, 50);
-}
-// Refresh after AI results, but not on every regeneration or every DOM re-render.
-function ifty192AfterAlliaCall() {
-  if (window.__ifty192AfterAlliaTimer) clearTimeout(window.__ifty192AfterAlliaTimer);
-  window.__ifty192AfterAlliaTimer = setTimeout(() => {
-    ifty192RequestNeuronRefresh().catch(() => {});
-  }, 10000);
-}
-if (!window.__ifty192NeuronPollingInstalled) {
-  window.__ifty192NeuronPollingInstalled = true;
-  ifty192QueueNeuronRefresh();
-  window.setInterval(() => {
-    if (document.visibilityState === 'visible') ifty192RequestNeuronRefresh().catch(() => {});
-  }, 120000);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') ifty192RequestNeuronRefresh().catch(() => {});
-  });
-}
-
-// STEP155: ALLIAの想定日次切替（日本時間09:00）までのカウントダウン。
-// UTC基準で計算するため、端末のタイムゾーン設定に依存しない。
-function getIftyAlliaResetCountdown(nowMs = Date.now()) {
-  const jstMs = nowMs + 9 * 60 * 60 * 1000;
-  const jstDayStart = Math.floor(jstMs / 86400000) * 86400000;
-  let nextResetJstMs = jstDayStart + IFTY_ALLIA_USAGE_RESET_HOUR_JST * 3600000;
-  if (nextResetJstMs <= jstMs) nextResetJstMs += 86400000;
-  const seconds = Math.max(0, Math.ceil((nextResetJstMs - jstMs) / 1000));
-  const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
-  const m = String(Math.floor(seconds % 3600 / 60)).padStart(2, '0');
-  const s = String(seconds % 60).padStart(2, '0');
-  return `${h}:${m}:${s}`;
-}
-
-function updateIftyAlliaResetCountdownDisplays() {
-  const countdown = getIftyAlliaResetCountdown();
-  document.querySelectorAll('[data-ifty-allia-reset-countdown]').forEach(node => {
-    if (node.textContent !== countdown) node.textContent = countdown;
-  });
-  // 切り替わった警告の表示を定期的に同期する。既存のDOMは必要時のみ再描画。
-  const state = loadIftyAlliaLimitState();
-  const elapsed = state.status === 'rate_limited' && (
-    (state.retryAt > 0 && Date.now() >= state.retryAt) ||
-    (!state.retryAt && state.updatedAt > 0 && Date.now() - state.updatedAt >= 300000)
-  );
-  if (elapsed && document.getElementById('iftyAlliaLimitBadge')?.style.display !== 'none') {
-    refreshIftyAlliaUsageDisplays();
-  }
-}
-
-// 表示中のみDOMの文字列を更新。既存の使用状況やフォームを再描画しない。
-if (!window.__iftyAlliaResetCountdownTimer) {
-  window.__iftyAlliaResetCountdownTimer = setInterval(updateIftyAlliaResetCountdownDisplays, 1000);
-  document.addEventListener('visibilitychange', updateIftyAlliaResetCountdownDisplays);
-}
-
-// STEP154: 時刻ごとの棒グラフではなく、分母の根拠を明示した残量バロメータに変更する。
-// Workers AIの処理量はリクエストごとに異なるため、根拠がない場合は割合を捏造しない。
-function renderIftyAlliaUsageBarHtml(compact = false) {
-  ifty192QueueNeuronRefresh();
-  const usage = loadIftyAlliaUsage();
-  const state = getIftyAlliaEffectiveLimitState();
-  const cloud = ifty192GetNeuronSnapshot();
-  const direct = cloud?.available === true && cloud.usedNeurons != null && cloud.limitNeurons != null &&
-    Number.isFinite(Number(cloud.usedNeurons)) && Number(cloud.usedNeurons) >= 0 &&
-    Number.isFinite(Number(cloud.limitNeurons)) && Number(cloud.limitNeurons) > 0;
-  const used = direct ? Number(cloud.usedNeurons) : 0;
-  const limit = direct ? Number(cloud.limitNeurons) : 0;
-  const remaining = direct ? Math.max(0, limit-used) : 0;
-  const usedPercent = direct ? Math.round(Math.min(100,100*used/limit)*10)/10 : 0;
-  const pct = direct ? Math.min(100,100*used/limit) : 0;
-  const fmt = number => new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 2 }).format(number);
-  const checkTime = direct && Number.isFinite(Date.parse(cloud.checkedAt))
-    ? new Date(cloud.checkedAt).toLocaleTimeString('ja-JP',{ timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',second:'2-digit' }) : '';
-  const reached = state.status === 'reached';
-  const limited = state.status === 'rate_limited';
-  const near = direct && remaining/limit <= .15;
-  const border = reached ? '#fca5a5' : limited ? '#fdba74' : near ? '#fcd34d' : '#94a3b8';
-  const background = reached ? '#35171d' : limited ? '#3c261d' : near ? '#342a16' : '#16253b';
-  const color = reached ? '#dc2626' : limited ? '#ea580c' : near ? '#eab308' : '#3b82f6';
-  const headline = reached ? '⛔ ALLIA 日次上限が報告されました' : limited ?
-    '⏳ ALLIA 利用制限中（種類は別途確認）' : near ? '⚠️ ALLIA 無料枠の残量が少なくなっています' : '🤖 ALLIA 使用状況';
-  const label = direct
-    ? `無料枠残り ${fmt(remaining)} / ${fmt(limit)} Neurons`
-    : 'Cloudflare残量：未取得';
-  const errorDetail = cloud?.available === false
-    ? String(cloud.message || 'Cloudflareが利用量を返しませんでした。')
-    : (ifty192NeuronError || 'Cloudflareの使用量を取得しています。');
-  const foot = direct
-    ? `Cloudflareアカウント全体：使用 ${fmt(used)} Neurons（${usedPercent}%）。最終照会 ${checkTime} JST`
-    : errorDetail;
-  const retryText = state.retryAt > Date.now()
-    ? `APIが示した再試行目安：約${Math.ceil((state.retryAt-Date.now())/60000)}分`
-    : (reached ? '現在の利用可否は実際のAI応答で判定します' : '');
-  return `<div data-ifty-allia-usage role="group" aria-label="ALLIA利用状況" style="border:1px solid ${border};background:${background};color:#f8fafc;border-radius:11px;padding:${compact?'10px':'13px'};box-sizing:border-box;min-width:0;overflow-wrap:anywhere;">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:7px;">
-      <b style="font-size:${compact?'.84em':'1em'};color:#f8fafc;">${headline}</b>
-      <span style="font-size:.79em;font-weight:850;color:#e2e8f0;">${label}</span>
-    </div>
-    <div role="progressbar" aria-label="Workers AI無料枠の使用率" ${direct?`aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usedPercent}"`:'aria-valuetext="使用量を取得できません"'} style="width:100%;height:${compact?'13px':'19px'};background:#334155;border:1px solid #64748b;border-radius:999px;overflow:hidden;margin-top:10px;">
-      <div style="width:${direct?pct:0}%;height:100%;background:${color};border-radius:999px;transition:width .25s ease;"></div>
-    </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px;font-size:.74em;color:#cbd5e1;">
-      <span>${escapeHtml(foot)}</span><span>この端末：今日 ${usage.total}回のリクエスト</span>
-    </div>
-    ${(() => { const perf=ifty213ReadStats();return `<div style="color:#c7d2fe;font-size:.72em;margin-top:6px;overflow-wrap:anywhere;">この端末の通信平均 ${perf.requests ? Math.round(perf.totalMs/perf.requests)/1000+'秒' : '未測定'}（${perf.requests}回）／和訳の再利用 ${perf.cacheHits}回。通信平均はAI以外の待ち時間も含みます。</div>`; })()}
-    <div style="font-size:.7em;color:#b9d5eb;margin-top:7px;">${direct
-      ? 'Cloudflareの集計値です。反映遅延があり、直近のAI処理がまだ含まれない場合があります。Paidプランでは無料枠残量0でも利用できる場合があります。'
-      : '取得できない場合は数値を推測しません。Workerの設定または通信を確認してください。'}
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:9px;padding-top:8px;border-top:1px solid #475569;">
-      <span style="font-size:.75em;color:#cbd5e1;">Cloudflare無料枠のUTC日付切替まで（日本時間9:00）</span>
-      <strong data-ifty-allia-reset-countdown aria-label="無料枠の日付切替まで" style="font-size:${compact?'1em':'1.15em'};font-variant-numeric:tabular-nums;letter-spacing:.04em;color:#f8fafc;">${getIftyAlliaResetCountdown()}</strong>
-    </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">
-      <span style="font-size:.71em;color:#cbd5e1;">${escapeHtml(retryText)}</span>
-      <button type="button" onclick="ifty192RefreshAlliaQuota()" style="border:1px solid #7da0c4;background:#294565;color:white;border-radius:8px;padding:7px 10px;min-height:36px;font-size:.8em;cursor:pointer;">↻ 残量を更新</button>
-    </div>
-  </div>`;
-}
-
-function refreshIftyAlliaUsageDisplays() {
-  document.querySelectorAll('[data-ifty-allia-usage]').forEach(node => {
+function refreshIfty213PerformanceDisplays() {
+  document.querySelectorAll('[data-ifty213-performance]').forEach(node => {
     const holder = document.createElement('div');
-    holder.innerHTML = renderIftyAlliaUsageBarHtml(node.closest('#mainLauncherModal') != null);
-    const replacement = holder.firstElementChild;
-if (replacement) node.replaceWith(replacement);
+    holder.innerHTML = renderIfty213PerformanceHtml();
+    if (holder.firstElementChild) node.replaceWith(holder.firstElementChild);
   });
-  updateIftyAlliaLimitBadge();
 }
 
 function renderIftyPracticeOrderSummaryHtml(subject) {
@@ -2641,9 +2119,8 @@ function renderIftyPracticeOrderSummaryHtml(subject) {
   const enabled = !!(active && getIftyOrderForScope(key,'practice'));
   const name = active ? active.name : 'ORDERなし';
   return `<div data-ifty-practice-tools style="display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin:0 0 12px 0;">
-    ${renderIftyAlliaUsageBarHtml(false)}
     <button type="button" onclick="openIftySubjectOrder('${key.replace(/'/g,"\\'")}')" style="width:100%;text-align:left;border:1px solid #80a7ce;background:#203852;color:#f8fafc;border-radius:10px;padding:11px 12px;cursor:pointer;">
-      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;"><b>🧾 ${escapeHtml(getIftySubjectDisplayName(key))} ORDER</b><span style="font-size:.78em;font-weight:900;">実践 ${enabled?'ON':'OFF'}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;"><b>🧾 ${escapeHtml(ifty216Ui(getIftySubjectDisplayName(key)))} ORDER</b><span style="font-size:.78em;font-weight:900;">実践 ${enabled?'ON':'OFF'}</span></div>
       <div style="margin-top:4px;color:#cbd5e1;font-size:.8em;overflow-wrap:anywhere;">${escapeHtml(name)}｜意味生成・チャット・実践を個別設定</div>
     </button>
   </div>`;
@@ -3068,7 +2545,7 @@ function renderIftyOrderSettingsCards() {
     return `
       <button type="button" onclick="openIftySubjectOrder('${subject.replace(/'/g, "\\'")}')" style="width:100%;text-align:left;border:1px solid #cbd5e1;background:transparent;color:inherit;border-radius:10px;padding:12px;cursor:pointer;">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
-          <strong>${escapeHtml(getIftySubjectDisplayName(subject))}</strong>
+          <strong>${escapeHtml(ifty216Ui(getIftySubjectDisplayName(subject)))}</strong>
           <span style="font-size:.76em;font-weight:900;color:${active ? '#0284c7' : '#64748b'};">${escapeHtml(getIftyOrderStatus(subject))}</span>
         </div>
         <div class="ifty-settings-note" style="margin-top:5px;">${preview}</div>
@@ -3133,14 +2610,14 @@ window.openIftySubjectOrder = function(subject, editOrderId = '') {
     <div role="dialog" aria-modal="true" aria-labelledby="iftyOrderTitle" style="width:min(780px,100%);max-height:90vh;overflow:auto;background:#fff;color:#0f172a;border-radius:16px;padding:20px;box-shadow:0 20px 55px rgba(0,0,0,.35);">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
         <div>
-          <h2 id="iftyOrderTitle" style="margin:0;">${escapeHtml(getIftySubjectDisplayName(key))} ORDER</h2>
+          <h2 id="iftyOrderTitle" style="margin:0;">${escapeHtml(ifty216Ui(getIftySubjectDisplayName(key)))} ORDER</h2>
           <div style="margin-top:6px;color:#64748b;font-size:.86em;line-height:1.55;">
             複数のORDERを保存し、使用するORDERを切り替えられます。<br>
             保存したORDERは教科ごとに独立し、使用するORDERを1つ選べます。<br>
             各ORDERの「意味生成・ALLIAチャット・実践」を個別にON/OFFできます。「ORDERなし」で全てOFFになります。
           </div>
         </div>
-        <button type="button" onclick="closeIftyOrderModal()" aria-label="閉じる" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;width:36px;height:36px;font-size:1.15em;cursor:pointer;">×</button>
+        <button type="button" onclick="closeIftyOrderModal()" aria-label="${ifty216Markup("閉じる","Close")}" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;width:36px;height:36px;font-size:1.15em;cursor:pointer;">×</button>
       </div>
 
       <div style="margin-top:14px;padding:12px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:10px;">
@@ -3422,7 +2899,7 @@ function renderIftySubjectHeaderActions(subject) {
   const safe = String(key).replace(/'/g, "\\'");
   return `<div class="ifty-subject-header-actions" style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;align-items:center;">
     <button type="button" onclick="openIftyHome()" aria-label="ホーム画面へ戻る" style="border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">⌂ ホームへ</button>
-    <button type="button" onclick="openPracticeHome('${safe}')" aria-label="実践問題を開く" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">⚔️ 実践</button>
+    <button type="button" onclick="openPracticeHome('${safe}')" aria-label="実践問題を開く" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">${ifty216Markup("⚔️ 実践","⚔️ Practice")}</button>
     <button type="button" onclick="openIftySubjectOrder('${safe}')" aria-label="生成ルールを開く" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">🧾 生成ルール</button>
     <button type="button" onclick="openIftySubjectAllia('${safe}')" aria-label="ALLIAを開く" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">🤖 ALLIA</button>
   </div>`;
@@ -3435,7 +2912,7 @@ function refreshIftyEnglishSubjectPanel() {
   panel.innerHTML = `
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
       <div>
-        <h1 style="margin:0;color:#0f172a;font-size:1.55rem;font-weight:900;letter-spacing:.015em;">LANGUAGES</h1>
+        <h1 style="margin:0;color:#0f172a;font-size:1.55rem;font-weight:900;letter-spacing:.015em;">${ifty216Markup("言語・語彙","LANGUAGES")}</h1>
         <div style="margin-top:6px;color:#64748b;font-size:.9em;">英語を含む外国語と日本語の語彙をフォルダごとに追加・編集し、ALLIA・復習・PRACTICEへつなげます。</div>
       </div>
       ${renderIftySubjectHeaderActions('ENGLISH')}
@@ -3452,7 +2929,7 @@ function refreshIftyEnglishSubjectPanel() {
       <div style="font-weight:900;color:#0c4a6e;">新しい外国語フォルダ</div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;align-items:center;">
         <input id="iftyEnglishFolderName" placeholder="例：英検1級 / フランス語 / 現代文語彙" onkeydown="if(event.key==='Enter'){event.preventDefault();createIftyEnglishFolder();}" style="flex:1;min-width:210px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;font-size:.95em;">
-        <button type="button" onclick="createIftyEnglishFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">作成</button>
+        <button type="button" onclick="createIftyEnglishFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">${ifty216Markup("作成","Create")}</button>
       </div>
       <div style="margin-top:8px;color:#64748b;font-size:.76em;">フォルダ ${folders.length} / 単語 ${wordCount}</div>
     </div>`;
@@ -3623,10 +3100,10 @@ function refreshIftyVocabSearchPanel() {
   const total = folders.reduce((sum, folder) => sum + (Array.isArray(folder.words) ? folder.words.length : 0), 0);
   const matchCount = countIftyGlobalVocabMatches();
   panel.innerHTML = `
-    <div style="font-weight:900;color:#0f172a;margin-bottom:7px;">全フォルダ検索</div>
+    <div style="font-weight:900;color:#0f172a;margin-bottom:7px;">${ifty216Markup("全フォルダ検索","Search all folders")}</div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
       <input id="iftyGlobalVocabSearchInput" value="${escapeHtml(inputValue)}" oninput="setIftyGlobalVocabSearch(this.value)" placeholder="スペル・意味で全フォルダを検索" style="flex:1;min-width:180px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.92em;">
-      <button type="button" onclick="clearIftyGlobalVocabSearch()" style="border:none;background:#e2e8f0;color:#334155;padding:9px 11px;border-radius:7px;font-weight:800;cursor:pointer;">クリア</button>
+      <button type="button" onclick="clearIftyGlobalVocabSearch()" style="border:none;background:#e2e8f0;color:#334155;padding:9px 11px;border-radius:7px;font-weight:800;cursor:pointer;">${ifty216Markup("クリア","Clear")}</button>
       <span style="font-size:.8em;color:#64748b;white-space:nowrap;">${normalizeIftyVocabSearchText(inputValue) ? `${matchCount}件一致` : `${total}語`}</span>
     </div>`;
 }
@@ -3723,10 +3200,10 @@ function enhanceIftyPracticeCloseButtons(root=document.getElementById('practiceM
     const onclick = String(btn.getAttribute('onclick') || '');
     if (!onclick.includes('closePracticeModal')) return;
     if (!['✕','×','✖','X','x'].includes(text)) return;
-    btn.textContent = '閉じる';
+    btn.textContent = ifty216T("閉じる","Close");
     btn.dataset.iftyPracticeClose = '1';
-    btn.setAttribute('aria-label','実践画面を閉じる');
-    btn.setAttribute('title','閉じる');
+    btn.setAttribute('aria-label',ifty216T("実践画面を閉じる","Close practice"));
+    btn.setAttribute('title',ifty216T("閉じる","Close"));
   });
 }
 
@@ -4252,7 +3729,7 @@ window.openIftyClassesPage = function() {
         <div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" onclick="openIftySoloChatGames()" class="ifty-portal-back">🎲 1人でALLIA</button><button class="ifty-portal-back" type="button" onclick="openIftyHome()">⌂ ホームへ</button></div>
       </div>
       <div id="iftyClassesRoot" style="margin-top:14px;">
-        <div class="ifty-settings-note">読み込み中…</div>
+        <div class="ifty-settings-note">${ifty216Markup("読み込み中…","Loading…")}</div>
       </div>
     </section>`, 'classes');
   refreshIftyClassesPage();
@@ -4265,26 +3742,26 @@ function renderIftyClassesData(data) {
   const commonButton = 'box-sizing:border-box;border:none;border-radius:10px;background:#2563eb;color:white;padding:12px 16px;font-weight:900;cursor:pointer;min-height:45px;';
   return `
     <div class="ifty-settings-section" style="margin-top:0;background:#172033;border-color:#475569;color:#f8fafc;">
-      <h3 style="color:#f8fafc;">クラスコードで参加</h3>
+      <h3 style="color:#f8fafc;">${ifty216Markup("クラスコードで参加","Join with a class code")}</h3>
       <div class="ifty-settings-note">クラスの作成者から教えてもらったコードを入力してください。英字は大文字・小文字どちらでも使えます。</div>
       <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:stretch;margin-top:11px;" class="ifty-class-join-grid">
-        <input id="iftyClassJoinCodeInput" type="text" maxlength="20" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-label="クラスコード" placeholder="例：ABCDE-FGHIJ" style="${commonInput}letter-spacing:.1em;font-weight:900;text-transform:uppercase;" onkeydown="if(event.key==='Enter'){event.preventDefault();joinIftyClass();}">
-        <button data-ifty-class-action type="button" onclick="joinIftyClass()" style="${commonButton}">参加する</button>
+        <input id="iftyClassJoinCodeInput" type="text" maxlength="20" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-label="${ifty216Markup("クラスコード","Class code")}" placeholder="例：ABCDE-FGHIJ" style="${commonInput}letter-spacing:.1em;font-weight:900;text-transform:uppercase;" onkeydown="if(event.key==='Enter'){event.preventDefault();joinIftyClass();}">
+        <button data-ifty-class-action type="button" onclick="joinIftyClass()" style="${commonButton}">${ifty216Markup("参加する","Join")}</button>
       </div>
     </div>
     <div class="ifty-settings-section" style="background:#172033;border-color:#475569;color:#f8fafc;">
-      <h3 style="color:#f8fafc;">新しいクラスを作る</h3>
+      <h3 style="color:#f8fafc;">${ifty216Markup("新しいクラスを作る","Create a class")}</h3>
       <div class="ifty-settings-note">クラス名を設定すると参加コードが発行されます。個人情報をクラス名に含めないでください。</div>
       <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:stretch;margin-top:11px;" class="ifty-class-create-grid">
-        <input id="iftyClassCreateNameInput" type="text" maxlength="60" autocomplete="off" aria-label="クラス名" placeholder="例：英語学習クラス" style="${commonInput}" onkeydown="if(event.key==='Enter'){event.preventDefault();createIftyClass();}">
-        <button data-ifty-class-action type="button" onclick="createIftyClass()" style="${commonButton}background:#047857;">作成する</button>
+        <input id="iftyClassCreateNameInput" type="text" maxlength="60" autocomplete="off" aria-label="${ifty216Markup("クラス名","Class name")}" placeholder="例：英語学習クラス" style="${commonInput}" onkeydown="if(event.key==='Enter'){event.preventDefault();createIftyClass();}">
+        <button data-ifty-class-action type="button" onclick="createIftyClass()" style="${commonButton}background:#047857;">${ifty216Markup("作成する","Create")}</button>
       </div>
     </div>
     <div id="iftyClassActionStatus" role="status" aria-live="polite" style="min-height:1.4em;margin:9px 2px;color:#86efac;font-size:.86em;"></div>
     <div class="ifty-settings-section" style="background:#172033;border-color:#475569;color:#f8fafc;">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">
         <h3 style="color:#f8fafc;margin:0;">参加しているクラス (${classes.length})</h3>
-        <button data-ifty-class-action type="button" onclick="refreshIftyClassesPage()" style="border:1px solid #64748b;background:#1e293b;color:white;border-radius:8px;padding:8px 12px;font-weight:850;cursor:pointer;">↻ 更新</button>
+        <button data-ifty-class-action type="button" onclick="refreshIftyClassesPage()" style="border:1px solid #64748b;background:#1e293b;color:white;border-radius:8px;padding:8px 12px;font-weight:850;cursor:pointer;">${ifty216Markup("↻ 更新","↻ Refresh")}</button>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:10px;margin-top:12px;">
         ${classes.length ? classes.map(row => {
@@ -4334,7 +3811,7 @@ window.refreshIftyClassesPage = async function() {
     root.innerHTML = renderIftyClassesData(data);
   } catch (error) {
     if (document.getElementById('iftyClassesRoot') === root)
-      root.innerHTML = `<div role="alert" style="color:#fca5a5;">クラス一覧を取得できません：${escapeHtml(String(error?.message || error))}<button type="button" onclick="refreshIftyClassesPage()" style="display:block;margin-top:10px;padding:9px;border-radius:8px;">再試行</button></div>`;
+      root.innerHTML = `<div role="alert" style="color:#fca5a5;">クラス一覧を取得できません：${escapeHtml(String(error?.message || error))}<button type="button" onclick="refreshIftyClassesPage()" style="display:block;margin-top:10px;padding:9px;border-radius:8px;">${ifty216Markup("再試行","Retry")}</button></div>`;
   }
 };
 
@@ -4397,7 +3874,7 @@ window.showIftyClassMembers = async function(id) {
   if (!node) return;
   if (!node.hidden) { node.hidden=true; return; }
   node.hidden = false;
-  node.textContent = '読み込み中…';
+  node.textContent = ifty216T("読み込み中…","Loading…");
   try {
     await syncIftyClassAvatarIfNeeded().catch(error => console.warn('クラス用アイコンの同期エラー:', error));
     const data = await iftyAccountApi('class_members', { token:iftySessionToken, classId:safeId });
@@ -4474,7 +3951,7 @@ function iftyClassFolderRowHtml(classId,f,canEdit){
   if(!/^csh_[A-Za-z0-9_.-]{4,120}$/.test(f.id))return '';
   return `<div class="ifty-sh-entry"><strong>${escapeHtml(f.name)}</strong><div class="ifty-sh-label">${escapeHtml(getIftyFolderShareSubjectLabel(f.subject))} ／ 投稿者：${escapeHtml(f.publisherUsername||'')}</div>
     <div class="ifty-sh-row"><button type="button" class="ifty-sh-btn blue" onclick="iftyImportClassFolder('${classId}','${f.id}')">📥 自分のフォルダへ取り込む</button>
-    ${canEdit?`<button type="button" class="ifty-sh-btn" onclick="iftyEditClassFolder('${classId}','${f.id}')">✏️ 編集</button><button type="button" class="ifty-sh-btn red" onclick="iftyDeleteClassFolder('${classId}','${f.id}')">削除</button>`:''}</div></div>`;
+    ${canEdit?`<button type="button" class="ifty-sh-btn" onclick="iftyEditClassFolder('${classId}','${f.id}')">✏️ 編集</button><button type="button" class="ifty-sh-btn red" onclick="iftyDeleteClassFolder('${classId}','${f.id}')">${ifty216Markup("削除","Delete")}</button>`:''}</div></div>`;
 }
 window.openIftyClassFolders = async function(classId){
   const id=String(classId||'').replace(/[^a-zA-Z0-9_-]/g,'');
@@ -4493,11 +3970,11 @@ window.iftyRefreshClassFolders=async function(classId){
     const rows=Array.isArray(data.folders)?data.folders:[];
     const canEdit=data.role==='owner'||data.role==='editor';
     iftyClassFolderCache.set(classId,rows);
-    root.innerHTML=IFTY_CLASS_SHARE_STYLE+`<div class="ifty-sh-pane"><div class="ifty-sh-row" style="justify-content:space-between"><strong>📁 クラスの共有フォルダ (${rows.length})</strong><button class="ifty-sh-btn" onclick="iftyRefreshClassFolders('${classId}')">↻ 更新</button></div>
+    root.innerHTML=IFTY_CLASS_SHARE_STYLE+`<div class="ifty-sh-pane"><div class="ifty-sh-row" style="justify-content:space-between"><strong>📁 クラスの共有フォルダ (${rows.length})</strong><button class="ifty-sh-btn" onclick="iftyRefreshClassFolders('${classId}')">${ifty216Markup("↻ 更新","↻ Refresh")}</button></div>
       <p class="ifty-sh-label">クラス内の共有用コピーです。個人の学習履歴・成績は共有されません。${canEdit?'Owner／Editorは登録・更新・削除ができます。':'Memberはフォルダを自分の学習用に取り込めます。'}</p>
       ${canEdit?`<div class="ifty-sh-entry"><strong>＋ 自分のフォルダをクラスに共有</strong><div class="ifty-sh-row">${iftyLocalFolderSelectHtml(classId)}<button type="button" class="ifty-sh-btn green" onclick="iftyPublishClassFolder('${classId}')">📤 クラスへ公開</button></div></div>`:''}
       <div id="iftyClassShareMessage" role="status" class="ifty-sh-label"></div>
-      ${rows.length?rows.map(f=>iftyClassFolderRowHtml(classId,f,canEdit)).join(''):'<p class="ifty-sh-label">まだ共有フォルダはありません。</p>'}</div>`;
+      ${rows.length?rows.map(f=>iftyClassFolderRowHtml(classId,f,canEdit)).join(''):("<p class=\"ifty-sh-label\">" + ifty216Markup("まだ共有フォルダはありません。","No shared folders yet.") + "</p>")}</div>`;
   }catch(error){root.innerHTML=`<div class="ifty-sh-pane" role="alert">${escapeHtml(String(error?.message||error))}</div>`;}
 };
 window.iftyPublishClassFolder=async function(classId,folderId='',version=0){
@@ -4554,11 +4031,11 @@ function iftyRenderShareEditor(){
   const state=window.iftyShareEditorState;if(!state)return;
   const {pack}=state;
   const rows=Array.isArray(pack.records)?pack.records:[];
-  iftyShowShareDialog('クラス共有フォルダを編集',`<label class="ifty-sh-label" for="iftySharedName">フォルダ名</label><input id="iftySharedName" class="ifty-sh-input" maxlength="80" value="${escapeHtml(pack.folder.name)}">
+  iftyShowShareDialog('クラス共有フォルダを編集',`<label class="ifty-sh-label" for="iftySharedName">${ifty216Markup("フォルダ名","Folder name")}</label><input id="iftySharedName" class="ifty-sh-input" maxlength="80" value="${escapeHtml(pack.folder.name)}">
     <div class="ifty-sh-label" style="margin-top:8px">${escapeHtml(getIftyFolderShareSubjectLabel(pack.subject))}・${rows.length}件 ／ 各項目の「編集」から内容を変更できます。</div>
     <div class="ifty-sh-row"><button class="ifty-sh-btn green" onclick="iftySaveEditedClassFolder()">変更をクラスに保存</button><button class="ifty-sh-btn" onclick="iftyAddSharedFolderItem()">＋ 項目追加</button><button class="ifty-sh-btn" onclick="iftyChooseReplacementFolder()">自分のフォルダで丸ごと更新</button></div>
     <div id="iftySharedEditStatus" role="status" class="ifty-sh-label"></div>
-    <div style="max-height:48vh;overflow-y:auto">${rows.map((r,i)=>`<div class="ifty-sh-entry"><div style="overflow-wrap:anywhere">${escapeHtml(iftyShareRecordLabel(r,i))}</div><div class="ifty-sh-row"><button class="ifty-sh-btn" onclick="iftyEditSharedFolderItem(${i})">✏️ 項目を編集</button><button class="ifty-sh-btn red" onclick="iftyRemoveSharedFolderItem(${i})">削除</button></div></div>`).join('')}</div>`);
+    <div style="max-height:48vh;overflow-y:auto">${rows.map((r,i)=>`<div class="ifty-sh-entry"><div style="overflow-wrap:anywhere">${escapeHtml(iftyShareRecordLabel(r,i))}</div><div class="ifty-sh-row"><button class="ifty-sh-btn" onclick="iftyEditSharedFolderItem(${i})">✏️ 項目を編集</button><button class="ifty-sh-btn red" onclick="iftyRemoveSharedFolderItem(${i})">${ifty216Markup("削除","Delete")}</button></div></div>`).join('')}</div>`);
 }
 function iftyRememberShareEditorName(){
   const input=document.getElementById('iftySharedName');
@@ -4586,7 +4063,7 @@ window.iftyEditSharedFolderItem=function(index){
   iftyShowShareDialog(`${iftyShareRecordLabel(record,index)} を編集`,
     `<p class="ifty-sh-label">用語・意味などの項目を編集できます。複雑なデータはJSON形式で表示されます。</p>
      <div style="max-height:57vh;overflow:auto">${html}</div>
-     <div class="ifty-sh-row"><button class="ifty-sh-btn green" onclick="iftySaveSharedFolderItem()">この項目を保存</button><button class="ifty-sh-btn" onclick="iftyRenderShareEditor()">戻る</button></div>`);
+     <div class="ifty-sh-row"><button class="ifty-sh-btn green" onclick="iftySaveSharedFolderItem()">${ifty216Markup("この項目を保存","Save this item")}</button><button class="ifty-sh-btn" onclick="iftyRenderShareEditor()">${ifty216Markup("戻る","Back")}</button></div>`);
 };
 window.iftySaveSharedFolderItem=function(){
   const state=window.iftyShareEditorState, index=window.iftySharedRecordEditIndex;
@@ -4624,8 +4101,8 @@ window.iftyChooseReplacementFolder=function(){
   const state=window.iftyShareEditorState;if(!state)return;
   const list=iftyEnumerateLocalFolders();
   iftyShowShareDialog('自分のフォルダで更新',`<p class="ifty-sh-label">編集した自分のフォルダを選び、クラスにある共有フォルダの内容を上書きします。</p>
-  <select id="iftyReplacementFolder" class="ifty-sh-input"><option value="">選択してください</option>${list.map((f,i)=>`<option value="${i}">${escapeHtml(getIftyFolderShareSubjectLabel(f.subject))} / ${escapeHtml(f.name)}</option>`).join('')}</select>
-  <div class="ifty-sh-row"><button class="ifty-sh-btn green" onclick="iftyConfirmReplaceSharedFolder()">更新する</button><button class="ifty-sh-btn" onclick="iftyRenderShareEditor()">戻る</button></div>`);
+  <select id="iftyReplacementFolder" class="ifty-sh-input"><option value="">${ifty216Markup("選択してください","Please select")}</option>${list.map((f,i)=>`<option value="${i}">${escapeHtml(getIftyFolderShareSubjectLabel(f.subject))} / ${escapeHtml(f.name)}</option>`).join('')}</select>
+  <div class="ifty-sh-row"><button class="ifty-sh-btn green" onclick="iftyConfirmReplaceSharedFolder()">${ifty216Markup("更新する","Update")}</button><button class="ifty-sh-btn" onclick="iftyRenderShareEditor()">${ifty216Markup("戻る","Back")}</button></div>`);
   window.iftyReplacementChoices=list;
 };
 window.iftyConfirmReplaceSharedFolder=function(){
@@ -4655,8 +4132,8 @@ window.openIftyFolderShareOptions=function(subject,folderId){
   let pack;try{pack=getIftyFolderPackage(subject,folderId);}catch(e){alert(String(e?.message||e));return;}
   const id=String(pack.folder.name||'共有フォルダ');
   iftyShowShareDialog(`「${id}」を共有`,`<p class="ifty-sh-label">LINEでは独自拡張子 .iftyfolder を扱えない場合があります。ファイルを送る場合は「LINE用ファイル（.txt）」を選んでください。受信側は IFTY の「フォルダを読み込み」から .txt を直接取り込めます（従来の .iftyfolder も対応）。共有リンクでも取り込めます（14日間有効・IFTYログイン必須）。</p>
-  <div class="ifty-sh-row"><button class="ifty-sh-btn green" onclick="iftyCreateFolderShareLink('line')">LINEに送る（共有リンク）</button><button class="ifty-sh-btn blue" onclick="iftyCreateFolderShareLink('copy')">リンクをコピー</button><button class="ifty-sh-btn" onclick="iftyShareFolderAsFile()">📄 LINE用ファイル（.txt）</button><button class="ifty-sh-btn" onclick="iftyShareFolderAsOriginalFile()">従来のファイル（.iftyfolder）</button></div>
-  <div class="ifty-sh-row"><button class="ifty-sh-btn" onclick="iftyShowFolderClassDestinations()">🏫 クラスに共有</button></div><div id="iftyShareDialogStatus" role="status" class="ifty-sh-label"></div>`);
+  <div class="ifty-sh-row"><button class="ifty-sh-btn green" onclick="iftyCreateFolderShareLink('line')">${ifty216Markup("LINEに送る（共有リンク）","Send to LINE (sharing link)")}</button><button class="ifty-sh-btn blue" onclick="iftyCreateFolderShareLink('copy')">${ifty216Markup("リンクをコピー","Copy link")}</button><button class="ifty-sh-btn" onclick="iftyShareFolderAsFile()">${ifty216Markup("📄 LINE用ファイル（.txt）","📄 LINE file (.txt)")}</button><button class="ifty-sh-btn" onclick="iftyShareFolderAsOriginalFile()">${ifty216Markup("従来のファイル（.iftyfolder）","Original file (.iftyfolder)")}</button></div>
+  <div class="ifty-sh-row"><button class="ifty-sh-btn" onclick="iftyShowFolderClassDestinations()">${ifty216Markup("🏫 クラスに共有","🏫 Share with class")}</button></div><div id="iftyShareDialogStatus" role="status" class="ifty-sh-label"></div>`);
   window.iftyCurrentShareFolder={subject,folderId};
 };
 window.iftyShareFolderAsFile=function(){
@@ -4678,7 +4155,7 @@ window.iftyCreateFolderShareLink=async function(mode){
     const message=`IFTYの「${pack.folder.name}」フォルダを共有します。\n${link.href}`;
     if(mode==='copy'){
       try{await navigator.clipboard.writeText(link.href);if(status)status.textContent='リンクをコピーしました。LINEに貼り付けて送れます。';}
-      catch(_){if(status){status.innerHTML=`<textarea class="ifty-sh-input" rows="3" readonly>${escapeHtml(link.href)}</textarea><p>長押ししてコピーしてください。</p>`;}}
+      catch(_){if(status){status.innerHTML=`<textarea class="ifty-sh-input" rows="3" readonly>${escapeHtml(link.href)}</textarea><p>${ifty216Markup("長押ししてコピーしてください。","Touch and hold to copy.")}</p>`;}}
     }else{
       // A real URL (not a .iftyfolder attachment) is compatible with LINE link shares.
       window.location.href=`https://line.me/R/msg/text/?${encodeURIComponent(message)}`;
@@ -4692,7 +4169,7 @@ window.iftyShowFolderClassDestinations=async function(){
   try{
     const data=await iftyAccountApi('class_list',{token:iftySessionToken});
     const classes=(data.classes||[]).filter(c=>c.role==='editor'||c.isOwner);
-    if(status)status.innerHTML=`<p>公開するクラスを選択してください（Owner／Editorのみ）。</p><div class="ifty-sh-row">${classes.map(c=>`<button class="ifty-sh-btn green" onclick="iftyShareCurrentFolderToClass('${escapeHtml(c.id)}')">${escapeHtml(c.name)}</button>`).join('')||'公開できるクラスがありません。'}</div>`;
+    if(status)status.innerHTML=`<p>${ifty216Markup("公開するクラスを選択してください（Owner／Editorのみ）。","Select a class to share with (Owner/Editor only).")}</p><div class="ifty-sh-row">${classes.map(c=>`<button class="ifty-sh-btn green" onclick="iftyShareCurrentFolderToClass('${escapeHtml(c.id)}')">${escapeHtml(c.name)}</button>`).join('')||'公開できるクラスがありません。'}</div>`;
   }catch(e){if(status)status.textContent=String(e?.message||e);}
 };
 window.iftyShareCurrentFolderToClass=async function(classId){
@@ -4742,10 +4219,10 @@ window.openIftyFriendsPage = function() {
   showIftyHubContent(`
     <section class="ifty-portal-shell">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
-        <div><h1 class="ifty-portal-title">👥 フレンド</h1><div class="ifty-portal-subtitle">IFTY IDで相互フレンドになります。利用状況は本人が公開をONにした場合だけ表示します。</div></div>
+        <div><h1 class="ifty-portal-title">${ifty216Markup("👥 フレンド","👥 Friends")}</h1><div class="ifty-portal-subtitle">IFTY IDで相互フレンドになります。利用状況は本人が公開をONにした場合だけ表示します。</div></div>
         <button class="ifty-portal-back" type="button" onclick="openIftyHome()">⌂ ホームへ</button>
       </div>
-      <div id="iftyFriendsRoot" style="margin-top:14px;"><div class="ifty-settings-note">読み込み中…</div></div>
+      <div id="iftyFriendsRoot" style="margin-top:14px;"><div class="ifty-settings-note">${ifty216Markup("読み込み中…","Loading…")}</div></div>
     </section>`, 'friends');
   refreshIftyFriendsPage({ force:true });
 };
@@ -4779,10 +4256,10 @@ function renderIftyFriendsData(data) {
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><input id="iftyFriendUsernameInput" autocomplete="off" placeholder="IFTY ID" style="flex:1;min-width:190px;padding:10px;border:1px solid #64748b;border-radius:8px;background:#0f172a;color:#f8fafc;" onkeydown="if(event.key==='Enter'){event.preventDefault();sendIftyFriendRequest();}"><button type="button" onclick="sendIftyFriendRequest()" style="border:none;background:#2563eb;color:white;border-radius:8px;padding:10px 13px;font-weight:900;cursor:pointer;">申請を送る</button></div>
       <div id="iftyFriendActionStatus" class="ifty-settings-note" style="margin-top:7px;"></div>
     </div>
-    ${incoming.length ? `<div class="ifty-settings-section" style="background:#172033;border-color:#475569;"><h3 style="color:#f8fafc;">届いた申請 ${incoming.length}</h3><div style="display:grid;gap:8px;">${incoming.map(row=>`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid #475569;border-radius:9px;"><b style="color:#f8fafc;">${escapeHtml(row.username)}</b><div style="display:flex;gap:6px;"><button onclick="acceptIftyFriendRequest('${escapeHtml(String(row.requestId))}')" style="border:none;background:#047857;color:white;border-radius:7px;padding:7px 9px;font-weight:900;">承認</button><button onclick="declineIftyFriendRequest('${escapeHtml(String(row.requestId))}')" style="border:none;background:#475569;color:white;border-radius:7px;padding:7px 9px;font-weight:900;">拒否</button></div></div>`).join('')}</div></div>` : ''}
+    ${incoming.length ? `<div class="ifty-settings-section" style="background:#172033;border-color:#475569;"><h3 style="color:#f8fafc;">届いた申請 ${incoming.length}</h3><div style="display:grid;gap:8px;">${incoming.map(row=>`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid #475569;border-radius:9px;"><b style="color:#f8fafc;">${escapeHtml(row.username)}</b><div style="display:flex;gap:6px;"><button onclick="acceptIftyFriendRequest('${escapeHtml(String(row.requestId))}')" style="border:none;background:#047857;color:white;border-radius:7px;padding:7px 9px;font-weight:900;">${ifty216Markup("承認","Approve")}</button><button onclick="declineIftyFriendRequest('${escapeHtml(String(row.requestId))}')" style="border:none;background:#475569;color:white;border-radius:7px;padding:7px 9px;font-weight:900;">${ifty216Markup("拒否","Reject")}</button></div></div>`).join('')}</div></div>` : ''}
     ${outgoing.length ? `<div class="ifty-settings-section" style="background:#172033;border-color:#475569;"><h3 style="color:#f8fafc;">送信済み申請 ${outgoing.length}</h3><div style="display:grid;gap:8px;">${outgoing.map(row=>`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid #475569;border-radius:9px;"><span style="color:#f8fafc;">${escapeHtml(row.username)}</span><button onclick="cancelIftyFriendRequest('${escapeHtml(String(row.requestId))}')" style="border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:7px;padding:7px 9px;font-weight:900;">取消</button></div>`).join('')}</div></div>` : ''}
     <div class="ifty-settings-section" style="background:#172033;border-color:#475569;">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><h3 style="color:#f8fafc;">フレンド ${friends.length}</h3><div class="ifty-settings-note">状態は約1分ごとに更新します。</div></div><button onclick="refreshIftyFriendsPage({force:true})" style="border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:8px;padding:8px 10px;font-weight:900;">↻ 更新</button></div>
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><h3 style="color:#f8fafc;">フレンド ${friends.length}</h3><div class="ifty-settings-note">状態は約1分ごとに更新します。</div></div><button onclick="refreshIftyFriendsPage({force:true})" style="border:1px solid #64748b;background:#1e293b;color:#f8fafc;border-radius:8px;padding:8px 10px;font-weight:900;">${ifty216Markup("↻ 更新","↻ Refresh")}</button></div>
       <div style="display:grid;gap:8px;margin-top:10px;">${friends.length ? friends.map(renderIftyFriendRow).join('') : '<div class="ifty-settings-note">まだフレンドはいません。</div>'}</div>
     </div>`;
 }
@@ -4791,7 +4268,7 @@ window.refreshIftyFriendsPage = async function(options={}) {
   const root = document.getElementById('iftyFriendsRoot');
   if (!root || iftyDeveloperMode || !iftySessionToken) return;
   stopIftyFriendsAutoRefresh();
-  if (options.force) root.innerHTML = '<div class="ifty-settings-note">読み込み中…</div>';
+  if (options.force) root.innerHTML = ("<div class=\"ifty-settings-note\">" + ifty216Markup("読み込み中…","Loading…") + "</div>");
   try {
     const data = await iftyAccountApi('friends_list',{ token:iftySessionToken });
     if (!document.getElementById('iftyFriendsRoot')) return;
@@ -5358,6 +4835,11 @@ function showIftyHubContent(html, pageName) {
 
 
 const IFTY_HOME_SUBJECT_NAME_MODE_KEY = 'ifty_home_subject_name_mode_v1';
+// STEP216: presentation language only. Never use this setting for meaning generation or ORDER.
+function ifty216QuizLanguage(){try{return localStorage.getItem('ifty216_quiz_display_v1')==='follow'?'follow':'original';}catch(_){return 'original';}}
+window.ifty216SetQuizLanguage=function(value){try{localStorage.setItem('ifty216_quiz_display_v1',value==='follow'?'follow':'original');}catch(_){alert('設定を保存できませんでした。');}window.openIftySettings();};
+function ifty216T(ja,en){return getIftyHomeSubjectNameMode()==='ja'?ja:en;}
+
 
 function getIftyHomeSubjectNameMode() {
   try {
@@ -5456,11 +4938,11 @@ window.openIftyHome = function() {
   const stats = getIftyHomeStats();
   showIftyHubContent(`
     <section class="ifty-portal-shell">
-      <h1 class="ifty-portal-title">HOME</h1>
-      <div class="ifty-portal-subtitle">IFTYの学習メニュー。科目を選ぶか、ALLIA・実践へ進めます。</div>
+      <h1 class="ifty-portal-title">${ifty216Markup("ホーム","HOME")}</h1>
+      <div class="ifty-portal-subtitle">${ifty216Markup("IFTYの学習メニュー。科目を選ぶか、ALLIA・実践へ進めます。","Choose a subject, open ALLIA or start practice.")}</div>
 
       <div style="margin:14px 0 10px;">
-        ${renderIftyAlliaUsageBarHtml(false)}
+        ${renderIfty213PerformanceHtml()}
       </div>
 
       <div id="iftyUpdateBannerHost" style="margin:0 0 16px;">
@@ -5470,62 +4952,62 @@ window.openIftyHome = function() {
       <div class="ifty-home-grid">
         <button class="ifty-home-card" type="button" onclick="openIftySubject('ENGLISH')">
           <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('ENGLISH'))}</div>
-          <div class="ifty-home-card-meta">フォルダ ${stats.folders} / 単語 ${stats.words}</div>
+          <div class="ifty-home-card-meta">${ifty216T('フォルダ','Folders')} ${stats.folders} / ${ifty216T('単語','Words')} ${stats.words}</div>
           <div class="ifty-home-card-spacer"></div>
-          <div class="ifty-home-card-action">単語帳を開く →</div>
+          <div class="ifty-home-card-action">${ifty216Markup("単語帳を開く →","Open vocabulary →")}</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('ANCIENT')">
           <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('ANCIENT'))}</div>
-          <div class="ifty-home-card-meta">フォルダ ${stats.ancientFolders} / 古文単語 ${stats.ancientItems}${stats.ancientDueReview ? ` / 🔁 今日 ${stats.ancientDueReview}` : ''}${stats.ancientWeak ? ` / 🎯 苦手 ${stats.ancientWeak}` : ''}</div>
+          <div class="ifty-home-card-meta">${ifty216T('フォルダ','Folders')} ${stats.ancientFolders} / 古文${ifty216T('単語','Words')} ${stats.ancientItems}${stats.ancientDueReview ? ` / 🔁 今日 ${stats.ancientDueReview}` : ''}${stats.ancientWeak ? ` / 🎯 苦手 ${stats.ancientWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
-          <div class="ifty-home-card-action">古文単語 →</div>
+          <div class="ifty-home-card-action">${ifty216Markup("古文単語 →","Classical vocabulary →")}</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('KANBUN')">
           <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('KANBUN'))}</div>
-          <div class="ifty-home-card-meta">フォルダ ${stats.kanbunFolders} / 漢文 ${stats.kanbunItems}${stats.kanbunDueReview ? ` / 🔁 今日 ${stats.kanbunDueReview}` : ''}${stats.kanbunWeak ? ` / 🎯 苦手 ${stats.kanbunWeak}` : ''}</div>
+          <div class="ifty-home-card-meta">${ifty216T('フォルダ','Folders')} ${stats.kanbunFolders} / 漢文 ${stats.kanbunItems}${stats.kanbunDueReview ? ` / 🔁 今日 ${stats.kanbunDueReview}` : ''}${stats.kanbunWeak ? ` / 🎯 苦手 ${stats.kanbunWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
-          <div class="ifty-home-card-action">漢文・返点・手書き →</div>
+          <div class="ifty-home-card-action">${ifty216Markup("漢文・返点・手書き →","Classical Chinese, reading marks & handwriting →")}</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('KANJI')">
           <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('KANJI'))}</div>
-          <div class="ifty-home-card-meta">フォルダ ${stats.kanjiFolders} / 漢字・熟語 ${stats.kanjiItems}${stats.kanjiDueReview ? ` / 🔁 今日 ${stats.kanjiDueReview}` : ''}${stats.kanjiWeak ? ` / 🎯 苦手 ${stats.kanjiWeak}` : ''}</div>
+          <div class="ifty-home-card-meta">${ifty216T('フォルダ','Folders')} ${stats.kanjiFolders} / 漢字・熟語 ${stats.kanjiItems}${stats.kanjiDueReview ? ` / 🔁 今日 ${stats.kanjiDueReview}` : ''}${stats.kanjiWeak ? ` / 🎯 苦手 ${stats.kanjiWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
-          <div class="ifty-home-card-action">漢字・熟語・手書き →</div>
+          <div class="ifty-home-card-action">${ifty216Markup("漢字・熟語・手書き →","Kanji, compounds & handwriting →")}</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('SCIENCE')">
           <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('SCIENCE'))}</div>
-          <div class="ifty-home-card-meta">フォルダ ${stats.scienceFolders} / 項目 ${stats.scienceItems}${stats.scienceDueReview ? ` / 🔁 今日 ${stats.scienceDueReview}` : ''}${stats.scienceWeak ? ` / 🎯 苦手 ${stats.scienceWeak}` : ''}</div>
+          <div class="ifty-home-card-meta">${ifty216T('フォルダ','Folders')} ${stats.scienceFolders} / ${ifty216T('項目','Items')} ${stats.scienceItems}${stats.scienceDueReview ? ` / 🔁 今日 ${stats.scienceDueReview}` : ''}${stats.scienceWeak ? ` / 🎯 苦手 ${stats.scienceWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
-          <div class="ifty-home-card-action">物理・化学・生物・地学 →</div>
+          <div class="ifty-home-card-action">${ifty216Markup("物理・化学・生物・地学 →","Physics, chemistry, biology & earth science →")}</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('SOCIAL STUDIES')">
           <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('SOCIAL STUDIES'))}</div>
-          <div class="ifty-home-card-meta">フォルダ ${stats.socialFolders} / 項目 ${stats.socialItems}${stats.socialDueReview ? ` / 🔁 今日 ${stats.socialDueReview}` : ''}${stats.socialWeak ? ` / 🎯 苦手 ${stats.socialWeak}` : ''}</div>
+          <div class="ifty-home-card-meta">${ifty216T('フォルダ','Folders')} ${stats.socialFolders} / ${ifty216T('項目','Items')} ${stats.socialItems}${stats.socialDueReview ? ` / 🔁 今日 ${stats.socialDueReview}` : ''}${stats.socialWeak ? ` / 🎯 苦手 ${stats.socialWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
-          <div class="ifty-home-card-action">日本史・世界史・地理・公共 →</div>
+          <div class="ifty-home-card-action">${ifty216Markup("日本史・世界史・地理・公共 →","Japanese/world history, geography & civics →")}</div>
         </button>
 
         <button class="ifty-home-card" type="button" onclick="openIftySubject('OTHERS')">
           <div class="ifty-home-card-title">${escapeHtml(getIftyHomeSubjectDisplayName('OTHERS'))}</div>
-          <div class="ifty-home-card-meta">フォルダ ${stats.othersFolders} / 項目 ${stats.othersItems}${stats.othersDueReview ? ` / 🔁 今日 ${stats.othersDueReview}` : ''}${stats.othersWeak ? ` / 🎯 苦手 ${stats.othersWeak}` : ''}</div>
+          <div class="ifty-home-card-meta">${ifty216T('フォルダ','Folders')} ${stats.othersFolders} / ${ifty216T('項目','Items')} ${stats.othersItems}${stats.othersDueReview ? ` / 🔁 今日 ${stats.othersDueReview}` : ''}${stats.othersWeak ? ` / 🎯 苦手 ${stats.othersWeak}` : ''}</div>
           <div class="ifty-home-card-spacer"></div>
-          <div class="ifty-home-card-action">保健・情報など →</div>
+          <div class="ifty-home-card-action">${ifty216Markup("保健・情報など →","Health, informatics and more →")}</div>
         </button>
       </div>
 
       <div style="margin-top:18px;padding:15px;border:1px solid #cbd5e1;border-radius:12px;background:rgba(248,250,252,.82);">
-        <div style="font-weight:900;color:#0f172a;margin-bottom:10px;">📊 TODAY / REVIEW</div>
+        <div style="font-weight:900;color:#0f172a;margin-bottom:10px;">${ifty216Markup("📊 今日の学習・復習","📊 TODAY / REVIEW")}</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;">
-          <div style="padding:10px;border-radius:9px;background:white;border:1px solid #e2e8f0;"><div style="font-size:.72em;color:#64748b;">今日学習した単語</div><div style="font-size:1.35em;font-weight:900;color:#0f172a;">${stats.studiedToday}語</div></div>
-          <div style="padding:10px;border-radius:9px;background:white;border:1px solid #e2e8f0;"><div style="font-size:.72em;color:#64748b;">今日の回答</div><div style="font-size:1.35em;font-weight:900;color:#0f172a;">${stats.answersToday}回</div></div>
-          <div style="padding:10px;border-radius:9px;background:white;border:1px solid #e2e8f0;"><div style="font-size:.72em;color:#64748b;">今日の正答率</div><div style="font-size:1.35em;font-weight:900;color:#0f172a;">${stats.answersToday ? stats.accuracyToday + '%' : '—'}</div></div>
-          <div style="padding:10px;border-radius:9px;background:#fff7ed;border:1px solid #fed7aa;"><div style="font-size:.72em;color:#9a3412;">今日の復習</div><div style="font-size:1.35em;font-weight:900;color:#c2410c;">${stats.dueReview}語</div></div>
-          <div style="padding:10px;border-radius:9px;background:#fff1f2;border:1px solid #fecdd3;"><div style="font-size:.72em;color:#9f1239;">苦手候補</div><div style="font-size:1.35em;font-weight:900;color:#be123c;">${stats.weakWords}語</div></div>
+          <div style="padding:10px;border-radius:9px;background:white;border:1px solid #e2e8f0;"><div style="font-size:.72em;color:#64748b;">${ifty216Markup("今日学習した単語","Words studied today")}</div><div style="font-size:1.35em;font-weight:900;color:#0f172a;">${stats.studiedToday}語</div></div>
+          <div style="padding:10px;border-radius:9px;background:white;border:1px solid #e2e8f0;"><div style="font-size:.72em;color:#64748b;">${ifty216Markup("今日の回答","Answers today")}</div><div style="font-size:1.35em;font-weight:900;color:#0f172a;">${stats.answersToday}回</div></div>
+          <div style="padding:10px;border-radius:9px;background:white;border:1px solid #e2e8f0;"><div style="font-size:.72em;color:#64748b;">${ifty216Markup("今日の正答率","Accuracy today")}</div><div style="font-size:1.35em;font-weight:900;color:#0f172a;">${stats.answersToday ? stats.accuracyToday + '%' : '—'}</div></div>
+          <div style="padding:10px;border-radius:9px;background:#fff7ed;border:1px solid #fed7aa;"><div style="font-size:.72em;color:#9a3412;">${ifty216Markup("今日の復習","Review today")}</div><div style="font-size:1.35em;font-weight:900;color:#c2410c;">${stats.dueReview}語</div></div>
+          <div style="padding:10px;border-radius:9px;background:#fff1f2;border:1px solid #fecdd3;"><div style="font-size:.72em;color:#9f1239;">${ifty216Markup("苦手候補","Items to work on")}</div><div style="font-size:1.35em;font-weight:900;color:#be123c;">${stats.weakWords}語</div></div>
         </div>
         <div style="margin-top:11px;padding:10px;border:1px solid #dbeafe;border-radius:9px;background:white;">
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:.8em;">
@@ -5544,16 +5026,16 @@ window.openIftyHome = function() {
         <button type="button" onclick="switchToChatView()" style="background:#0284c7;color:white;">🤖 ALLIA</button>
         <button type="button" onclick="openIftyExampleBank()" style="background:#2563eb;color:white;">📚 例文資産 ${stats.examples}</button>
         <button type="button" onclick="openIftyBasicSentences()" style="background:#059669;color:white;">📝 BASIC SENTENCES ${stats.basicSentences}</button>
-        <button type="button" onclick="openIftyConversation()" style="background:#0f766e;color:white;">🗣 ENGLISH CONVERSATION</button>
+        <button type="button" onclick="openIftyConversation()" style="background:#0f766e;color:white;">${ifty216Markup("🗣 英会話","🗣 ENGLISH CONVERSATION")}</button>
         <button type="button" onclick="openIftyYears()" style="background:#b45309;color:white;">📅 YEARS ${stats.years}</button>
         <button type="button" onclick="openIftyPlaces()" style="background:#155e75;color:white;">🗺️ ${escapeHtml(getIftyHomeSubjectNameMode()==='ja'?'地図・地名':'PLACES')}</button>
-        <button type="button" onclick="openPracticeHome()" style="background:#7c3aed;color:white;">⚔️ 実践</button>
-        <button type="button" onclick="openIftyLearningStats()" style="background:#0f766e;color:white;">📊 学習統計</button>
-        <button type="button" onclick="openIftyFriendsPage()" style="background:#2563eb;color:white;">👥 フレンド</button>
+        <button type="button" onclick="openPracticeHome()" style="background:#7c3aed;color:white;">${ifty216Markup("⚔️ 実践","⚔️ Practice")}</button>
+        <button type="button" onclick="openIftyLearningStats()" style="background:#0f766e;color:white;">${ifty216Markup("📊 学習統計","📊 Study statistics")}</button>
+        <button type="button" onclick="openIftyFriendsPage()" style="background:#2563eb;color:white;">${ifty216Markup("👥 フレンド","👥 Friends")}</button>
         <button type="button" onclick="openIftyClassesPage()" style="background:#1d4ed8;color:white;">🏫 ${escapeHtml(getIftySideMenuDisplayText('classes'))}</button>
-        <button type="button" onclick="openIftyFolderImportPicker()" style="background:#475569;color:white;">📦 フォルダを受け取る</button>
-        <button type="button" onclick="openIftyRecoveryCenter()" style="background:#334155;color:white;">🛟 バックアップ / 復元</button>
-        <button type="button" onclick="openIftyBugReport()" style="background:#7f1d1d;color:white;">🐞 不具合を報告</button>
+        <button type="button" onclick="openIftyFolderImportPicker()" style="background:#475569;color:white;">${ifty216Markup("📦 フォルダを受け取る","📦 Receive folder")}</button>
+        <button type="button" onclick="openIftyRecoveryCenter()" style="background:#334155;color:white;">${ifty216Markup("🛟 バックアップ / 復元","🛟 Backup / restore")}</button>
+        <button type="button" onclick="openIftyBugReport()" style="background:#7f1d1d;color:white;">${ifty216Markup("🐞 不具合を報告","🐞 Report an issue")}</button>
       </div>
 
       <div class="ifty-settings-note" style="margin-top:14px;">
@@ -5704,16 +5186,16 @@ function renderIftyPronunciationGuide(item, options = {}) {
   const pitfalls = Array.isArray(guide.pitfalls) ? guide.pitfalls : [];
   return `<div class="ifty-pron-guide" style="margin-top:9px;border:1px solid #c4b5fd;border-radius:11px;background:#faf5ff;padding:10px 11px;">
     <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
-      <b style="color:#5b21b6;font-size:.82em;">発音ポイント</b>
+      <b style="color:#5b21b6;font-size:.82em;">${ifty216Markup("発音ポイント","Pronunciation tips")}</b>
       ${guide.phonetic ? `<span style="padding:3px 7px;border-radius:999px;background:white;border:1px solid #ddd6fe;color:#3b0764;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78em;overflow-wrap:anywhere;">${escapeHtml(guide.phoneticLabel || '発音')} ${escapeHtml(guide.phonetic)}</span>` : ''}
     </div>
-    ${guide.stress ? `<div style="margin-top:6px;color:#334155;font-size:.78em;line-height:1.5;"><b>強勢：</b>${escapeHtml(guide.stress)}</div>` : ''}
+    ${guide.stress ? `<div style="margin-top:6px;color:#334155;font-size:.78em;line-height:1.5;"><b>${ifty216Markup("強勢：","Stress:")}</b>${escapeHtml(guide.stress)}</div>` : ''}
     ${compact ? '' : `
-      ${guide.mouth ? `<div style="margin-top:7px;color:#334155;font-size:.8em;line-height:1.55;"><b>👄 口・唇：</b>${escapeHtml(guide.mouth)}</div>` : ''}
-      ${guide.tongue ? `<div style="margin-top:6px;color:#334155;font-size:.8em;line-height:1.55;"><b>👅 舌：</b>${escapeHtml(guide.tongue)}</div>` : ''}
-      ${guide.rhythm ? `<div style="margin-top:6px;color:#334155;font-size:.8em;line-height:1.55;"><b>🎵 リズム：</b>${escapeHtml(guide.rhythm)}</div>` : ''}
+      ${guide.mouth ? `<div style="margin-top:7px;color:#334155;font-size:.8em;line-height:1.55;"><b>${ifty216Markup("👄 口・唇：","👄 Mouth / lips:")}</b>${escapeHtml(guide.mouth)}</div>` : ''}
+      ${guide.tongue ? `<div style="margin-top:6px;color:#334155;font-size:.8em;line-height:1.55;"><b>${ifty216Markup("👅 舌：","👅 Tongue:")}</b>${escapeHtml(guide.tongue)}</div>` : ''}
+      ${guide.rhythm ? `<div style="margin-top:6px;color:#334155;font-size:.8em;line-height:1.55;"><b>${ifty216Markup("🎵 リズム：","🎵 Rhythm:")}</b>${escapeHtml(guide.rhythm)}</div>` : ''}
       ${points.length ? `<div style="display:grid;gap:5px;margin-top:7px;">${points.map(row => `<div style="padding:7px 8px;border-radius:8px;background:white;border:1px solid #e2e8f0;color:#334155;font-size:.78em;line-height:1.5;"><b style="color:#0f172a;">${escapeHtml(row.part || 'ポイント')}</b>　${escapeHtml(row.tip)}</div>`).join('')}</div>` : ''}
-      ${pitfalls.length ? `<div style="margin-top:7px;padding:7px 8px;border-radius:8px;background:#fff7ed;color:#9a3412;font-size:.76em;line-height:1.5;"><b>注意：</b>${pitfalls.map(escapeHtml).join(' / ')}</div>` : ''}
+      ${pitfalls.length ? `<div style="margin-top:7px;padding:7px 8px;border-radius:8px;background:#fff7ed;color:#9a3412;font-size:.76em;line-height:1.5;"><b>${ifty216Markup("注意：","Note:")}</b>${pitfalls.map(escapeHtml).join(' / ')}</div>` : ''}
     `}
   </div>`;
 }
@@ -5780,8 +5262,8 @@ function renderIftyPronunciationItemCard(folder, item) {
           <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">${ifty139DragHandle('PRONUNCIATION',folder.id,item.id)}
             <b style="color:#0f172a;font-size:1.02em;overflow-wrap:anywhere;">${escapeHtml(item.text)}</b>${ifty132AliasInfo(item)}
             <span style="padding:2px 7px;border-radius:999px;background:#f1f5f9;color:#475569;font-size:.67em;font-weight:900;">${escapeHtml(locale)}</span>
-            ${item.sourceType === 'LANGUAGES' ? '<span style="padding:2px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.67em;font-weight:900;">LANGUAGES</span>' : ''}
-            ${item.sourceKind === 'EXAMPLE' ? '<span style="padding:2px 7px;border-radius:999px;background:#f3e8ff;color:#7e22ce;font-size:.67em;font-weight:900;">例文</span>' : ''}
+            ${item.sourceType === 'LANGUAGES' ? ("<span style=\"padding:2px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.67em;font-weight:900;\">" + ifty216Markup("言語・語彙","LANGUAGES") + "</span>") : ''}
+            ${item.sourceKind === 'EXAMPLE' ? ("<span style=\"padding:2px 7px;border-radius:999px;background:#f3e8ff;color:#7e22ce;font-size:.67em;font-weight:900;\">" + ifty216Markup("例文","Example sentences") + "</span>") : ''}
             ${score ? `<span style="padding:2px 7px;border-radius:999px;background:${score.bg};color:${score.fg};font-size:.67em;font-weight:900;">前回 ${last.overallScore} / 100</span>` : ''}
           </div>
           
@@ -5790,11 +5272,11 @@ function renderIftyPronunciationItemCard(folder, item) {
           ${last && last.summary ? `<div style="margin-top:5px;color:#64748b;font-size:.76em;line-height:1.45;">前回：${escapeHtml(last.summary)}</div>` : ''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
-          <button type="button" onclick="speakIftyPronunciationItem('${safeFolder}','${safeItem}')" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:8px 10px;font-weight:900;cursor:pointer;">🔊 聞く</button>
+          <button type="button" onclick="speakIftyPronunciationItem('${safeFolder}','${safeItem}')" style="border:none;background:#0284c7;color:white;border-radius:8px;padding:8px 10px;font-weight:900;cursor:pointer;">${ifty216Markup("🔊 聞く","🔊 Listen")}</button>
           <button type="button" ${guidePending ? 'disabled' : ''} onclick="toggleIftyPronunciationGuide('${safeFolder}','${safeItem}')" style="border:1px solid #a78bfa;background:#faf5ff;color:#5b21b6;border-radius:8px;padding:8px 10px;font-weight:900;cursor:${guidePending?'wait':'pointer'};">${guidePending ? '生成中…' : (item.guide ? (guideOpen ? '口・舌を閉じる' : '👄 口・舌の使い方') : '👄 発音ポイント')}</button>
-          <button type="button" onclick="openIftyPronunciationPractice('${safeFolder}','${safeItem}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:8px 10px;font-weight:900;cursor:pointer;">🎙 練習</button>
-          <button type="button" onclick="ifty132EditPronunciationAliases('${safeFolder}','${safeItem}')" style="border:1px solid #94a3b8;background:#f8fafc;color:#334155;border-radius:8px;padding:8px;font-weight:900;">別名</button>
-          <button type="button" onclick="deleteIftyPronunciationItem('${safeFolder}','${safeItem}')" style="border:none;background:#f1f5f9;color:#be123c;border-radius:8px;padding:8px 9px;font-weight:900;cursor:pointer;">削除</button>
+          <button type="button" onclick="openIftyPronunciationPractice('${safeFolder}','${safeItem}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:8px 10px;font-weight:900;cursor:pointer;">${ifty216Markup("🎙 練習","🎙 Practise")}</button>
+          <button type="button" onclick="ifty132EditPronunciationAliases('${safeFolder}','${safeItem}')" style="border:1px solid #94a3b8;background:#f8fafc;color:#334155;border-radius:8px;padding:8px;font-weight:900;">${ifty216Markup("別名","Aliases")}</button>
+          <button type="button" onclick="deleteIftyPronunciationItem('${safeFolder}','${safeItem}')" style="border:none;background:#f1f5f9;color:#be123c;border-radius:8px;padding:8px 9px;font-weight:900;cursor:pointer;">${ifty216Markup("削除","Delete")}</button>
         </div>
       </div>
       ${item.guide && guideOpen ? renderIftyPronunciationGuide(item) : ''}
@@ -5821,15 +5303,15 @@ function renderIftyPronunciationFolder(folder) {
           <div style="font-size:.73em;color:#64748b;margin-top:2px;">${folder.items.length}件${folder.sourceFolderId ? ' ・ LANGUAGESからimport' : ''}</div>
         </button>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          ${ifty135ThemeButton('PRONUNCIATION',folder)}<button type="button" onclick="renameIftyPronunciationFolder('${safe}')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:7px;padding:7px 9px;font-weight:800;cursor:pointer;">名前変更</button>
-          <button type="button" onclick="deleteIftyPronunciationFolder('${safe}')" style="border:1px solid #fecdd3;background:white;color:#be123c;border-radius:7px;padding:7px 9px;font-weight:800;cursor:pointer;">削除</button>
+          ${ifty135ThemeButton('PRONUNCIATION',folder)}<button type="button" onclick="renameIftyPronunciationFolder('${safe}')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:7px;padding:7px 9px;font-weight:800;cursor:pointer;">${ifty216Markup("名前変更","Rename")}</button>
+          <button type="button" onclick="deleteIftyPronunciationFolder('${safe}')" style="border:1px solid #fecdd3;background:white;color:#be123c;border-radius:7px;padding:7px 9px;font-weight:800;cursor:pointer;">${ifty216Markup("削除","Delete")}</button>
         </div>
       </div>
       ${folder.collapsed ? '' : `
         <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,170px) auto;gap:7px;margin-top:12px;align-items:center;" class="ifty-pron-add-row">
           <input id="iftyPronText_${escapeHtml(folder.id)}" maxlength="${IFTY_PRONUNCIATION_MAX_TEXT_CHARS}" placeholder="単語・熟語・短い英文" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();addIftyPronunciationItem('${safe}');}" style="min-width:0;padding:9px;border:1px solid #94a3b8;border-radius:8px;font-size:.95em;">
           <input id="iftyPronLang_${escapeHtml(folder.id)}" maxlength="12" placeholder="言語 en / fr / de…" style="min-width:0;padding:9px;border:1px solid #94a3b8;border-radius:8px;font-size:.9em;">
-          <button type="button" onclick="addIftyPronunciationItem('${safe}')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;white-space:nowrap;">追加</button>
+          <button type="button" onclick="addIftyPronunciationItem('${safe}')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;white-space:nowrap;">${ifty216Markup("追加","Add")}</button>
         </div>
         <div class="ifty128-pron-items" style="display:grid;gap:8px;margin-top:10px;">
           ${folder.items.length ? folder.items.map(item => renderIftyPronunciationItemCard(folder, item)).join('') : '<div style="padding:16px;text-align:center;color:#94a3b8;font-size:.86em;">まだ教材がありません。</div>'}
@@ -5862,10 +5344,10 @@ window.openIftyPronunciation = function(options = {}) {
     <section class="ifty-portal-shell">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
         <div>
-          <h1 class="ifty-portal-title">PRONUNCIATION</h1>
+          <h1 class="ifty-portal-title">${ifty216Markup("発音","PRONUNCIATION")}</h1>
           <div class="ifty-portal-subtitle">標準発音を聞き、自分の発音を録音して、認識結果・採点・改善方法を確認します。</div>
         </div>
-        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">${ifty216Markup("HOMEへ戻る","Back to Home")}</button>
       </div>
 
       <div style="margin-top:14px;padding:13px;border:1px solid #c4b5fd;border-radius:12px;background:#faf5ff;">
@@ -5873,7 +5355,7 @@ window.openIftyPronunciation = function(options = {}) {
         <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;align-items:center;">
           <input id="iftyPronFolderName" placeholder="例：英検準1級 発音 / French phrases" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();createIftyPronunciationFolder();}" style="flex:1;min-width:210px;padding:9px;border:1px solid #a78bfa;border-radius:8px;font-size:.95em;">
           <button type="button" onclick="createIftyPronunciationFolder()" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">新規作成</button>
-          <button type="button" onclick="openIftyPronunciationImport()" style="border:none;background:#0369a1;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">LANGUAGESからIMPORT</button>
+          <button type="button" onclick="openIftyPronunciationImport()" style="border:none;background:#0369a1;color:white;border-radius:8px;padding:9px 12px;font-weight:900;cursor:pointer;">${ifty216Markup("LANGUAGESからIMPORT","Import from Languages")}</button>
         </div>
         <div style="margin-top:7px;color:#64748b;font-size:.76em;">フォルダ ${module.folders.length} / 教材 ${itemCount}。録音音声は端末内の練習中だけ保持し、クラウドには保存しません。</div>
       </div>
@@ -5969,7 +5451,7 @@ window.openIftyPronunciationImport = function() {
   }).join('');
   modal.innerHTML = `<div style="width:min(640px,100%);max-height:88vh;overflow:auto;background:#f8fafc;border-radius:15px;padding:15px;box-sizing:border-box;">
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
-      <div><h2 style="margin:0;color:#0f172a;font-size:1.2rem;">LANGUAGESからIMPORT</h2><div style="margin-top:4px;color:#64748b;font-size:.78em;">選んだLANGUAGESフォルダを発音練習用に複製します。</div></div>
+      <div><h2 style="margin:0;color:#0f172a;font-size:1.2rem;">${ifty216Markup("LANGUAGESからIMPORT","Import from Languages")}</h2><div style="margin-top:4px;color:#64748b;font-size:.78em;">${ifty216Markup("選んだLANGUAGESフォルダを発音練習用に複製します。","Copy the selected language folder for pronunciation practice.")}</div></div>
       <button type="button" onclick="document.getElementById('iftyPronImportModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:8px;padding:7px 10px;font-weight:900;">×</button>
     </div>
     <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;padding:10px;border-radius:9px;background:#eff6ff;color:#1e3a8a;font-size:.82em;line-height:1.45;"><input id="iftyPronImportExamples" type="checkbox" checked style="margin-top:2px;"> <span>各単語に保存されている<b>短い例文（180文字以内）</b>も教材として取り込む</span></label>
@@ -6086,7 +5568,7 @@ function renderIftyPronunciationPracticeModal() {
     <div style="margin-top:12px;">
       ${item.guide
         ? renderIftyPronunciationGuide(item)
-        : `<div style="padding:10px 11px;border:1px solid #c4b5fd;border-radius:11px;background:#faf5ff;color:#475569;font-size:.8em;line-height:1.5;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;"><span><b style="color:#5b21b6;">録音前：</b>発音記号・強勢・口・舌の使い方を先に確認できます。</span><button type="button" onclick="loadIftyPronunciationGuide('${String(st.folderId).replace(/'/g, "\\'")}','${String(st.itemId).replace(/'/g, "\\'")}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:7px 9px;font-weight:900;">発音ポイントを表示</button></div>`}
+        : `<div style="padding:10px 11px;border:1px solid #c4b5fd;border-radius:11px;background:#faf5ff;color:#475569;font-size:.8em;line-height:1.5;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;"><span><b style="color:#5b21b6;">録音前：</b>発音記号・強勢・口・舌の使い方を先に確認できます。</span><button type="button" onclick="loadIftyPronunciationGuide('${String(st.folderId).replace(/'/g, "\\'")}','${String(st.itemId).replace(/'/g, "\\'")}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:7px 9px;font-weight:900;">${ifty216Markup("発音ポイントを表示","Show pronunciation tips")}</button></div>`}
     </div>
 
     <div class="ifty-pron-main-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px;">
@@ -6480,10 +5962,10 @@ function renderIftyYearEntryCard(entry, index, total) {
           <button type="button" ${index <= 0 ? 'disabled' : ''} onclick="moveIftyYearEntry('${escapeHtml(entry.id)}',-1)" title="上へ">↑</button>
           <button type="button" ${index >= total - 1 ? 'disabled' : ''} onclick="moveIftyYearEntry('${escapeHtml(entry.id)}',1)" title="下へ">↓</button>
           <button id="iftyYearCollapseBtn_${escapeHtml(entry.id)}" class="ifty-year-collapse" type="button" aria-expanded="${collapsed ? 'false' : 'true'}" onclick="toggleIftyYearEntryCollapse('${escapeHtml(entry.id)}')">${collapsed ? '▼ 展開' : '▲ 折りたたむ'}</button>
-          <button type="button" onclick="ifty187ToggleYearRegeneration('${escapeHtml(entry.id)}')" style="background:#f59e0b;color:#111827;">再生成</button>
+          <button type="button" onclick="ifty187ToggleYearRegeneration('${escapeHtml(entry.id)}')" style="background:#f59e0b;color:#111827;">${ifty216Markup("再生成","Regenerate")}</button>
           <button type="button" onclick="ifty187ToggleYearEditor('${escapeHtml(entry.id)}')" style="background:#2563eb;color:#fff;">✏️ 編集</button>
-          <button type="button" onclick="ifty132EditYearAliases('${escapeHtml(entry.id)}')">別名</button>
-          <button type="button" onclick="deleteIftyYearEntry('${escapeHtml(entry.id)}')" style="background:#ef4444;color:white;">削除</button>
+          <button type="button" onclick="ifty132EditYearAliases('${escapeHtml(entry.id)}')">${ifty216Markup("別名","Aliases")}</button>
+          <button type="button" onclick="deleteIftyYearEntry('${escapeHtml(entry.id)}')" style="background:#ef4444;color:white;">${ifty216Markup("削除","Delete")}</button>
         </div>
       </div>
       <div id="ifty187YearEditor_${escapeHtml(entry.id)}" hidden class="ifty187-year-editor" style="margin:12px 0;background:#15263e;border:1px solid #6483a5;padding:12px;border-radius:12px;color:#f8fafc;"></div>
@@ -6495,7 +5977,7 @@ function renderIftyYearEntryCard(entry, index, total) {
         </div>
         ${nearby.length ? `<div class="ifty-year-section-title">前後の重要事項</div><div class="ifty-year-events">${nearby.map(event => renderIftyYearEventCard(event, true)).join('')}</div>` : ''}
         <div class="ifty-year-mnemonic">
-          <div class="ifty-year-mnemonic-head"><span>語呂合わせ</span><div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;"><button class="ifty-year-mnemonic-edit" type="button" onclick="ifty167SuggestYearMnemonics('${escapeHtml(entry.id)}')" style="background:#0369a1;color:white;">✨ 再生成・3案</button><button class="ifty-year-mnemonic-edit" type="button" onclick="editIftyYearMnemonic('${escapeHtml(entry.id)}')">編集</button></div></div>
+          <div class="ifty-year-mnemonic-head"><span>語呂合わせ</span><div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;"><button class="ifty-year-mnemonic-edit" type="button" onclick="ifty167SuggestYearMnemonics('${escapeHtml(entry.id)}')" style="background:#0369a1;color:white;">✨ 再生成・3案</button><button class="ifty-year-mnemonic-edit" type="button" onclick="editIftyYearMnemonic('${escapeHtml(entry.id)}')">${ifty216Markup("編集","Edit")}</button></div></div>
           <label style="display:block;margin:7px 0;color:#dbeafe;font-size:.86em;">語呂候補への注文（任意）<textarea id="ifty187YearMnemonicOrder_${escapeHtml(entry.id)}" rows="2" placeholder="例：語感を重視し、無理な当て字は避ける" style="display:block;width:100%;box-sizing:border-box;background:#0c1d31;color:#fff;border:1px solid #7b99b7;border-radius:8px;padding:8px;"></textarea></label>
           <div id="ifty167YearMnemonicChoices_${escapeHtml(entry.id)}" aria-live="polite"></div>
           <div class="ifty-year-mnemonic-text">${entry.mnemonic ? escapeHtml(entry.mnemonic) : 'まだ語呂合わせはありません。編集から自分で追加できます。'}</div>
@@ -6546,8 +6028,8 @@ function renderIftyYearEntries() {
           <button type="button" ${folderIndex <= 0 ? 'disabled' : ''} onclick="moveIftyYearFolder('${escapeHtml(folder.id)}',-1)" style="background:#e2e8f0;color:#334155;">↑</button>
           <button type="button" ${folderIndex >= folders.length - 1 ? 'disabled' : ''} onclick="moveIftyYearFolder('${escapeHtml(folder.id)}',1)" style="background:#e2e8f0;color:#334155;">↓</button>
           ${ifty132RegenerateFolderButton('YEARS',folder.id,entries.length)}
-          ${ifty135ThemeButton('YEARS',folder)}<button type="button" onclick="ifty144SelectYearFolder('${escapeHtml(folder.id)}')" style="background:#e2e8f0;color:#334155;">全選択</button><button type="button" onclick="ifty144PracticeFolder('${escapeHtml(folder.id)}')" style="background:#7c3aed;color:white;">⚔️ PRACTICE</button><button type="button" onclick="renameIftyYearFolder('${escapeHtml(folder.id)}')" style="background:#f59e0b;color:#111827;">名前変更</button>
-          <button type="button" onclick="deleteIftyYearFolder('${escapeHtml(folder.id)}')" style="background:#ef4444;color:white;">削除</button>
+          ${ifty135ThemeButton('YEARS',folder)}<button type="button" onclick="ifty144SelectYearFolder('${escapeHtml(folder.id)}')" style="background:#e2e8f0;color:#334155;">${ifty216Markup("全選択","Select all")}</button><button type="button" onclick="ifty144PracticeFolder('${escapeHtml(folder.id)}')" style="background:#7c3aed;color:white;">${ifty216Markup("⚔️ 実践","⚔️ PRACTICE")}</button><button type="button" onclick="renameIftyYearFolder('${escapeHtml(folder.id)}')" style="background:#f59e0b;color:#111827;">${ifty216Markup("名前変更","Rename")}</button>
+          <button type="button" onclick="deleteIftyYearFolder('${escapeHtml(folder.id)}')" style="background:#ef4444;color:white;">${ifty216Markup("削除","Delete")}</button>
         </div>
       </div>
       ${folder.collapsed ? '' : `<div class="ifty-year-list ifty128-year-items">${entries.length ? entries.map((entry, index) => renderIftyYearEntryCard(entry, index, entries.length)).join('') : '<div class="ifty-settings-note">このフォルダにはまだ年号がありません。</div>'}</div>`}
@@ -6650,17 +6132,17 @@ window.openIftyYears = function() {
     <section class="ifty-portal-shell">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
         <div>
-          <h1 class="ifty-portal-title">YEARS</h1>
+          <h1 class="ifty-portal-title">${ifty216Markup("年号","YEARS")}</h1>
           <div class="ifty-portal-subtitle">年号をフォルダで整理し、PRACTICEの四択・記述で復習できます。</div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" onclick="openPracticeHome('YEARS')" style="background:#7c3aed;color:#fff;border:0;border-radius:9px;padding:10px 15px;font-weight:850;">⚔️ PRACTICE</button><button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" onclick="openPracticeHome('YEARS')" style="background:#7c3aed;color:#fff;border:0;border-radius:9px;padding:10px 15px;font-weight:850;">${ifty216Markup("⚔️ 実践","⚔️ PRACTICE")}</button><button class="ifty-portal-back" type="button" onclick="openIftyHome()">${ifty216Markup("HOMEへ戻る","Back to Home")}</button></div>
       </div>
 
       <details class="ifty-year-advanced" style="margin-top:12px;"><summary style="cursor:pointer;font-weight:800;padding:10px;">詳細な年号登録（西暦／紀元前）</summary>
       <form class="ifty-years-form" onsubmit="event.preventDefault(); if(!event.isComposing) lookupIftyYear();">
         <div class="ifty-years-form-row">
           <select id="iftyYearEra" aria-label="年代"><option value="CE">西暦</option><option value="BCE">紀元前</option></select>
-          <input id="iftyYearInput" type="text" inputmode="numeric" autocomplete="off" placeholder="例：1600" aria-label="年号">
+          <input id="iftyYearInput" type="text" inputmode="numeric" autocomplete="off" placeholder="例：1600" aria-label="${ifty216Markup("年号","Years")}">
           <select id="iftyYearFolderSelect" aria-label="保存先フォルダ" onchange="iftyYearActiveFolderId=this.value;"></select>
           <button id="iftyYearLookupBtn" class="ifty-years-primary" type="submit">ALLIAで調べる</button>
         </div>
@@ -6799,7 +6281,7 @@ function ifty187YearEventRow(evt={},nearby=false){
  return `<div data-ifty187-year-event="${nearby?'nearby':'exact'}" data-ifty187-id="${id}" style="margin:8px 0;padding:11px;background:#263c56;border:1px solid #607b9c;border-radius:10px;display:grid;gap:8px;min-width:0;">
   <label style="color:#fff;font-weight:750;">科目<select data-ifty187-subject="1" style="display:block;width:100%;padding:9px;background:#0b1c31;color:#fff;border:1px solid #849bb5;border-radius:8px;"><option value="WORLD_HISTORY" ${evt.subject!=='JAPANESE_HISTORY'?'selected':''}>世界史</option><option value="JAPANESE_HISTORY" ${evt.subject==='JAPANESE_HISTORY'?'selected':''}>日本史</option></select></label>
   ${period}<label style="color:#fff;font-weight:750;">出来事名<input data-ifty187-title="1" maxlength="180" value="${escapeHtml(evt.title||'')}" style="display:block;width:100%;box-sizing:border-box;padding:9px;background:#0b1c31;color:white;border:1px solid #849bb5;border-radius:8px;"></label>
-  <label style="color:#fff;font-weight:750;">説明<textarea data-ifty187-memory="1" rows="2" style="display:block;width:100%;box-sizing:border-box;padding:9px;background:#0b1c31;color:white;border:1px solid #849bb5;border-radius:8px;">${escapeHtml(evt.memoryText||'')}</textarea></label>
+  <label style="color:#fff;font-weight:750;">${ifty216Markup("説明","Explanation")}<textarea data-ifty187-memory="1" rows="2" style="display:block;width:100%;box-sizing:border-box;padding:9px;background:#0b1c31;color:white;border:1px solid #849bb5;border-radius:8px;">${escapeHtml(evt.memoryText||'')}</textarea></label>
   <button type="button" onclick="this.closest('[data-ifty187-year-event]').remove()" style="justify-self:start;background:#7f1d1d;color:#fff;border:1px solid #f87171;border-radius:8px;padding:8px;">この出来事を削除</button></div>`;
 }
 window.ifty187ToggleYearEditor=function(entryId){
@@ -6811,8 +6293,8 @@ window.ifty187ToggleYearEditor=function(entryId){
  <h4 style="color:#fff;margin-bottom:4px;">この年の重要事項</h4><div id="ifty187ExactEvents_${escapeHtml(id)}">${(entry.exactEvents||[]).map(x=>ifty187YearEventRow(x,false)).join('')}</div><button type="button" onclick="ifty187AddYearEvent('${escapeHtml(id)}',false)" style="padding:9px;color:white;background:#155e75;border-radius:8px;">＋ 同年の出来事</button>
  <h4 style="color:#fff;margin-bottom:4px;">前後の重要事項</h4><div id="ifty187NearbyEvents_${escapeHtml(id)}">${(entry.nearbyEvents||[]).map(x=>ifty187YearEventRow(x,true)).join('')}</div><button type="button" onclick="ifty187AddYearEvent('${escapeHtml(id)}',true)" style="padding:9px;color:white;background:#155e75;border-radius:8px;">＋ 前後の出来事</button>
  <label style="display:grid;gap:4px;color:#fff;font-weight:750;margin-top:10px;">語呂合わせ<textarea id="ifty187Mnemonic_${escapeHtml(id)}" rows="2" style="box-sizing:border-box;width:100%;padding:9px;background:#0b1c31;color:white;border:1px solid #849bb5;border-radius:8px;">${escapeHtml(entry.mnemonic||'')}</textarea></label>
- <label style="display:grid;gap:4px;color:#fff;font-weight:750;margin-top:10px;">メモ<textarea id="ifty187Note_${escapeHtml(id)}" rows="2" style="box-sizing:border-box;width:100%;padding:9px;background:#0b1c31;color:white;border:1px solid #849bb5;border-radius:8px;">${escapeHtml(entry.note||'')}</textarea></label>
- <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;"><button type="button" onclick="ifty187SaveYearEditor('${escapeHtml(id)}')" style="background:#2563eb;color:#fff;border:0;padding:11px 15px;border-radius:8px;font-weight:850;">💾 編集を保存</button><button type="button" onclick="ifty187ToggleYearEditor('${escapeHtml(id)}')" style="background:#475569;color:#fff;padding:11px;border-radius:8px;">キャンセル</button></div>`;
+ <label style="display:grid;gap:4px;color:#fff;font-weight:750;margin-top:10px;">${ifty216Markup("メモ","Notes")}<textarea id="ifty187Note_${escapeHtml(id)}" rows="2" style="box-sizing:border-box;width:100%;padding:9px;background:#0b1c31;color:white;border:1px solid #849bb5;border-radius:8px;">${escapeHtml(entry.note||'')}</textarea></label>
+ <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;"><button type="button" onclick="ifty187SaveYearEditor('${escapeHtml(id)}')" style="background:#2563eb;color:#fff;border:0;padding:11px 15px;border-radius:8px;font-weight:850;">💾 編集を保存</button><button type="button" onclick="ifty187ToggleYearEditor('${escapeHtml(id)}')" style="background:#475569;color:#fff;padding:11px;border-radius:8px;">${ifty216Markup("キャンセル","Cancel")}</button></div>`;
 };
 window.ifty187AddYearEvent=function(id,nearby){
  const container=document.getElementById((nearby?'ifty187NearbyEvents_':'ifty187ExactEvents_')+id);
@@ -6844,7 +6326,7 @@ window.ifty187SaveYearEditor=function(id){
 window.ifty187ToggleYearRegeneration=function(entryId){
  const id=String(entryId||''),panel=document.getElementById('ifty187YearRegeneration_'+id),entry=getIftyYearEntries().find(x=>String(x.id)===id);if(!panel||!entry)return;
  const opening=panel.hidden;panel.hidden=!opening;if(!opening)return;
- panel.innerHTML=`<h3 style="margin:0 0 9px;color:#fff;">✨ ${escapeHtml(entry.yearLabel)}の再生成</h3><label style="display:grid;gap:5px;color:#fff;font-weight:750;">ALLIAへの注文<textarea id="ifty187RegenRequest_${escapeHtml(id)}" rows="4" placeholder="例：世界史を優先し、人物名と因果関係を詳しく。現在の記述の誤りを修正して。" style="width:100%;box-sizing:border-box;background:#0b1c31;color:#fff;border:1px solid #849bb5;border-radius:8px;padding:10px;"></textarea></label><label style="display:flex;gap:8px;align-items:center;margin:9px 0;color:#fff;"><input id="ifty187KeepMnemonic_${escapeHtml(id)}" type="checkbox" checked> 保存済みの語呂合わせを維持する</label><div style="display:flex;flex-wrap:wrap;gap:8px;"><button type="button" onclick="ifty187RunYearRegeneration('${escapeHtml(id)}')" style="background:#2563eb;color:#fff;border:0;border-radius:8px;padding:11px;">再生成を実行</button><button type="button" onclick="ifty187ToggleYearRegeneration('${escapeHtml(id)}')" style="background:#475569;color:#fff;border-radius:8px;padding:11px;">キャンセル</button></div><p style="color:#cbd5e1;font-size:.83em;">生成成功時だけ内容を更新します。手動編集の内容は生成結果で置き換わるため、必要ならバックアップしてください。</p>`;
+ panel.innerHTML=`<h3 style="margin:0 0 9px;color:#fff;">✨ ${escapeHtml(entry.yearLabel)}の再生成</h3><label style="display:grid;gap:5px;color:#fff;font-weight:750;">${ifty216Markup("ALLIAへの注文","Instructions for ALLIA")}<textarea id="ifty187RegenRequest_${escapeHtml(id)}" rows="4" placeholder="例：世界史を優先し、人物名と因果関係を詳しく。現在の記述の誤りを修正して。" style="width:100%;box-sizing:border-box;background:#0b1c31;color:#fff;border:1px solid #849bb5;border-radius:8px;padding:10px;"></textarea></label><label style="display:flex;gap:8px;align-items:center;margin:9px 0;color:#fff;"><input id="ifty187KeepMnemonic_${escapeHtml(id)}" type="checkbox" checked> ${ifty216Markup("保存済みの語呂合わせを維持する","Keep saved mnemonics")}</label><div style="display:flex;flex-wrap:wrap;gap:8px;"><button type="button" onclick="ifty187RunYearRegeneration('${escapeHtml(id)}')" style="background:#2563eb;color:#fff;border:0;border-radius:8px;padding:11px;">${ifty216Markup("再生成を実行","Regenerate now")}</button><button type="button" onclick="ifty187ToggleYearRegeneration('${escapeHtml(id)}')" style="background:#475569;color:#fff;border-radius:8px;padding:11px;">${ifty216Markup("キャンセル","Cancel")}</button></div><p style="color:#cbd5e1;font-size:.83em;">生成成功時だけ内容を更新します。手動編集の内容は生成結果で置き換わるため、必要ならバックアップしてください。</p>`;
 };
 window.ifty187RunYearRegeneration=function(id){
  const el=document.getElementById('ifty187RegenRequest_'+id);
@@ -7269,18 +6751,18 @@ function renderIftySocialItemCard(folder, item) {
           ${ifty139DragHandle('SOCIAL STUDIES',folder.id,item.id)}<strong style="font-size:1.08em;color:#0f172a;">${escapeHtml(item.title || item.topic || '無題')}</strong>${ifty132AliasInfo(item)}
           ${renderIftySocialSubjectBadges(item.subjects.length ? item.subjects : folder.subjects)}
           ${renderIftyLearningLevelInline('SOCIAL STUDIES', item.id, item.level)}
-          ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
+          ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : ("<span style=\"font-size:.68em;color:#64748b;font-weight:900;\">" + ifty216Markup("マニュアル","MANUAL") + "</span>")}
           ${item.imageData ? '<span style="font-size:.68em;color:#7e22ce;font-weight:900;">IMAGE</span>' : ''}
           ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
         </div>
       </div>
       <div style="display:flex;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end;">
-        <button id="iftyRegenSocial_${item.id}" type="button" onclick="regenerateIftySocialItem('${folder.id}','${item.id}')" title="事実関係・意味を最初から慎重に再検討する" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">再生成</button>
-        <button type="button" onclick="openIftySocialItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
+        <button id="iftyRegenSocial_${item.id}" type="button" onclick="regenerateIftySocialItem('${folder.id}','${item.id}')" title="事実関係・意味を最初から慎重に再検討する" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${ifty216Markup("再生成","Regenerate")}</button>
+        <button type="button" onclick="openIftySocialItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">${ifty216Markup("編集","Edit")}</button>
         <button type="button" onclick="moveIftySocialItem('${folder.id}','${item.id}',-1)" ${itemIndex <= 0 ? 'disabled' : ''} title="上へ" style="border:none;background:${itemIndex <= 0 ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex <= 0 ? 'not-allowed' : 'pointer'};font-weight:900;">↑</button>
         <button type="button" onclick="moveIftySocialItem('${folder.id}','${item.id}',1)" ${itemIndex >= lastIndex ? 'disabled' : ''} title="下へ" style="border:none;background:${itemIndex >= lastIndex ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex >= lastIndex ? 'not-allowed' : 'pointer'};font-weight:900;">↓</button>
         <button type="button" onclick="toggleIftySocialItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
-        <button type="button" onclick="deleteIftySocialItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">削除</button>
+        <button type="button" onclick="deleteIftySocialItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">${ifty216Markup("削除","Delete")}</button>
       </div>
     </div>
     ${renderIftySocialVisualAsset(item)}
@@ -7527,7 +7009,7 @@ function renderIftySocialFolder(folder) {
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
 ${ifty132RegenerateFolderButton('SOCIAL STUDIES',folder.id,(folder.items||[]).length)}
-        ${ifty135ThemeButton('SOCIAL STUDIES',folder)}<button type="button" onclick="renameIftySocialFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">名前変更</button>
+        ${ifty135ThemeButton('SOCIAL STUDIES',folder)}<button type="button" onclick="renameIftySocialFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">${ifty216Markup("名前変更","Rename")}</button>
         <button type="button" onclick="deleteIftySocialFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">フォルダ削除</button>
       </div>
     </div>
@@ -7535,7 +7017,7 @@ ${ifty132RegenerateFolderButton('SOCIAL STUDIES',folder.id,(folder.items||[]).le
     ${folder.collapsed ? '' : `<div style="margin-top:12px;">
       <div style="display:flex;gap:7px;flex-wrap:wrap;">
         <input id="iftySocialTopic_${folder.id}" value="${escapeHtml(iftySocialTopicDrafts[folder.id] || '')}" placeholder="人物・出来事・制度・地名など（画像だけでも可）" oninput="iftySocialTopicDrafts['${folder.id}']=this.value;clearIftyAcademicTermSuggestion('SOCIAL STUDIES','${folder.id}')" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftySocialItem('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}));}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;">
-        <button type="button" onclick="generateIftySocialItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 13px;min-height:42px;font-weight:900;cursor:pointer;white-space:nowrap;">＋ 追加</button>
+        <button type="button" onclick="generateIftySocialItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 13px;min-height:42px;font-weight:900;cursor:pointer;white-space:nowrap;">${ifty216Markup("＋ 追加","＋ Add")}</button>
         <input id="iftySocialImageInput_${folder.id}" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleIftySocialImageSelect(event,'${folder.id}')" style="display:none;">
         <button type="button" onclick="addBlankIftySocialItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">白紙</button>
       </div>
@@ -7544,7 +7026,7 @@ ${ifty132RegenerateFolderButton('SOCIAL STUDIES',folder.id,(folder.items||[]).le
       <div id="iftySocialStatus_${folder.id}" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;">${Number(iftySocialGenerationPending[folder.id] || 0) > 0 ? `ALLIA生成中… ${Number(iftySocialGenerationPending[folder.id] || 0)}件` : ''}</div>
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;">
         <input id="iftySocialFolderSearch_${folder.id}" value="${escapeHtml(iftySocialFolderSearchQueries[folder.id] || '')}" placeholder="🔎 このフォルダ内を検索" oninput="applyIftySocialFolderSearch('${folder.id}',this.value)" style="flex:1;min-width:180px;padding:8px 9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.86em;">
-        <button type="button" onclick="document.getElementById('iftySocialFolderSearch_${folder.id}').value='';applyIftySocialFolderSearch('${folder.id}','');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-size:.8em;font-weight:900;cursor:pointer;">クリア</button>
+        <button type="button" onclick="document.getElementById('iftySocialFolderSearch_${folder.id}').value='';applyIftySocialFolderSearch('${folder.id}','');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-size:.8em;font-weight:900;cursor:pointer;">${ifty216Markup("クリア","Clear")}</button>
         <span id="iftySocialFolderSearchCount_${folder.id}" style="font-size:.72em;color:#64748b;font-weight:800;">${items.length}件</span>
       </div>
       <div id="iftySocialItems_${folder.id}">${renderIftySocialItemsHtml(folder)}</div>
@@ -7561,7 +7043,7 @@ function renderIftySocialStudiesPage(options = {}) {
     <section class="ifty-portal-shell">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <div>
-          <h1 class="ifty-portal-title">SOCIAL STUDIES</h1>
+          <h1 class="ifty-portal-title">${ifty216Markup("社会","SOCIAL STUDIES")}</h1>
           <div class="ifty-portal-subtitle">日本史・世界史・地理・公共を、フォルダごとに1つ以上組み合わせて管理。</div>
         </div>
         ${renderIftySubjectHeaderActions('SOCIAL STUDIES')}
@@ -7578,7 +7060,7 @@ function renderIftySocialStudiesPage(options = {}) {
         <div style="font-weight:900;color:#0c4a6e;">新しい社会フォルダ</div>
         <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;align-items:center;">
           <input id="iftySocialFolderName" placeholder="例：古代中国 / 幕末 / 気候 / 日本国憲法" onkeydown="if(event.key==='Enter'){event.preventDefault();createIftySocialFolder();}" style="flex:1;min-width:210px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;font-size:.95em;">
-          <button type="button" onclick="createIftySocialFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">作成</button>
+          <button type="button" onclick="createIftySocialFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">${ifty216Markup("作成","Create")}</button>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">
           ${IFTY_SOCIAL_SUBJECTS.map((subject, index) => `<label style="display:inline-flex;align-items:center;gap:4px;font-size:.8em;font-weight:800;"><input id="iftySocialCreate_${subject.key}" type="checkbox" ${index === 1 ? 'checked' : ''}> ${escapeHtml(subject.label)}</label>`).join('')}
@@ -7587,7 +7069,7 @@ function renderIftySocialStudiesPage(options = {}) {
 
       <div style="margin-top:12px;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:white;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <input id="iftySocialSearchInput" value="${escapeHtml(iftySocialSearchQuery)}" placeholder="🔎 全フォルダから社会の用語・説明を検索" oninput="applyIftySocialSearch(this.value)" style="flex:1;min-width:220px;padding:9px 10px;border:1px solid #94a3b8;border-radius:8px;font-size:.92em;">
-        <button type="button" onclick="document.getElementById('iftySocialSearchInput').value='';applyIftySocialSearch('');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">クリア</button>
+        <button type="button" onclick="document.getElementById('iftySocialSearchInput').value='';applyIftySocialSearch('');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${ifty216Markup("クリア","Clear")}</button>
         <span id="iftySocialSearchCount" style="font-size:.78em;color:#64748b;font-weight:800;">${countIftySocialItems()}件</span>
       </div>
       ${renderIftySubjectSelectionToolbar('SOCIAL STUDIES')}
@@ -8002,7 +7484,7 @@ window.openIftySocialItemEditor = function(folderId, itemId) {
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
       <div><div style="font-size:1.15em;font-weight:900;color:#0f172a;">社会項目を編集</div><div style="font-size:.75em;color:#64748b;">5W1Hを自然に含んだ暗記用説明文と、画像の覚える核を修正できます。</div></div>
       <div style="display:flex;gap:7px;align-items:center;">
-        <button type="button" onclick="saveIftySocialItemEditor('${folderId}','${itemId}')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:8px 11px;font-weight:900;cursor:pointer;touch-action:manipulation;">保存</button>
+        <button type="button" onclick="saveIftySocialItemEditor('${folderId}','${itemId}')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:8px 11px;font-weight:900;cursor:pointer;touch-action:manipulation;">${ifty216Markup("保存","Save")}</button>
         <button type="button" onclick="closeIftySocialItemEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:999px;width:34px;height:34px;font-size:1.2em;font-weight:900;cursor:pointer;touch-action:manipulation;">×</button>
       </div>
     </div>
@@ -8033,8 +7515,8 @@ window.openIftySocialItemEditor = function(folderId, itemId) {
       ${field('iftySocialEditWorkTitle','作品名・建築名・史料名',item.workTitle)}
     </div>
     <div style="position:sticky;bottom:0;z-index:4;margin:14px -16px 0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:rgba(255,255,255,.98);border-top:1px solid #e2e8f0;display:flex;gap:8px;justify-content:flex-end;pointer-events:auto;">
-      <button type="button" onclick="closeIftySocialItemEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;touch-action:manipulation;">キャンセル</button>
-      <button type="button" onclick="saveIftySocialItemEditor('${folderId}','${itemId}')" data-ifty-enter-primary="true" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 14px;font-weight:900;cursor:pointer;touch-action:manipulation;pointer-events:auto;">保存</button>
+      <button type="button" onclick="closeIftySocialItemEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;touch-action:manipulation;">${ifty216Markup("キャンセル","Cancel")}</button>
+      <button type="button" onclick="saveIftySocialItemEditor('${folderId}','${itemId}')" data-ifty-enter-primary="true" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 14px;font-weight:900;cursor:pointer;touch-action:manipulation;pointer-events:auto;">${ifty216Markup("保存","Save")}</button>
     </div>`;
   modal.style.display = 'flex';
   renderIftySocialEditorImagePreview();
@@ -8283,8 +7765,8 @@ function renderIftySocialVisualQuiz() {
         <div style="font-size:1.25em;font-weight:900;color:#0f172a;">画像クイズ完了</div>
         <div style="margin-top:12px;font-size:1.05em;color:#334155;">正解 ${state.correct} / ${total}　正答率 ${rate}%</div>
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px;">
-          <button type="button" onclick="startIftySocialVisualQuiz('${state.folderId}','${state.mode}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">もう一度</button>
-          <button type="button" onclick="closeIftySocialVisualQuiz()" data-ifty-enter-primary="true" style="border:none;background:#334155;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">閉じる</button>
+          <button type="button" onclick="startIftySocialVisualQuiz('${state.folderId}','${state.mode}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">${ifty216Markup("もう一度","Again")}</button>
+          <button type="button" onclick="closeIftySocialVisualQuiz()" data-ifty-enter-primary="true" style="border:none;background:#334155;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">${ifty216Markup("閉じる","Close")}</button>
         </div>
       </div>`;
     return;
@@ -8301,11 +7783,11 @@ function renderIftySocialVisualQuiz() {
   const optionRefs = state.optionIds.map(id => getIftySocialItemById(id)).filter(Boolean);
 
   const resultBlock = state.answered ? `<div style="margin-top:13px;padding:10px;border-radius:9px;background:${state.selectedId === String(target.id) ? '#ecfdf5' : '#fff1f2'};border:1px solid ${state.selectedId === String(target.id) ? '#86efac' : '#fda4af'};">
-      <div style="font-weight:900;color:${state.selectedId === String(target.id) ? '#166534' : '#9f1239'};">${state.selectedId === String(target.id) ? '正解' : `正解：${escapeHtml(target.title || '無題')}`}</div>
-      ${target.workTitle ? `<div style="margin-top:5px;font-size:.83em;color:#581c87;"><strong>図・装置・資料名：</strong>${escapeHtml(target.workTitle)}</div>` : ''}
-      ${target.imageFocus ? `<div style="margin-top:5px;font-size:.83em;color:#3b0764;line-height:1.5;"><strong>画像の核：</strong>${escapeHtml(target.imageFocus)}</div>` : ''}
+      <div style="font-weight:900;color:${state.selectedId === String(target.id) ? '#166534' : '#9f1239'};">${state.selectedId === String(target.id) ? ifty216T("正解","Correct") : `正解：${escapeHtml(target.title || '無題')}`}</div>
+      ${target.workTitle ? `<div style="margin-top:5px;font-size:.83em;color:#581c87;"><strong>${ifty216Markup("図・装置・資料名：","Image / device / source name:")}</strong>${escapeHtml(target.workTitle)}</div>` : ''}
+      ${target.imageFocus ? `<div style="margin-top:5px;font-size:.83em;color:#3b0764;line-height:1.5;"><strong>${ifty216Markup("画像の核：","Key visual feature:")}</strong>${escapeHtml(target.imageFocus)}</div>` : ''}
       ${target.memoryText ? `<div style="margin-top:5px;font-size:.82em;color:#475569;line-height:1.55;">${escapeHtml(target.memoryText)}</div>` : ''}
-      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySocialVisualQuiz()" data-ifty-enter-primary="true" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySocialVisualQuiz()" data-ifty-enter-primary="true" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("次へ","Next")}</button></div>
     </div>` : '';
 
   card.innerHTML = `
@@ -8583,8 +8065,8 @@ function renderIftySocialPracticeHome() {
     else if (!selectedItems.length) disabledReason = '学習する項目を選択してください。';
     const disabled = !!disabledReason;
     return `<button type="button" onclick="startIftySocialPractice('${mode}')" ${disabled ? 'disabled' : ''} style="text-align:left;border:1px solid ${disabled ? '#e2e8f0' : meta.color};background:${disabled ? '#f8fafc' : '#fff'};border-radius:12px;padding:14px;cursor:${disabled ? 'not-allowed' : 'pointer'};min-height:126px;opacity:${disabled ? '.62' : '1'};">
-      <div style="font-size:1.08em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(meta.title)}</div>
-      <div style="margin-top:7px;color:#475569;font-size:.84em;line-height:1.55;">${escapeHtml(meta.description)}</div>
+      <div style="font-size:1.08em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(ifty216Ui(meta.title))}</div>
+      <div style="margin-top:7px;color:#475569;font-size:.84em;line-height:1.55;">${escapeHtml(ifty216Ui(meta.description))}</div>
       ${disabledReason ? `<div style="margin-top:8px;font-size:.72em;color:#94a3b8;font-weight:800;">${escapeHtml(disabledReason)}</div>` : ''}
     </button>`;
   };
@@ -8606,7 +8088,7 @@ function renderIftySocialPracticeHome() {
             <div style="font-size:.76em;color:#64748b;margin-top:3px;">選択 ${selectedFolders.length}フォルダ / ${selectedItems.length}項目${selectedSubjects.length ? ` ・ ${escapeHtml(selectedSubjects.join('・'))}` : ''}</div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button type="button" onclick="selectAllIftySocialPracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">すべて</button>
+            <button type="button" onclick="selectAllIftySocialPracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${ifty216Markup("すべて","All")}</button>
             <button type="button" onclick="selectAllIftySocialPracticeFolders(false)" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">解除</button>
           </div>
         </div>
@@ -8614,8 +8096,8 @@ function renderIftySocialPracticeHome() {
       </div>
 
       <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
-        <strong style="color:#334155;">問題数</strong>
-        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${iftySocialPracticeQuestionCount}" onchange="setIftySocialPracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
+        <strong style="color:#334155;">${ifty216Markup("問題数","Number of questions")}</strong>
+        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="${ifty216Markup("問題数","Number of questions")}" value="${iftySocialPracticeQuestionCount}" onchange="setIftySocialPracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
         <span style="font-size:.74em;color:#64748b;">時代・並べ替え・説明は開始時にALLIAが問題を作ります。</span>
       </div>
 
@@ -8796,10 +8278,10 @@ function renderIftySocialPracticeLoading(mode) {
     <section class="ifty-portal-shell">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         <div>
-          <h1 class="ifty-portal-title">${escapeHtml(meta.title)}</h1>
+          <h1 class="ifty-portal-title">${escapeHtml(ifty216Ui(meta.title))}</h1>
           <div class="ifty-portal-subtitle">ALLIAが社会PRACTICE用の問題を作成しています。</div>
         </div>
-        <button class="ifty-portal-back" type="button" onclick="openIftySocialPractice()">PRACTICEへ戻る</button>
+        <button class="ifty-portal-back" type="button" onclick="openIftySocialPractice()">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button>
       </div>
       <div style="margin-top:20px;padding:28px;border:1px solid #ddd6fe;border-radius:12px;background:#faf5ff;text-align:center;">
         <div style="font-size:1.15em;font-weight:900;color:#6d28d9;">問題を生成中…</div>
@@ -8902,12 +8384,12 @@ function renderIftySocialPracticeResult() {
   showIftyHubContent(`
     <section class="ifty-portal-shell">
       <div style="text-align:center;padding:28px 8px;">
-        <div style="font-size:1.4em;font-weight:900;color:${meta.color};">${escapeHtml(meta.title)} 完了</div>
+        <div style="font-size:1.4em;font-weight:900;color:${meta.color};">${escapeHtml(ifty216Ui(meta.title))} 完了</div>
         <div style="margin-top:12px;color:#334155;font-size:1.05em;">正解 ${state.correct} / ${total}　分からない ${state.unknown||0}　正答率 ${rate}%</div>
         ${ifty182Summary(state.history182)}
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:18px;">
-          <button type="button" onclick="startIftySocialPractice('${state.mode}')" style="border:none;background:${meta.color};color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">もう一度</button>
-          <button type="button" onclick="openIftySocialPractice()" data-ifty-enter-primary="true" style="border:none;background:#334155;color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">PRACTICEへ戻る</button>
+          <button type="button" onclick="startIftySocialPractice('${state.mode}')" style="border:none;background:${meta.color};color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">${ifty216Markup("もう一度","Again")}</button>
+          <button type="button" onclick="openIftySocialPractice()" data-ifty-enter-primary="true" style="border:none;background:#334155;color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button>
         </div>
       </div>
     </section>
@@ -8925,7 +8407,7 @@ function renderIftySocialPracticeChoiceQuestion(question) {
     ? `<div style="margin-top:12px;text-align:center;"><img src="${imageRef.item.imageData}" alt="問題画像" style="max-width:100%;max-height:330px;object-fit:contain;border:1px solid #e2e8f0;border-radius:10px;background:white;"></div>`
     : '';
   const sourceText = question.sourceText
-    ? `<div style="margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:10px;background:#f8fbff;color:#0f172a;line-height:1.65;">${escapeHtml(question.sourceText)}</div>`
+    ? `<div style="margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:10px;background:#f8fbff;color:#0f172a;line-height:1.65;">${ifty216QuizText(question.sourceText, true, false)}</div>`
     : '';
 
   const optionHtml = (question.options || []).map(option => {
@@ -8945,26 +8427,26 @@ function renderIftySocialPracticeChoiceQuestion(question) {
       </button>`;
     }
 
-    return `<button type="button" ${state.answered ? 'disabled' : ''} data-ifty-enter-ignore="true" onclick="${isEra ? `toggleIftySocialPracticeEraChoice('${option.id}')` : `answerIftySocialPracticeChoice('${option.id}')`}" style="border:2px solid ${border};background:${bg};color:${color};border-radius:9px;padding:11px;text-align:left;font-weight:800;line-height:1.5;cursor:${state.answered ? 'default' : 'pointer'};">${escapeHtml(option.label)}</button>`;
+    return `<button type="button" ${state.answered ? 'disabled' : ''} data-ifty-enter-ignore="true" onclick="${isEra ? `toggleIftySocialPracticeEraChoice('${option.id}')` : `answerIftySocialPracticeChoice('${option.id}')`}" style="border:2px solid ${border};background:${bg};color:${color};border-radius:9px;padding:11px;text-align:left;font-weight:800;line-height:1.5;cursor:${state.answered ? 'default' : 'pointer'};">${ifty216QuizText(option.label, true, false)}</button>`;
   }).join('');
 
   const allCorrect = state.answered && arraysAsSetsEqual(state.selectedIds, question.correctIds || []);
   const feedback = state.answered ? `
     <div style="margin-top:13px;padding:11px;border-radius:9px;background:${allCorrect ? '#ecfdf5' : '#fff1f2'};border:1px solid ${allCorrect ? '#86efac' : '#fda4af'};">
-      <div style="font-weight:900;color:${allCorrect ? '#166534' : '#9f1239'};">${state.unknownLast?'？ 分からない':allCorrect ? '正解' : '不正解'}</div>
-      ${question.explanation ? `<div style="margin-top:6px;color:#475569;line-height:1.6;">${escapeHtml(question.explanation)}</div>` : ''}
-      ${isImage && targetRef?.item?.workTitle ? `<div style="margin-top:5px;color:#581c87;font-size:.85em;"><strong>図・装置・資料名：</strong>${escapeHtml(targetRef.item.workTitle)}</div>` : ''}
-      ${isImage && targetRef?.item?.imageFocus ? `<div style="margin-top:5px;color:#3b0764;font-size:.85em;"><strong>画像の核：</strong>${escapeHtml(targetRef.item.imageFocus)}</div>` : ''}
-      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySocialPracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
+      <div style="font-weight:900;color:${allCorrect ? '#166534' : '#9f1239'};">${state.unknownLast?ifty216T("？ 分からない","? Don't know"):allCorrect ? ifty216T("正解","Correct") : ifty216T("不正解","Incorrect")}</div>
+      ${question.explanation ? `<div style="margin-top:6px;color:#475569;line-height:1.6;">${ifty216QuizText(question.explanation, true, false)}</div>` : ''}
+      ${isImage && targetRef?.item?.workTitle ? `<div style="margin-top:5px;color:#581c87;font-size:.85em;"><strong>${ifty216Markup("図・装置・資料名：","Image / device / source name:")}</strong>${escapeHtml(targetRef.item.workTitle)}</div>` : ''}
+      ${isImage && targetRef?.item?.imageFocus ? `<div style="margin-top:5px;color:#3b0764;font-size:.85em;"><strong>${ifty216Markup("画像の核：","Key visual feature:")}</strong>${escapeHtml(targetRef.item.imageFocus)}</div>` : ''}
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySocialPracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("次へ","Next")}</button></div>
     </div>` : '';
 
   return `
-    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
+    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${ifty216QuizText(question.prompt, true, false)}</div>
     ${promptVisual}
     ${sourceText}
-    ${isEra && !state.answered ? '<div style="margin-top:7px;color:#7c3aed;font-size:.76em;font-weight:800;">正しいものをすべて選択してください。複数正解の場合があります。</div>' : ''}
+    ${isEra && !state.answered ? ("<div style=\"margin-top:7px;color:#7c3aed;font-size:.76em;font-weight:800;\">" + ifty216Markup("正しいものをすべて選択してください。複数正解の場合があります。","Select every correct option. More than one may be correct.") + "</div>") : ''}
     <div style="display:grid;grid-template-columns:${isImage && question.direction === 'text_to_image' ? 'repeat(2,minmax(0,1fr))' : 'repeat(auto-fit,minmax(220px,1fr))'};gap:8px;margin-top:12px;">${optionHtml}</div>
-    ${isEra && !state.answered ? `<div style="text-align:right;margin-top:11px;"><button type="button" onclick="submitIftySocialPracticeEra()" ${state.selectedIds.length ? '' : 'disabled'} style="border:none;background:${state.selectedIds.length ? '#7c3aed' : '#cbd5e1'};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:${state.selectedIds.length ? 'pointer' : 'not-allowed'};">回答する</button></div>` : ''}
+    ${isEra && !state.answered ? `<div style="text-align:right;margin-top:11px;"><button type="button" onclick="submitIftySocialPracticeEra()" ${state.selectedIds.length ? '' : 'disabled'} style="border:none;background:${state.selectedIds.length ? '#7c3aed' : '#cbd5e1'};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:${state.selectedIds.length ? 'pointer' : 'not-allowed'};">${ifty216Markup("回答する","Submit answer")}</button></div>` : ''}
     ${feedback}`;
 }
 
@@ -8985,7 +8467,7 @@ function renderIftySocialPracticeOrderQuestion(question) {
     const isCorrectPosition = state.answered && correctPosition === index;
     return `<div style="display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;padding:9px;border:1px solid ${state.answered ? (isCorrectPosition ? '#86efac' : '#fda4af') : '#cbd5e1'};background:${state.answered ? (isCorrectPosition ? '#f0fdf4' : '#fff1f2') : '#fff'};border-radius:9px;">
       <div style="font-weight:900;color:#64748b;text-align:center;">${index + 1}</div>
-      <div style="color:#0f172a;line-height:1.5;">${escapeHtml(event.text)}</div>
+      <div style="color:#0f172a;line-height:1.5;">${ifty216QuizText(event.text, true, false)}</div>
       ${state.answered ? '' : `<div style="display:flex;gap:4px;">
         <button type="button" data-ifty-enter-ignore="true" onclick="moveIftySocialPracticeOrder(${index},-1)" ${index === 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;border-radius:6px;width:34px;height:34px;cursor:${index === 0 ? 'not-allowed' : 'pointer'};">↑</button>
         <button type="button" data-ifty-enter-ignore="true" onclick="moveIftySocialPracticeOrder(${index},1)" ${index === state.orderIds.length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;border-radius:6px;width:34px;height:34px;cursor:${index === state.orderIds.length - 1 ? 'not-allowed' : 'pointer'};">↓</button>
@@ -8994,34 +8476,34 @@ function renderIftySocialPracticeOrderQuestion(question) {
   }).join('');
   const correct = state.answered && arraysAsSetsEqual(state.orderIds, question.correctOrder || []) && state.orderIds.every((id, index) => String(id) === String(question.correctOrder[index]));
   return `
-    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
-    <div style="margin-top:7px;color:#64748b;font-size:.76em;">科学的に正しい過程・因果・手順の順に並べてください。</div>
+    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${ifty216QuizText(question.prompt, true, false)}</div>
+    <div style="margin-top:7px;color:#64748b;font-size:.76em;">${ifty216Markup("科学的に正しい過程・因果・手順の順に並べてください。","Arrange the items in the required sequence.")}</div>
     <div style="display:grid;gap:7px;margin-top:12px;">${rows}</div>
     ${state.answered ? `<div style="margin-top:12px;padding:11px;border-radius:9px;background:${correct ? '#ecfdf5' : '#fff1f2'};border:1px solid ${correct ? '#86efac' : '#fda4af'};">
-      <div style="font-weight:900;color:${correct ? '#166534' : '#9f1239'};">${state.unknownLast?'？ 分からない':correct ? '正解' : '不正解'}</div>
-      ${question.explanation ? `<div style="margin-top:6px;color:#475569;line-height:1.6;">${escapeHtml(question.explanation)}</div>` : ''}
-      ${!correct ? `<div style="margin-top:8px;color:#334155;font-size:.84em;"><strong>正しい順：</strong>${(question.correctOrder || []).map((id, i) => `${i + 1}. ${escapeHtml(eventMap.get(String(id))?.text || '')}`).join(' → ')}</div>` : ''}
-      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySocialPracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
-    </div>` : `<div style="text-align:right;margin-top:11px;"><button type="button" onclick="submitIftySocialPracticeOrder()" style="border:none;background:#d97706;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">回答する</button></div>`}`;
+      <div style="font-weight:900;color:${correct ? '#166534' : '#9f1239'};">${state.unknownLast?ifty216T("？ 分からない","? Don't know"):correct ? ifty216T("正解","Correct") : ifty216T("不正解","Incorrect")}</div>
+      ${question.explanation ? `<div style="margin-top:6px;color:#475569;line-height:1.6;">${ifty216QuizText(question.explanation, true, false)}</div>` : ''}
+      ${!correct ? `<div style="margin-top:8px;color:#334155;font-size:.84em;"><strong>${ifty216Markup("正しい順：","Correct order:")}</strong>${(question.correctOrder || []).map((id, i) => `${i + 1}. ${escapeHtml(eventMap.get(String(id))?.text || '')}`).join(' → ')}</div>` : ''}
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySocialPracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("次へ","Next")}</button></div>
+    </div>` : `<div style="text-align:right;margin-top:11px;"><button type="button" onclick="submitIftySocialPracticeOrder()" style="border:none;background:#d97706;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">${ifty216Markup("回答する","Submit answer")}</button></div>`}`;
 }
 
 function renderIftySocialPracticeExplanationQuestion(question) {
   const state = iftySocialPracticeState;
   const required = (question.requiredTerms || []).map(term => `<span style="display:inline-block;padding:5px 8px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:900;font-size:.82em;">${escapeHtml(term)}</span>`).join(' ');
   return `
-    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
+    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${ifty216QuizText(question.prompt, true, false)}</div>
     <div style="margin-top:10px;padding:10px;border:1px solid #bbf7d0;border-radius:9px;background:#f0fdf4;color:#166534;font-size:.81em;line-height:1.55;">
-      単語の丸暗記だけでなく、「何を指す用語か」と「他と区別するための核となる特徴」を説明してください。原因・影響・類似用語との比較は派生記述で扱います。
+      ${ifty216Markup("単語の丸暗記だけでなく、「何を指す用語か」と「他と区別するための核となる特徴」を説明してください。原因・影響・類似用語との比較は派生記述で扱います。","Explain what the term refers to and its distinguishing features. Causes, effects and comparisons belong to derived questions.")}
     </div>
     ${state.answered ? `<div style="margin-top:12px;padding:11px;border:1px solid ${state.correctLast ? '#86efac' : '#fda4af'};background:${state.correctLast ? '#ecfdf5' : '#fff1f2'};border-radius:9px;">
-      <div style="font-weight:900;color:${state.correctLast ? '#166534' : '#9f1239'};">${state.unknownLast?'？ 分からない':state.correctLast ? '正解' : '要復習'}${Number.isFinite(Number(state.score)) ? `　${Math.round(Number(state.score))}点` : ''}</div>
+      <div style="font-weight:900;color:${state.correctLast ? '#166534' : '#9f1239'};">${state.unknownLast?ifty216T("？ 分からない","? Don't know"):state.correctLast ? ifty216T("正解","Correct") : ifty216T("要復習","Review needed")}${Number.isFinite(Number(state.score)) ? `　${Math.round(Number(state.score))}点` : ''}</div>
       <div style="margin-top:7px;color:#334155;line-height:1.6;white-space:pre-wrap;">${escapeHtml(state.feedback)}</div>
-      ${state.modelAnswer ? `<div style="margin-top:9px;padding:9px;background:white;border:1px solid #d1fae5;border-radius:8px;color:#0f172a;line-height:1.6;"><strong>模範：</strong>${escapeHtml(state.modelAnswer)}</div>` : ''}
-      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySocialPracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
+      ${state.modelAnswer ? `<div style="margin-top:9px;padding:9px;background:white;border:1px solid #d1fae5;border-radius:8px;color:#0f172a;line-height:1.6;"><strong>${ifty216Markup("模範：","Model:")}</strong>${escapeHtml(state.modelAnswer)}</div>` : ''}
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySocialPracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("次へ","Next")}</button></div>
     </div>` : `<div style="margin-top:12px;">
-      <textarea id="iftySocialPracticeExplanationInput" placeholder="ここに説明を書く" oninput="iftySocialPracticeState.answerText=this.value" style="width:100%;min-height:150px;box-sizing:border-box;padding:11px;border:1px solid #94a3b8;border-radius:9px;font:inherit;line-height:1.6;resize:vertical;">${escapeHtml(state.answerText || '')}</textarea>
-      <div id="iftySocialPracticeGradeStatus" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;">${state.grading ? 'ALLIAが採点中…' : 'Ctrl/Cmd + Enterでも回答できます。'}</div>
-      <div style="text-align:right;margin-top:7px;"><button type="button" onclick="submitIftySocialPracticeExplanation()" ${state.grading ? 'disabled' : ''} style="border:none;background:${state.grading ? '#94a3b8' : '#059669'};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:${state.grading ? 'wait' : 'pointer'};">${state.grading ? '採点中…' : '回答する'}</button></div>
+      <textarea id="iftySocialPracticeExplanationInput" placeholder="${ifty216Markup("ここに説明を書く","Write your explanation here")}" oninput="iftySocialPracticeState.answerText=this.value" style="width:100%;min-height:150px;box-sizing:border-box;padding:11px;border:1px solid #94a3b8;border-radius:9px;font:inherit;line-height:1.6;resize:vertical;">${escapeHtml(state.answerText || '')}</textarea>
+      <div id="iftySocialPracticeGradeStatus" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;">${state.grading ? ifty216T("ALLIAが採点中…","ALLIA is grading…") : 'Ctrl/Cmd + Enterでも回答できます。'}</div>
+      <div style="text-align:right;margin-top:7px;"><button type="button" onclick="submitIftySocialPracticeExplanation()" ${state.grading ? 'disabled' : ''} style="border:none;background:${state.grading ? '#94a3b8' : '#059669'};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:${state.grading ? 'wait' : 'pointer'};">${state.grading ? ifty216T("採点中…","Grading…") : ifty216T("回答する","Submit answer")}</button></div>
     </div>`}`;
 }
 
@@ -9047,13 +8529,13 @@ function renderIftySocialPracticePlayer() {
     <section class="ifty-portal-shell">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
         <div>
-          <h1 class="ifty-portal-title" style="color:${meta.color};">${escapeHtml(meta.title)}</h1>
+          <h1 class="ifty-portal-title" style="color:${meta.color};">${escapeHtml(ifty216Ui(meta.title))}</h1>
           <div class="ifty-portal-subtitle">${state.index + 1} / ${state.questions.length}　正解 ${state.correct}　要復習 ${state.wrong}　分からない ${state.unknown||0}</div>
         </div>
-        <button class="ifty-portal-back" type="button" onclick="openIftySocialPractice()">終了</button>
+        <button class="ifty-portal-back" type="button" onclick="openIftySocialPractice()">${ifty216Markup("終了","End")}</button>
       </div>
       <div style="margin-top:15px;padding:15px;border:1px solid #cbd5e1;border-radius:12px;background:white;">${body}
-    ${!state.answered && !state.grading ? `<button type="button" onclick="ifty182UnknownSocial()" style="display:block;width:100%;margin-top:12px;padding:12px;background:#475569;color:white;border:1px solid #94a3b8;border-radius:9px;font-weight:800;">？ 分からない（答えを見る）</button>` : ''}</div>
+    ${!state.answered && !state.grading ? `<button type="button" onclick="ifty182UnknownSocial()" style="display:block;width:100%;margin-top:12px;padding:12px;background:#475569;color:white;border:1px solid #94a3b8;border-radius:9px;font-weight:800;">${ifty216Markup("？ 分からない（答えを見る）","? Don't know (show answer)")}</button>` : ''}</div>
     </section>
   `, 'social-practice');
 
@@ -9140,7 +8622,7 @@ window.submitIftySocialPracticeExplanation = async function() {
   state.answerText = answer;
   state.grading = true;
   const status = document.getElementById('iftySocialPracticeGradeStatus');
-  if (status) status.textContent = 'ALLIAが採点中…';
+  if (status) status.textContent = ifty216T("ALLIAが採点中…","ALLIA is grading…");
   const button = status?.parentElement?.querySelector('button');
   if (button) button.disabled = true;
 
@@ -9506,18 +8988,18 @@ function renderIftyScienceItemCard(folder, item) {
           ${ifty139DragHandle('SCIENCE',folder.id,item.id)}<strong style="font-size:1.08em;color:#0f172a;">${escapeHtml(item.title || item.topic || '無題')}</strong>${ifty132AliasInfo(item)}
           ${renderIftyScienceSubjectBadges(item.subjects.length ? item.subjects : folder.subjects)}
           ${renderIftyLearningLevelInline('SCIENCE', item.id, item.level)}
-          ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
+          ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : ("<span style=\"font-size:.68em;color:#64748b;font-weight:900;\">" + ifty216Markup("マニュアル","MANUAL") + "</span>")}
           ${item.imageData ? '<span style="font-size:.68em;color:#7e22ce;font-weight:900;">IMAGE</span>' : ''}
           ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
         </div>
       </div>
       <div style="display:flex;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end;">
-        <button id="iftyRegenScience_${item.id}" type="button" onclick="regenerateIftyScienceItem('${folder.id}','${item.id}')" title="意味・公式・単位・条件を最初から慎重に再検討する" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">再生成</button>
-        <button type="button" onclick="openIftyScienceItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
+        <button id="iftyRegenScience_${item.id}" type="button" onclick="regenerateIftyScienceItem('${folder.id}','${item.id}')" title="意味・公式・単位・条件を最初から慎重に再検討する" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${ifty216Markup("再生成","Regenerate")}</button>
+        <button type="button" onclick="openIftyScienceItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">${ifty216Markup("編集","Edit")}</button>
         <button type="button" onclick="moveIftyScienceItem('${folder.id}','${item.id}',-1)" ${itemIndex <= 0 ? 'disabled' : ''} title="上へ" style="border:none;background:${itemIndex <= 0 ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex <= 0 ? 'not-allowed' : 'pointer'};font-weight:900;">↑</button>
         <button type="button" onclick="moveIftyScienceItem('${folder.id}','${item.id}',1)" ${itemIndex >= lastIndex ? 'disabled' : ''} title="下へ" style="border:none;background:${itemIndex >= lastIndex ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex >= lastIndex ? 'not-allowed' : 'pointer'};font-weight:900;">↓</button>
         <button type="button" onclick="toggleIftyScienceItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
-        <button type="button" onclick="deleteIftyScienceItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">削除</button>
+        <button type="button" onclick="deleteIftyScienceItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">${ifty216Markup("削除","Delete")}</button>
       </div>
     </div>
     ${renderIftyScienceVisualAsset(item)}
@@ -9765,7 +9247,7 @@ function renderIftyScienceFolder(folder) {
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
 ${ifty132RegenerateFolderButton('SCIENCE',folder.id,(folder.items||[]).length)}
-        ${ifty135ThemeButton('SCIENCE',folder)}<button type="button" onclick="renameIftyScienceFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">名前変更</button>
+        ${ifty135ThemeButton('SCIENCE',folder)}<button type="button" onclick="renameIftyScienceFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">${ifty216Markup("名前変更","Rename")}</button>
         <button type="button" onclick="deleteIftyScienceFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;cursor:pointer;">フォルダ削除</button>
       </div>
     </div>
@@ -9773,7 +9255,7 @@ ${ifty132RegenerateFolderButton('SCIENCE',folder.id,(folder.items||[]).length)}
     ${folder.collapsed ? '' : `<div style="margin-top:12px;">
       <div style="display:flex;gap:7px;flex-wrap:wrap;">
         <input id="iftyScienceTopic_${folder.id}" value="${escapeHtml(iftyScienceTopicDrafts[folder.id] || '')}" placeholder="用語・法則・現象・反応・生体機能など（画像だけでも可）" oninput="iftyScienceTopicDrafts['${folder.id}']=this.value;clearIftyAcademicTermSuggestion('SCIENCE','${folder.id}')" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftyScienceItem('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}));}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;">
-        <button type="button" onclick="generateIftyScienceItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 13px;min-height:42px;font-weight:900;cursor:pointer;white-space:nowrap;">＋ 追加</button>
+        <button type="button" onclick="generateIftyScienceItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 13px;min-height:42px;font-weight:900;cursor:pointer;white-space:nowrap;">${ifty216Markup("＋ 追加","＋ Add")}</button>
         <input id="iftyScienceImageInput_${folder.id}" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleIftyScienceImageSelect(event,'${folder.id}')" style="display:none;">
         <button type="button" onclick="addBlankIftyScienceItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">白紙</button>
       </div>
@@ -9782,7 +9264,7 @@ ${ifty132RegenerateFolderButton('SCIENCE',folder.id,(folder.items||[]).length)}
       <div id="iftyScienceStatus_${folder.id}" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;">${Number(iftyScienceGenerationPending[folder.id] || 0) > 0 ? `ALLIA生成中… ${Number(iftyScienceGenerationPending[folder.id] || 0)}件` : ''}</div>
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;">
         <input id="iftyScienceFolderSearch_${folder.id}" value="${escapeHtml(iftyScienceFolderSearchQueries[folder.id] || '')}" placeholder="🔎 このフォルダ内を検索" oninput="applyIftyScienceFolderSearch('${folder.id}',this.value)" style="flex:1;min-width:180px;padding:8px 9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.86em;">
-        <button type="button" onclick="document.getElementById('iftyScienceFolderSearch_${folder.id}').value='';applyIftyScienceFolderSearch('${folder.id}','');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-size:.8em;font-weight:900;cursor:pointer;">クリア</button>
+        <button type="button" onclick="document.getElementById('iftyScienceFolderSearch_${folder.id}').value='';applyIftyScienceFolderSearch('${folder.id}','');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-size:.8em;font-weight:900;cursor:pointer;">${ifty216Markup("クリア","Clear")}</button>
         <span id="iftyScienceFolderSearchCount_${folder.id}" style="font-size:.72em;color:#64748b;font-weight:800;">${items.length}件</span>
       </div>
       <div id="iftyScienceItems_${folder.id}">${renderIftyScienceItemsHtml(folder)}</div>
@@ -9799,7 +9281,7 @@ function renderIftySciencePage(options = {}) {
     <section class="ifty-portal-shell">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <div>
-          <h1 class="ifty-portal-title">SCIENCE</h1>
+          <h1 class="ifty-portal-title">${ifty216Markup("理科","SCIENCE")}</h1>
           <div class="ifty-portal-subtitle">物理・化学・生物・地学を、フォルダごとに1つ以上組み合わせて管理。</div>
         </div>
         ${renderIftySubjectHeaderActions('SCIENCE')}
@@ -9818,7 +9300,7 @@ function renderIftySciencePage(options = {}) {
         <div style="font-weight:900;color:#0c4a6e;">新しい理科フォルダ</div>
         <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;align-items:center;">
           <input id="iftyScienceFolderName" placeholder="例：力学 / 酸塩基 / 遺伝 / 地質" onkeydown="if(event.key==='Enter'){event.preventDefault();createIftyScienceFolder();}" style="flex:1;min-width:210px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;font-size:.95em;">
-          <button type="button" onclick="createIftyScienceFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">作成</button>
+          <button type="button" onclick="createIftyScienceFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">${ifty216Markup("作成","Create")}</button>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">
           ${IFTY_SCIENCE_SUBJECTS.map((subject, index) => `<label style="display:inline-flex;align-items:center;gap:4px;font-size:.8em;font-weight:800;"><input id="iftyScienceCreate_${subject.key}" type="checkbox" ${index === 0 ? 'checked' : ''}> ${escapeHtml(subject.label)}</label>`).join('')}
@@ -9827,7 +9309,7 @@ function renderIftySciencePage(options = {}) {
 
       <div style="margin-top:12px;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:white;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <input id="iftyScienceSearchInput" value="${escapeHtml(iftyScienceSearchQuery)}" placeholder="🔎 全フォルダから理科の用語・説明・公式・単位を検索" oninput="applyIftyScienceSearch(this.value)" style="flex:1;min-width:220px;padding:9px 10px;border:1px solid #94a3b8;border-radius:8px;font-size:.92em;">
-        <button type="button" onclick="document.getElementById('iftyScienceSearchInput').value='';applyIftyScienceSearch('');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">クリア</button>
+        <button type="button" onclick="document.getElementById('iftyScienceSearchInput').value='';applyIftyScienceSearch('');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${ifty216Markup("クリア","Clear")}</button>
         <span id="iftyScienceSearchCount" style="font-size:.78em;color:#64748b;font-weight:800;">${countIftyScienceItems()}件</span>
       </div>
       ${renderIftySubjectSelectionToolbar('SCIENCE')}
@@ -10269,8 +9751,8 @@ window.openIftyScienceItemEditor = function(folderId, itemId) {
       ${field('iftyScienceEditWorkTitle','図・装置・資料名',item.workTitle)}
     </div>
     <div style="position:sticky;bottom:-16px;margin:14px -16px -16px;padding:10px 16px;background:rgba(255,255,255,.97);border-top:1px solid #e2e8f0;display:flex;gap:8px;justify-content:flex-end;">
-      <button type="button" onclick="closeIftyScienceItemEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">キャンセル</button>
-      <button type="button" onclick="saveIftyScienceItemEditor('${folderId}','${itemId}')" data-ifty-enter-primary="true" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 14px;font-weight:900;cursor:pointer;">保存</button>
+      <button type="button" onclick="closeIftyScienceItemEditor()" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;cursor:pointer;">${ifty216Markup("キャンセル","Cancel")}</button>
+      <button type="button" onclick="saveIftyScienceItemEditor('${folderId}','${itemId}')" data-ifty-enter-primary="true" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:9px 14px;font-weight:900;cursor:pointer;">${ifty216Markup("保存","Save")}</button>
     </div>`;
   modal.style.display = 'flex';
   renderIftyScienceEditorImagePreview();
@@ -10447,8 +9929,8 @@ function renderIftyScienceVisualQuiz() {
         <div style="font-size:1.25em;font-weight:900;color:#0f172a;">画像クイズ完了</div>
         <div style="margin-top:12px;font-size:1.05em;color:#334155;">正解 ${state.correct} / ${total}　正答率 ${rate}%</div>
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px;">
-          <button type="button" onclick="startIftyScienceVisualQuiz('${state.folderId}','${state.mode}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">もう一度</button>
-          <button type="button" onclick="closeIftyScienceVisualQuiz()" data-ifty-enter-primary="true" style="border:none;background:#334155;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">閉じる</button>
+          <button type="button" onclick="startIftyScienceVisualQuiz('${state.folderId}','${state.mode}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">${ifty216Markup("もう一度","Again")}</button>
+          <button type="button" onclick="closeIftyScienceVisualQuiz()" data-ifty-enter-primary="true" style="border:none;background:#334155;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">${ifty216Markup("閉じる","Close")}</button>
         </div>
       </div>`;
     return;
@@ -10465,11 +9947,11 @@ function renderIftyScienceVisualQuiz() {
   const optionRefs = state.optionIds.map(id => getIftyScienceItemById(id)).filter(Boolean);
 
   const resultBlock = state.answered ? `<div style="margin-top:13px;padding:10px;border-radius:9px;background:${state.selectedId === String(target.id) ? '#ecfdf5' : '#fff1f2'};border:1px solid ${state.selectedId === String(target.id) ? '#86efac' : '#fda4af'};">
-      <div style="font-weight:900;color:${state.selectedId === String(target.id) ? '#166534' : '#9f1239'};">${state.selectedId === String(target.id) ? '正解' : `正解：${escapeHtml(target.title || '無題')}`}</div>
-      ${target.workTitle ? `<div style="margin-top:5px;font-size:.83em;color:#581c87;"><strong>図・装置・資料名：</strong>${escapeHtml(target.workTitle)}</div>` : ''}
-      ${target.imageFocus ? `<div style="margin-top:5px;font-size:.83em;color:#3b0764;line-height:1.5;"><strong>画像の核：</strong>${escapeHtml(target.imageFocus)}</div>` : ''}
+      <div style="font-weight:900;color:${state.selectedId === String(target.id) ? '#166534' : '#9f1239'};">${state.selectedId === String(target.id) ? ifty216T("正解","Correct") : `正解：${escapeHtml(target.title || '無題')}`}</div>
+      ${target.workTitle ? `<div style="margin-top:5px;font-size:.83em;color:#581c87;"><strong>${ifty216Markup("図・装置・資料名：","Image / device / source name:")}</strong>${escapeHtml(target.workTitle)}</div>` : ''}
+      ${target.imageFocus ? `<div style="margin-top:5px;font-size:.83em;color:#3b0764;line-height:1.5;"><strong>${ifty216Markup("画像の核：","Key visual feature:")}</strong>${escapeHtml(target.imageFocus)}</div>` : ''}
       ${target.memoryText ? `<div style="margin-top:5px;font-size:.82em;color:#475569;line-height:1.55;">${escapeHtml(target.memoryText)}</div>` : ''}
-      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftyScienceVisualQuiz()" data-ifty-enter-primary="true" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftyScienceVisualQuiz()" data-ifty-enter-primary="true" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("次へ","Next")}</button></div>
     </div>` : '';
 
   card.innerHTML = `
@@ -10744,8 +10226,8 @@ function renderIftySciencePracticeHome() {
     else if (!selectedItems.length) disabledReason = '学習する項目を選択してください。';
     const disabled = !!disabledReason;
     return `<button type="button" onclick="startIftySciencePractice('${mode}')" ${disabled ? 'disabled' : ''} style="text-align:left;border:1px solid ${disabled ? '#e2e8f0' : meta.color};background:${disabled ? '#f8fafc' : '#fff'};border-radius:12px;padding:14px;cursor:${disabled ? 'not-allowed' : 'pointer'};min-height:126px;opacity:${disabled ? '.62' : '1'};">
-      <div style="font-size:1.08em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(meta.title)}</div>
-      <div style="margin-top:7px;color:#475569;font-size:.84em;line-height:1.55;">${escapeHtml(meta.description)}</div>
+      <div style="font-size:1.08em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(ifty216Ui(meta.title))}</div>
+      <div style="margin-top:7px;color:#475569;font-size:.84em;line-height:1.55;">${escapeHtml(ifty216Ui(meta.description))}</div>
       ${disabledReason ? `<div style="margin-top:8px;font-size:.72em;color:#94a3b8;font-weight:800;">${escapeHtml(disabledReason)}</div>` : ''}
     </button>`;
   };
@@ -10767,7 +10249,7 @@ function renderIftySciencePracticeHome() {
             <div style="font-size:.76em;color:#64748b;margin-top:3px;">選択 ${selectedFolders.length}フォルダ / ${selectedItems.length}項目${selectedSubjects.length ? ` ・ ${escapeHtml(selectedSubjects.join('・'))}` : ''}</div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button type="button" onclick="selectAllIftySciencePracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">すべて</button>
+            <button type="button" onclick="selectAllIftySciencePracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${ifty216Markup("すべて","All")}</button>
             <button type="button" onclick="selectAllIftySciencePracticeFolders(false)" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">解除</button>
           </div>
         </div>
@@ -10775,8 +10257,8 @@ function renderIftySciencePracticeHome() {
       </div>
 
       <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
-        <strong style="color:#334155;">問題数</strong>
-        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${iftySciencePracticeQuestionCount}" onchange="setIftySciencePracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
+        <strong style="color:#334155;">${ifty216Markup("問題数","Number of questions")}</strong>
+        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="${ifty216Markup("問題数","Number of questions")}" value="${iftySciencePracticeQuestionCount}" onchange="setIftySciencePracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
         <span style="font-size:.74em;color:#64748b;">公式・単位・並べ替え・説明は開始時にALLIAが問題を作ります。</span>
       </div>
 
@@ -10960,10 +10442,10 @@ function renderIftySciencePracticeLoading(mode) {
     <section class="ifty-portal-shell">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         <div>
-          <h1 class="ifty-portal-title">${escapeHtml(meta.title)}</h1>
+          <h1 class="ifty-portal-title">${escapeHtml(ifty216Ui(meta.title))}</h1>
           <div class="ifty-portal-subtitle">ALLIAが理科PRACTICE用の問題を作成しています。</div>
         </div>
-        <button class="ifty-portal-back" type="button" onclick="openIftySciencePractice()">PRACTICEへ戻る</button>
+        <button class="ifty-portal-back" type="button" onclick="openIftySciencePractice()">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button>
       </div>
       <div style="margin-top:20px;padding:28px;border:1px solid #ddd6fe;border-radius:12px;background:#faf5ff;text-align:center;">
         <div style="font-size:1.15em;font-weight:900;color:#6d28d9;">問題を生成中…</div>
@@ -11066,12 +10548,12 @@ function renderIftySciencePracticeResult() {
   showIftyHubContent(`
     <section class="ifty-portal-shell">
       <div style="text-align:center;padding:28px 8px;">
-        <div style="font-size:1.4em;font-weight:900;color:${meta.color};">${escapeHtml(meta.title)} 完了</div>
+        <div style="font-size:1.4em;font-weight:900;color:${meta.color};">${escapeHtml(ifty216Ui(meta.title))} 完了</div>
         <div style="margin-top:12px;color:#334155;font-size:1.05em;">正解 ${state.correct} / ${total}　分からない ${state.unknown||0}　正答率 ${rate}%</div>
         ${ifty182Summary(state.history182)}
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:18px;">
-          <button type="button" onclick="startIftySciencePractice('${state.mode}')" style="border:none;background:${meta.color};color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">もう一度</button>
-          <button type="button" onclick="openIftySciencePractice()" data-ifty-enter-primary="true" style="border:none;background:#334155;color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">PRACTICEへ戻る</button>
+          <button type="button" onclick="startIftySciencePractice('${state.mode}')" style="border:none;background:${meta.color};color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">${ifty216Markup("もう一度","Again")}</button>
+          <button type="button" onclick="openIftySciencePractice()" data-ifty-enter-primary="true" style="border:none;background:#334155;color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button>
         </div>
       </div>
     </section>
@@ -11089,7 +10571,7 @@ function renderIftySciencePracticeChoiceQuestion(question) {
     ? `<div style="margin-top:12px;text-align:center;"><img src="${imageRef.item.imageData}" alt="問題画像" style="max-width:100%;max-height:330px;object-fit:contain;border:1px solid #e2e8f0;border-radius:10px;background:white;"></div>`
     : '';
   const sourceText = question.sourceText
-    ? `<div style="margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:10px;background:#f8fbff;color:#0f172a;line-height:1.65;">${escapeHtml(question.sourceText)}</div>`
+    ? `<div style="margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:10px;background:#f8fbff;color:#0f172a;line-height:1.65;">${ifty216QuizText(question.sourceText, true, false)}</div>`
     : '';
 
   const optionHtml = (question.options || []).map(option => {
@@ -11109,26 +10591,26 @@ function renderIftySciencePracticeChoiceQuestion(question) {
       </button>`;
     }
 
-    return `<button type="button" ${state.answered ? 'disabled' : ''} data-ifty-enter-ignore="true" onclick="${isFormula ? `toggleIftySciencePracticeFormulaChoice('${option.id}')` : `answerIftySciencePracticeChoice('${option.id}')`}" style="border:2px solid ${border};background:${bg};color:${color};border-radius:9px;padding:11px;text-align:left;font-weight:800;line-height:1.5;cursor:${state.answered ? 'default' : 'pointer'};">${escapeHtml(option.label)}</button>`;
+    return `<button type="button" ${state.answered ? 'disabled' : ''} data-ifty-enter-ignore="true" onclick="${isFormula ? `toggleIftySciencePracticeFormulaChoice('${option.id}')` : `answerIftySciencePracticeChoice('${option.id}')`}" style="border:2px solid ${border};background:${bg};color:${color};border-radius:9px;padding:11px;text-align:left;font-weight:800;line-height:1.5;cursor:${state.answered ? 'default' : 'pointer'};">${ifty216QuizText(option.label, true, false)}</button>`;
   }).join('');
 
   const allCorrect = state.answered && arraysAsSetsEqual(state.selectedIds, question.correctIds || []);
 const feedback = state.answered ? `
     <div style="margin-top:13px;padding:11px;border-radius:9px;background:${allCorrect ? '#ecfdf5' : '#fff1f2'};border:1px solid ${allCorrect ? '#86efac' : '#fda4af'};">
-      <div style="font-weight:900;color:${allCorrect ? '#166534' : '#9f1239'};">${state.unknownLast?'？ 分からない':allCorrect ? '正解' : '不正解'}</div>
-      ${question.explanation ? `<div style="margin-top:6px;color:#475569;line-height:1.6;">${escapeHtml(question.explanation)}</div>` : ''}
-      ${isImage && targetRef?.item?.workTitle ? `<div style="margin-top:5px;color:#581c87;font-size:.85em;"><strong>図・装置・資料名：</strong>${escapeHtml(targetRef.item.workTitle)}</div>` : ''}
-      ${isImage && targetRef?.item?.imageFocus ? `<div style="margin-top:5px;color:#3b0764;font-size:.85em;"><strong>画像の核：</strong>${escapeHtml(targetRef.item.imageFocus)}</div>` : ''}
-      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySciencePracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
+      <div style="font-weight:900;color:${allCorrect ? '#166534' : '#9f1239'};">${state.unknownLast?ifty216T("？ 分からない","? Don't know"):allCorrect ? ifty216T("正解","Correct") : ifty216T("不正解","Incorrect")}</div>
+      ${question.explanation ? `<div style="margin-top:6px;color:#475569;line-height:1.6;">${ifty216QuizText(question.explanation, true, false)}</div>` : ''}
+      ${isImage && targetRef?.item?.workTitle ? `<div style="margin-top:5px;color:#581c87;font-size:.85em;"><strong>${ifty216Markup("図・装置・資料名：","Image / device / source name:")}</strong>${escapeHtml(targetRef.item.workTitle)}</div>` : ''}
+      ${isImage && targetRef?.item?.imageFocus ? `<div style="margin-top:5px;color:#3b0764;font-size:.85em;"><strong>${ifty216Markup("画像の核：","Key visual feature:")}</strong>${escapeHtml(targetRef.item.imageFocus)}</div>` : ''}
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySciencePracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("次へ","Next")}</button></div>
     </div>` : '';
 
   return `
-    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
+    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${ifty216QuizText(question.prompt, true, false)}</div>
     ${promptVisual}
     ${sourceText}
-    ${isFormula && !state.answered ? '<div style="margin-top:7px;color:#7c3aed;font-size:.76em;font-weight:800;">正しいものをすべて選択してください。複数正解の場合があります。</div>' : ''}
+    ${isFormula && !state.answered ? ("<div style=\"margin-top:7px;color:#7c3aed;font-size:.76em;font-weight:800;\">" + ifty216Markup("正しいものをすべて選択してください。複数正解の場合があります。","Select every correct option. More than one may be correct.") + "</div>") : ''}
     <div style="display:grid;grid-template-columns:${isImage && question.direction === 'text_to_image' ? 'repeat(2,minmax(0,1fr))' : 'repeat(auto-fit,minmax(220px,1fr))'};gap:8px;margin-top:12px;">${optionHtml}</div>
-    ${isFormula && !state.answered ? `<div style="text-align:right;margin-top:11px;"><button type="button" onclick="submitIftySciencePracticeFormula()" ${state.selectedIds.length ? '' : 'disabled'} style="border:none;background:${state.selectedIds.length ? '#7c3aed' : '#cbd5e1'};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:${state.selectedIds.length ? 'pointer' : 'not-allowed'};">回答する</button></div>` : ''}
+    ${isFormula && !state.answered ? `<div style="text-align:right;margin-top:11px;"><button type="button" onclick="submitIftySciencePracticeFormula()" ${state.selectedIds.length ? '' : 'disabled'} style="border:none;background:${state.selectedIds.length ? '#7c3aed' : '#cbd5e1'};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:${state.selectedIds.length ? 'pointer' : 'not-allowed'};">${ifty216Markup("回答する","Submit answer")}</button></div>` : ''}
     ${feedback}`;
 }
 
@@ -11144,7 +10626,7 @@ function renderIftySciencePracticeOrderQuestion(question) {
     const isCorrectPosition = state.answered && correctPosition === index;
     return `<div style="display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;padding:9px;border:1px solid ${state.answered ? (isCorrectPosition ? '#86efac' : '#fda4af') : '#cbd5e1'};background:${state.answered ? (isCorrectPosition ? '#f0fdf4' : '#fff1f2') : '#fff'};border-radius:9px;">
       <div style="font-weight:900;color:#64748b;text-align:center;">${index + 1}</div>
-      <div style="color:#0f172a;line-height:1.5;">${escapeHtml(event.text)}</div>
+      <div style="color:#0f172a;line-height:1.5;">${ifty216QuizText(event.text, true, false)}</div>
       ${state.answered ? '' : `<div style="display:flex;gap:4px;">
         <button type="button" data-ifty-enter-ignore="true" onclick="moveIftySciencePracticeOrder(${index},-1)" ${index === 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;border-radius:6px;width:34px;height:34px;cursor:${index === 0 ? 'not-allowed' : 'pointer'};">↑</button>
         <button type="button" data-ifty-enter-ignore="true" onclick="moveIftySciencePracticeOrder(${index},1)" ${index === state.orderIds.length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;border-radius:6px;width:34px;height:34px;cursor:${index === state.orderIds.length - 1 ? 'not-allowed' : 'pointer'};">↓</button>
@@ -11153,34 +10635,34 @@ function renderIftySciencePracticeOrderQuestion(question) {
   }).join('');
   const correct = state.answered && arraysAsSetsEqual(state.orderIds, question.correctOrder || []) && state.orderIds.every((id, index) => String(id) === String(question.correctOrder[index]));
   return `
-    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
-    <div style="margin-top:7px;color:#64748b;font-size:.76em;">科学的に正しい過程・因果・手順の順に並べてください。</div>
+    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${ifty216QuizText(question.prompt, true, false)}</div>
+    <div style="margin-top:7px;color:#64748b;font-size:.76em;">${ifty216Markup("科学的に正しい過程・因果・手順の順に並べてください。","Arrange the items in the required sequence.")}</div>
     <div style="display:grid;gap:7px;margin-top:12px;">${rows}</div>
     ${state.answered ? `<div style="margin-top:12px;padding:11px;border-radius:9px;background:${correct ? '#ecfdf5' : '#fff1f2'};border:1px solid ${correct ? '#86efac' : '#fda4af'};">
-      <div style="font-weight:900;color:${correct ? '#166534' : '#9f1239'};">${state.unknownLast?'？ 分からない':correct ? '正解' : '不正解'}</div>
-      ${question.explanation ? `<div style="margin-top:6px;color:#475569;line-height:1.6;">${escapeHtml(question.explanation)}</div>` : ''}
-      ${!correct ? `<div style="margin-top:8px;color:#334155;font-size:.84em;"><strong>正しい順：</strong>${(question.correctOrder || []).map((id, i) => `${i + 1}. ${escapeHtml(eventMap.get(String(id))?.text || '')}`).join(' → ')}</div>` : ''}
-      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySciencePracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
-    </div>` : `<div style="text-align:right;margin-top:11px;"><button type="button" onclick="submitIftySciencePracticeOrder()" style="border:none;background:#d97706;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">回答する</button></div>`}`;
+      <div style="font-weight:900;color:${correct ? '#166534' : '#9f1239'};">${state.unknownLast?ifty216T("？ 分からない","? Don't know"):correct ? ifty216T("正解","Correct") : ifty216T("不正解","Incorrect")}</div>
+      ${question.explanation ? `<div style="margin-top:6px;color:#475569;line-height:1.6;">${ifty216QuizText(question.explanation, true, false)}</div>` : ''}
+      ${!correct ? `<div style="margin-top:8px;color:#334155;font-size:.84em;"><strong>${ifty216Markup("正しい順：","Correct order:")}</strong>${(question.correctOrder || []).map((id, i) => `${i + 1}. ${escapeHtml(eventMap.get(String(id))?.text || '')}`).join(' → ')}</div>` : ''}
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySciencePracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("次へ","Next")}</button></div>
+    </div>` : `<div style="text-align:right;margin-top:11px;"><button type="button" onclick="submitIftySciencePracticeOrder()" style="border:none;background:#d97706;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">${ifty216Markup("回答する","Submit answer")}</button></div>`}`;
 }
 
 function renderIftySciencePracticeExplanationQuestion(question) {
   const state = iftySciencePracticeState;
   const required = (question.requiredTerms || []).map(term => `<span style="display:inline-block;padding:5px 8px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:900;font-size:.82em;">${escapeHtml(term)}</span>`).join(' ');
   return `
-    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${escapeHtml(question.prompt)}</div>
+    <div style="font-size:1.03em;font-weight:900;color:#0f172a;line-height:1.55;">${ifty216QuizText(question.prompt, true, false)}</div>
     <div style="margin-top:10px;padding:10px;border:1px solid #bbf7d0;border-radius:9px;background:#f0fdf4;color:#166534;font-size:.81em;line-height:1.55;">
-      単語の丸暗記だけでなく、「何を指す用語か」と「他と区別するための核となる特徴」を説明してください。原因・影響・類似用語との比較は派生記述で扱います。
+      ${ifty216Markup("単語の丸暗記だけでなく、「何を指す用語か」と「他と区別するための核となる特徴」を説明してください。原因・影響・類似用語との比較は派生記述で扱います。","Explain what the term refers to and its distinguishing features. Causes, effects and comparisons belong to derived questions.")}
     </div>
     ${state.answered ? `<div style="margin-top:12px;padding:11px;border:1px solid ${state.correctLast ? '#86efac' : '#fda4af'};background:${state.correctLast ? '#ecfdf5' : '#fff1f2'};border-radius:9px;">
-      <div style="font-weight:900;color:${state.correctLast ? '#166534' : '#9f1239'};">${state.unknownLast?'？ 分からない':state.correctLast ? '正解' : '要復習'}${Number.isFinite(Number(state.score)) ? `　${Math.round(Number(state.score))}点` : ''}</div>
+      <div style="font-weight:900;color:${state.correctLast ? '#166534' : '#9f1239'};">${state.unknownLast?ifty216T("？ 分からない","? Don't know"):state.correctLast ? ifty216T("正解","Correct") : ifty216T("要復習","Review needed")}${Number.isFinite(Number(state.score)) ? `　${Math.round(Number(state.score))}点` : ''}</div>
       <div style="margin-top:7px;color:#334155;line-height:1.6;white-space:pre-wrap;">${escapeHtml(state.feedback)}</div>
-      ${state.modelAnswer ? `<div style="margin-top:9px;padding:9px;background:white;border:1px solid #d1fae5;border-radius:8px;color:#0f172a;line-height:1.6;"><strong>模範：</strong>${escapeHtml(state.modelAnswer)}</div>` : ''}
-      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySciencePracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">次へ</button></div>
+      ${state.modelAnswer ? `<div style="margin-top:9px;padding:9px;background:white;border:1px solid #d1fae5;border-radius:8px;color:#0f172a;line-height:1.6;"><strong>${ifty216Markup("模範：","Model:")}</strong>${escapeHtml(state.modelAnswer)}</div>` : ''}
+      <div style="margin-top:10px;text-align:right;"><button type="button" onclick="nextIftySciencePracticeQuestion()" data-ifty-enter-primary="true" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("次へ","Next")}</button></div>
     </div>` : `<div style="margin-top:12px;">
-      <textarea id="iftySciencePracticeExplanationInput" placeholder="ここに説明を書く" oninput="iftySciencePracticeState.answerText=this.value" style="width:100%;min-height:150px;box-sizing:border-box;padding:11px;border:1px solid #94a3b8;border-radius:9px;font:inherit;line-height:1.6;resize:vertical;">${escapeHtml(state.answerText || '')}</textarea>
-      <div id="iftySciencePracticeGradeStatus" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;">${state.grading ? 'ALLIAが採点中…' : 'Ctrl/Cmd + Enterでも回答できます。'}</div>
-      <div style="text-align:right;margin-top:7px;"><button type="button" onclick="submitIftySciencePracticeExplanation()" ${state.grading ? 'disabled' : ''} style="border:none;background:${state.grading ? '#94a3b8' : '#059669'};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:${state.grading ? 'wait' : 'pointer'};">${state.grading ? '採点中…' : '回答する'}</button></div>
+      <textarea id="iftySciencePracticeExplanationInput" placeholder="${ifty216Markup("ここに説明を書く","Write your explanation here")}" oninput="iftySciencePracticeState.answerText=this.value" style="width:100%;min-height:150px;box-sizing:border-box;padding:11px;border:1px solid #94a3b8;border-radius:9px;font:inherit;line-height:1.6;resize:vertical;">${escapeHtml(state.answerText || '')}</textarea>
+      <div id="iftySciencePracticeGradeStatus" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.78em;">${state.grading ? ifty216T("ALLIAが採点中…","ALLIA is grading…") : 'Ctrl/Cmd + Enterでも回答できます。'}</div>
+      <div style="text-align:right;margin-top:7px;"><button type="button" onclick="submitIftySciencePracticeExplanation()" ${state.grading ? 'disabled' : ''} style="border:none;background:${state.grading ? '#94a3b8' : '#059669'};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:${state.grading ? 'wait' : 'pointer'};">${state.grading ? ifty216T("採点中…","Grading…") : ifty216T("回答する","Submit answer")}</button></div>
     </div>`}`;
 }
 
@@ -11206,13 +10688,13 @@ function renderIftySciencePracticePlayer() {
     <section class="ifty-portal-shell">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
         <div>
-          <h1 class="ifty-portal-title" style="color:${meta.color};">${escapeHtml(meta.title)}</h1>
+          <h1 class="ifty-portal-title" style="color:${meta.color};">${escapeHtml(ifty216Ui(meta.title))}</h1>
           <div class="ifty-portal-subtitle">${state.index + 1} / ${state.questions.length}　正解 ${state.correct}　要復習 ${state.wrong}　分からない ${state.unknown||0}</div>
         </div>
-        <button class="ifty-portal-back" type="button" onclick="openIftySciencePractice()">終了</button>
+        <button class="ifty-portal-back" type="button" onclick="openIftySciencePractice()">${ifty216Markup("終了","End")}</button>
       </div>
       <div style="margin-top:15px;padding:15px;border:1px solid #cbd5e1;border-radius:12px;background:white;">${body}
-    ${!state.answered && !state.grading ? `<button type="button" onclick="ifty182UnknownScience()" style="display:block;width:100%;margin-top:12px;padding:12px;background:#475569;color:white;border:1px solid #94a3b8;border-radius:9px;font-weight:800;">？ 分からない（答えを見る）</button>` : ''}</div>
+    ${!state.answered && !state.grading ? `<button type="button" onclick="ifty182UnknownScience()" style="display:block;width:100%;margin-top:12px;padding:12px;background:#475569;color:white;border:1px solid #94a3b8;border-radius:9px;font-weight:800;">${ifty216Markup("？ 分からない（答えを見る）","? Don't know (show answer)")}</button>` : ''}</div>
     </section>
   `, 'science-practice');
 
@@ -11299,7 +10781,7 @@ window.submitIftySciencePracticeExplanation = async function() {
   state.answerText = answer;
   state.grading = true;
   const status = document.getElementById('iftySciencePracticeGradeStatus');
-  if (status) status.textContent = 'ALLIAが採点中…';
+  if (status) status.textContent = ifty216T("ALLIAが採点中…","ALLIA is grading…");
   const button = status?.parentElement?.querySelector('button');
   if (button) button.disabled = true;
 
@@ -11396,18 +10878,18 @@ function renderIftyAncientItemCard(folder, item) {
           ${item.reading ? `<span style="font-size:.78em;color:#475569;background:#f1f5f9;border-radius:999px;padding:2px 7px;">${escapeHtml(item.reading)}</span>` : ''}
           ${item.partOfSpeech ? `<span style="font-size:.72em;color:#075985;background:#e0f2fe;border-radius:999px;padding:2px 7px;font-weight:900;">${escapeHtml(item.partOfSpeech)}</span>` : ''}
           ${renderIftyLearningLevelInline('ANCIENT', item.id, item.level)}
-          ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
+          ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : ("<span style=\"font-size:.68em;color:#64748b;font-weight:900;\">" + ifty216Markup("マニュアル","MANUAL") + "</span>")}
           ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
         </div>
       </div>
 
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
-        <button id="iftyRegenAncient_${item.id}" type="button" onclick="regenerateIftyAncientItem('${folder.id}','${item.id}')" title="語義・読み・品詞を最初から慎重に再検討する" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">再生成</button>
-        <button type="button" onclick="openIftyAncientItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">編集</button>
+        <button id="iftyRegenAncient_${item.id}" type="button" onclick="regenerateIftyAncientItem('${folder.id}','${item.id}')" title="語義・読み・品詞を最初から慎重に再検討する" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${ifty216Markup("再生成","Regenerate")}</button>
+        <button type="button" onclick="openIftyAncientItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">${ifty216Markup("編集","Edit")}</button>
         <button type="button" onclick="moveIftyAncientItem('${folder.id}','${item.id}',-1)" ${itemIndex <= 0 ? 'disabled' : ''} title="上へ" style="border:none;background:${itemIndex <= 0 ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex <= 0 ? 'not-allowed' : 'pointer'};font-weight:900;">↑</button>
         <button type="button" onclick="moveIftyAncientItem('${folder.id}','${item.id}',1)" ${itemIndex >= lastIndex ? 'disabled' : ''} title="下へ" style="border:none;background:${itemIndex >= lastIndex ? '#cbd5e1' : '#e2e8f0'};color:#334155;border-radius:6px;padding:5px 8px;cursor:${itemIndex >= lastIndex ? 'not-allowed' : 'pointer'};font-weight:900;">↓</button>
         <button type="button" onclick="toggleIftyAncientItemReview('${folder.id}','${item.id}')" title="${isIftyReviewTagged(item) ? '復習登録を解除' : '復習に登録'}" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:900;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
-        <button type="button" onclick="deleteIftyAncientItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">削除</button>
+        <button type="button" onclick="deleteIftyAncientItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;cursor:pointer;font-weight:800;">${ifty216Markup("削除","Delete")}</button>
       </div>
     </div>
 
@@ -11426,7 +10908,7 @@ function renderIftyAncientItemCard(folder, item) {
     </div>` : ''}
 
     ${examples.length ? `<div style="margin-top:8px;padding:9px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:8px;">
-      <div style="font-size:.74em;font-weight:900;color:#7e22ce;margin-bottom:5px;">例文</div>
+      <div style="font-size:.74em;font-weight:900;color:#7e22ce;margin-bottom:5px;">${ifty216Markup("例文","Example sentences")}</div>
       ${examples.map(ex => `<div style="margin-top:5px;">
         ${ex.classical ? `<div style="font-size:.88em;line-height:1.5;color:#3b0764;">${escapeHtml(ex.classical)}</div>` : ''}
         ${ex.modern ? `<div style="font-size:.78em;line-height:1.45;color:#6b21a8;margin-top:2px;">→ ${escapeHtml(ex.modern)}</div>` : ''}
@@ -11525,21 +11007,21 @@ function renderIftyAncientFolder(folder, folderIndex) {
         <button type="button" onclick="moveIftyAncientFolder(${folderIndex},1)" ${folderIndex >= getIftyAncientModule().folders.length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">↓</button>
 ${ifty132RegenerateFolderButton('ANCIENT',folder.id,(folder.items||[]).length)}
         ${ifty135ThemeButton('ANCIENT',folder)}<button type="button" onclick="renameIftyAncientFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">✏️ 名前変更</button>
-        <button type="button" onclick="deleteIftyAncientFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">削除</button>
+        <button type="button" onclick="deleteIftyAncientFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">${ifty216Markup("削除","Delete")}</button>
       </div>
     </div>
 
     ${folder.collapsed ? '' : `<div style="margin-top:12px;">
       <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;">
         <input id="iftyAncientWord_${folder.id}" value="${escapeHtml(iftyAncientWordDrafts[folder.id] || '')}" placeholder="古文単語を入力してEnter（例：あはれ / いみじ / をかし）" oninput="iftyAncientWordDrafts['${folder.id}']=this.value;clearIftyAcademicTermSuggestion('ANCIENT','${folder.id}')" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftyAncientWord('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}));}" style="flex:1;min-width:210px;padding:9px;border:1px solid #94a3b8;border-radius:7px;font-size:.95em;">
-        <button type="button" onclick="generateIftyAncientWord('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 13px;min-height:42px;font-weight:900;cursor:pointer;white-space:nowrap;">＋ 追加</button>
+        <button type="button" onclick="generateIftyAncientWord('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 13px;min-height:42px;font-weight:900;cursor:pointer;white-space:nowrap;">${ifty216Markup("＋ 追加","＋ Add")}</button>
       </div>
       <div id="iftyAncientTermSuggestion_${folder.id}">${renderIftyAcademicTermSuggestion('ANCIENT', folder.id)}</div>
       <div id="iftyAncientPending_${folder.id}" style="margin-top:6px;min-height:1.2em;font-size:.76em;color:#7c3aed;font-weight:800;">${Number(iftyAncientGenerationPending[folder.id] || 0) ? `ALLIA生成中… ${Number(iftyAncientGenerationPending[folder.id] || 0)}件` : ''}</div>
 
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;">
         <input id="iftyAncientFolderSearch_${folder.id}" value="${escapeHtml(iftyAncientFolderSearchQueries[folder.id] || '')}" placeholder="🔎 このフォルダ内を検索" oninput="applyIftyAncientFolderSearch('${folder.id}',this.value)" style="flex:1;min-width:180px;padding:8px 9px;border:1px solid #cbd5e1;border-radius:7px;font-size:.86em;">
-        <button type="button" onclick="document.getElementById('iftyAncientFolderSearch_${folder.id}').value='';applyIftyAncientFolderSearch('${folder.id}','');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-size:.8em;font-weight:900;cursor:pointer;">クリア</button>
+        <button type="button" onclick="document.getElementById('iftyAncientFolderSearch_${folder.id}').value='';applyIftyAncientFolderSearch('${folder.id}','');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-size:.8em;font-weight:900;cursor:pointer;">${ifty216Markup("クリア","Clear")}</button>
         <span id="iftyAncientFolderSearchCount_${folder.id}" style="font-size:.72em;color:#64748b;font-weight:800;">${items.length}件</span>
       </div>
 
@@ -11556,7 +11038,7 @@ window.renderIftyAncientPage = function(options = {}) {
     <section class="ifty-portal-shell">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <div>
-          <h1 class="ifty-portal-title">ANCIENT</h1>
+          <h1 class="ifty-portal-title">${ifty216Markup("古文","ANCIENT")}</h1>
           <div class="ifty-portal-subtitle">古文単語。漢文はまだここには入れません。</div>
         </div>
         ${renderIftySubjectHeaderActions('ANCIENT')}
@@ -11573,7 +11055,7 @@ window.renderIftyAncientPage = function(options = {}) {
 
       <div style="margin-top:12px;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:white;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <input id="iftyAncientSearchInput" value="${escapeHtml(iftyAncientSearchQuery)}" placeholder="🔎 全フォルダから古文単語・意味・例文を検索" oninput="applyIftyAncientSearch(this.value)" style="flex:1;min-width:220px;padding:9px 10px;border:1px solid #94a3b8;border-radius:8px;font-size:.92em;">
-        <button type="button" onclick="document.getElementById('iftyAncientSearchInput').value='';applyIftyAncientSearch('');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">クリア</button>
+        <button type="button" onclick="document.getElementById('iftyAncientSearchInput').value='';applyIftyAncientSearch('');" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${ifty216Markup("クリア","Clear")}</button>
         <span id="iftyAncientSearchCount" style="font-size:.78em;color:#64748b;font-weight:800;">${countIftyAncientItems()}件</span>
       </div>
 
@@ -11889,7 +11371,7 @@ window.openIftyAncientItemEditor = function(folderId, itemId) {
       ${field('iftyAncientEditRelated','関連語（1行1つ）',(item.relatedWords || []).join('\n'),3)}
       ${field('iftyAncientEditPoints','重要ポイント（1行1つ）',(item.keyPoints || []).join('\n'),3)}
     </div>
-    <button type="button" onclick="saveIftyAncientItemEditor('${folderId}','${itemId}')" style="width:100%;margin-top:14px;border:none;background:#0284c7;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">保存</button>
+    <button type="button" onclick="saveIftyAncientItemEditor('${folderId}','${itemId}')" style="width:100%;margin-top:14px;border:none;background:#0284c7;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">${ifty216Markup("保存","Save")}</button>
   </div>`;
 
   modal.addEventListener('click', event => {
@@ -12359,7 +11841,7 @@ function renderIftyKanbunItemCard(folder, item) {
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <input type="checkbox" ${iftyKanbunSelectedItemIds.has(String(item.id)) ? 'checked' : ''} onchange="toggleIftySubjectItemSelection('KANBUN','${item.id}',this.checked)" title="この漢文を選択" style="width:18px;height:18px;flex:none;">
           ${ifty139DragHandle('KANBUN',folder.id,item.id)}<strong style="font-size:1.05em;color:#0f172a;font-family:serif;overflow-wrap:anywhere;">${escapeHtml(item.title || item.originalText || '無題')}</strong>${ifty132AliasInfo(item)}
-          ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : '<span style="font-size:.68em;color:#64748b;font-weight:900;">MANUAL</span>'}
+          ${item.source === 'ALLIA' ? '<span style="font-size:.68em;color:#7c3aed;font-weight:900;">ALLIA</span>' : ("<span style=\"font-size:.68em;color:#64748b;font-weight:900;\">" + ifty216Markup("マニュアル","MANUAL") + "</span>")}
           ${item.inputKind === 'pattern' ? '<span style="font-size:.68em;color:#92400e;font-weight:900;background:#fffbeb;border-radius:999px;padding:2px 6px;">句法・型</span>' : ''}
           ${renderIftyLearningLevelInline('KANBUN', item.id, item.level)}
           ${isIftyReviewTagged(item) ? `<span style="font-size:.68em;color:#c2410c;font-weight:900;background:#fff7ed;border-radius:999px;padding:2px 6px;">🔁 ${isIftyReviewDue(item) ? '今日' : formatIftyReviewDate(item.review?.nextReview)}</span>` : ''}
@@ -12368,13 +11850,13 @@ function renderIftyKanbunItemCard(folder, item) {
         ${study && study.total ? `<div style="margin-top:4px;color:#64748b;font-size:.72em;">学習 ${study.total}回 ・ 正解 ${study.correct} ・ 不正解 ${study.wrong} ・ 正答率 ${Math.round(study.correct / study.total * 100)}%</div>` : ''}
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;max-width:100%;">
-        <button id="iftyRegenKanbun_${item.id}" type="button" onclick="regenerateIftyKanbunItem('${folder.id}','${item.id}')" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;font-weight:900;cursor:pointer;">再生成</button>
+        <button id="iftyRegenKanbun_${item.id}" type="button" onclick="regenerateIftyKanbunItem('${folder.id}','${item.id}')" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;font-weight:900;cursor:pointer;">${ifty216Markup("再生成","Regenerate")}</button>
         <button type="button" onclick="openIftyKanbunReturnMarkEditor('${folder.id}','${item.id}')" style="border:none;background:#b91c1c;color:white;border-radius:6px;padding:5px 8px;font-weight:900;cursor:pointer;">訓点</button>
-        <button type="button" onclick="openIftyKanbunItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:800;cursor:pointer;">編集</button>
+        <button type="button" onclick="openIftyKanbunItemEditor('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:800;cursor:pointer;">${ifty216Markup("編集","Edit")}</button>
         <button type="button" onclick="moveIftyKanbunItem('${folder.id}','${item.id}',-1)" ${index <= 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:5px 8px;cursor:${index <= 0 ? 'not-allowed' : 'pointer'};">↑</button>
         <button type="button" onclick="moveIftyKanbunItem('${folder.id}','${item.id}',1)" ${index >= last ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:5px 8px;cursor:${index >= last ? 'not-allowed' : 'pointer'};">↓</button>
         <button type="button" onclick="toggleIftyKanbunItemReview('${folder.id}','${item.id}')" style="border:none;background:${isIftyReviewTagged(item) ? '#ffedd5' : '#f1f5f9'};color:${isIftyReviewTagged(item) ? '#c2410c' : '#64748b'};border-radius:6px;padding:5px 8px;font-weight:900;cursor:pointer;">${isIftyReviewTagged(item) ? '🔁' : '＋復習'}</button>
-        <button type="button" onclick="deleteIftyKanbunItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:800;cursor:pointer;">削除</button>
+        <button type="button" onclick="deleteIftyKanbunItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:800;cursor:pointer;">${ifty216Markup("削除","Delete")}</button>
       </div>
     </div>
 
@@ -12385,7 +11867,7 @@ function renderIftyKanbunItemCard(folder, item) {
     ${item.kundoku ? `<div style="margin-top:8px;padding:9px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:8px;"><div style="font-size:.72em;font-weight:900;color:#0369a1;">書き下し文</div><div style="margin-top:4px;color:#0f172a;line-height:1.6;overflow-wrap:anywhere;">${escapeHtml(item.kundoku)}</div></div>` : ''}
     ${item.translation ? `<div style="margin-top:8px;padding:9px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;"><div style="font-size:.72em;font-weight:900;color:#166534;">現代語訳</div><div style="margin-top:4px;color:#14532d;line-height:1.6;overflow-wrap:anywhere;">${escapeHtml(item.translation)}</div></div>` : ''}
     ${grammarPoints.length ? `<div style="margin-top:8px;padding:9px;border:1px solid #e9d5ff;background:#faf5ff;border-radius:8px;font-size:.82em;color:#581c87;"><strong>句法・文法：</strong>${grammarPoints.map(escapeHtml).join(' / ')}</div>` : ''}
-    ${examples.length ? `<div style="margin-top:8px;padding:9px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;"><div style="font-size:.72em;font-weight:900;color:#92400e;margin-bottom:6px;">例文</div>${examples.map((ex,i)=>`<div style="${i?'margin-top:8px;padding-top:8px;border-top:1px dashed #fcd34d;':''}"><div style="font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#0f172a;font-size:1.02em;line-height:1.55;overflow-wrap:anywhere;">${escapeHtml(ex.original||'')}</div>${ex.kundoku?`<div style="margin-top:3px;color:#075985;font-size:.84em;line-height:1.5;"><strong>書き下し：</strong>${escapeHtml(ex.kundoku)}</div>`:''}${ex.translation?`<div style="margin-top:2px;color:#166534;font-size:.84em;line-height:1.5;"><strong>訳：</strong>${escapeHtml(ex.translation)}</div>`:''}${ex.point?`<div style="margin-top:2px;color:#92400e;font-size:.78em;line-height:1.45;">${escapeHtml(ex.point)}</div>`:''}</div>`).join('')}</div>` : `<div style="margin-top:8px;padding:9px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;"><div><div style="font-size:.72em;font-weight:900;color:#92400e;">例文</div><div style="margin-top:3px;font-size:.78em;color:#a16207;">例文がまだありません。</div></div><button id="iftyKanbunExamples_${item.id}" type="button" onclick="generateIftyKanbunExamples('${folder.id}','${item.id}')" style="border:none;background:#d97706;color:white;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">例文を生成</button></div>`}
+    ${examples.length ? `<div style="margin-top:8px;padding:9px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;"><div style="font-size:.72em;font-weight:900;color:#92400e;margin-bottom:6px;">${ifty216Markup("例文","Example sentences")}</div>${examples.map((ex,i)=>`<div style="${i?'margin-top:8px;padding-top:8px;border-top:1px dashed #fcd34d;':''}"><div style="font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#0f172a;font-size:1.02em;line-height:1.55;overflow-wrap:anywhere;">${escapeHtml(ex.original||'')}</div>${ex.kundoku?`<div style="margin-top:3px;color:#075985;font-size:.84em;line-height:1.5;"><strong>書き下し：</strong>${escapeHtml(ex.kundoku)}</div>`:''}${ex.translation?`<div style="margin-top:2px;color:#166534;font-size:.84em;line-height:1.5;"><strong>訳：</strong>${escapeHtml(ex.translation)}</div>`:''}${ex.point?`<div style="margin-top:2px;color:#92400e;font-size:.78em;line-height:1.45;">${escapeHtml(ex.point)}</div>`:''}</div>`).join('')}</div>` : `<div style="margin-top:8px;padding:9px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;"><div><div style="font-size:.72em;font-weight:900;color:#92400e;">${ifty216Markup("例文","Example sentences")}</div><div style="margin-top:3px;font-size:.78em;color:#a16207;">例文がまだありません。</div></div><button id="iftyKanbunExamples_${item.id}" type="button" onclick="generateIftyKanbunExamples('${folder.id}','${item.id}')" style="border:none;background:#d97706;color:white;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">例文を生成</button></div>`}
     ${keyPoints.length ? `<div style="margin-top:8px;font-size:.8em;color:#334155;line-height:1.5;">${keyPoints.map(point => `・${escapeHtml(point)}`).join('<br>')}</div>` : ''}
   </article>`;
 }
@@ -12483,7 +11965,7 @@ window.openIftyKanbunReturnMarkInputPalette = function(targetId) {
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.58);z-index:12158;display:flex;align-items:flex-end;justify-content:center;padding:10px;box-sizing:border-box;';
   const palette = getIftyKanbunInputReturnMarkPalette();
   modal.innerHTML = `<div style="width:min(620px,100%);background:white;border-radius:14px 14px 8px 8px;padding:14px;box-sizing:border-box;box-shadow:0 -8px 30px rgba(15,23,42,.18);">
-    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>返点を入力</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">選んだ返点をカーソル位置へ挿入します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunInputMarkPalette')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>${ifty216Markup("返点を入力","Enter reading marks")}</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">${ifty216Markup("選んだ返点をカーソル位置へ挿入します。","Insert the selected reading mark at the cursor.")}</div></div><button type="button" onclick="document.getElementById('iftyKanbunInputMarkPalette')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;">${palette.map(mark => `<button type="button" onclick="insertIftyKanbunTextAtCursor('${String(targetId).replace(/'/g,"\\'")}','${mark}');document.getElementById('iftyKanbunInputMarkPalette')?.remove()" style="border:1px solid #fecaca;background:#fff;color:#991b1b;border-radius:8px;min-width:42px;padding:9px 10px;font-size:1em;font-weight:900;cursor:pointer;">${renderIftyKanbunReturnMarkGlyph(mark,{compact:true})}</button>`).join('')}</div>
   </div>`;
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
@@ -12560,11 +12042,11 @@ window.openIftyKanbunInputHandwriting = function(targetId, folderId = '', subjec
   modal.id = 'iftyKanbunInputHandwritingModal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12160;display:flex;align-items:center;justify-content:center;padding:10px;box-sizing:border-box;';
   modal.innerHTML = `<div style="width:min(720px,100%);max-height:94vh;overflow:auto;background:white;border-radius:14px;padding:14px;box-sizing:border-box;">
-    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>✍️ 手書き入力</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">漢字だけでなく、かな・英字・数字・記号・短い句法も認識します。A / B / 〜 / ー は下のボタンなら認識なしで直接入力できます。</div></div><button type="button" onclick="document.getElementById('iftyKanbunInputHandwritingModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>${ifty216Markup("✍️ 手書き入力","✍️ Handwriting input")}</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">漢字だけでなく、かな・英字・数字・記号・短い句法も認識します。A / B / 〜 / ー は下のボタンなら認識なしで直接入力できます。</div></div><button type="button" onclick="document.getElementById('iftyKanbunInputHandwritingModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
     ${iftyKanbunInputHandwritingState.handwritingOnly ? '<div style="margin-top:9px;padding:8px 10px;border:1px solid #fed7aa;background:#fff7ed;border-radius:9px;color:#9a3412;font-size:.75em;font-weight:800;">このモードは手書き回答専用です。キーボード入力欄は表示しません。候補認識のみALLIAを使用します。</div>' : `<div style="margin-top:11px;padding:9px;border:1px solid #a7f3d0;background:#ecfdf5;border-radius:9px;"><div style="font-size:.72em;font-weight:900;color:#065f46;margin-bottom:6px;">端末の手書き入力（iPadはここを推奨）</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"><input id="iftyKanbunDeviceHandwritingInput" lang="ja" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Apple Pencilでこの欄へ直接書く／キーボードでも可" style="flex:1;min-width:220px;padding:10px 11px;border:1px solid #6ee7b7;border-radius:8px;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.05em;"><button type="button" onclick="insertIftyKanbunDeviceHandwriting()" style="border:none;background:#059669;color:white;border-radius:8px;padding:9px 12px;font-weight:900;">挿入</button></div><div style="margin-top:4px;font-size:.68em;color:#047857;">ここは端末側の文字入力を使うため、AI画像認識より安定する場合があります。下のキャンバスはAI候補用です。</div></div>`}
     <canvas id="iftyKanbunInputHandwritingCanvas" style="display:block;width:100%;height:320px;margin-top:11px;border:1px solid #94a3b8;border-radius:10px;background:white;touch-action:none;"></canvas>
-    ${iftyKanbunInputHandwritingState.handwritingOnly ? `<div style="display:flex;justify-content:flex-end;align-items:center;margin-top:8px;"><span style="font-size:.7em;color:#64748b;">認識：</span><select id="iftyKanbunHandwritingRecognitionMode" onchange="setIftyKanbunHandwritingRecognitionMode(this.value)" style="border:1px solid #cbd5e1;background:white;border-radius:7px;padding:6px 8px;font-weight:800;color:#334155;"><option value="auto">自動</option><option value="single">1文字</option><option value="sequence">熟語</option></select></div>` : `<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;padding:8px 9px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:9px;"><span style="font-size:.72em;font-weight:900;color:#075985;">句法クイック入力</span>${['A','B','〜','ー'].map(ch => `<button type="button" onclick="insertIftyKanbunHandwritingQuick('${ch}')" style="min-width:42px;border:1px solid #7dd3fc;background:white;color:#0f172a;border-radius:7px;padding:7px 10px;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.05em;font-weight:900;">${ch}</button>`).join('')}<span style="margin-left:auto;font-size:.7em;color:#64748b;">認識：</span><select id="iftyKanbunHandwritingRecognitionMode" onchange="setIftyKanbunHandwritingRecognitionMode(this.value)" style="border:1px solid #cbd5e1;background:white;border-radius:7px;padding:6px 8px;font-weight:800;color:#334155;"><option value="auto">自動</option><option value="single">1文字</option><option value="sequence">短い文字列</option></select></div>`}
-    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;"><button type="button" onclick="undoIftyKanbunInputHandwritingStroke()" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;padding:9px 11px;font-weight:900;">1画戻す</button><button type="button" onclick="clearIftyKanbunInputHandwriting()" style="border:none;background:#fee2e2;color:#991b1b;border-radius:8px;padding:9px 11px;font-weight:900;">全消去</button><button id="iftyKanbunInputHandwritingRecognize" type="button" onclick="recognizeIftyKanbunInputHandwriting()" style="margin-left:auto;border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 12px;font-weight:900;">候補を出す</button></div>
+    ${iftyKanbunInputHandwritingState.handwritingOnly ? `<div style="display:flex;justify-content:flex-end;align-items:center;margin-top:8px;"><span style="font-size:.7em;color:#64748b;">認識：</span><select id="iftyKanbunHandwritingRecognitionMode" onchange="setIftyKanbunHandwritingRecognitionMode(this.value)" style="border:1px solid #cbd5e1;background:white;border-radius:7px;padding:6px 8px;font-weight:800;color:#334155;"><option value="auto">${ifty216Markup("自動","Automatic")}</option><option value="single">1文字</option><option value="sequence">熟語</option></select></div>` : `<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;padding:8px 9px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:9px;"><span style="font-size:.72em;font-weight:900;color:#075985;">句法クイック入力</span>${['A','B','〜','ー'].map(ch => `<button type="button" onclick="insertIftyKanbunHandwritingQuick('${ch}')" style="min-width:42px;border:1px solid #7dd3fc;background:white;color:#0f172a;border-radius:7px;padding:7px 10px;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.05em;font-weight:900;">${ch}</button>`).join('')}<span style="margin-left:auto;font-size:.7em;color:#64748b;">認識：</span><select id="iftyKanbunHandwritingRecognitionMode" onchange="setIftyKanbunHandwritingRecognitionMode(this.value)" style="border:1px solid #cbd5e1;background:white;border-radius:7px;padding:6px 8px;font-weight:800;color:#334155;"><option value="auto">${ifty216Markup("自動","Automatic")}</option><option value="single">1文字</option><option value="sequence">短い文字列</option></select></div>`}
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;"><button type="button" onclick="undoIftyKanbunInputHandwritingStroke()" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;padding:9px 11px;font-weight:900;">${ifty216Markup("1画戻す","Undo one stroke")}</button><button type="button" onclick="clearIftyKanbunInputHandwriting()" style="border:none;background:#fee2e2;color:#991b1b;border-radius:8px;padding:9px 11px;font-weight:900;">${ifty216Markup("全消去","Clear all")}</button><button id="iftyKanbunInputHandwritingRecognize" type="button" onclick="recognizeIftyKanbunInputHandwriting()" style="margin-left:auto;border:none;background:#7c3aed;color:white;border-radius:8px;padding:9px 12px;font-weight:900;">${ifty216Markup("候補を出す","Show candidates")}</button></div>
     <div id="iftyKanbunInputHandwritingCandidates" style="display:none;margin-top:10px;padding:10px;border:1px solid #ddd6fe;background:#faf5ff;border-radius:10px;"></div>
     <div id="iftyKanbunInputHandwritingStatus" style="min-height:1.2em;margin-top:7px;font-size:.76em;color:#64748b;"></div>
   </div>`;
@@ -12748,7 +12230,7 @@ window.recognizeIftyKanbunInputHandwriting = async function() {
     if (status) status.textContent = `認識できませんでした：${String(error.message || error)}`;
   } finally {
     st.recognizing = false;
-    if (button) { button.disabled = false; button.textContent = '候補を出す'; }
+    if (button) { button.disabled = false; button.textContent = ifty216T("候補を出す","Show candidates"); }
   }
 };
 
@@ -12781,13 +12263,13 @@ function renderIftyKanbunDraftReturnMarkEditor() {
   const selectedIsPlaceholder = isIftyKanbunPatternPlaceholderChar(selectedToken);
   const selectedKana = st.selectedIndex >= 0 ? String(st.okurigana?.[st.selectedIndex] || '') : '';
   modal.innerHTML = `<div style="width:min(780px,100%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:15px;box-sizing:border-box;">
-    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>原文に訓点を付ける</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">縦書きの字をタップし、返点と送り仮名を設定します。送り仮名は字の右、返点は左下へ小さく表示します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunDraftReturnMarkModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>${ifty216Markup("原文に訓点を付ける","Annotate the original text")}</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">縦書きの字をタップし、返点と送り仮名を設定します。送り仮名は字の右、返点は左下へ小さく表示します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunDraftReturnMarkModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
     <div style="margin-top:12px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;padding:6px;">${renderIftyKanbunMarkedText(item,{interactive:true,selectedIndex:st.selectedIndex,marks:st.marks,okurigana:st.okurigana,selectFunction:'selectIftyKanbunDraftReturnMarkIndex'})}</div>
-    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;"><button type="button" onclick="moveIftyKanbunDraftReturnMarkSelection(-1)" ${st.selectedIndex <= 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;opacity:${st.selectedIndex <= 0 ? '.45' : '1'};">← 前の字</button><span style="font-size:.78em;color:#475569;font-weight:900;">選択中：${escapeHtml(selectedToken)}</span><button type="button" onclick="moveIftyKanbunDraftReturnMarkSelection(1)" ${st.selectedIndex >= getIftyKanbunTokens(st.text).length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;opacity:${st.selectedIndex >= getIftyKanbunTokens(st.text).length - 1 ? '.45' : '1'};">次の字 →</button></div>
+    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;"><button type="button" onclick="moveIftyKanbunDraftReturnMarkSelection(-1)" ${st.selectedIndex <= 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;opacity:${st.selectedIndex <= 0 ? '.45' : '1'};">${ifty216Markup("← 前の字","← Previous character")}</button><span style="font-size:.78em;color:#475569;font-weight:900;">選択中：${escapeHtml(selectedToken)}</span><button type="button" onclick="moveIftyKanbunDraftReturnMarkSelection(1)" ${st.selectedIndex >= getIftyKanbunTokens(st.text).length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;opacity:${st.selectedIndex >= getIftyKanbunTokens(st.text).length - 1 ? '.45' : '1'};">${ifty216Markup("次の字 →","Next character →")}</button></div>
     ${selectedIsPlaceholder ? '<div style="margin-top:7px;text-align:center;color:#6d28d9;font-size:.76em;font-weight:900;">この字は句法パーツなので訓点は設定しません。前後ボタンでそのまま移動できます。</div>' : ''}
-    <div style="margin-top:12px;padding:10px;border:1px solid #fecaca;border-radius:10px;background:#fff7f7;"><div style="font-size:.76em;font-weight:900;color:#991b1b;margin-bottom:7px;">返点</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark => `<button type="button" onclick="setIftyKanbunDraftReturnMark('${mark}')" style="border:1px solid #fecaca;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;">${renderIftyKanbunReturnMarkGlyph(mark,{compact:true})}</button>`).join('')}<button type="button" onclick="setIftyKanbunDraftReturnMark('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;">消す</button></div></div>
-    <div style="margin-top:10px;padding:10px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:7px;">送り仮名</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"><input id="iftyKanbunDraftOkurigana" value="${escapeHtml(selectedKana)}" placeholder="例：して → シテ" maxlength="12" oninput="normalizeIftyKanbunOkuriganaInput(this,event)" oncompositionend="normalizeIftyKanbunOkuriganaInput(this,event)" onblur="normalizeIftyKanbunOkuriganaInput(this,event)" style="flex:1;min-width:150px;padding:8px;border:1px solid #7dd3fc;border-radius:7px;font-family:serif;"><button type="button" onclick="setIftyKanbunDraftOkurigana(document.getElementById('iftyKanbunDraftOkurigana')?.value||'')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:8px 10px;font-weight:900;">設定</button><button type="button" onclick="setIftyKanbunDraftOkurigana('')" style="border:none;background:#e0f2fe;color:#0369a1;border-radius:7px;padding:8px 10px;font-weight:900;">消す</button></div>${renderIftyKanbunOkuriganaQuickButtons('appendIftyKanbunDraftOkuriganaQuick')}</div>
-    <button type="button" onclick="saveIftyKanbunDraftReturnMarks()" style="width:100%;margin-top:13px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:10px;font-weight:900;">訓点を保存</button>
+    <div style="margin-top:12px;padding:10px;border:1px solid #fecaca;border-radius:10px;background:#fff7f7;"><div style="font-size:.76em;font-weight:900;color:#991b1b;margin-bottom:7px;">${ifty216Markup("返点","Reading marks")}</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark => `<button type="button" onclick="setIftyKanbunDraftReturnMark('${mark}')" style="border:1px solid #fecaca;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;">${renderIftyKanbunReturnMarkGlyph(mark,{compact:true})}</button>`).join('')}<button type="button" onclick="setIftyKanbunDraftReturnMark('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;">${ifty216Markup("消す","Clear")}</button></div></div>
+    <div style="margin-top:10px;padding:10px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:7px;">${ifty216Markup("送り仮名","Reading suffix")}</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"><input id="iftyKanbunDraftOkurigana" value="${escapeHtml(selectedKana)}" placeholder="例：して → シテ" maxlength="12" oninput="normalizeIftyKanbunOkuriganaInput(this,event)" oncompositionend="normalizeIftyKanbunOkuriganaInput(this,event)" onblur="normalizeIftyKanbunOkuriganaInput(this,event)" style="flex:1;min-width:150px;padding:8px;border:1px solid #7dd3fc;border-radius:7px;font-family:serif;"><button type="button" onclick="setIftyKanbunDraftOkurigana(document.getElementById('iftyKanbunDraftOkurigana')?.value||'')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:8px 10px;font-weight:900;">${ifty216Markup("設定","Settings")}</button><button type="button" onclick="setIftyKanbunDraftOkurigana('')" style="border:none;background:#e0f2fe;color:#0369a1;border-radius:7px;padding:8px 10px;font-weight:900;">${ifty216Markup("消す","Clear")}</button></div>${renderIftyKanbunOkuriganaQuickButtons('appendIftyKanbunDraftOkuriganaQuick')}</div>
+    <button type="button" onclick="saveIftyKanbunDraftReturnMarks()" style="width:100%;margin-top:13px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:10px;font-weight:900;">${ifty216Markup("訓点を保存","Save reading marks")}</button>
   </div>`;
 }
 
@@ -12857,12 +12339,12 @@ function renderIftyKanbunFolder(folder, folderIndex) {
         <span style="font-size:.72em;color:#64748b;">${(folder.items || []).length}題</span>
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
-        <button type="button" onclick="toggleIftySubjectFolderItemsSelection('KANBUN','${folder.id}')" style="border:none;background:${allSelected ? '#dbeafe' : '#f1f5f9'};color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">${allSelected ? '選択解除' : '全選択'}</button>
+        <button type="button" onclick="toggleIftySubjectFolderItemsSelection('KANBUN','${folder.id}')" style="border:none;background:${allSelected ? '#dbeafe' : '#f1f5f9'};color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;cursor:pointer;">${allSelected ? ifty216T("選択解除","Clear selection") : ifty216T("全選択","Select all")}</button>
         <button type="button" onclick="moveIftyKanbunFolder(${folderIndex},-1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;cursor:pointer;">↑</button>
         <button type="button" onclick="moveIftyKanbunFolder(${folderIndex},1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;cursor:pointer;">↓</button>
 ${ifty132RegenerateFolderButton('KANBUN',folder.id,(folder.items||[]).length)}
         ${ifty135ThemeButton('KANBUN',folder)}<button type="button" onclick="renameIftyKanbunFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 8px;cursor:pointer;">✏️ 名前変更</button>
-        <button type="button" onclick="deleteIftyKanbunFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 8px;cursor:pointer;">削除</button>
+        <button type="button" onclick="deleteIftyKanbunFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 8px;cursor:pointer;">${ifty216Markup("削除","Delete")}</button>
       </div>
     </div>
     ${folder.collapsed ? '' : `<div style="margin-top:10px;display:grid;gap:8px;">
@@ -12879,7 +12361,7 @@ ${ifty132RegenerateFolderButton('KANBUN',folder.id,(folder.items||[]).length)}
           </div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-          <button type="button" onclick="openIftyKanbunInputHandwriting('iftyKanbunText_${folder.id}','${folder.id}')" style="border:none;background:#0f766e;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">✍️ 手書き</button>
+          <button type="button" onclick="openIftyKanbunInputHandwriting('iftyKanbunText_${folder.id}','${folder.id}')" style="border:none;background:#0f766e;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${ifty216Markup("✍️ 手書き","✍️ Handwriting")}</button>
           <button type="button" onclick="openIftyKanbunDraftReturnMarkEditor('${folder.id}')" style="border:none;background:#b91c1c;color:white;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">返点・送り仮名</button>
           <span id="iftyKanbunDraftMarkCount_${folder.id}" style="font-size:.74em;color:#991b1b;font-weight:900;">${(() => { const d=iftyKanbunDraftReturnMarks[String(folder.id)]; if(!(d && String(d.text||'')===String(iftyKanbunTextDrafts[folder.id]||'').trim())) return ''; const mc=Array.isArray(d.marks)?d.marks.filter(Boolean).length:0; const kc=Array.isArray(d.okurigana)?d.okurigana.filter(Boolean).length:0; return (mc||kc)?`返点 ${mc} / 送り仮名 ${kc}`:''; })()}</span>
           <button type="button" onclick="generateIftyKanbunItem('${folder.id}')" style="margin-left:auto;border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 13px;font-weight:900;cursor:pointer;min-height:42px;">＋ 追加（ALLIA）</button>
@@ -12914,8 +12396,8 @@ window.renderIftyKanbunPage = function(options = {}) {
   const module = getIftyKanbunModule();
   showIftyHubContent(`<section class="ifty-portal-shell">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-      <div><h1 class="ifty-portal-title">KANBUN</h1><div class="ifty-portal-subtitle">漢文原文・書き下し文・現代語訳・返点をまとめて学習します。</div></div>
-      <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+      <div><h1 class="ifty-portal-title">${ifty216Markup("漢文","KANBUN")}</h1><div class="ifty-portal-subtitle">漢文原文・書き下し文・現代語訳・返点をまとめて学習します。</div></div>
+      <button class="ifty-portal-back" type="button" onclick="openIftyHome()">${ifty216Markup("HOMEへ戻る","Back to Home")}</button>
     </div>
     ${renderIftySubjectHeaderActions('KANBUN')}
     <div style="margin-top:8px;color:#64748b;font-size:.8em;line-height:1.5;">原文や句法はキーボード入力に加えて、手書き認識で漢字を入力できます。句法では「主語 S・目的語 O・補語 C・述語 V・空所 ━」をボタンで挿入できます。原文は生成前に「返点・送り仮名」からレ点・一二三点・甲乙点・上中下点と送り仮名を字ごとに設定できます。右側のプレビューは常に縦書きで、上から下・列は右から左です。明確な誤入力候補がある場合だけ「もしかして」で確認します。</div>
@@ -12926,7 +12408,7 @@ window.renderIftyKanbunPage = function(options = {}) {
     </div>
     <div style="margin-top:10px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
       <input id="iftyKanbunSearchInput" value="${escapeHtml(iftyKanbunSearchQuery)}" placeholder="漢文・書き下し・訳・句法を検索" oninput="applyIftyKanbunSearch(this.value)" style="flex:1;min-width:210px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">
-      <button type="button" onclick="iftyKanbunSearchQuery='';const e=document.getElementById('iftyKanbunSearchInput');if(e)e.value='';applyIftyKanbunSearch('')" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">クリア</button>
+      <button type="button" onclick="iftyKanbunSearchQuery='';const e=document.getElementById('iftyKanbunSearchInput');if(e)e.value='';applyIftyKanbunSearch('')" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${ifty216Markup("クリア","Clear")}</button>
       <span id="iftyKanbunSearchCount" style="font-size:.78em;color:#64748b;font-weight:800;">${countIftyKanbunItems()}題</span>
     </div>
     ${renderIftySubjectSelectionToolbar('KANBUN')}
@@ -13079,10 +12561,10 @@ window.openIftyKanbunItemEditor = function(folderId,itemId){
   const modal=document.createElement('div');modal.id='iftyKanbunEditorModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12140;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';
   const field=(id,label,value,rows=1,assist=false)=>{
     const control=rows>1?`<textarea id="${id}" rows="${rows}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;resize:vertical;${id==='iftyKanbunEditOriginal'?'font-family:serif;':''}">${escapeHtml(value||'')}</textarea>`:`<input id="${id}" value="${escapeHtml(value||'')}" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">`;
-    const tools=assist?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;"><button type="button" onclick="openIftyKanbunInputHandwriting('${id}','${folderId}')" style="border:none;background:#0f766e;color:white;border-radius:6px;padding:6px 8px;font-size:.76em;font-weight:900;">✍️ 手書き</button>${id==='iftyKanbunEditOriginal'?`<button type="button" onclick="openIftyKanbunItemEditorKunten('${folderId}','${itemId}')" style="border:none;background:#b91c1c;color:white;border-radius:6px;padding:6px 8px;font-size:.76em;font-weight:900;">訓点を編集</button>`:`<button type="button" onclick="openIftyKanbunReturnMarkInputPalette('${id}')" style="border:none;background:#b91c1c;color:white;border-radius:6px;padding:6px 8px;font-size:.76em;font-weight:900;">返点記号を入力</button>`}</div>${id==='iftyKanbunEditOriginal'?renderIftyKanbunPatternQuickButtons(id):''}`:'';
+    const tools=assist?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;"><button type="button" onclick="openIftyKanbunInputHandwriting('${id}','${folderId}')" style="border:none;background:#0f766e;color:white;border-radius:6px;padding:6px 8px;font-size:.76em;font-weight:900;">${ifty216Markup("✍️ 手書き","✍️ Handwriting")}</button>${id==='iftyKanbunEditOriginal'?`<button type="button" onclick="openIftyKanbunItemEditorKunten('${folderId}','${itemId}')" style="border:none;background:#b91c1c;color:white;border-radius:6px;padding:6px 8px;font-size:.76em;font-weight:900;">訓点を編集</button>`:`<button type="button" onclick="openIftyKanbunReturnMarkInputPalette('${id}')" style="border:none;background:#b91c1c;color:white;border-radius:6px;padding:6px 8px;font-size:.76em;font-weight:900;">返点記号を入力</button>`}</div>${id==='iftyKanbunEditOriginal'?renderIftyKanbunPatternQuickButtons(id):''}`:'';
     return `<div><label style="font-size:.78em;font-weight:900;color:#334155;">${label}</label>${control}${tools}</div>`;
   };
-  modal.innerHTML=`<div style="width:min(720px,100%);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><h2 style="margin:0;font-size:1.2em;">漢文を編集</h2><button type="button" onclick="document.getElementById('iftyKanbunEditorModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="display:grid;gap:10px;margin-top:12px;">${field('iftyKanbunEditTitle','題名',item.title)}${ifty132AliasField(item, 'ifty132KanbunAliases')}${field('iftyKanbunEditOriginal','原文',item.originalText,4,true)}${field('iftyKanbunEditKundoku','書き下し文',item.kundoku,4,true)}${field('iftyKanbunEditTranslation','現代語訳',item.translation,4,true)}${field('iftyKanbunEditGrammar','句法・文法（1行1つ）',(item.grammarPoints||[]).join('\n'),4,true)}${field('iftyKanbunEditExamples','例文（1行＝原文｜書き下し｜現代語訳｜ポイント）',(item.examples||[]).map(ex=>[ex.original||'',ex.kundoku||'',ex.translation||'',ex.point||''].join('｜')).join('\n'),4,true)}${field('iftyKanbunEditPoints','重要ポイント（1行1つ）',(item.keyPoints||[]).join('\n'),4,true)}<div style="font-size:.78em;color:#64748b;line-height:1.5;">原文の返点・送り仮名は「訓点を編集」で字ごとに設定し、原文の文字列とは別データで保存します。句法説明などでは「返点記号を入力」で記号そのものを挿入できます。</div></div><button type="button" onclick="saveIftyKanbunItemEditor('${folderId}','${itemId}')" style="width:100%;margin-top:14px;border:none;background:#0284c7;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">保存</button></div>`;
+  modal.innerHTML=`<div style="width:min(720px,100%);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><h2 style="margin:0;font-size:1.2em;">漢文を編集</h2><button type="button" onclick="document.getElementById('iftyKanbunEditorModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="display:grid;gap:10px;margin-top:12px;">${field('iftyKanbunEditTitle','題名',item.title)}${ifty132AliasField(item, 'ifty132KanbunAliases')}${field('iftyKanbunEditOriginal','原文',item.originalText,4,true)}${field('iftyKanbunEditKundoku','書き下し文',item.kundoku,4,true)}${field('iftyKanbunEditTranslation','現代語訳',item.translation,4,true)}${field('iftyKanbunEditGrammar','句法・文法（1行1つ）',(item.grammarPoints||[]).join('\n'),4,true)}${field('iftyKanbunEditExamples','例文（1行＝原文｜書き下し｜現代語訳｜ポイント）',(item.examples||[]).map(ex=>[ex.original||'',ex.kundoku||'',ex.translation||'',ex.point||''].join('｜')).join('\n'),4,true)}${field('iftyKanbunEditPoints','重要ポイント（1行1つ）',(item.keyPoints||[]).join('\n'),4,true)}<div style="font-size:.78em;color:#64748b;line-height:1.5;">原文の返点・送り仮名は「訓点を編集」で字ごとに設定し、原文の文字列とは別データで保存します。句法説明などでは「返点記号を入力」で記号そのものを挿入できます。</div></div><button type="button" onclick="saveIftyKanbunItemEditor('${folderId}','${itemId}')" style="width:100%;margin-top:14px;border:none;background:#0284c7;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">${ifty216Markup("保存","Save")}</button></div>`;
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});document.body.appendChild(modal);
 };
 
@@ -13130,7 +12612,7 @@ function renderIftyKanbunReturnMarkEditor(){
   const selectedIsPlaceholder=isIftyKanbunPatternPlaceholderChar(selectedToken);
   const selectedKana=st.selectedIndex>=0?String(st.okurigana?.[st.selectedIndex]||''):'';
   const renderItem=st.source==='editor'?{originalText:String(st.text||''),returnMarks:[],okurigana:[]}:ref.item;
-  modal.innerHTML=`<div style="width:min(780px,100%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><h2 style="margin:0;font-size:1.2em;">訓点を付ける</h2><div style="font-size:.78em;color:#64748b;margin-top:3px;">縦書きの字をタップ → 返点と送り仮名を設定。返点は原文の文字とは別データで保存します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunReturnMarkModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="margin-top:14px;border:1px solid #e2e8f0;border-radius:10px;padding:6px;">${renderIftyKanbunMarkedText(renderItem,{interactive:true,selectedIndex:st.selectedIndex,marks:st.marks,okurigana:st.okurigana})}</div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;"><button type="button" onclick="moveIftyKanbunReturnMarkSelection(-1)" ${st.selectedIndex <= 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;opacity:${st.selectedIndex <= 0 ? '.45' : '1'};">← 前の字</button><span style="font-size:.78em;color:#475569;font-weight:900;">選択中：${escapeHtml(selectedToken)}</span><button type="button" onclick="moveIftyKanbunReturnMarkSelection(1)" ${st.selectedIndex >= getIftyKanbunTokens(st.text).length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;opacity:${st.selectedIndex >= getIftyKanbunTokens(st.text).length - 1 ? '.45' : '1'};">次の字 →</button></div>${selectedIsPlaceholder ? '<div style="margin-top:7px;text-align:center;color:#6d28d9;font-size:.76em;font-weight:900;">この字は句法パーツなので訓点は設定しません。前後ボタンでそのまま移動できます。</div>' : ''}<div style="margin-top:14px;padding:11px;border:1px solid #fecaca;border-radius:10px;background:#fff7f7;"><div style="font-size:.76em;font-weight:900;color:#991b1b;margin-bottom:8px;">返点</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark=>`<button type="button" onclick="setIftyKanbunReturnMarkDraft('${mark}')" style="border:1px solid #cbd5e1;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${renderIftyKanbunReturnMarkGlyph(mark,{compact:true})}</button>`).join('')}<button type="button" onclick="setIftyKanbunReturnMarkDraft('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">消す</button></div></div><div style="margin-top:10px;padding:11px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:8px;">送り仮名</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"><input id="iftyKanbunItemOkurigana" value="${escapeHtml(selectedKana)}" placeholder="例：して → シテ" maxlength="12" oninput="normalizeIftyKanbunOkuriganaInput(this,event)" oncompositionend="normalizeIftyKanbunOkuriganaInput(this,event)" onblur="normalizeIftyKanbunOkuriganaInput(this,event)" style="flex:1;min-width:150px;padding:8px;border:1px solid #7dd3fc;border-radius:7px;font-family:serif;"><button type="button" onclick="setIftyKanbunOkuriganaDraft(document.getElementById('iftyKanbunItemOkurigana')?.value||'')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:8px 10px;font-weight:900;">設定</button><button type="button" onclick="setIftyKanbunOkuriganaDraft('')" style="border:none;background:#e0f2fe;color:#0369a1;border-radius:7px;padding:8px 10px;font-weight:900;">消す</button></div>${renderIftyKanbunOkuriganaQuickButtons('appendIftyKanbunItemOkuriganaQuick')}</div><button type="button" onclick="saveIftyKanbunReturnMarks()" style="width:100%;margin-top:14px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">訓点を保存</button></div>`;
+  modal.innerHTML=`<div style="width:min(780px,100%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:18px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><h2 style="margin:0;font-size:1.2em;">訓点を付ける</h2><div style="font-size:.78em;color:#64748b;margin-top:3px;">縦書きの字をタップ → 返点と送り仮名を設定。返点は原文の文字とは別データで保存します。</div></div><button type="button" onclick="document.getElementById('iftyKanbunReturnMarkModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;font-weight:900;cursor:pointer;">×</button></div><div style="margin-top:14px;border:1px solid #e2e8f0;border-radius:10px;padding:6px;">${renderIftyKanbunMarkedText(renderItem,{interactive:true,selectedIndex:st.selectedIndex,marks:st.marks,okurigana:st.okurigana})}</div><div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;"><button type="button" onclick="moveIftyKanbunReturnMarkSelection(-1)" ${st.selectedIndex <= 0 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;opacity:${st.selectedIndex <= 0 ? '.45' : '1'};">${ifty216Markup("← 前の字","← Previous character")}</button><span style="font-size:.78em;color:#475569;font-weight:900;">選択中：${escapeHtml(selectedToken)}</span><button type="button" onclick="moveIftyKanbunReturnMarkSelection(1)" ${st.selectedIndex >= getIftyKanbunTokens(st.text).length - 1 ? 'disabled' : ''} style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 11px;font-weight:900;opacity:${st.selectedIndex >= getIftyKanbunTokens(st.text).length - 1 ? '.45' : '1'};">${ifty216Markup("次の字 →","Next character →")}</button></div>${selectedIsPlaceholder ? '<div style="margin-top:7px;text-align:center;color:#6d28d9;font-size:.76em;font-weight:900;">この字は句法パーツなので訓点は設定しません。前後ボタンでそのまま移動できます。</div>' : ''}<div style="margin-top:14px;padding:11px;border:1px solid #fecaca;border-radius:10px;background:#fff7f7;"><div style="font-size:.76em;font-weight:900;color:#991b1b;margin-bottom:8px;">${ifty216Markup("返点","Reading marks")}</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${palette.map(mark=>`<button type="button" onclick="setIftyKanbunReturnMarkDraft('${mark}')" style="border:1px solid #cbd5e1;background:white;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${renderIftyKanbunReturnMarkGlyph(mark,{compact:true})}</button>`).join('')}<button type="button" onclick="setIftyKanbunReturnMarkDraft('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:8px 10px;font-weight:900;cursor:pointer;">${ifty216Markup("消す","Clear")}</button></div></div><div style="margin-top:10px;padding:11px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:8px;">${ifty216Markup("送り仮名","Reading suffix")}</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"><input id="iftyKanbunItemOkurigana" value="${escapeHtml(selectedKana)}" placeholder="例：して → シテ" maxlength="12" oninput="normalizeIftyKanbunOkuriganaInput(this,event)" oncompositionend="normalizeIftyKanbunOkuriganaInput(this,event)" onblur="normalizeIftyKanbunOkuriganaInput(this,event)" style="flex:1;min-width:150px;padding:8px;border:1px solid #7dd3fc;border-radius:7px;font-family:serif;"><button type="button" onclick="setIftyKanbunOkuriganaDraft(document.getElementById('iftyKanbunItemOkurigana')?.value||'')" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:8px 10px;font-weight:900;">${ifty216Markup("設定","Settings")}</button><button type="button" onclick="setIftyKanbunOkuriganaDraft('')" style="border:none;background:#e0f2fe;color:#0369a1;border-radius:7px;padding:8px 10px;font-weight:900;">${ifty216Markup("消す","Clear")}</button></div>${renderIftyKanbunOkuriganaQuickButtons('appendIftyKanbunItemOkuriganaQuick')}</div><button type="button" onclick="saveIftyKanbunReturnMarks()" style="width:100%;margin-top:14px;border:none;background:#b91c1c;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">${ifty216Markup("訓点を保存","Save reading marks")}</button></div>`;
 }
 
 window.openIftyKanbunReturnMarkEditor=function(folderId,itemId){const ref=getIftyKanbunItemById(itemId);if(!ref?.item||String(ref.folder.id)!==String(folderId))return;document.getElementById('iftyKanbunReturnMarkModal')?.remove();iftyKanbunReturnMarkEditorState={source:'item',folderId:String(folderId),itemId:String(itemId),text:String(ref.item.originalText||''),selectedIndex:getFirstIftyKanbunSelectableIndex(String(ref.item.originalText||'')),marks:getIftyKanbunMarkArray(ref.item),okurigana:getIftyKanbunOkuriganaArray(ref.item)};const modal=document.createElement('div');modal.id='iftyKanbunReturnMarkModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12150;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});document.body.appendChild(modal);renderIftyKanbunReturnMarkEditor();};
@@ -13417,7 +12899,7 @@ function renderIftyKanbunPracticePlayer(){
       <section class="ifty-portal-shell">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
           <div><h1 class="ifty-portal-title" style="color:${meta.color};">KANBUN PRACTICE 完了</h1><div class="ifty-portal-subtitle">正解 ${st.correct}　要復習 ${st.wrong}　分からない ${st.unknown||0}</div></div>
-          <button class="ifty-portal-back" type="button" onclick="openIftyKanbunPractice()">PRACTICEへ戻る</button>
+          <button class="ifty-portal-back" type="button" onclick="openIftyKanbunPractice()">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button>
         </div>
         <div style="margin-top:15px;padding:22px;border:1px solid #cbd5e1;border-radius:12px;background:white;text-align:center;">
           <div style="font-size:1.35em;font-weight:900;color:#0f766e;">${st.correct}正解 / ${st.wrong}要復習 / ${st.unknown||0}分からない</div>
@@ -13433,7 +12915,7 @@ function renderIftyKanbunPracticePlayer(){
   const answered=st.answered;
   const canChallenge=answered&&!st.correctLast&&['translation','kundoku','cloze'].includes(currentMode)&&st.lastSubmission&&!st.lastSubmission.challenged;
   const challengeArea=canChallenge?`<div style="margin-top:12px;padding:11px;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;"><div style="font-weight:900;color:#92400e;">⚖️ Challenge</div><textarea id="iftyKanbunChallengeReason" rows="2" placeholder="採点に異議がある場合の理由（任意）" style="width:100%;box-sizing:border-box;margin-top:7px;padding:9px;border:1px solid #f59e0b;border-radius:7px;resize:vertical;"></textarea><button type="button" onclick="submitIftyKanbunPracticeChallenge()" ${st.challengePending?'disabled':''} style="width:100%;margin-top:7px;border:none;background:#d97706;color:white;border-radius:7px;padding:9px;font-weight:900;cursor:${st.challengePending?'wait':'pointer'};opacity:${st.challengePending?'.6':'1'};">${st.challengePending?'ALLIAが再審査中…':'Challenge（ALLIA）'}</button></div>`:'';
-  const result=answered?`<div style="margin-top:12px;padding:11px;border:1px solid ${st.correctLast?'#86efac':'#fecaca'};background:${st.correctLast?'#f0fdf4':'#fef2f2'};border-radius:9px;"><div style="font-weight:900;color:${st.correctLast?'#166534':'#b91c1c'};">${st.unknownLast?'？ 分からない':st.correctLast?'⭕ 正解':'❌ 要復習'}</div>${st.feedback?`<div style="margin-top:5px;color:#334155;line-height:1.5;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:7px;color:#475569;font-size:.84em;white-space:pre-wrap;"><strong>解答例：</strong>${escapeHtml(st.modelAnswer)}</div>`:''}${currentMode==='kaeriten'?`<div style="margin-top:9px;">${renderIftyKanbunMarkedText({originalText:q.originalText,returnMarks:q.returnMarks})}</div>`:''}${challengeArea}</div>`:'';
+  const result=answered?`<div style="margin-top:12px;padding:11px;border:1px solid ${st.correctLast?'#86efac':'#fecaca'};background:${st.correctLast?'#f0fdf4':'#fef2f2'};border-radius:9px;"><div style="font-weight:900;color:${st.correctLast?'#166534':'#b91c1c'};">${st.unknownLast?ifty216T("？ 分からない","? Don't know"):st.correctLast?ifty216T("⭕ 正解","⭕ Correct"):'❌ 要復習'}</div>${st.feedback?`<div style="margin-top:5px;color:#334155;line-height:1.5;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:7px;color:#475569;font-size:.84em;white-space:pre-wrap;"><strong>解答例：</strong>${escapeHtml(st.modelAnswer)}</div>`:''}${currentMode==='kaeriten'?`<div style="margin-top:9px;">${renderIftyKanbunMarkedText({originalText:q.originalText,returnMarks:q.returnMarks})}</div>`:''}${challengeArea}</div>`:'';
 
   let questionBlock='';
   if(currentMode==='simple'){
@@ -13450,26 +12932,26 @@ function renderIftyKanbunPracticePlayer(){
   }else if(currentMode==='same_meaning'){
     const selectedSet=new Set((st.selectedEquivalentIds||[]).map(String));
     const correctSet=new Set((q.correctOptionIds||[]).map(String));
-    answerArea=`<div style="margin-top:14px;"><div style="font-size:.78em;color:#64748b;margin-bottom:7px;">当てはまるものをすべて選択してください。</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;">${(q.options||[]).map(opt=>{const id=String(opt.id||'');const chosen=selectedSet.has(id);const isCorrect=answered&&correctSet.has(id);const isWrongPick=answered&&chosen&&!correctSet.has(id);const border=answered?(isCorrect?'#22c55e':(isWrongPick?'#ef4444':'#cbd5e1')):(chosen?'#0f766e':'#99f6e4');const bg=answered?(isCorrect?'#f0fdf4':(isWrongPick?'#fef2f2':'white')):(chosen?'#ccfbf1':'white');return `<button type="button" onclick="toggleIftyKanbunPracticeEquivalent('${escapeHtml(id.replace(/'/g,"\\'"))}')" ${answered?'disabled':''} style="border:2px solid ${border};background:${bg};color:#0f172a;border-radius:10px;padding:14px 10px;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.45em;font-weight:900;cursor:${answered?'default':'pointer'};">${escapeHtml(opt.label||'')}</button>`;}).join('')}</div>${answered?'':`<div style="text-align:right;margin-top:10px;"><button type="button" onclick="submitIftyKanbunPracticeEquivalent()" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">回答する</button></div>`}</div>`;
+    answerArea=`<div style="margin-top:14px;"><div style="font-size:.78em;color:#64748b;margin-bottom:7px;">当てはまるものをすべて選択してください。</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;">${(q.options||[]).map(opt=>{const id=String(opt.id||'');const chosen=selectedSet.has(id);const isCorrect=answered&&correctSet.has(id);const isWrongPick=answered&&chosen&&!correctSet.has(id);const border=answered?(isCorrect?'#22c55e':(isWrongPick?'#ef4444':'#cbd5e1')):(chosen?'#0f766e':'#99f6e4');const bg=answered?(isCorrect?'#f0fdf4':(isWrongPick?'#fef2f2':'white')):(chosen?'#ccfbf1':'white');return `<button type="button" onclick="toggleIftyKanbunPracticeEquivalent('${escapeHtml(id.replace(/'/g,"\\'"))}')" ${answered?'disabled':''} style="border:2px solid ${border};background:${bg};color:#0f172a;border-radius:10px;padding:14px 10px;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.45em;font-weight:900;cursor:${answered?'default':'pointer'};">${escapeHtml(opt.label||'')}</button>`;}).join('')}</div>${answered?'':`<div style="text-align:right;margin-top:10px;"><button type="button" onclick="submitIftyKanbunPracticeEquivalent()" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">${ifty216Markup("回答する","Submit answer")}</button></div>`}</div>`;
   }else if(currentMode==='kaeriten'){
-    answerArea=`<div style="margin-top:14px;"><div style="font-size:.78em;color:#64748b;margin-bottom:7px;">字をタップして返点を選んでください。</div>${renderIftyKanbunPracticeMarks(q,st)}${answered?'':`<div style="text-align:right;margin-top:10px;"><button type="button" onclick="submitIftyKanbunPracticeKaeriten()" style="border:none;background:#b91c1c;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">回答する</button></div>`}</div>`;
+    answerArea=`<div style="margin-top:14px;"><div style="font-size:.78em;color:#64748b;margin-bottom:7px;">字をタップして返点を選んでください。</div>${renderIftyKanbunPracticeMarks(q,st)}${answered?'':`<div style="text-align:right;margin-top:10px;"><button type="button" onclick="submitIftyKanbunPracticeKaeriten()" style="border:none;background:#b91c1c;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">${ifty216Markup("回答する","Submit answer")}</button></div>`}</div>`;
   }else{
     const placeholder=currentMode==='cloze'?'空欄に入る語句を答える':'ここに回答を書く（手書きだけでも可）';
-    answerArea=`<div style="margin-top:14px;"><textarea id="iftyKanbunPracticeAnswer" rows="${currentMode==='cloze'?2:4}" placeholder="${placeholder}" ${answered?'disabled':''} style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;resize:vertical;"></textarea><div style="margin-top:9px;padding:9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;"><b style="font-size:.82em;color:#334155;">✍️ 手書き</b><div style="display:flex;gap:6px;"><button type="button" onclick="undoIftyKanbunHandwriting()" ${answered?'disabled':''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;">1つ戻す</button><button type="button" onclick="clearIftyKanbunHandwriting()" ${answered?'disabled':''} style="border:none;background:#fee2e2;color:#991b1b;border-radius:6px;padding:6px 8px;font-weight:900;">消す</button></div></div><canvas id="iftyKanbunHandwritingCanvas" style="display:block;width:100%;height:${currentMode==='cloze'?'180':'250'}px;margin-top:8px;background:white;border:1px dashed #94a3b8;border-radius:8px;"></canvas><div style="margin-top:5px;color:#64748b;font-size:.7em;">指・Apple Pencil等で書けます。手書き画像は採点時だけALLIAへ送ります。</div></div>${answered?'':`<div style="text-align:right;margin-top:10px;"><button type="button" onclick="submitIftyKanbunPracticeWritten()" style="border:none;background:${meta.color};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">回答する</button></div>`}<div id="iftyKanbunPracticeGradeStatus" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.76em;"></div></div>`;
+    answerArea=`<div style="margin-top:14px;"><textarea id="iftyKanbunPracticeAnswer" rows="${currentMode==='cloze'?2:4}" placeholder="${placeholder}" ${answered?'disabled':''} style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;resize:vertical;"></textarea><div style="margin-top:9px;padding:9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;"><b style="font-size:.82em;color:#334155;">${ifty216Markup("✍️ 手書き","✍️ Handwriting")}</b><div style="display:flex;gap:6px;"><button type="button" onclick="undoIftyKanbunHandwriting()" ${answered?'disabled':''} style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:6px 8px;font-weight:900;">${ifty216Markup("1つ戻す","Undo")}</button><button type="button" onclick="clearIftyKanbunHandwriting()" ${answered?'disabled':''} style="border:none;background:#fee2e2;color:#991b1b;border-radius:6px;padding:6px 8px;font-weight:900;">${ifty216Markup("消す","Clear")}</button></div></div><canvas id="iftyKanbunHandwritingCanvas" style="display:block;width:100%;height:${currentMode==='cloze'?'180':'250'}px;margin-top:8px;background:white;border:1px dashed #94a3b8;border-radius:8px;"></canvas><div style="margin-top:5px;color:#64748b;font-size:.7em;">指・Apple Pencil等で書けます。手書き画像は採点時だけALLIAへ送ります。</div></div>${answered?'':`<div style="text-align:right;margin-top:10px;"><button type="button" onclick="submitIftyKanbunPracticeWritten()" style="border:none;background:${meta.color};color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">${ifty216Markup("回答する","Submit answer")}</button></div>`}<div id="iftyKanbunPracticeGradeStatus" style="min-height:1.2em;margin-top:6px;color:#64748b;font-size:.76em;"></div></div>`;
   }
 
   showIftyHubContent(`
     <section class="ifty-portal-shell">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
-        <div><h1 class="ifty-portal-title" style="color:${meta.color};">${escapeHtml(meta.title)}</h1><div class="ifty-portal-subtitle">${st.index+1} / ${st.questions.length}　正解 ${st.correct}　要復習 ${st.wrong}　分からない ${st.unknown||0}</div></div>
-        <button class="ifty-portal-back" type="button" onclick="openIftyKanbunPractice()">終了</button>
+        <div><h1 class="ifty-portal-title" style="color:${meta.color};">${escapeHtml(ifty216Ui(meta.title))}</h1><div class="ifty-portal-subtitle">${st.index+1} / ${st.questions.length}　正解 ${st.correct}　要復習 ${st.wrong}　分からない ${st.unknown||0}</div></div>
+        <button class="ifty-portal-back" type="button" onclick="openIftyKanbunPractice()">${ifty216Markup("終了","End")}</button>
       </div>
       <div style="margin-top:15px;padding:15px;border:1px solid #cbd5e1;border-radius:12px;background:white;">
         ${questionBlock}
-        <div style="margin-top:9px;color:#475569;font-size:.84em;">${escapeHtml(meta.description)}</div>
-        <button type="button" onclick="openIftyKanbunQuestionHelp()" style="margin-top:9px;border:1px solid #c4b5fd;background:#faf5ff;color:#6d28d9;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">🤖 ALLIAに質問</button>
-        ${answerArea}${!answered?`<button type="button" onclick="ifty182UnknownKanbun()" style="width:100%;margin-top:12px;padding:12px;background:#475569;color:white;border:1px solid #94a3b8;border-radius:8px;font-weight:850;">？ 分からない（答えを見る）</button>`:''}${result}
-        ${answered?`<div style="text-align:right;margin-top:12px;"><button type="button" onclick="nextIftyKanbunPracticeQuestion()" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">次の問題</button></div>`:''}
+        <div style="margin-top:9px;color:#475569;font-size:.84em;">${escapeHtml(ifty216Ui(meta.description))}</div>
+        <button type="button" onclick="openIftyKanbunQuestionHelp()" style="margin-top:9px;border:1px solid #c4b5fd;background:#faf5ff;color:#6d28d9;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${ifty216Markup("🤖 ALLIAに質問","🤖 Ask ALLIA")}</button>
+        ${answerArea}${!answered?`<button type="button" onclick="ifty182UnknownKanbun()" style="width:100%;margin-top:12px;padding:12px;background:#475569;color:white;border:1px solid #94a3b8;border-radius:8px;font-weight:850;">${ifty216Markup("？ 分からない（答えを見る）","? Don't know (show answer)")}</button>`:''}${result}
+        ${answered?`<div style="text-align:right;margin-top:12px;"><button type="button" onclick="nextIftyKanbunPracticeQuestion()" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:pointer;">${ifty216Markup("次の問題","Next question")}</button></div>`:''}
       </div>
     </section>
   `,'kanbun-practice');
@@ -13492,7 +12974,7 @@ window.openIftyKanbunPractice=function(){
 function renderIftyKanbunPracticeMarks(q,st){
   const palette=getIftyKanbunInputReturnMarkPalette();
   const fake={originalText:q.originalText,returnMarks:[]};
-  return `<div>${renderIftyKanbunMarkedText(fake,{interactive:true,selectedIndex:st.selectedMarkIndex,marks:st.answerMarks,selectFunction:'selectIftyKanbunPracticeMarkIndex'})}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">${palette.map(mark=>`<button type="button" onclick="chooseIftyKanbunPracticeMark('${mark}')" style="border:1px solid #fecaca;background:#fff;color:#991b1b;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${renderIftyKanbunReturnMarkGlyph(mark,{compact:true})}</button>`).join('')}<button type="button" onclick="chooseIftyKanbunPracticeMark('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">消す</button></div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;"><input id="iftyKanbunPracticeCustomMark" placeholder="その他の返点" maxlength="6" style="flex:1;min-width:130px;padding:7px 8px;border:1px solid #cbd5e1;border-radius:7px;"><button type="button" onclick="chooseIftyKanbunPracticeMark(document.getElementById('iftyKanbunPracticeCustomMark')?.value||'')" style="border:none;background:#64748b;color:white;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">設定</button></div>`;
+  return `<div>${renderIftyKanbunMarkedText(fake,{interactive:true,selectedIndex:st.selectedMarkIndex,marks:st.answerMarks,selectFunction:'selectIftyKanbunPracticeMarkIndex'})}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">${palette.map(mark=>`<button type="button" onclick="chooseIftyKanbunPracticeMark('${mark}')" style="border:1px solid #fecaca;background:#fff;color:#991b1b;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${renderIftyKanbunReturnMarkGlyph(mark,{compact:true})}</button>`).join('')}<button type="button" onclick="chooseIftyKanbunPracticeMark('')" style="border:none;background:#fee2e2;color:#991b1b;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${ifty216Markup("消す","Clear")}</button></div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;"><input id="iftyKanbunPracticeCustomMark" placeholder="その他の返点" maxlength="6" style="flex:1;min-width:130px;padding:7px 8px;border:1px solid #cbd5e1;border-radius:7px;"><button type="button" onclick="chooseIftyKanbunPracticeMark(document.getElementById('iftyKanbunPracticeCustomMark')?.value||'')" style="border:none;background:#64748b;color:white;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${ifty216Markup("設定","Settings")}</button></div>`;
 }
 window.selectIftyKanbunPracticeMarkIndex=function(index){if(!iftyKanbunPracticeState||iftyKanbunPracticeState.answered)return;iftyKanbunPracticeState.selectedMarkIndex=Number(index);renderIftyKanbunPracticePlayer();};
 window.chooseIftyKanbunPracticeMark=function(mark){const st=iftyKanbunPracticeState;if(!st||st.answered)return;const i=Number(st.selectedMarkIndex);if(i<0||i>=st.answerMarks.length)return;st.answerMarks[i]=normalizeIftyKanbunMark(mark);if(i<st.answerMarks.length-1)st.selectedMarkIndex=i+1;renderIftyKanbunPracticePlayer();};
@@ -13518,7 +13000,7 @@ window.submitIftyKanbunPracticeWritten=async function(){
   if(!answer&&!handwriting){const el=document.getElementById('iftyKanbunPracticeGradeStatus');if(el)el.textContent='文字入力または手書きで回答してください。';return;}
   if(!ensureIftyOnline('漢文PRACTICE採点'))return;
   st.grading=true;
-  const status=document.getElementById('iftyKanbunPracticeGradeStatus');if(status)status.textContent='ALLIAが採点中…';
+  const status=document.getElementById('iftyKanbunPracticeGradeStatus');if(status)status.textContent=ifty216T("ALLIAが採点中…","ALLIA is grading…");
   try{
     const referenceAnswer=currentMode==='cloze'?String(q.clozeAnswer||'').trim():(currentMode==='kundoku'?String(q.kundoku||'').trim():String(q.translation||'').trim());
     const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'kanbun_practice_grade',mode:currentMode,originalText:q.originalText,kundoku:q.kundoku,translation:q.translation,referenceAnswer,clozeText:q.clozeText||'',clozeLabel:q.clozeLabel||'',userAnswer:answer,handwritingImage:handwriting,subject:'KANBUN',order:getIftyPracticeOrder('KANBUN')||getIftySubjectOrder('KANBUN')})});
@@ -13577,9 +13059,9 @@ window.nextIftyKanbunPracticeQuestion=function(){
   resetIftyKanbunHandwriting();iftyKanbunHelpHistory=[];renderIftyKanbunPracticePlayer();
 };
 
-window.openIftyKanbunQuestionHelp=function(){const q=getCurrentIftyKanbunPracticeQuestion();if(!q)return;document.getElementById('iftyKanbunHelpModal')?.remove();const modal=document.createElement('div');modal.id='iftyKanbunHelpModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:12170;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';modal.innerHTML=`<div style="width:min(620px,100%);max-height:88vh;overflow:auto;background:white;border-radius:14px;padding:16px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b style="color:#6d28d9;">🤖 ALLIAに質問</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">今の漢文問題を開いたまま質問できます。</div></div><button type="button" onclick="document.getElementById('iftyKanbunHelpModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div><div id="iftyKanbunHelpHistory" style="margin-top:10px;display:grid;gap:7px;"></div><div style="display:flex;gap:7px;margin-top:10px;align-items:flex-end;"><textarea id="iftyKanbunHelpInput" rows="2" placeholder="例：この『未』はどう読む？／答えは言わずヒントだけ" style="flex:1;min-width:0;padding:9px;border:1px solid #c4b5fd;border-radius:8px;resize:vertical;"></textarea><button type="button" onclick="askIftyKanbunQuestionHelp()" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px 12px;font-weight:900;cursor:pointer;">送信</button></div><div id="iftyKanbunHelpStatus" style="margin-top:5px;font-size:.72em;color:#64748b;"></div></div>`;document.body.appendChild(modal);renderIftyKanbunHelpHistory();document.getElementById('iftyKanbunHelpInput')?.focus();};
+window.openIftyKanbunQuestionHelp=function(){const q=getCurrentIftyKanbunPracticeQuestion();if(!q)return;document.getElementById('iftyKanbunHelpModal')?.remove();const modal=document.createElement('div');modal.id='iftyKanbunHelpModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:12170;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';modal.innerHTML=`<div style="width:min(620px,100%);max-height:88vh;overflow:auto;background:white;border-radius:14px;padding:16px;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b style="color:#6d28d9;">${ifty216Markup("🤖 ALLIAに質問","🤖 Ask ALLIA")}</b><div style="font-size:.72em;color:#64748b;margin-top:2px;">${ifty216Markup("今の漢文問題を開いたまま質問できます。","Ask a question without leaving the current exercise.")}</div></div><button type="button" onclick="document.getElementById('iftyKanbunHelpModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div><div id="iftyKanbunHelpHistory" style="margin-top:10px;display:grid;gap:7px;"></div><div style="display:flex;gap:7px;margin-top:10px;align-items:flex-end;"><textarea id="iftyKanbunHelpInput" rows="2" placeholder="例：この『未』はどう読む？／答えは言わずヒントだけ" style="flex:1;min-width:0;padding:9px;border:1px solid #c4b5fd;border-radius:8px;resize:vertical;"></textarea><button type="button" onclick="askIftyKanbunQuestionHelp()" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px 12px;font-weight:900;cursor:pointer;">${ifty216Markup("送信","Send")}</button></div><div id="iftyKanbunHelpStatus" style="margin-top:5px;font-size:.72em;color:#64748b;"></div></div>`;document.body.appendChild(modal);renderIftyKanbunHelpHistory();document.getElementById('iftyKanbunHelpInput')?.focus();};
 function renderIftyKanbunHelpHistory(){const wrap=document.getElementById('iftyKanbunHelpHistory');if(!wrap)return;wrap.innerHTML=iftyKanbunHelpHistory.map(row=>`<div style="padding:8px 10px;border-radius:8px;background:${row.role==='user'?'#f1f5f9':'#faf5ff'};color:#334155;white-space:pre-wrap;line-height:1.5;"><b style="font-size:.72em;color:${row.role==='user'?'#475569':'#6d28d9'};">${row.role==='user'?'自分':'ALLIA'}</b><div style="margin-top:3px;">${escapeHtml(row.text)}</div></div>`).join('');wrap.scrollTop=wrap.scrollHeight;}
-window.askIftyKanbunQuestionHelp=async function(){const q=getCurrentIftyKanbunPracticeQuestion();const input=document.getElementById('iftyKanbunHelpInput');const userQuestion=String(input?.value||'').trim();if(!q||!userQuestion)return;if(!ensureIftyOnline('ALLIA質問'))return;const history=iftyKanbunHelpHistory.slice(-8);iftyKanbunHelpHistory.push({role:'user',text:userQuestion});if(input)input.value='';renderIftyKanbunHelpHistory();const status=document.getElementById('iftyKanbunHelpStatus');if(status)status.textContent='ALLIAが考えています…';try{const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_help',answerRevealed:!!iftyKanbunPracticeState?.answered,quizType:`kanbun_${getCurrentIftyKanbunPracticeMode()}`,direction:'',question:[q.prompt?`問題：${q.prompt}`:'',`原文：${q.originalText}`,q.clozeText?`${q.clozeLabel||'穴埋め'}：${q.clozeText}`:'',q.sourceText?`提示文：${q.sourceText}`:''].filter(Boolean).join('\n'),instruction:getIftyKanbunPracticeModeMeta(getCurrentIftyKanbunPracticeMode()).description,userQuestion,options:[],history,subject:'KANBUN',order:getIftySubjectOrder('KANBUN')})});const data=await response.json().catch(()=>({}));if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);iftyKanbunHelpHistory.push({role:'assistant',text:String(data.answer||'説明を生成できませんでした。')});renderIftyKanbunHelpHistory();if(status)status.textContent='';}catch(error){if(status)status.textContent=String(error.message||error);}};
+window.askIftyKanbunQuestionHelp=async function(){const q=getCurrentIftyKanbunPracticeQuestion();const input=document.getElementById('iftyKanbunHelpInput');const userQuestion=String(input?.value||'').trim();if(!q||!userQuestion)return;if(!ensureIftyOnline('ALLIA質問'))return;const history=iftyKanbunHelpHistory.slice(-8);iftyKanbunHelpHistory.push({role:'user',text:userQuestion});if(input)input.value='';renderIftyKanbunHelpHistory();const status=document.getElementById('iftyKanbunHelpStatus');if(status)status.textContent=ifty216T("ALLIAが考えています…","ALLIA is thinking…");try{const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_help',answerRevealed:!!iftyKanbunPracticeState?.answered,quizType:`kanbun_${getCurrentIftyKanbunPracticeMode()}`,direction:'',question:[q.prompt?`問題：${q.prompt}`:'',`原文：${q.originalText}`,q.clozeText?`${q.clozeLabel||'穴埋め'}：${q.clozeText}`:'',q.sourceText?`提示文：${q.sourceText}`:''].filter(Boolean).join('\n'),instruction:getIftyKanbunPracticeModeMeta(getCurrentIftyKanbunPracticeMode()).description,userQuestion,options:[],history,subject:'KANBUN',order:getIftySubjectOrder('KANBUN')})});const data=await response.json().catch(()=>({}));if(!response.ok||data.error)throw new Error(data.error||`HTTP ${response.status}`);iftyKanbunHelpHistory.push({role:'assistant',text:String(data.answer||'説明を生成できませんでした。')});renderIftyKanbunHelpHistory();if(status)status.textContent='';}catch(error){if(status)status.textContent=String(error.message||error);}};
 
 window.openIftySubject = function(subject) {
   const normalized = normalizeIftySubject(subject);
@@ -13657,7 +13139,7 @@ window.openIftySubject = function(subject) {
           <h1 class="ifty-portal-title">${escapeHtml(info.title)}</h1>
           <div class="ifty-portal-subtitle">${escapeHtml(info.description)}</div>
         </div>
-        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">${ifty216Markup("HOMEへ戻る","Back to Home")}</button>
       </div>
 
       <div class="ifty-subject-badge">SUBJECT PAGE</div>
@@ -13676,7 +13158,7 @@ window.openIftySubject = function(subject) {
         <div class="ifty-settings-row">
           <div>
             <h3>${escapeHtml(normalized)} ALLIA</h3>
-            <div class="ifty-settings-note">この教科のORDERだけを読み込み、他教科のORDERは参照しません。</div>
+            <div class="ifty-settings-note">${ifty216Markup("この教科のORDERだけを読み込み、他教科のORDERは参照しません。","Use this subject ORDER only. Other subject ORDER settings are not used.")}</div>
           </div>
           <button class="ifty-settings-action" type="button" onclick="openIftySubjectAllia('${normalized.replace(/'/g, "\'")}')" style="background:#7c3aed;color:white;">🤖 ALLIAを開く</button>
         </div>
@@ -13712,52 +13194,58 @@ window.openIftySettings = function() {
     <section class="ifty-portal-shell">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <div>
-          <h1 class="ifty-portal-title">SETTINGS</h1>
-          <div class="ifty-portal-subtitle">IFTYの表示・データ・アカウント設定。</div>
+          <h1 class="ifty-portal-title">${ifty216Markup("設定","SETTINGS")}</h1>
+          <div class="ifty-portal-subtitle">${ifty216Markup("IFTYの表示・データ・アカウント設定。","IFTY display, data and account settings.")}</div>
         </div>
-        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">${ifty216Markup("HOMEへ戻る","Back to Home")}</button>
       </div>
 
       <div class="ifty-settings-section">
-        <h3>表示言語</h3>
-        <div class="ifty-settings-note">HOMEの教科カードと左メニュー全体の表示を、日本語または英語で切り替えます。フォルダ名・単語・学習データには影響しません。</div>
+        <h3>${ifty216Markup("表示言語","Interface language")}</h3>
+        <div class="ifty-settings-note">${ifty216T("画面の操作表示を日本語／英語で切り替えます。登録内容・ORDER・意味生成の言語は変更しません。","Switch the interface between Japanese and English. Saved content, ORDER and meaning generation are unchanged.")}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
           <button class="ifty-settings-action" type="button" onclick="setIftyHomeSubjectNameMode('ja')" aria-pressed="${getIftyHomeSubjectNameMode()==='ja' ? 'true' : 'false'}"
             style="background:${getIftyHomeSubjectNameMode()==='ja' ? '#0f766e' : '#334155'};color:white;border:${getIftyHomeSubjectNameMode()==='ja' ? '2px solid #5eead4' : '1px solid #64748b'};">
-            日本語
+            ${ifty216Markup("日本語","Japanese")}
           </button>
           <button class="ifty-settings-action" type="button" onclick="setIftyHomeSubjectNameMode('en')" aria-pressed="${getIftyHomeSubjectNameMode()==='en' ? 'true' : 'false'}"
             style="background:${getIftyHomeSubjectNameMode()==='en' ? '#0f766e' : '#334155'};color:white;border:${getIftyHomeSubjectNameMode()==='en' ? '2px solid #5eead4' : '1px solid #64748b'};">
-            ENGLISH
+            ${ifty216Markup("英語","ENGLISH")}
           </button>
         </div>
         <div class="ifty-settings-note" style="margin-top:8px;">
-          現在：${getIftyHomeSubjectNameMode()==='ja' ? '日本語（言語・語彙 / 古文 / 漢文 / 漢字 / 理科 / 社会 / その他）' : '英語（LANGUAGES / ANCIENT / KANBUN / KANJI / SCIENCE / SOCIAL STUDIES / OTHERS）'}<br>
-          HOMEの教科名・左メニューの教科名・ツール名・操作名に適用
+          ${ifty216T('現在：日本語','Current: English')}
         </div>
       </div>
 
       <div class="ifty-settings-section">
-        <h3>PROFILE IMAGE</h3>
-        <div class="ifty-settings-note">左上のメニューボタンに表示するプロフィール画像です。プリセットまたは自分の画像を使用できます。</div>
+        <h3>${ifty216T('クイズの表示言語','Quiz display language')}</h3>
+        <div class="ifty-settings-note">${ifty216T('社会・理科・その他・年号の対応問題を表示言語に合わせて翻訳します。語学・漢字手書き等の学習対象は原文のまま。翻訳はALLIAを使用し、原文も併記します。翻訳に誤りがある場合は原文を優先し、記述では登録済みの表記を使ってください。採点基準は変わりません。','Translate supported Social Studies, Science, Others and Years questions into the interface language using ALLIA. Language-learning targets and handwriting remain original. The original remains visible. If translations differ, use the original. For exact-match responses, use the registered spelling. Grading rules are unchanged.')}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
+          ${[['original',ifty216T('原文のまま','Original')],['follow',ifty216T('表示言語に合わせる','Follow interface')]].map(([v,label])=>`<button class="ifty-settings-action" type="button" aria-pressed="${ifty216QuizLanguage()===v}" onclick="ifty216SetQuizLanguage('${v}')" style="background:${ifty216QuizLanguage()===v?'#0f766e':'#334155'};color:white;">${escapeHtml(label)}</button>`).join('')}
+        </div>
+      </div>
+      <div class="ifty-settings-section">
+        <h3>${ifty216Markup("プロフィール画像","PROFILE IMAGE")}</h3>
+        <div class="ifty-settings-note">${ifty216Markup("左上のメニューボタンに表示するプロフィール画像です。プリセットまたは自分の画像を使用できます。","Profile image shown on the menu button. Use a preset or your own image.")}</div>
         <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px;">
-          <img src="${getIftyProfileImageSrc()}" alt="プロフィール" style="width:74px;height:74px;border-radius:50%;object-fit:cover;border:2px solid #cbd5e1;background:white;">
+          <img src="${getIftyProfileImageSrc()}" alt="${ifty216Markup("プロフィール","Profile")}" style="width:74px;height:74px;border-radius:50%;object-fit:cover;border:2px solid #cbd5e1;background:white;">
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             ${IFTY_PROFILE_PRESETS.map((preset,index) => `<button type="button" onclick="setIftyProfilePreset(${index})" title="プリセット ${index+1}" style="width:48px;height:48px;padding:0;border:2px solid #cbd5e1;border-radius:50%;overflow:hidden;background:white;cursor:pointer;"><img src="${makeIftyPresetAvatar(preset[0],preset[1])}" alt="" style="width:100%;height:100%;object-fit:cover;"></button>`).join('')}
           </div>
         </div>
         <div style="margin-top:12px;">
           <input id="iftyProfileImageInput" type="file" accept="image/*" onchange="handleIftyProfileImageUpload(this)" style="display:none;">
-          <button class="ifty-settings-action" type="button" onclick="chooseIftyProfileImage()" style="background:#0f766e;color:white;">画像で置き換える</button>
+          <button class="ifty-settings-action" type="button" onclick="chooseIftyProfileImage()" style="background:#0f766e;color:white;">${ifty216Markup("画像で置き換える","Replace with an image")}</button>
         </div>
       </div>
 
       <div class="ifty-settings-section">
-        <h3>HOME SCREEN ICON</h3>
-        <div class="ifty-settings-note">ホーム画面用アイコンは無限マークのみ。背景を白または黒から選べます。</div>
+        <h3>${ifty216Markup("ホーム画面アイコン","HOME SCREEN ICON")}</h3>
+        <div class="ifty-settings-note">${ifty216Markup("ホーム画面用アイコンは無限マークのみ。背景を白または黒から選べます。","Home screen icon uses the infinity mark. Choose a white or black background.")}</div>
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px;">
-          <button type="button" onclick="setIftyHomeIconBackground('white')" style="padding:8px;border:${getIftyHomeIconBackground()==='white'?'3px solid #14b8a6':'1px solid #94a3b8'};border-radius:12px;background:white;cursor:pointer;"><img src="${IFTY_HOME_ICON_PATHS.white}" alt="白背景" style="width:68px;height:68px;border-radius:12px;display:block;"><span style="display:block;margin-top:5px;font-weight:800;color:#0f172a;">白</span></button>
-          <button type="button" onclick="setIftyHomeIconBackground('black')" style="padding:8px;border:${getIftyHomeIconBackground()==='black'?'3px solid #14b8a6':'1px solid #94a3b8'};border-radius:12px;background:#111827;cursor:pointer;"><img src="${IFTY_HOME_ICON_PATHS.black}" alt="黒背景" style="width:68px;height:68px;border-radius:12px;display:block;"><span style="display:block;margin-top:5px;font-weight:800;color:white;">黒</span></button>
+          <button type="button" onclick="setIftyHomeIconBackground('white')" style="padding:8px;border:${getIftyHomeIconBackground()==='white'?'3px solid #14b8a6':'1px solid #94a3b8'};border-radius:12px;background:white;cursor:pointer;"><img src="${IFTY_HOME_ICON_PATHS.white}" alt="${ifty216Markup("白背景","White background")}" style="width:68px;height:68px;border-radius:12px;display:block;"><span style="display:block;margin-top:5px;font-weight:800;color:#0f172a;">${ifty216Markup("白","White")}</span></button>
+          <button type="button" onclick="setIftyHomeIconBackground('black')" style="padding:8px;border:${getIftyHomeIconBackground()==='black'?'3px solid #14b8a6':'1px solid #94a3b8'};border-radius:12px;background:#111827;cursor:pointer;"><img src="${IFTY_HOME_ICON_PATHS.black}" alt="${ifty216Markup("黒背景","Black background")}" style="width:68px;height:68px;border-radius:12px;display:block;"><span style="display:block;margin-top:5px;font-weight:800;color:white;">${ifty216Markup("黒","Black")}</span></button>
         </div>
         <div class="ifty-settings-note" style="margin-top:8px;">設定後にSafariからホーム画面へ追加すると選択中のアイコンを使います。iPhone / iPadですでに追加済みのIFTYはアイコンだけを後から差し替えられないため、変更する場合はホーム画面のIFTYを削除してからSafariで再追加してください。</div>
       </div>
@@ -13813,8 +13301,8 @@ window.openIftySettings = function() {
             <div class="ifty-settings-note">フォルダは .iftyfolder ファイルとして送受信できます。フレンドの利用状況は、相互フレンドかつ本人が公開をONにした場合だけ表示されます。</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="ifty-settings-action" type="button" onclick="openIftyFolderImportPicker()" style="background:#475569;color:white;">📦 フォルダを受け取る</button>
-            <button class="ifty-settings-action" type="button" onclick="openIftyFriendsPage()" style="background:#2563eb;color:white;">👥 フレンド</button>
+            <button class="ifty-settings-action" type="button" onclick="openIftyFolderImportPicker()" style="background:#475569;color:white;">${ifty216Markup("📦 フォルダを受け取る","📦 Receive folder")}</button>
+            <button class="ifty-settings-action" type="button" onclick="openIftyFriendsPage()" style="background:#2563eb;color:white;">${ifty216Markup("👥 フレンド","👥 Friends")}</button>
           </div>
         </div>
       </div>
@@ -13822,7 +13310,7 @@ window.openIftySettings = function() {
       <div class="ifty-settings-section">
         <div class="ifty-settings-row">
           <div>
-            <h3>BACKUP / RESTORE</h3>
+            <h3>${ifty216Markup("バックアップ・復元","BACKUP / RESTORE")}</h3>
             <div class="ifty-settings-note">PERIODICはオートセーブ1件を上書き。MANUALは手動保存を複数残します。</div>
           </div>
           <button class="ifty-settings-action" type="button" onclick="openIftyRecoveryCenter()" style="background:#0f766e;color:white;">🛟 開く</button>
@@ -13844,7 +13332,7 @@ window.openIftySettings = function() {
         <div style="font-weight:900;margin-bottom:4px;">${escapeHtml(accountLabel)}</div>
         <div class="ifty-settings-note">${escapeHtml(cloudText)}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-          <button class="ifty-settings-action" type="button" onclick="logout()" style="background:#e11d48;color:white;">LOG OUT</button>
+          <button class="ifty-settings-action" type="button" onclick="logout()" style="background:#e11d48;color:white;">${ifty216Markup("ログアウト","LOG OUT")}</button>
         </div>
       </div>
 
@@ -14483,7 +13971,7 @@ function ensureIftyRecoveryModal() {
     <div style="background:white;color:#0f172a;width:min(720px,96vw);max-height:88vh;overflow:auto;border-radius:14px;padding:18px;box-shadow:0 18px 50px rgba(0,0,0,.35);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;">
         <div>
-          <div style="font-size:1.25em;font-weight:800;">🛟 バックアップ / 復元</div>
+          <div style="font-size:1.25em;font-weight:800;">${ifty216Markup("🛟 バックアップ / 復元","🛟 Backup / restore")}</div>
           <div style="font-size:.82em;color:#64748b;margin-top:3px;">PERIODICはオートセーブ1件を上書き、MANUALは手動保存を複数保持します。</div>
         </div>
         <button onclick="closeIftyRecoveryCenter()" style="border:none;background:#e2e8f0;color:#0f172a;border-radius:8px;padding:8px 11px;cursor:pointer;">✕</button>
@@ -14496,7 +13984,7 @@ function ensureIftyRecoveryModal() {
         <input id="iftyBackupImportInput" type="file" accept="application/json,.json" style="display:none;" onchange="handleIftyBackupImport(event)">
       </div>
       <div style="font-size:.78em;color:#64748b;margin-bottom:12px;line-height:1.5;">PERIODICは常に最上部に固定されます。復元の直前には現在状態をMANUALとして緊急保存します。重要な保存は「ファイル書き出し」も利用できます。</div>
-      <div id="iftyRecoveryList"><div style="padding:18px;text-align:center;color:#64748b;">読み込み中…</div></div>
+      <div id="iftyRecoveryList"><div style="padding:18px;text-align:center;color:#64748b;">${ifty216Markup("読み込み中…","Loading…")}</div></div>
     </div>`;
   document.body.appendChild(modal);
   return modal;
@@ -14516,7 +14004,7 @@ function renderIftyRecoveryCard(snapshot, label, accent) {
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
           <button onclick="restoreIftyRecoverySnapshot('${snapshot.id}')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;white-space:nowrap;">この状態に復元</button>
-          <button onclick="deleteIftyRecoverySnapshot('${snapshot.id}')" style="border:none;background:#dc2626;color:white;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;white-space:nowrap;">削除</button>
+          <button onclick="deleteIftyRecoverySnapshot('${snapshot.id}')" style="border:none;background:#dc2626;color:white;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;white-space:nowrap;">${ifty216Markup("削除","Delete")}</button>
         </div>
       </div>
     </div>`;
@@ -14525,7 +14013,7 @@ function renderIftyRecoveryCard(snapshot, label, accent) {
 async function renderIftyRecoveryCenter() {
   const container = document.getElementById('iftyRecoveryList');
   if (!container) return;
-  container.innerHTML = '<div style="padding:18px;text-align:center;color:#64748b;">読み込み中…</div>';
+  container.innerHTML = ("<div style=\"padding:18px;text-align:center;color:#64748b;\">" + ifty216Markup("読み込み中…","Loading…") + "</div>");
 
   try {
     await migrateLegacyIftyRecoverySnapshots();
@@ -14549,7 +14037,7 @@ async function renderIftyRecoveryCenter() {
       <div style="position:sticky;top:-18px;z-index:2;background:white;padding-top:2px;padding-bottom:4px;">
         ${periodicHtml}
       </div>
-      <div style="font-weight:900;color:#6d28d9;margin:12px 0 7px;">MANUAL</div>
+      <div style="font-weight:900;color:#6d28d9;margin:12px 0 7px;">${ifty216Markup("マニュアル","MANUAL")}</div>
       ${manualHtml}`;
   } catch (error) {
     container.innerHTML = `<div style="padding:16px;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:10px;">バックアップを読み込めませんでした：${escapeHtml(String(error.message || error))}</div>`;
@@ -14925,8 +14413,6 @@ function ensureIftyOnline(feature, options = {}) {
   updateIftyNetworkStatus();
   return false;
 }
-
-setTimeout(() => { try { updateIftyAlliaLimitBadge(); } catch (_) {} }, 0);
 
 function ensureIftyNetworkUi() {
   let badge = document.getElementById('iftyNetworkStatus');
@@ -15391,7 +14877,7 @@ window.toggleIftyPasswordVisibility = function(inputId, button) {
   const show = input.type === 'password';
   input.type = show ? 'text' : 'password';
   if (button) {
-    button.textContent = show ? '隠す' : '表示';
+    button.textContent = show ? '隠す' : ifty216T("表示","Display");
     button.setAttribute('aria-label', show ? 'パスワードを隠す' : 'パスワードを表示');
     button.setAttribute('aria-pressed', show ? 'true' : 'false');
   }
@@ -15411,25 +14897,25 @@ window.showIftyPasswordRecoveryInfo = function() {
     <div role="dialog" aria-modal="true" aria-labelledby="iftyPasswordRecoveryTitle" style="width:min(540px,100%);max-height:92vh;overflow:auto;background:#fff;color:#0f172a;border-radius:16px;padding:clamp(16px,4vw,22px);box-shadow:0 18px 50px rgba(0,0,0,.35);box-sizing:border-box;">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
         <div>
-          <h3 id="iftyPasswordRecoveryTitle" style="margin:0 0 8px;font-size:1.25em;">パスワードを再設定</h3>
-          <p style="margin:0;color:#475569;line-height:1.6;font-size:.9em;">保存してあるIFTY復旧コードを使います。メールは不要です。</p>
+          <h3 id="iftyPasswordRecoveryTitle" style="margin:0 0 8px;font-size:1.25em;">${ifty216Markup("パスワードを再設定","Reset password")}</h3>
+          <p style="margin:0;color:#475569;line-height:1.6;font-size:.9em;">${ifty216Markup("保存してあるIFTY復旧コードを使います。メールは不要です。","Use your saved IFTY recovery code. Email is not required.")}</p>
         </div>
-        <button type="button" onclick="closeIftyPasswordRecoveryInfo()" aria-label="閉じる" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;width:34px;height:34px;flex:0 0 34px;font-size:1.1em;cursor:pointer;">×</button>
+        <button type="button" onclick="closeIftyPasswordRecoveryInfo()" aria-label="${ifty216Markup("閉じる","Close")}" style="border:none;background:#e2e8f0;color:#334155;border-radius:8px;width:34px;height:34px;flex:0 0 34px;font-size:1.1em;cursor:pointer;">×</button>
       </div>
       <div style="display:grid;gap:10px;margin-top:16px;">
         <input id="iftyResetUsername" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="IFTY ID" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
         <input id="iftyResetRecoveryCode" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="復旧コード（例：ABCDE-FGHIJ-KLMNO-PQRST）" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;letter-spacing:.04em;">
         <div style="display:flex;gap:7px;">
-          <input id="iftyResetNewPassword" type="password" autocomplete="new-password" placeholder="新しいパスワード（10文字以上）" style="flex:1;min-width:0;padding:11px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
-          <button type="button" onclick="toggleIftyPasswordVisibility('iftyResetNewPassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button>
+          <input id="iftyResetNewPassword" type="password" autocomplete="new-password" placeholder="${ifty216Markup("新しいパスワード（10文字以上）","New password (at least 10 characters)")}" style="flex:1;min-width:0;padding:11px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+          <button type="button" onclick="toggleIftyPasswordVisibility('iftyResetNewPassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">${ifty216Markup("表示","Display")}</button>
         </div>
         <div style="display:flex;gap:7px;">
-          <input id="iftyResetNewPasswordConfirm" type="password" autocomplete="new-password" placeholder="新しいパスワードを再入力" style="flex:1;min-width:0;padding:11px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
-          <button type="button" onclick="toggleIftyPasswordVisibility('iftyResetNewPasswordConfirm', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button>
+          <input id="iftyResetNewPasswordConfirm" type="password" autocomplete="new-password" placeholder="${ifty216Markup("新しいパスワードを再入力","Repeat new password")}" style="flex:1;min-width:0;padding:11px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+          <button type="button" onclick="toggleIftyPasswordVisibility('iftyResetNewPasswordConfirm', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">${ifty216Markup("表示","Display")}</button>
         </div>
       </div>
       <div id="iftyResetStatus" style="min-height:1.3em;margin-top:10px;font-size:.84em;color:#475569;line-height:1.5;"></div>
-      <button type="button" onclick="confirmIftyPasswordReset()" style="margin-top:9px;width:100%;border:none;background:#15803d;color:white;padding:11px 14px;border-radius:8px;font-weight:800;cursor:pointer;">復旧コードでパスワードを変更</button>
+      <button type="button" onclick="confirmIftyPasswordReset()" style="margin-top:9px;width:100%;border:none;background:#15803d;color:white;padding:11px 14px;border-radius:8px;font-weight:800;cursor:pointer;">${ifty216Markup("復旧コードでパスワードを変更","Change password with recovery code")}</button>
     </div>`;
   modal.addEventListener('click', event => {
     if (event.target === modal) window.closeIftyPasswordRecoveryInfo();
@@ -15497,15 +14983,15 @@ function renderIftyAccountLanding(message = '') {
     <input id="iftyAccountUsername" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="IFTY ID（3〜24文字）" style="padding:11px;border:1px solid #475569;border-radius:7px;font-size:1em;background:#0f172a;color:white;">
     <div style="display:flex;gap:7px;align-items:stretch;">
       <input id="iftyAccountPassword" type="password" autocomplete="current-password" placeholder="パスワード（10文字以上）" style="flex:1;min-width:0;padding:11px;border:1px solid #475569;border-radius:7px;font-size:1em;background:#0f172a;color:white;">
-      <button type="button" onclick="toggleIftyPasswordVisibility('iftyAccountPassword', this)" aria-label="パスワードを表示" aria-pressed="false" style="flex:0 0 auto;background:#334155;color:#f8fafc;border:1px solid #475569;padding:0 12px;border-radius:7px;font-weight:700;cursor:pointer;">表示</button>
+      <button type="button" onclick="toggleIftyPasswordVisibility('iftyAccountPassword', this)" aria-label="パスワードを表示" aria-pressed="false" style="flex:0 0 auto;background:#334155;color:#f8fafc;border:1px solid #475569;padding:0 12px;border-radius:7px;font-weight:700;cursor:pointer;">${ifty216Markup("表示","Display")}</button>
     </div>
     <div style="display:flex;gap:7px;align-items:stretch;">
       <input id="iftyAccountPasswordConfirm" type="password" autocomplete="new-password" placeholder="新規作成時のみ：パスワード確認" style="flex:1;min-width:0;padding:11px;border:1px solid #475569;border-radius:7px;font-size:1em;background:#0f172a;color:white;">
-      <button type="button" onclick="toggleIftyPasswordVisibility('iftyAccountPasswordConfirm', this)" aria-label="確認用パスワードを表示" aria-pressed="false" style="flex:0 0 auto;background:#334155;color:#f8fafc;border:1px solid #475569;padding:0 12px;border-radius:7px;font-weight:700;cursor:pointer;">表示</button>
+      <button type="button" onclick="toggleIftyPasswordVisibility('iftyAccountPasswordConfirm', this)" aria-label="確認用パスワードを表示" aria-pressed="false" style="flex:0 0 auto;background:#334155;color:#f8fafc;border:1px solid #475569;padding:0 12px;border-radius:7px;font-weight:700;cursor:pointer;">${ifty216Markup("表示","Display")}</button>
     </div>
     <button type="button" onclick="showIftyPasswordRecoveryInfo()" style="align-self:flex-start;background:transparent;color:#7dd3fc;border:none;padding:2px 0;font-size:.84em;text-decoration:underline;cursor:pointer;">パスワードを忘れた場合</button>
 <div style="display:flex;gap:8px;margin-top:4px;">
-      <button onclick="loginIftyAccount()" style="flex:1;background:#0284c7;color:white;border:none;padding:10px;border-radius:7px;font-weight:800;cursor:pointer;">ログイン</button>
+      <button onclick="loginIftyAccount()" style="flex:1;background:#0284c7;color:white;border:none;padding:10px;border-radius:7px;font-weight:800;cursor:pointer;">${ifty216Markup("ログイン","Log in")}</button>
       <button onclick="registerIftyAccount()" style="flex:1;background:#15803d;color:white;border:none;padding:10px;border-radius:7px;font-weight:800;cursor:pointer;">新規作成</button>
     </div>
     <button type="button" onclick="enterIftyDeveloperMode()" style="width:100%;background:#d97706;color:white;border:none;padding:10px;border-radius:7px;font-weight:800;cursor:pointer;">Developer</button>
@@ -15667,7 +15153,7 @@ function renderIftyAdminUsageStats(data) {
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;">
       <div style="font-size:.72em;color:#94a3b8;">更新 ${escapeHtml(formatIftyActivityUpdatedAt(data && data.updatedAt))}　・　個人名は表示しません</div>
-      <button type="button" onclick="refreshIftyAdminUsagePanel({force:true})" style="border:1px solid #475569;background:#1e293b;color:#f8fafc;border-radius:8px;padding:8px 11px;font-weight:900;cursor:pointer;">↻ 更新</button>
+      <button type="button" onclick="refreshIftyAdminUsagePanel({force:true})" style="border:1px solid #475569;background:#1e293b;color:#f8fafc;border-radius:8px;padding:8px 11px;font-weight:900;cursor:pointer;">${ifty216Markup("↻ 更新","↻ Refresh")}</button>
     </div>`;
 }
 
@@ -15749,11 +15235,11 @@ async function refreshIftyAccountSecurityPanel() {
         <div style="margin-top:3px;">${usernameText}</div>
       </div>
       <div>
-        <div style="font-weight:900;color:inherit;">復旧コード</div>
+        <div style="font-weight:900;color:inherit;">${ifty216Markup("復旧コード","Recovery code")}</div>
         <div style="margin-top:3px;">${recoveryText}</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="ifty-settings-action" type="button" onclick="openIftyUsernameChange()" style="background:#7c3aed;color:white;">IFTY IDを変更</button>
+        <button class="ifty-settings-action" type="button" onclick="openIftyUsernameChange()" style="background:#7c3aed;color:white;">${ifty216Markup("IFTY IDを変更","Change IFTY ID")}</button>
         <button class="ifty-settings-action" type="button" onclick="openIftyRecoveryCodeSettings()" style="background:#0284c7;color:white;">復旧コードを発行 / 再発行</button>
         <button class="ifty-settings-action" type="button" onclick="openIftyPasswordChange()" style="background:#334155;color:white;">パスワード変更</button>
         <button class="ifty-settings-action" type="button" onclick="openIftySessionManager()" style="background:#0f766e;color:white;">セッション管理</button>
@@ -15847,13 +15333,13 @@ window.openIftyUsernameChange = function() {
   const current = String((iftyAccountProfile && iftyAccountProfile.account && iftyAccountProfile.account.username) || (iftyAccount && iftyAccount.username) || currentUser || '');
   showIftySecurityModal('IFTY IDを変更', `
     <div style="display:grid;gap:9px;">
-      <div style="font-size:.84em;color:#64748b;line-height:1.5;">現在のIFTY ID：<b>${escapeHtml(current)}</b><br>英数字・_ . - の3〜24文字で設定できます。</div>
-      <input id="iftyNewUsername" type="text" autocomplete="username" maxlength="24" value="${escapeHtml(current)}" placeholder="新しいIFTY ID" style="padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+      <div style="font-size:.84em;color:#64748b;line-height:1.5;">${ifty216Markup("現在のIFTY ID：","Current IFTY ID:")}<b>${escapeHtml(current)}</b><br>${ifty216Markup("英数字・_ . - の3〜24文字で設定できます。","Use 3–24 letters, digits, underscores, dots or hyphens.")}</div>
+      <input id="iftyNewUsername" type="text" autocomplete="username" maxlength="24" value="${escapeHtml(current)}" placeholder="${ifty216Markup("新しいIFTY ID","New IFTY ID")}" style="padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
       <div style="display:flex;gap:7px;">
-        <input id="iftyUsernameChangePassword" type="password" autocomplete="current-password" placeholder="現在のパスワード" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
-        <button type="button" onclick="toggleIftyPasswordVisibility('iftyUsernameChangePassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button>
+        <input id="iftyUsernameChangePassword" type="password" autocomplete="current-password" placeholder="${ifty216Markup("現在のパスワード","Current password")}" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+        <button type="button" onclick="toggleIftyPasswordVisibility('iftyUsernameChangePassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">${ifty216Markup("表示","Display")}</button>
       </div>
-      <button type="button" onclick="submitIftyUsernameChange()" style="border:none;background:#7c3aed;color:white;padding:10px;border-radius:8px;font-weight:800;cursor:pointer;">IFTY IDを変更</button>
+      <button type="button" onclick="submitIftyUsernameChange()" style="border:none;background:#7c3aed;color:white;padding:10px;border-radius:8px;font-weight:800;cursor:pointer;">${ifty216Markup("IFTY IDを変更","Change IFTY ID")}</button>
       <div id="iftySecurityModalStatus" style="min-height:1.3em;color:#475569;font-size:.84em;"></div>
     </div>`);
 };
@@ -15956,8 +15442,8 @@ window.openIftyRecoveryCodeSettings = function() {
     <div style="display:grid;gap:10px;">
       <div style="color:#475569;font-size:.88em;line-height:1.6;">現在のパスワードを確認後、新しい復旧コードを1回だけ表示します。再発行すると以前の復旧コードは無効になります。</div>
       <div style="display:flex;gap:7px;">
-        <input id="iftyRecoveryCodePassword" type="password" autocomplete="current-password" placeholder="現在のパスワード" style="flex:1;min-width:0;padding:11px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
-        <button type="button" onclick="toggleIftyPasswordVisibility('iftyRecoveryCodePassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button>
+        <input id="iftyRecoveryCodePassword" type="password" autocomplete="current-password" placeholder="${ifty216Markup("現在のパスワード","Current password")}" style="flex:1;min-width:0;padding:11px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+        <button type="button" onclick="toggleIftyPasswordVisibility('iftyRecoveryCodePassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">${ifty216Markup("表示","Display")}</button>
       </div>
       <button type="button" onclick="generateIftyRecoveryCode()" style="width:100%;border:none;background:#0284c7;color:white;padding:11px;border-radius:8px;font-weight:800;cursor:pointer;">新しい復旧コードを発行</button>
       <div id="iftySecurityModalStatus" style="min-height:1.3em;color:#475569;font-size:.84em;"></div>
@@ -15986,8 +15472,8 @@ window.openIftyRecoveryEmailSettings = function() {
     <div style="display:grid;gap:9px;">
       <input id="iftySecurityEmail" type="email" autocomplete="email" value="${escapeHtml(current)}" placeholder="復旧用メールアドレス" style="padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
       <div style="display:flex;gap:7px;">
-        <input id="iftySecurityEmailPassword" type="password" autocomplete="current-password" placeholder="現在のパスワード" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
-        <button type="button" onclick="toggleIftyPasswordVisibility('iftySecurityEmailPassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button>
+        <input id="iftySecurityEmailPassword" type="password" autocomplete="current-password" placeholder="${ifty216Markup("現在のパスワード","Current password")}" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
+        <button type="button" onclick="toggleIftyPasswordVisibility('iftySecurityEmailPassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">${ifty216Markup("表示","Display")}</button>
       </div>
       <button type="button" onclick="requestIftyRecoveryEmailCode()" style="border:none;background:#0284c7;color:white;padding:10px;border-radius:8px;font-weight:800;cursor:pointer;">確認コードを送信</button>
       <div style="display:flex;gap:7px;">
@@ -16045,9 +15531,9 @@ window.verifyIftyRecoveryEmail = async function() {
 window.openIftyPasswordChange = function() {
   showIftySecurityModal('パスワード変更', `
     <div style="display:grid;gap:9px;">
-      <div style="display:flex;gap:7px;"><input id="iftyCurrentPasswordChange" type="password" autocomplete="current-password" placeholder="現在のパスワード" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;"><button type="button" onclick="toggleIftyPasswordVisibility('iftyCurrentPasswordChange', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button></div>
-      <div style="display:flex;gap:7px;"><input id="iftyNewPasswordChange" type="password" autocomplete="new-password" placeholder="新しいパスワード（10文字以上）" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;"><button type="button" onclick="toggleIftyPasswordVisibility('iftyNewPasswordChange', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button></div>
-      <div style="display:flex;gap:7px;"><input id="iftyNewPasswordChangeConfirm" type="password" autocomplete="new-password" placeholder="新しいパスワードを再入力" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;"><button type="button" onclick="toggleIftyPasswordVisibility('iftyNewPasswordChangeConfirm', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button></div>
+      <div style="display:flex;gap:7px;"><input id="iftyCurrentPasswordChange" type="password" autocomplete="current-password" placeholder="${ifty216Markup("現在のパスワード","Current password")}" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;"><button type="button" onclick="toggleIftyPasswordVisibility('iftyCurrentPasswordChange', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">${ifty216Markup("表示","Display")}</button></div>
+      <div style="display:flex;gap:7px;"><input id="iftyNewPasswordChange" type="password" autocomplete="new-password" placeholder="${ifty216Markup("新しいパスワード（10文字以上）","New password (at least 10 characters)")}" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;"><button type="button" onclick="toggleIftyPasswordVisibility('iftyNewPasswordChange', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">${ifty216Markup("表示","Display")}</button></div>
+      <div style="display:flex;gap:7px;"><input id="iftyNewPasswordChangeConfirm" type="password" autocomplete="new-password" placeholder="${ifty216Markup("新しいパスワードを再入力","Repeat new password")}" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;"><button type="button" onclick="toggleIftyPasswordVisibility('iftyNewPasswordChangeConfirm', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">${ifty216Markup("表示","Display")}</button></div>
       <button type="button" onclick="submitIftyPasswordChange()" style="border:none;background:#0284c7;color:white;padding:10px;border-radius:8px;font-weight:800;cursor:pointer;">変更する</button>
       <div id="iftySecurityModalStatus" style="min-height:1.3em;color:#475569;font-size:.84em;"></div>
     </div>`);
@@ -16075,7 +15561,7 @@ window.submitIftyPasswordChange = async function() {
 };
 
 window.openIftySessionManager = async function() {
-  showIftySecurityModal('セッション管理', '<div id="iftySecurityModalStatus">読み込み中…</div>');
+  showIftySecurityModal('セッション管理', ("<div id=\"iftySecurityModalStatus\">" + ifty216Markup("読み込み中…","Loading…") + "</div>"));
   try {
     const result = await iftyAccountApi('account_sessions', { token: iftySessionToken });
     const sessions = Array.isArray(result.sessions) ? result.sessions : [];
@@ -16170,7 +15656,7 @@ window.openIftyAccountDelete = function() {
   showIftySecurityModal('アカウント削除', `
     <div style="padding:11px;border-radius:9px;background:#fef2f2;color:#991b1b;font-size:.86em;line-height:1.55;">IFTYアカウントとクラウド上の単語帳・実践・チャットデータを削除し、この端末のIFTY用ローカルキャッシュと端末内バックアップも削除します。この操作は取り消せません。書き出し済みJSONファイルは自動削除されません。</div>
     <div style="display:grid;gap:9px;margin-top:12px;">
-      <div style="display:flex;gap:7px;"><input id="iftyDeletePassword" type="password" autocomplete="current-password" placeholder="現在のパスワード" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;"><button type="button" onclick="toggleIftyPasswordVisibility('iftyDeletePassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">表示</button></div>
+      <div style="display:flex;gap:7px;"><input id="iftyDeletePassword" type="password" autocomplete="current-password" placeholder="${ifty216Markup("現在のパスワード","Current password")}" style="flex:1;min-width:0;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;"><button type="button" onclick="toggleIftyPasswordVisibility('iftyDeletePassword', this)" style="border:none;background:#334155;color:white;padding:0 12px;border-radius:8px;font-weight:800;cursor:pointer;">${ifty216Markup("表示","Display")}</button></div>
       <input id="iftyDeleteConfirmText" autocomplete="off" placeholder="確認のため DELETE と入力" style="padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:1em;">
       <button type="button" onclick="submitIftyAccountDelete()" style="border:none;background:#b91c1c;color:white;padding:10px;border-radius:8px;font-weight:900;cursor:pointer;">完全に削除</button>
       <div id="iftySecurityModalStatus" style="min-height:1.3em;color:#475569;font-size:.84em;"></div>
@@ -17111,9 +16597,9 @@ function iftyKanjiItemMatchesSearch(item,query){
 function renderIftyKanjiItemCard(folder,item,index){
   const study=normalizeIftySubjectStudyState(item), weak=isIftySubjectWeakItem(item);
   const relations=[
-    item.synonyms?.length?`<div><b>類義語：</b>${item.synonyms.map(escapeHtml).join(' / ')}</div>`:'',
-    item.sameMeaning?.length?`<div><b>同義語：</b>${item.sameMeaning.map(escapeHtml).join(' / ')}</div>`:'',
-    item.antonyms?.length?`<div><b>対義語：</b>${item.antonyms.map(escapeHtml).join(' / ')}</div>`:''
+    item.synonyms?.length?`<div><b>${ifty216Markup("類義語：","Similar words:")}</b>${item.synonyms.map(escapeHtml).join(' / ')}</div>`:'',
+    item.sameMeaning?.length?`<div><b>${ifty216Markup("同義語：","Synonyms:")}</b>${item.sameMeaning.map(escapeHtml).join(' / ')}</div>`:'',
+    item.antonyms?.length?`<div><b>${ifty216Markup("対義語：","Antonyms:")}</b>${item.antonyms.map(escapeHtml).join(' / ')}</div>`:''
   ].filter(Boolean).join('');
   return `<article data-ifty139-item="1" data-ifty139-subject="KANJI" data-ifty139-folder="${escapeHtml(String(folder.id))}" data-ifty139-id="${escapeHtml(String(item.id))}" style="margin-top:9px;border:1px solid #d8b4fe;background:white;border-radius:11px;padding:12px;">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap;">
@@ -17127,18 +16613,18 @@ function renderIftyKanjiItemCard(folder,item,index){
         </span>
       </label>
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
-        <button type="button" onclick="regenerateIftyKanjiItem('${folder.id}','${item.id}')" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">再生成</button>
-        <button type="button" onclick="editIftyKanjiItem('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">編集</button>
+        <button type="button" onclick="regenerateIftyKanjiItem('${folder.id}','${item.id}')" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${ifty216Markup("再生成","Regenerate")}</button>
+        <button type="button" onclick="editIftyKanjiItem('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${ifty216Markup("編集","Edit")}</button>
         <button type="button" onclick="moveIftyKanjiItem('${folder.id}','${item.id}',-1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:5px 7px;">↑</button>
         <button type="button" onclick="moveIftyKanjiItem('${folder.id}','${item.id}',1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:5px 7px;">↓</button>
         <button type="button" onclick="toggleIftyKanjiItemReview('${folder.id}','${item.id}')" style="border:none;background:#f59e0b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${isIftyReviewTagged(item)?'🔁 復習中':'＋復習'}</button>
-        <button type="button" onclick="deleteIftyKanjiItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">削除</button>
+        <button type="button" onclick="deleteIftyKanjiItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${ifty216Markup("削除","Delete")}</button>
       </div>
     </div>
-    ${item.meanings?.length?`<div style="margin-top:9px;color:#0f172a;line-height:1.55;"><b>意味：</b>${item.meanings.map(escapeHtml).join(' / ')}</div>`:''}
+    ${item.meanings?.length?`<div style="margin-top:9px;color:#0f172a;line-height:1.55;"><b>${ifty216Markup("意味：","Meaning:")}</b>${item.meanings.map(escapeHtml).join(' / ')}</div>`:''}
     ${item.explanation?`<div style="margin-top:7px;color:#334155;line-height:1.55;white-space:pre-wrap;">${escapeHtml(item.explanation)}</div>`:''}
     ${relations?`<div style="margin-top:8px;padding:8px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;color:#78350f;font-size:.82em;line-height:1.5;">${relations}</div>`:''}
-    ${item.examples?.length?`<div style="margin-top:8px;padding:8px 10px;background:#f8fafc;border-radius:8px;"><b style="font-size:.78em;color:#475569;">例</b>${item.examples.map(ex=>`<div style="margin-top:5px;color:#334155;"><span>${escapeHtml(ex.sentence)}</span>${ex.reading?` <span style="color:#0284c7;font-size:.84em;">（${escapeHtml(ex.reading)}）</span>`:''}${ex.meaning?`<div style="color:#64748b;font-size:.82em;">${escapeHtml(ex.meaning)}</div>`:''}</div>`).join('')}</div>`:''}
+    ${item.examples?.length?`<div style="margin-top:8px;padding:8px 10px;background:#f8fafc;border-radius:8px;"><b style="font-size:.78em;color:#475569;">${ifty216Markup("例","Example")}</b>${item.examples.map(ex=>`<div style="margin-top:5px;color:#334155;"><span>${escapeHtml(ex.sentence)}</span>${ex.reading?` <span style="color:#0284c7;font-size:.84em;">（${escapeHtml(ex.reading)}）</span>`:''}${ex.meaning?`<div style="color:#64748b;font-size:.82em;">${escapeHtml(ex.meaning)}</div>`:''}</div>`).join('')}</div>`:''}
     ${item.notes?`<div style="margin-top:6px;color:#64748b;font-size:.8em;">💡 ${escapeHtml(item.notes)}</div>`:''}
     ${study?.total?`<div style="margin-top:7px;color:#64748b;font-size:.72em;">学習 ${study.total}回 ・ 正解 ${study.correct} ・ 不正解 ${study.wrong}${weak?' ・ 🎯 苦手候補':''}</div>`:''}
   </article>`;
@@ -17165,18 +16651,18 @@ function renderIftyKanjiPage(options={}){
           <button id="iftyKanjiFolderToggle_${folder.id}" type="button" onclick="toggleIftyKanjiFolder('${folder.id}')" style="border:none;background:transparent;padding:0;font-weight:900;color:#0f172a;font-size:1.04em;cursor:pointer;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${visuallyCollapsed?'▶':'▼'} 📁 ${escapeHtml(folder.name)} (${(folder.items||[]).length}件)</button>
         </div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">
-          <button type="button" onclick="toggleIftyKanjiFolderSelection('${folder.id}',${allSelected?'false':'true'})" style="border:none;background:${allSelected?'#10b981':'#e2e8f0'};color:${allSelected?'white':'#334155'};border-radius:6px;padding:6px 8px;font-weight:800;">${allSelected?'全解除':'全選択'}</button>
+          <button type="button" onclick="toggleIftyKanjiFolderSelection('${folder.id}',${allSelected?'false':'true'})" style="border:none;background:${allSelected?'#10b981':'#e2e8f0'};color:${allSelected?'white':'#334155'};border-radius:6px;padding:6px 8px;font-weight:800;">${allSelected?ifty216T("全解除","Deselect all"):ifty216T("全選択","Select all")}</button>
           <button type="button" onclick="moveIftyKanjiFolder(${folderIndex},-1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;">↑</button>
           <button type="button" onclick="moveIftyKanjiFolder(${folderIndex},1)" style="border:none;background:#e2e8f0;border-radius:6px;padding:6px 8px;">↓</button>
 ${ifty132RegenerateFolderButton('KANJI',folder.id,(folder.items||[]).length)}
-          ${ifty135ThemeButton('KANJI',folder)}<button type="button" onclick="renameIftyKanjiFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">名前変更</button>
-          <button type="button" onclick="deleteIftyKanjiFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">削除</button>
+          ${ifty135ThemeButton('KANJI',folder)}<button type="button" onclick="renameIftyKanjiFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">${ifty216Markup("名前変更","Rename")}</button>
+          <button type="button" onclick="deleteIftyKanjiFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">${ifty216Markup("削除","Delete")}</button>
         </div>
       </div>
       ${visuallyCollapsed?'':`<div style="margin-top:11px;">
         <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;">
           <input id="iftyKanjiTerm_${folder.id}" value="${escapeHtml(iftyKanjiTermDrafts[folder.id]||'')}" oninput="iftyKanjiTermDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftyKanjiItem('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}))}" placeholder="漢字・熟語を入力（EnterでALLIA生成）" style="flex:1;min-width:180px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1em;">
-          <button type="button" onclick="openIftyKanbunInputHandwriting('iftyKanjiTerm_${folder.id}','${folder.id}','KANJI')" style="border:none;background:#0f766e;color:white;border-radius:7px;padding:9px 11px;font-weight:900;">✍️ 手書き</button>
+          <button type="button" onclick="openIftyKanbunInputHandwriting('iftyKanjiTerm_${folder.id}','${folder.id}','KANJI')" style="border:none;background:#0f766e;color:white;border-radius:7px;padding:9px 11px;font-weight:900;">${ifty216Markup("✍️ 手書き","✍️ Handwriting")}</button>
           <button id="iftyKanjiGenerateBtn_${folder.id}" type="button" onclick="generateIftyKanjiItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">＋ 追加（ALLIA）</button>
           <button type="button" onclick="addBlankIftyKanjiItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 11px;font-weight:900;">白紙</button>
         </div>
@@ -17191,14 +16677,14 @@ ${ifty132RegenerateFolderButton('KANJI',folder.id,(folder.items||[]).length)}
   }).join('');
   showIftyHubContent(`<section class="ifty-portal-shell">
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
-      <div><h1 class="ifty-portal-title">KANJI</h1><div class="ifty-portal-subtitle">漢字・熟語の読み・意味・書き・関係語を、LANGUAGESと同じフォルダ形式で管理します。</div></div>
+      <div><h1 class="ifty-portal-title">${ifty216Markup("漢字","KANJI")}</h1><div class="ifty-portal-subtitle">漢字・熟語の読み・意味・書き・関係語を、LANGUAGESと同じフォルダ形式で管理します。</div></div>
       ${renderIftySubjectHeaderActions('KANJI')}
     </div>
     <div style="margin-top:14px;padding:13px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;">
       <div style="font-weight:900;color:#0f172a;">新しいKANJIフォルダ</div>
 <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;">
         <input id="iftyKanjiFolderName" placeholder="例：常用漢字 / 四字熟語 / 模試の漢字" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();createIftyKanjiFolder()}" style="flex:1;min-width:200px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">
-        <button type="button" onclick="createIftyKanjiFolder()" style="border:none;background:#7e22ce;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">作成</button>
+        <button type="button" onclick="createIftyKanjiFolder()" style="border:none;background:#7e22ce;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">${ifty216Markup("作成","Create")}</button>
       </div>
       <div style="margin-top:7px;color:#64748b;font-size:.76em;">フォルダ ${module.folders.length} / 漢字・熟語 ${countIftyKanjiItems()}</div>
     </div>
@@ -17277,19 +16763,19 @@ window.editIftyKanjiItem=function(folderId,itemId,isNew=false){
   const item=ref.item, modal=document.createElement('div');modal.id='iftyKanjiEditModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.68);z-index:12180;display:flex;align-items:center;justify-content:center;padding:10px;box-sizing:border-box;';
   const list=v=>escapeHtml((v||[]).join('、'));
   modal.innerHTML=`<div style="width:min(760px,100%);max-height:92vh;overflow:auto;background:white;border-radius:14px;padding:16px;box-sizing:border-box;">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h2 style="margin:0;color:#581c87;">漢字・熟語を編集</h2><button type="button" onclick="document.getElementById('iftyKanjiEditModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h2 style="margin:0;color:#581c87;">${ifty216Markup("漢字・熟語を編集","Edit kanji or compound")}</h2><button type="button" onclick="document.getElementById('iftyKanjiEditModal')?.remove()" style="border:none;background:#e2e8f0;border-radius:7px;padding:6px 9px;font-weight:900;">×</button></div>
     <div style="display:grid;gap:9px;margin-top:12px;">
-      <div><b>漢字・熟語</b><div style="display:flex;gap:6px;margin-top:4px;"><input id="iftyKanjiEditTerm" value="${escapeHtml(item.term)}" style="flex:1;min-width:0;padding:9px;border:1px solid #c4b5fd;border-radius:7px;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.15em;"><button type="button" onclick="openIftyKanbunInputHandwriting('iftyKanjiEditTerm','${folderId}','KANJI')" style="border:none;background:#0f766e;color:white;border-radius:7px;padding:9px 11px;font-weight:900;">✍️</button></div></div>
+      <div><b>${ifty216Markup("漢字・熟語","Kanji / compound")}</b><div style="display:flex;gap:6px;margin-top:4px;"><input id="iftyKanjiEditTerm" value="${escapeHtml(item.term)}" style="flex:1;min-width:0;padding:9px;border:1px solid #c4b5fd;border-radius:7px;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.15em;"><button type="button" onclick="openIftyKanbunInputHandwriting('iftyKanjiEditTerm','${folderId}','KANJI')" style="border:none;background:#0f766e;color:white;border-radius:7px;padding:9px 11px;font-weight:900;">✍️</button></div></div>
       ${ifty132AliasField(item, 'ifty132KanjiAliases')}
-      <label><b>読み（、区切り）</b><input id="iftyKanjiEditReadings" value="${list(item.readings)}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></label>
-      <label><b>意味（、区切り）</b><input id="iftyKanjiEditMeanings" value="${list(item.meanings)}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></label>
-      <label><b>意味説明</b><textarea id="iftyKanjiEditExplanation" rows="3" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">${escapeHtml(item.explanation)}</textarea></label>
-      <label><b>類義語（、区切り）</b><input id="iftyKanjiEditSynonyms" value="${list(item.synonyms)}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></label>
-      <label><b>同義語（、区切り）</b><input id="iftyKanjiEditSame" value="${list(item.sameMeaning)}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></label>
-      <label><b>対義語（、区切り）</b><input id="iftyKanjiEditAntonyms" value="${list(item.antonyms)}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></label>
-      <label><b>例文（1行1例）</b><textarea id="iftyKanjiEditExamples" rows="3" placeholder="熟慮を重ねる。" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">${escapeHtml((item.examples||[]).map(x=>x.sentence).join('\n'))}</textarea></label>
-      <label><b>補足</b><textarea id="iftyKanjiEditNotes" rows="2" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">${escapeHtml(item.notes)}</textarea></label>
-      <button type="button" onclick="saveIftyKanjiItemEdit('${folderId}','${itemId}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:11px;font-weight:900;">保存</button>
+      <label><b>${ifty216Markup("読み（、区切り）","Readings (separated by 、)")}</b><input id="iftyKanjiEditReadings" value="${list(item.readings)}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></label>
+      <label><b>${ifty216Markup("意味（、区切り）","Meanings (separated by 、)")}</b><input id="iftyKanjiEditMeanings" value="${list(item.meanings)}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></label>
+      <label><b>${ifty216Markup("意味説明","Meaning explanation")}</b><textarea id="iftyKanjiEditExplanation" rows="3" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">${escapeHtml(item.explanation)}</textarea></label>
+      <label><b>${ifty216Markup("類義語（、区切り）","Similar words (separated by 、)")}</b><input id="iftyKanjiEditSynonyms" value="${list(item.synonyms)}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></label>
+      <label><b>${ifty216Markup("同義語（、区切り）","Synonyms (separated by 、)")}</b><input id="iftyKanjiEditSame" value="${list(item.sameMeaning)}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></label>
+      <label><b>${ifty216Markup("対義語（、区切り）","Antonyms (separated by 、)")}</b><input id="iftyKanjiEditAntonyms" value="${list(item.antonyms)}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;"></label>
+      <label><b>${ifty216Markup("例文（1行1例）","Examples (one per line)")}</b><textarea id="iftyKanjiEditExamples" rows="3" placeholder="熟慮を重ねる。" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">${escapeHtml((item.examples||[]).map(x=>x.sentence).join('\n'))}</textarea></label>
+      <label><b>${ifty216Markup("補足","Notes")}</b><textarea id="iftyKanjiEditNotes" rows="2" style="width:100%;box-sizing:border-box;margin-top:4px;padding:9px;border:1px solid #cbd5e1;border-radius:7px;">${escapeHtml(item.notes)}</textarea></label>
+      <button type="button" onclick="saveIftyKanjiItemEdit('${folderId}','${itemId}')" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:11px;font-weight:900;">${ifty216Markup("保存","Save")}</button>
     </div></div>`;
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});document.body.appendChild(modal);setTimeout(()=>document.getElementById('iftyKanjiEditTerm')?.focus({preventScroll:true}),0);
 };
@@ -17417,7 +16903,7 @@ window.startIftyKanjiPractice=async function(modes){
 function renderIftyKanjiPracticePlayer(){
   const st=iftyKanjiPracticeState;if(!st)return;let modal=document.getElementById('practiceModal');
   if(!modal){modal=document.createElement('div');modal.id='practiceModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;justify-content:center;align-items:center;padding:18px;box-sizing:border-box;z-index:10030;';document.body.appendChild(modal);}modal.style.display='flex';
-  if(st.index>=st.questions.length){if(advanceIftySubjectQuizSequence124('KANJI',st))return;setIftyPracticeQuestionActive(modal,false);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h2 style="color:#581c87;">KANJI PRACTICE 完了</h2><div style="font-size:1.2em;font-weight:900;">正解 ${st.correct} / ${st.questions.length} ・ 分からない ${st.unknown||0}</div>${ifty182Summary(st.history182)}<button onclick="openPracticeHome('KANJI')" style="margin-top:14px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px 14px;font-weight:900;">PRACTICEへ戻る</button></div>`;return;}
+  if(st.index>=st.questions.length){if(advanceIftySubjectQuizSequence124('KANJI',st))return;setIftyPracticeQuestionActive(modal,false);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h2 style="color:#581c87;">KANJI PRACTICE 完了</h2><div style="font-size:1.2em;font-weight:900;">正解 ${st.correct} / ${st.questions.length} ・ 分からない ${st.unknown||0}</div>${ifty182Summary(st.history182)}<button onclick="openPracticeHome('KANJI')" style="margin-top:14px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px 14px;font-weight:900;">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button></div>`;return;}
   setIftyPracticeQuestionActive(modal,true);
   const q=st.questions[st.index],meta=getIftyKanjiPracticeModeMeta(q.mode);
   let answerUi='';
@@ -17427,12 +16913,12 @@ function renderIftyKanjiPracticePlayer(){
     }else if(q.mode==='write_handwriting'){
       answerUi=`<input id="iftyKanjiPracticeHandwrittenAnswer" readonly placeholder="手書き候補を選ぶとここに入ります" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #fed7aa;border-radius:8px;background:#fff7ed;font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:1.2em;"><div style="display:flex;gap:8px;margin-top:8px;"><button type="button" onclick="openIftyKanbunInputHandwriting('iftyKanjiPracticeHandwrittenAnswer','','KANJI',{handwritingOnly:true})" style="flex:1;border:none;background:#c2410c;color:white;border-radius:8px;padding:11px;font-weight:900;">✍️ 手書きで回答</button><button type="button" onclick="submitIftyKanjiPracticeAnswer()" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:11px 14px;font-weight:900;">判定</button></div><div style="margin-top:5px;color:#9a3412;font-size:.7em;">文字候補の認識時だけALLIAを使用します。</div>`;
     }else{
-      answerUi=`<textarea id="iftyKanjiPracticeAnswer" rows="${q.mode==='meaning_explain'?4:2}" placeholder="${q.mode==='write_typing'?'漢字・熟語を入力':q.mode==='reading'?'読みを入力':'意味を説明'}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:10px;border:1px solid #c4b5fd;border-radius:8px;${q.mode==='write_typing'?'font-family:&quot;Hiragino Mincho ProN&quot;,&quot;Yu Mincho&quot;,serif;font-size:1.15em;':''}"></textarea><button type="button" onclick="submitIftyKanjiPracticeAnswer()" style="width:100%;margin-top:8px;border:none;background:${meta.color};color:white;border-radius:8px;padding:10px;font-weight:900;">回答する</button>`;
+      answerUi=`<textarea id="iftyKanjiPracticeAnswer" rows="${q.mode==='meaning_explain'?4:2}" placeholder="${q.mode==='write_typing'?'漢字・熟語を入力':q.mode==='reading'?'読みを入力':'意味を説明'}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:10px;border:1px solid #c4b5fd;border-radius:8px;${q.mode==='write_typing'?'font-family:&quot;Hiragino Mincho ProN&quot;,&quot;Yu Mincho&quot;,serif;font-size:1.15em;':''}"></textarea><button type="button" onclick="submitIftyKanjiPracticeAnswer()" style="width:100%;margin-top:8px;border:none;background:${meta.color};color:white;border-radius:8px;padding:10px;font-weight:900;">${ifty216Markup("回答する","Submit answer")}</button>`;
     }
   }
-  if(!st.answered)answerUi+=`<button type="button" onclick="ifty182UnknownKanji()" style="width:100%;margin-top:9px;padding:12px;background:#475569;color:#fff;border:1px solid #94a3b8;border-radius:9px;font-weight:800;">？ 分からない（答えを見る）</button>`;
-  const result=st.answered?`<div style="margin-top:12px;padding:11px;border-radius:8px;background:${st.last?.correct?'#f0fdf4':'#fef2f2'};color:${st.last?.correct?'#166534':'#991b1b'};"><b>${st.last?.unknown?'？ 分からない':st.last?.correct?'⭕ 正解':'❌ 要復習'}</b>${st.feedback?`<div style="margin-top:5px;white-space:pre-wrap;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:6px;color:#475569;"><b>基準：</b>${escapeHtml(st.modelAnswer)}</div>`:''}<button onclick="nextIftyKanjiPracticeQuestion()" style="width:100%;margin-top:10px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px;font-weight:900;">次へ</button></div>`:'';
-  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(700px,100%);max-height:92vh;overflow:auto;padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><b style="color:${meta.color};">KANJI ・ ${escapeHtml(meta.title)} ・ ${st.index+1}/${st.questions.length}</b><button onclick="openPracticeHome('KANJI')" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;">終了</button></div><div style="margin-top:14px;padding:17px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:9px;line-height:1.7;white-space:pre-wrap;font-size:1.05em;">${escapeHtml(q.prompt)}</div>${answerUi}${st.grading?'<div style="margin-top:7px;color:#7c3aed;font-weight:800;">ALLIAが採点中…</div>':''}${result}</div>`;
+  if(!st.answered)answerUi+=`<button type="button" onclick="ifty182UnknownKanji()" style="width:100%;margin-top:9px;padding:12px;background:#475569;color:#fff;border:1px solid #94a3b8;border-radius:9px;font-weight:800;">${ifty216Markup("？ 分からない（答えを見る）","? Don't know (show answer)")}</button>`;
+  const result=st.answered?`<div style="margin-top:12px;padding:11px;border-radius:8px;background:${st.last?.correct?'#f0fdf4':'#fef2f2'};color:${st.last?.correct?'#166534':'#991b1b'};"><b>${st.last?.unknown?ifty216T("？ 分からない","? Don't know"):st.last?.correct?ifty216T("⭕ 正解","⭕ Correct"):'❌ 要復習'}</b>${st.feedback?`<div style="margin-top:5px;white-space:pre-wrap;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:6px;color:#475569;"><b>${ifty216Markup("基準：","Reference:")}</b>${escapeHtml(st.modelAnswer)}</div>`:''}<button onclick="nextIftyKanjiPracticeQuestion()" style="width:100%;margin-top:10px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px;font-weight:900;">${ifty216Markup("次へ","Next")}</button></div>`:'';
+  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(700px,100%);max-height:92vh;overflow:auto;padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><b style="color:${meta.color};">KANJI ・ ${escapeHtml(ifty216Ui(meta.title))} ・ ${st.index+1}/${st.questions.length}</b><button onclick="openPracticeHome('KANJI')" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;">${ifty216Markup("終了","End")}</button></div><div style="margin-top:14px;padding:17px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:9px;line-height:1.7;white-space:pre-wrap;font-size:1.05em;">${escapeHtml(q.prompt)}</div>${answerUi}${st.grading?("<div style=\"margin-top:7px;color:#7c3aed;font-weight:800;\">" + ifty216Markup("ALLIAが採点中…","ALLIA is grading…") + "</div>"):''}${result}</div>`;
 }
 window.submitIftyKanjiPracticeAnswer=async function(choice){
   const st=iftyKanjiPracticeState;if(!st||st.answered||st.grading)return;const q=st.questions[st.index],ref=getIftyKanjiItemById(q.targetItemId);if(!ref)return;
@@ -17511,7 +16997,7 @@ function renderIftyOthersItemCard(folder,item){
   return `<div data-ifty139-item="1" data-ifty139-subject="OTHERS" data-ifty139-folder="${escapeHtml(String(folder.id))}" data-ifty139-id="${escapeHtml(String(item.id))}" style="margin-top:9px;border:1px solid #dbeafe;background:#fff;border-radius:10px;padding:11px;">
     <div style="display:flex;gap:8px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;">
       ${ifty139DragHandle('OTHERS',folder.id,item.id)}<label style="display:flex;gap:7px;align-items:flex-start;min-width:0;flex:1;"><input type="checkbox" ${iftyOthersSelectedItemIds.has(String(item.id))?'checked':''} onchange="toggleIftySubjectItemSelection('OTHERS','${item.id}',this.checked)" style="width:18px;height:18px;margin-top:2px;"><span style="min-width:0;"><b style="color:#0f172a;font-size:1.02em;">${escapeHtml(item.title||item.topic)}</b>${ifty132AliasInfo(item)}<span style="margin-left:6px;">${renderIftyLearningLevelInline('OTHERS', item.id, item.level)}</span>${item.tags?.length?`<span style="display:block;margin-top:4px;">${item.tags.map(t=>`<span style="display:inline-block;margin-right:4px;padding:2px 6px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.7em;font-weight:900;">${escapeHtml(t)}</span>`).join('')}</span>`:''}</span></label>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;"><button type="button" onclick="editIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">編集</button><button type="button" onclick="regenerateIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">再生成</button><button type="button" onclick="toggleIftySubjectItemReview('OTHERS','${folder.id}','${item.id}')" style="border:none;background:#f59e0b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${isIftyReviewTagged(item)?'🔁 復習中':'🔁 復習'}</button><button type="button" onclick="deleteIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">削除</button></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;"><button type="button" onclick="editIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${ifty216Markup("編集","Edit")}</button><button type="button" onclick="regenerateIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#7c3aed;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${ifty216Markup("再生成","Regenerate")}</button><button type="button" onclick="toggleIftySubjectItemReview('OTHERS','${folder.id}','${item.id}')" style="border:none;background:#f59e0b;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${isIftyReviewTagged(item)?'🔁 復習中':'🔁 復習'}</button><button type="button" onclick="deleteIftyOthersItem('${folder.id}','${item.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:5px 8px;font-weight:900;">${ifty216Markup("削除","Delete")}</button></div>
     </div>
     ${item.memoryText?`<div style="margin-top:8px;line-height:1.6;color:#334155;white-space:pre-wrap;">${escapeHtml(item.memoryText)}</div>`:''}
     ${item.keyPoints?.length?`<div style="margin-top:7px;color:#475569;font-size:.85em;">${item.keyPoints.map(x=>`• ${escapeHtml(x)}`).join('<br>')}</div>`:''}
@@ -17521,10 +17007,10 @@ function renderIftyOthersItemCard(folder,item){
 function renderIftyOthersPage(options={}){
   const y=options.preserveScroll?ifty132EditorY(window.scrollY):0; currentIftySubject='OTHERS'; const module=getIftyOthersModule();
   const rows=module.folders.map(folder=>`<section style="margin-top:14px;border:1px solid #cbd5e1;border-radius:11px;background:white;padding:13px;">
-    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start;"><div style="min-width:0;flex:1;"><button type="button" onclick="toggleIftyOthersFolder('${folder.id}')" style="border:none;background:transparent;padding:0;font-weight:900;color:#0f172a;font-size:1.02em;cursor:pointer;">${folder.collapsed?'▶':'▼'} 📁 ${escapeHtml(folder.name)} (${(folder.items||[]).length}件)</button><div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">${folder.tags.map(t=>`<span style="padding:3px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.72em;font-weight:900;">${escapeHtml(t)}</span>`).join('')||'<span style="font-size:.75em;color:#94a3b8;">教科タグ未設定</span>'}</div></div><div style="display:flex;gap:5px;flex-wrap:wrap;">${ifty132RegenerateFolderButton('OTHERS',folder.id,(folder.items||[]).length)}${ifty135ThemeButton('OTHERS',folder)}<button onclick="renameIftyOthersFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">名前変更</button><button onclick="editIftyOthersFolderTags('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">教科タグ変更</button><button onclick="deleteIftyOthersFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">フォルダ削除</button></div></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start;"><div style="min-width:0;flex:1;"><button type="button" onclick="toggleIftyOthersFolder('${folder.id}')" style="border:none;background:transparent;padding:0;font-weight:900;color:#0f172a;font-size:1.02em;cursor:pointer;">${folder.collapsed?'▶':'▼'} 📁 ${escapeHtml(folder.name)} (${(folder.items||[]).length}件)</button><div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">${folder.tags.map(t=>`<span style="padding:3px 7px;border-radius:999px;background:#e0f2fe;color:#075985;font-size:.72em;font-weight:900;">${escapeHtml(t)}</span>`).join('')||'<span style="font-size:.75em;color:#94a3b8;">教科タグ未設定</span>'}</div></div><div style="display:flex;gap:5px;flex-wrap:wrap;">${ifty132RegenerateFolderButton('OTHERS',folder.id,(folder.items||[]).length)}${ifty135ThemeButton('OTHERS',folder)}<button onclick="renameIftyOthersFolder('${folder.id}')" style="border:none;background:#64748b;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">${ifty216Markup("名前変更","Rename")}</button><button onclick="editIftyOthersFolderTags('${folder.id}')" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">教科タグ変更</button><button onclick="deleteIftyOthersFolder('${folder.id}')" style="border:none;background:#ef4444;color:white;border-radius:6px;padding:6px 9px;font-weight:900;">フォルダ削除</button></div></div>
     ${folder.collapsed?'':`<div style="margin-top:11px;"><div style="display:flex;gap:7px;flex-wrap:wrap;"><input id="iftyOthersTopic_${folder.id}" value="${escapeHtml(iftyOthersTopicDrafts[folder.id]||'')}" placeholder="用語・概念・人物など" oninput="iftyOthersTopicDrafts['${folder.id}']=this.value" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();event.stopPropagation();generateIftyOthersItem('${folder.id}');requestAnimationFrame(()=>this.focus({preventScroll:true}))}" style="flex:1;min-width:190px;padding:9px;border:1px solid #94a3b8;border-radius:7px;"><button onclick="generateIftyOthersItem('${folder.id}')" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">＋ 追加（ALLIA）</button><button onclick="addBlankIftyOthersItem('${folder.id}')" style="border:1px solid #94a3b8;background:white;color:#334155;border-radius:7px;padding:9px 12px;font-weight:900;">白紙</button></div><div id="iftyOthersPending_${folder.id}" style="margin-top:6px;color:#64748b;font-size:.76em;">${Number(iftyOthersGenerationPending[folder.id]||0)>0?`ALLIA生成中… ${Number(iftyOthersGenerationPending[folder.id]||0)}件`:''}</div><div id="iftyOthersItems_${folder.id}">${(folder.items||[]).map(item=>renderIftyOthersItemCard(folder,item)).join('')||'<div style="padding:18px;text-align:center;color:#94a3b8;">まだ項目がありません。</div>'}</div></div>`}
   </section>`).join('');
-  showIftyHubContent(`<section class="ifty-portal-shell"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;"><div><h1 class="ifty-portal-title">OTHERS</h1><div class="ifty-portal-subtitle">保健・情報など、専用教科がない内容を自由な教科タグで管理。</div></div>${renderIftySubjectHeaderActions('OTHERS')}</div><div style="margin-top:14px;padding:13px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-weight:900;color:#0c4a6e;">新しいOTHERSフォルダ</div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;"><input id="iftyOthersFolderName" placeholder="例：保健 / 情報I" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><input id="iftyOthersFolderTags" placeholder="教科タグ（例：保健, 情報）" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><button onclick="createIftyOthersFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">作成</button></div><div style="font-size:.75em;color:#64748b;margin-top:6px;">タグ名は自由に変更できます。「世界史 / 日本史」のような固定候補にはしません。</div></div>${renderIftySubjectSelectionToolbar('OTHERS')}<div id="iftyOthersReviewPanelWrap">${renderIftySubjectReviewPanel('OTHERS')}</div>
+  showIftyHubContent(`<section class="ifty-portal-shell"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;"><div><h1 class="ifty-portal-title">${ifty216Markup("その他","OTHERS")}</h1><div class="ifty-portal-subtitle">保健・情報など、専用教科がない内容を自由な教科タグで管理。</div></div>${renderIftySubjectHeaderActions('OTHERS')}</div><div style="margin-top:14px;padding:13px;border:1px solid #bae6fd;border-radius:10px;background:#f0f9ff;"><div style="font-weight:900;color:#0c4a6e;">新しいOTHERSフォルダ</div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;"><input id="iftyOthersFolderName" placeholder="例：保健 / 情報I" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><input id="iftyOthersFolderTags" placeholder="教科タグ（例：保健, 情報）" style="flex:1;min-width:180px;padding:9px;border:1px solid #7dd3fc;border-radius:7px;"><button onclick="createIftyOthersFolder()" style="border:none;background:#0369a1;color:white;border-radius:7px;padding:9px 12px;font-weight:900;">${ifty216Markup("作成","Create")}</button></div><div style="font-size:.75em;color:#64748b;margin-top:6px;">タグ名は自由に変更できます。「世界史 / 日本史」のような固定候補にはしません。</div></div>${renderIftySubjectSelectionToolbar('OTHERS')}<div id="iftyOthersReviewPanelWrap">${renderIftySubjectReviewPanel('OTHERS')}</div>
       <div id="iftyOthersWeakPanelWrap">${renderIftySubjectWeakPanel('OTHERS')}</div>${rows||'<div style="margin-top:16px;padding:28px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;color:#94a3b8;">OTHERSフォルダを作成してください。</div>'}</section>`,'subject');
   if(options.preserveScroll){requestAnimationFrame(()=>window.scrollTo({top:y,left:0,behavior:'auto'}));}
 }
@@ -17589,7 +17075,7 @@ window.generateIftyOthersItem=async function(folderId){
 function getIftyOthersPracticeRefs(){if(iftySubjectQuizRunOverride?.subject==='OTHERS'){const ids=new Set((iftySubjectQuizRunOverride.itemIds||[]).map(String));return getIftyOthersModule().folders.flatMap(folder=>(folder.items||[]).filter(item=>ids.has(String(item.id))).map(item=>({folder,item})));}return getIftyOthersModule().folders.flatMap(folder=>(folder.items||[]).map(item=>({folder,item})));}
 function buildIftyOthersPracticeQuestions(modes,count){const refs=shuffleArray(getIftyOthersPracticeRefs());const out=[];const usableModes=modes.length?modes:['simple'];for(let i=0;i<Math.min(count,refs.length);i++){const ref=refs[i];const mode=usableModes[i%usableModes.length];if(mode==='simple'){const distract=ifty147RankRelated(ref,refs.filter(x=>x.item.id!==ref.item.id)).slice(0,3).map(x=>x.item.title);const options=shuffleArray([ref.item.title,...distract]);if(options.length<2){out.push({mode:'term_write',targetItemId:ref.item.id,prompt:ref.item.memoryText||ref.item.title,answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});}else out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この説明に当てはまる用語は？',options,answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});}else if(mode==='term_write')out.push({mode,targetItemId:ref.item.id,prompt:ref.item.memoryText||'この項目名を書いてください。',answer:ref.item.title,aliases:[...ifty132Aliases(ref.item.aliases),...ifty132Aliases(ref.item.alternateSpellings)]});else out.push({mode:'explanation',targetItemId:ref.item.id,prompt:`「${ref.item.title}」とは何か。定義と本質的な特徴を自分の言葉で説明してください。`,referenceAnswer:ref.item.memoryText,keyPoints:ref.item.keyPoints||[]});}return out;}
 window.startIftyOthersPractice=async function(modes){const refs=getIftyOthersPracticeRefs();if(!refs.length)return alert('出題できるOTHERS項目がありません。');const ms=[...new Set((Array.isArray(modes)?modes:[modes]).filter(Boolean))];iftyOthersPracticeState={modes:ms,questions:buildIftyOthersPracticeQuestions(ms,iftyOthersPracticeQuestionCount),index:0,correct:0,wrong:0,answered:false,feedback:'',modelAnswer:'',last:null};closePracticeModal();renderIftyOthersPracticePlayer();};
-function renderIftyOthersPracticePlayer(){const st=iftyOthersPracticeState;if(!st)return;let modal=document.getElementById('practiceModal');if(!modal){modal=document.createElement('div');modal.id='practiceModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;justify-content:center;align-items:center;padding:18px;box-sizing:border-box;z-index:10030;';document.body.appendChild(modal);}modal.style.display='flex';if(st.index>=st.questions.length){if(advanceIftySubjectQuizSequence124('OTHERS',st))return;setIftyPracticeQuestionActive(modal,false);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:22px;text-align:center;"><h2>OTHERS PRACTICE 完了</h2><div style="font-size:1.2em;font-weight:900;color:#0f766e;">正解 ${st.correct} / ${st.questions.length} ・ 分からない ${st.unknown||0}</div>${ifty182Summary(st.history182)}<button onclick="openPracticeHome('OTHERS')" style="margin-top:14px;border:none;background:#334155;color:white;border-radius:8px;padding:10px 14px;font-weight:900;">PRACTICEへ戻る</button></div>`;return;}setIftyPracticeQuestionActive(modal,true);const q=st.questions[st.index],meta=getIftyOthersPracticeModeMeta(q.mode);const result=st.answered?`<div style="margin-top:12px;padding:10px;border-radius:8px;background:${st.last?.correct?'#f0fdf4':'#fef2f2'};color:${st.last?.correct?'#166534':'#991b1b'};"><b>${st.last?.unknown?'？ 分からない':st.last?.correct?'⭕ 正解':'❌ 要復習'}</b>${st.feedback?`<div style="margin-top:5px;white-space:pre-wrap;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:6px;color:#475569;"><b>基準：</b>${escapeHtml(st.modelAnswer)}</div>`:''}<button onclick="nextIftyOthersPracticeQuestion()" style="width:100%;margin-top:10px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px;font-weight:900;">次へ</button></div>`:'';const answer=st.answered?'':(q.mode==='simple'?`<div style="display:grid;gap:8px;margin-top:12px;">${q.options.map(o=>`<button onclick="submitIftyOthersPracticeAnswer(${JSON.stringify(o).replace(/"/g,'&quot;')})" style="border:1px solid #cbd5e1;background:white;border-radius:8px;padding:10px;text-align:left;font-weight:800;">${escapeHtml(o)}</button>`).join('')}</div>`:`<textarea id="iftyOthersPracticeAnswer" rows="4" placeholder="回答を入力" style="width:100%;box-sizing:border-box;margin-top:12px;padding:10px;border:1px solid #c4b5fd;border-radius:8px;"></textarea><button onclick="submitIftyOthersPracticeAnswer()" style="width:100%;margin-top:8px;border:none;background:${meta.color};color:white;border-radius:8px;padding:10px;font-weight:900;">回答する</button>`);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(680px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><b style="color:${meta.color};">OTHERS ・ ${meta.title} ・ ${st.index+1}/${st.questions.length}</b><button onclick="openPracticeHome('OTHERS')" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;">終了</button></div><div style="margin-top:14px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:9px;line-height:1.65;white-space:pre-wrap;">${escapeHtml(q.prompt)}</div>${answer}${result}</div>`;if(!st.answered){const btn=document.createElement('button');btn.type='button';btn.textContent='？ 分からない（答えを見る）';btn.style.cssText='display:block;width:calc(100% - 40px);margin:0 20px 16px;padding:12px;background:#475569;color:white;border:1px solid #94a3b8;border-radius:9px;font-weight:800';btn.onclick=()=>window.ifty182UnknownOthers();modal.firstElementChild?.appendChild(btn);}}
+function renderIftyOthersPracticePlayer(){const st=iftyOthersPracticeState;if(!st)return;let modal=document.getElementById('practiceModal');if(!modal){modal=document.createElement('div');modal.id='practiceModal';modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;justify-content:center;align-items:center;padding:18px;box-sizing:border-box;z-index:10030;';document.body.appendChild(modal);}modal.style.display='flex';if(st.index>=st.questions.length){if(advanceIftySubjectQuizSequence124('OTHERS',st))return;setIftyPracticeQuestionActive(modal,false);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:22px;text-align:center;"><h2>OTHERS PRACTICE 完了</h2><div style="font-size:1.2em;font-weight:900;color:#0f766e;">正解 ${st.correct} / ${st.questions.length} ・ 分からない ${st.unknown||0}</div>${ifty182Summary(st.history182)}<button onclick="openPracticeHome('OTHERS')" style="margin-top:14px;border:none;background:#334155;color:white;border-radius:8px;padding:10px 14px;font-weight:900;">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button></div>`;return;}setIftyPracticeQuestionActive(modal,true);const q=st.questions[st.index],meta=getIftyOthersPracticeModeMeta(q.mode);const result=st.answered?`<div style="margin-top:12px;padding:10px;border-radius:8px;background:${st.last?.correct?'#f0fdf4':'#fef2f2'};color:${st.last?.correct?'#166534':'#991b1b'};"><b>${st.last?.unknown?ifty216T("？ 分からない","? Don't know"):st.last?.correct?ifty216T("⭕ 正解","⭕ Correct"):'❌ 要復習'}</b>${st.feedback?`<div style="margin-top:5px;white-space:pre-wrap;">${escapeHtml(st.feedback)}</div>`:''}${st.modelAnswer?`<div style="margin-top:6px;color:#475569;"><b>${ifty216Markup("基準：","Reference:")}</b>${escapeHtml(st.modelAnswer)}</div>`:''}<button onclick="nextIftyOthersPracticeQuestion()" style="width:100%;margin-top:10px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:10px;font-weight:900;">${ifty216Markup("次へ","Next")}</button></div>`:'';const answer=st.answered?'':(q.mode==='simple'?`<div style="display:grid;gap:8px;margin-top:12px;">${q.options.map(o=>`<button onclick="submitIftyOthersPracticeAnswer(${JSON.stringify(o).replace(/"/g,'&quot;')})" style="border:1px solid #cbd5e1;background:white;border-radius:8px;padding:10px;text-align:left;font-weight:800;">${ifty216QuizText(o, true, false)}</button>`).join('')}</div>`:`<textarea id="iftyOthersPracticeAnswer" rows="4" placeholder="${ifty216Markup("回答を入力","Enter an answer")}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:10px;border:1px solid #c4b5fd;border-radius:8px;"></textarea><button onclick="submitIftyOthersPracticeAnswer()" style="width:100%;margin-top:8px;border:none;background:${meta.color};color:white;border-radius:8px;padding:10px;font-weight:900;">${ifty216Markup("回答する","Submit answer")}</button>`);modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(680px,100%);padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><b style="color:${meta.color};">OTHERS ・ ${meta.title} ・ ${st.index+1}/${st.questions.length}</b><button onclick="openPracticeHome('OTHERS')" style="border:none;background:#e2e8f0;border-radius:7px;padding:7px 10px;">${ifty216Markup("終了","End")}</button></div><div style="margin-top:14px;padding:16px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:9px;line-height:1.65;white-space:pre-wrap;">${ifty216QuizText(q.prompt, true, false)}</div>${answer}${result}</div>`;if(!st.answered){const btn=document.createElement('button');btn.type='button';btn.textContent=ifty216T("？ 分からない（答えを見る）","? Don't know (show answer)");btn.style.cssText='display:block;width:calc(100% - 40px);margin:0 20px 16px;padding:12px;background:#475569;color:white;border:1px solid #94a3b8;border-radius:9px;font-weight:800';btn.onclick=()=>window.ifty182UnknownOthers();modal.firstElementChild?.appendChild(btn);}}
 window.submitIftyOthersPracticeAnswer=async function(choice){const st=iftyOthersPracticeState;if(!st||st.answered)return;const q=st.questions[st.index];const ref=getIftyOthersItemById(q.targetItemId);if(!ref)return;const user=choice!==undefined?String(choice):String(document.getElementById('iftyOthersPracticeAnswer')?.value||'').trim();if(!user)return;let correct=false,feedback='',model=q.answer||q.referenceAnswer||'';if(q.mode==='simple'||q.mode==='term_write'){const accepted=[q.answer,...(q.aliases||[])].map(x=>String(x||'').trim().toLowerCase());correct=accepted.includes(user.trim().toLowerCase());feedback=correct?'登録内容と一致しました。':'登録内容とは一致しませんでした。';}else{if(!ensureIftyOnline('OTHERS記述採点'))return;try{const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'question_grade',quizType:'others_explanation',direction:'term_to_explanation',question:q.prompt,referenceAnswer:q.referenceAnswer||'',userAnswer:user,word:{word:ref.item.title,meanings:[ref.item.memoryText],details:(ref.item.keyPoints||[]).join(' / ')},subject:'OTHERS',order:getIftySubjectOrder('OTHERS')})});const data=await response.json().catch(()=>({}));if(!response.ok)throw alliaHttpError(response,data,'採点に失敗しました。');correct=data.correct===true;feedback=data.feedback||'';model=data.modelAnswer||model;}catch(e){return alert(String(e.message||e));}}st.answered=true;st.last={correct,userAnswer:user};st.feedback=feedback;st.modelAnswer=model;ifty182Record(st,st.index,q.prompt||'その他の問題',correct,user,model||q.answer||'',feedback);if(correct)st.correct++;else st.wrong++;recordIftySubjectStudyEvent('OTHERS',q.targetItemId,correct,`others_${q.mode}`);enrollIftyEntityReviewFromStudy(ref.item,correct);savePracticeData();renderIftyOthersPracticePlayer();};
 window.ifty182UnknownOthers=function(){
  const st=iftyOthersPracticeState,q=st?.questions?.[st.index];if(!q||st.answered)return;
@@ -19126,20 +18612,20 @@ window.openIftyLearningStats = function() {
   const weak = getIftyWeakEntries().slice(0, 20);
   showIftyHubContent(`
     <section class="ifty-portal-shell">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;"><div><h1 class="ifty-portal-title">LEARNING STATS</h1><div class="ifty-portal-subtitle">端末・クラウドに保存された単語ごとの学習記録から集計。</div></div><button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;"><div><h1 class="ifty-portal-title">LEARNING STATS</h1><div class="ifty-portal-subtitle">端末・クラウドに保存された単語ごとの学習記録から集計。</div></div><button class="ifty-portal-back" type="button" onclick="openIftyHome()">${ifty216Markup("HOMEへ戻る","Back to Home")}</button></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-top:16px;">
         <div class="ifty-settings-section"><div class="ifty-settings-note">今日学習</div><div style="font-size:1.6em;font-weight:900;">${stats.studiedToday}語</div></div>
-        <div class="ifty-settings-section"><div class="ifty-settings-note">今日の回答</div><div style="font-size:1.6em;font-weight:900;">${stats.answersToday}回</div></div>
-        <div class="ifty-settings-section"><div class="ifty-settings-note">今日の正答率</div><div style="font-size:1.6em;font-weight:900;">${stats.answersToday ? stats.accuracyToday + '%' : '—'}</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">${ifty216Markup("今日の回答","Answers today")}</div><div style="font-size:1.6em;font-weight:900;">${stats.answersToday}回</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">${ifty216Markup("今日の正答率","Accuracy today")}</div><div style="font-size:1.6em;font-weight:900;">${stats.answersToday ? stats.accuracyToday + '%' : '—'}</div></div>
         <div class="ifty-settings-section"><div class="ifty-settings-note">今日の目標</div><div style="font-size:1.6em;font-weight:900;color:#0f766e;">${stats.studiedToday}/${stats.dailyGoal}語</div><div class="ifty-settings-note">${stats.goalPercent >= 100 ? '達成 ✓' : stats.goalPercent + '%'}</div></div>
         <div class="ifty-settings-section"><div class="ifty-settings-note">連続学習</div><div style="font-size:1.6em;font-weight:900;color:#b45309;">${stats.studyStreak}日</div></div>
         <div class="ifty-settings-section"><div class="ifty-settings-note">自己ベスト</div><div style="font-size:1.6em;font-weight:900;color:#7c3aed;">${stats.bestStreak}日</div></div>
-        <div class="ifty-settings-section"><div class="ifty-settings-note">今日の復習</div><div style="font-size:1.6em;font-weight:900;color:#c2410c;">${stats.dueReview}語</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">${ifty216Markup("今日の復習","Review today")}</div><div style="font-size:1.6em;font-weight:900;color:#c2410c;">${stats.dueReview}語</div></div>
         <div class="ifty-settings-section"><div class="ifty-settings-note">復習卒業</div><div style="font-size:1.6em;font-weight:900;color:#047857;">${stats.reviewGraduated}語</div></div>
-        <div class="ifty-settings-section"><div class="ifty-settings-note">苦手候補</div><div style="font-size:1.6em;font-weight:900;color:#be123c;">${stats.weakWords}語</div></div>
+        <div class="ifty-settings-section"><div class="ifty-settings-note">${ifty216Markup("苦手候補","Items to work on")}</div><div style="font-size:1.6em;font-weight:900;color:#be123c;">${stats.weakWords}語</div></div>
       </div>
-      <div class="ifty-settings-section"><h3>直近7日</h3><div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.86em;"><thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #cbd5e1;">日付</th><th style="padding:7px;border-bottom:1px solid #cbd5e1;">学習語</th><th style="padding:7px;border-bottom:1px solid #cbd5e1;">回答</th><th style="padding:7px;border-bottom:1px solid #cbd5e1;">正答率</th></tr></thead><tbody>${daily.map(row => `<tr><td style="padding:7px;border-bottom:1px solid #e2e8f0;">${escapeHtml(row.key.slice(5).replace('-', '/'))}</td><td style="text-align:center;padding:7px;border-bottom:1px solid #e2e8f0;">${row.studiedWords}</td><td style="text-align:center;padding:7px;border-bottom:1px solid #e2e8f0;">${row.attempts}</td><td style="text-align:center;padding:7px;border-bottom:1px solid #e2e8f0;">${row.attempts ? row.accuracy + '%' : '—'}</td></tr>`).join('')}</tbody></table></div></div>
-      <div class="ifty-settings-section"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div><h3 style="margin-bottom:4px;">苦手候補</h3><div class="ifty-settings-note">回答履歴から自動判定。</div></div>${weak.length ? '<button class="ifty-settings-action" type="button" onclick="switchToVocabView(); setTimeout(()=>startIftyWeakFlashcards(\'front\'),0);" style="background:#be123c;color:white;">苦手だけ学習</button>' : ''}</div><div style="margin-top:10px;display:grid;gap:6px;">${weak.length ? weak.map(({ folder, word, study, accuracy }) => `<div style="padding:9px;border:1px solid #fecdd3;border-radius:8px;background:#fff1f2;"><b>${escapeHtml(word.word || '')}</b><span style="margin-left:8px;color:#be123c;font-size:.8em;">${Math.round(accuracy*100)}% (${study.correct}/${study.total})</span><div style="font-size:.72em;color:#9f1239;margin-top:2px;">${escapeHtml(folder.name || '')}</div></div>`).join('') : '<div class="ifty-settings-note">現在、苦手候補はありません。</div>'}</div></div>
+      <div class="ifty-settings-section"><h3>直近7日</h3><div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.86em;"><thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #cbd5e1;">${ifty216Markup("日付","Date")}</th><th style="padding:7px;border-bottom:1px solid #cbd5e1;">学習語</th><th style="padding:7px;border-bottom:1px solid #cbd5e1;">${ifty216Markup("回答","Answer")}</th><th style="padding:7px;border-bottom:1px solid #cbd5e1;">${ifty216Markup("正答率","Accuracy")}</th></tr></thead><tbody>${daily.map(row => `<tr><td style="padding:7px;border-bottom:1px solid #e2e8f0;">${escapeHtml(row.key.slice(5).replace('-', '/'))}</td><td style="text-align:center;padding:7px;border-bottom:1px solid #e2e8f0;">${row.studiedWords}</td><td style="text-align:center;padding:7px;border-bottom:1px solid #e2e8f0;">${row.attempts}</td><td style="text-align:center;padding:7px;border-bottom:1px solid #e2e8f0;">${row.attempts ? row.accuracy + '%' : '—'}</td></tr>`).join('')}</tbody></table></div></div>
+      <div class="ifty-settings-section"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div><h3 style="margin-bottom:4px;">${ifty216Markup("苦手候補","Items to work on")}</h3><div class="ifty-settings-note">回答履歴から自動判定。</div></div>${weak.length ? '<button class="ifty-settings-action" type="button" onclick="switchToVocabView(); setTimeout(()=>startIftyWeakFlashcards(\'front\'),0);" style="background:#be123c;color:white;">苦手だけ学習</button>' : ''}</div><div style="margin-top:10px;display:grid;gap:6px;">${weak.length ? weak.map(({ folder, word, study, accuracy }) => `<div style="padding:9px;border:1px solid #fecdd3;border-radius:8px;background:#fff1f2;"><b>${escapeHtml(word.word || '')}</b><span style="margin-left:8px;color:#be123c;font-size:.8em;">${Math.round(accuracy*100)}% (${study.correct}/${study.total})</span><div style="font-size:.72em;color:#9f1239;margin-top:2px;">${escapeHtml(folder.name || '')}</div></div>`).join('') : '<div class="ifty-settings-note">現在、苦手候補はありません。</div>'}</div></div>
     </section>`, 'stats');
 };
 
@@ -19261,16 +18747,16 @@ window.openIftyExampleBank = function() {
     <section class="ifty-portal-shell">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <div>
-          <h1 class="ifty-portal-title">EXAMPLE BANK</h1>
+          <h1 class="ifty-portal-title">${ifty216Markup("例文バンク","EXAMPLE BANK")}</h1>
           <div class="ifty-portal-subtitle">保存済みの例文を一覧・検索し、必要なものをBASIC SENTENCESへ取り込めます。</div>
         </div>
-        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">${ifty216Markup("HOMEへ戻る","Back to Home")}</button>
       </div>
 
       <div class="ifty-settings-section">
         <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
           <input id="iftyExampleSearchInput" value="${escapeHtml(iftyExampleSearchQuery)}" oninput="setIftyExampleSearch(this.value)" placeholder="語彙・例文・日本語訳・フォルダ名で検索" style="flex:1;min-width:210px;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:.94em;">
-          <button class="ifty-settings-action" type="button" onclick="clearIftyExampleSearch()" style="background:#64748b;color:white;">クリア</button>
+          <button class="ifty-settings-action" type="button" onclick="clearIftyExampleSearch()" style="background:#64748b;color:white;">${ifty216Markup("クリア","Clear")}</button>
           <span id="iftyExampleBankCount" class="ifty-settings-note">${total}件</span>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;">
@@ -19485,7 +18971,7 @@ window.openIftyBasicSentenceEditor = function(sentenceId = '', preferredFolderId
   const folderOptions = getIftySortedBasicSentenceFolders().map(folder => `<option value="${escapeHtml(folder.id)}" ${String(folder.id) === folderId ? 'selected' : ''}>${escapeHtml(folder.name)}</option>`).join('');
   modal.innerHTML = `
     <div class="ifty196-basic-editor" style="width:min(94vw,700px);max-height:92vh;overflow:auto;background:#1e293b;color:#f1f5f9;border:1px solid #64748b;border-radius:14px;padding:20px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.35);position:relative;">
-      <button type="button" onclick="closeIftyBasicSentenceEditor()" aria-label="閉じる" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
+      <button type="button" onclick="closeIftyBasicSentenceEditor()" aria-label="${ifty216Markup("閉じる","Close")}" style="position:absolute;right:10px;top:10px;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.35em;cursor:pointer;">×</button>
       <h2 style="margin:0;padding-right:46px;color:#f8fafc;">${item ? 'BASIC SENTENCEを編集' : 'BASIC SENTENCEを追加'}</h2>
       <div style="margin-top:8px;color:#cbd5e1;font-size:.83em;line-height:1.55;">英文は必須です。和訳は同時に入力できます。和訳を後で追加する場合、英日・日英の記述問題には和訳登録後に出題されます。</div>
       <div style="margin-top:15px;display:grid;gap:11px;">
@@ -19499,7 +18985,7 @@ window.openIftyBasicSentenceEditor = function(sentenceId = '', preferredFolderId
           <button type="button" id="ifty213BasicTranslateForceButton" onclick="ifty205TranslateBasicSentence(true)" style="border:1px solid #64748b;border-radius:8px;background:#334155;color:#f8fafc;padding:9px 12px;font:inherit;font-size:.82em;min-height:42px;cursor:pointer;">↻ AIで再生成</button>
           <span style="color:#cbd5e1;font-size:.76em;line-height:1.5;">英文を日本語に翻訳します。生成結果を確認してから保存してください（ALLIA利用枠を消費）。</span>
         </div>
-        <label style="display:grid;gap:5px;font-weight:800;color:#f1f5f9;">メモ<textarea id="iftyBasicSentenceNote" rows="2" placeholder="文法・語法・覚え方など（任意）" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.note : '')}</textarea></label>
+        <label style="display:grid;gap:5px;font-weight:800;color:#f1f5f9;">${ifty216Markup("メモ","Notes")}<textarea id="iftyBasicSentenceNote" rows="2" placeholder="文法・語法・覚え方など（任意）" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;">${escapeHtml(item ? item.note : '')}</textarea></label>
       </div>
       <div id="iftyBasicSentenceSaveStatus" style="min-height:1.2em;margin-top:10px;color:#86efac;font-size:.8em;font-weight:800;"></div>
       <div class="ifty196-basic-editor-actions" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;position:sticky;bottom:-20px;background:#1e293b;padding:14px 0 2px;margin-top:4px;border-top:1px solid #64748b;">
@@ -19790,9 +19276,9 @@ function renderIftyBasicSentenceCard(item, index, total) {
         <button type="button" ${index <= 0 ? 'disabled' : ''} onclick="moveIftyBasicSentence('${escapeHtml(String(item.id))}',-1)" title="上へ" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 9px;cursor:pointer;">↑</button>
         <button type="button" ${index >= total - 1 ? 'disabled' : ''} onclick="moveIftyBasicSentence('${escapeHtml(String(item.id))}',1)" title="下へ" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:7px 9px;cursor:pointer;">↓</button>
         <button type="button" onclick="speakIftyBasicSentence('${escapeHtml(String(item.id))}')" title="英文を読む" style="border:none;background:#0284c7;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">🔊</button>
-        <button type="button" onclick="openIftyBasicSentenceEditor('${escapeHtml(String(item.id))}')" title="編集" style="border:none;background:#64748b;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">✏️</button>
+        <button type="button" onclick="openIftyBasicSentenceEditor('${escapeHtml(String(item.id))}')" title="${ifty216Markup("編集","Edit")}" style="border:none;background:#64748b;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">✏️</button>
         ${!item.ja ? `<button type="button" onclick="ifty205TranslateExistingBasicSentence('${escapeHtml(String(item.id))}')" title="ALLIAで和訳を生成して編集する" style="border:1px solid #38bdf8;background:#075985;color:white;border-radius:7px;padding:7px 9px;font-size:.76em;font-weight:850;min-height:36px;cursor:pointer;">✨ 和訳を生成</button>` : ''}
-        <button type="button" onclick="deleteIftyBasicSentence('${escapeHtml(String(item.id))}')" title="削除" style="border:none;background:#dc2626;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">削除</button>
+        <button type="button" onclick="deleteIftyBasicSentence('${escapeHtml(String(item.id))}')" title="${ifty216Markup("削除","Delete")}" style="border:none;background:#dc2626;color:white;border-radius:7px;padding:7px 9px;cursor:pointer;">${ifty216Markup("削除","Delete")}</button>
       </div>
     </div>
   </div>`;
@@ -19825,8 +19311,8 @@ function renderIftyBasicSentenceList() {
         <div style="display:flex;gap:5px;flex-wrap:wrap;">
           <button type="button" ${folderIndex <= 0 ? 'disabled' : ''} onclick="moveIftyBasicSentenceFolder('${escapeHtml(folder.id)}',-1)" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:6px 9px;font-weight:800;">↑</button>
           <button type="button" ${folderIndex >= folders.length - 1 ? 'disabled' : ''} onclick="moveIftyBasicSentenceFolder('${escapeHtml(folder.id)}',1)" style="border:none;background:#e2e8f0;color:#334155;border-radius:7px;padding:6px 9px;font-weight:800;">↓</button>
-          ${ifty135ThemeButton('BASIC SENTENCES',folder)}<button type="button" onclick="renameIftyBasicSentenceFolder('${escapeHtml(folder.id)}')" style="border:none;background:#f59e0b;color:#111827;border-radius:7px;padding:6px 9px;font-weight:800;">名前変更</button>
-          <button type="button" onclick="deleteIftyBasicSentenceFolder('${escapeHtml(folder.id)}')" style="border:none;background:#ef4444;color:white;border-radius:7px;padding:6px 9px;font-weight:800;">削除</button>
+          ${ifty135ThemeButton('BASIC SENTENCES',folder)}<button type="button" onclick="renameIftyBasicSentenceFolder('${escapeHtml(folder.id)}')" style="border:none;background:#f59e0b;color:#111827;border-radius:7px;padding:6px 9px;font-weight:800;">${ifty216Markup("名前変更","Rename")}</button>
+          <button type="button" onclick="deleteIftyBasicSentenceFolder('${escapeHtml(folder.id)}')" style="border:none;background:#ef4444;color:white;border-radius:7px;padding:6px 9px;font-weight:800;">${ifty216Markup("削除","Delete")}</button>
         </div>
       </div>
       ${folder.collapsed && !queryActive ? '' : `<div class="ifty128-basic-items" style="display:grid;gap:8px;margin-top:10px;">${rows.length ? rows.map((item, index) => renderIftyBasicSentenceCard(item, index, rows.length)).join('') : '<div class="ifty-settings-note">このフォルダにはまだ英文がありません。</div>'}</div>`}
@@ -19842,21 +19328,21 @@ window.openIftyBasicSentences = function() {
   showIftyHubContent(`
     <section class="ifty-portal-shell">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-        <div><h1 class="ifty-portal-title">BASIC SENTENCES</h1><div class="ifty-portal-subtitle">英文をフォルダで整理できます。フォルダと英文は↑↓で並べ替えられます。</div></div>
-        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">HOMEへ戻る</button>
+        <div><h1 class="ifty-portal-title">${ifty216Markup("基本文","BASIC SENTENCES")}</h1><div class="ifty-portal-subtitle">英文をフォルダで整理できます。フォルダと英文は↑↓で並べ替えられます。</div></div>
+        <button class="ifty-portal-back" type="button" onclick="openIftyHome()">${ifty216Markup("HOMEへ戻る","Back to Home")}</button>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;margin-top:15px;"><div class="ifty-settings-section"><div class="ifty-settings-note">登録英文</div><div style="font-size:1.45em;font-weight:900;color:#047857;">${stats.total}</div></div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;margin-top:15px;"><div class="ifty-settings-section"><div class="ifty-settings-note">${ifty216Markup("登録英文","Saved sentences")}</div><div style="font-size:1.45em;font-weight:900;color:#047857;">${stats.total}</div></div></div>
       <div class="ifty-settings-section ifty196-basic-toolbar">
         <div class="ifty196-basic-toolbar-main" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <input id="iftyBasicSentenceSearchInput" value="${escapeHtml(iftyBasicSentenceSearchQuery)}" oninput="setIftyBasicSentenceSearch(this.value)" placeholder="英文・和訳・メモで全フォルダ検索" aria-label="全フォルダから英文を検索" style="flex:1;min-width:170px;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:.94em;">
-          <button class="ifty-settings-action" type="button" onclick="clearIftyBasicSentenceSearch()" style="background:#475569;color:white;">クリア</button>
+          <input id="iftyBasicSentenceSearchInput" value="${escapeHtml(iftyBasicSentenceSearchQuery)}" oninput="setIftyBasicSentenceSearch(this.value)" placeholder="${ifty216Markup("英文・和訳・メモで全フォルダ検索","Search all folders by English, translation or notes")}" aria-label="全フォルダから英文を検索" style="flex:1;min-width:170px;padding:10px;border:1px solid #94a3b8;border-radius:8px;font-size:.94em;">
+          <button class="ifty-settings-action" type="button" onclick="clearIftyBasicSentenceSearch()" style="background:#475569;color:white;">${ifty216Markup("クリア","Clear")}</button>
           <span id="iftyBasicSentenceCount" class="ifty-settings-note">${stats.total}件</span>
-          <button class="ifty-settings-action" type="button" onclick="createIftyBasicSentenceFolder()" style="background:#047857;color:white;">＋ フォルダ作成</button>
+          <button class="ifty-settings-action" type="button" onclick="createIftyBasicSentenceFolder()" style="background:#047857;color:white;">${ifty216Markup("＋ フォルダ作成","＋ Create folder")}</button>
         </div>
         <div class="ifty196-basic-toolbar-sub" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-          <button class="ifty-settings-action" type="button" onclick="openIftyBasicSentenceEditor('', iftyBasicSentenceActiveFolderId)" style="background:#059669;color:white;">＋ 英文・和訳を登録</button>
+          <button class="ifty-settings-action" type="button" onclick="openIftyBasicSentenceEditor('', iftyBasicSentenceActiveFolderId)" style="background:#059669;color:white;">${ifty216Markup("＋ 英文・和訳を登録","＋ Add sentence & translation")}</button>
           <button class="ifty-settings-action" type="button" onclick="openIftyExampleBank()" style="background:#0f766e;color:white;">📚 EXAMPLE BANK</button>
-          <button class="ifty-settings-action" type="button" onclick="openPracticeHome('BASIC SENTENCES')" style="background:#7c3aed;color:white;">⚔️ PRACTICE</button>
+          <button class="ifty-settings-action" type="button" onclick="openPracticeHome('BASIC SENTENCES')" style="background:#7c3aed;color:white;">${ifty216Markup("⚔️ 実践","⚔️ PRACTICE")}</button>
         </div>
       </div>
       <div id="iftyBasicSentenceList" style="display:grid;gap:10px;margin-top:12px;"></div>
@@ -20174,7 +19660,7 @@ function renderIftyBasicSentencePracticeHome(modal) {
   const sets = getIftyBasicPracticeSets();
   modal.innerHTML = `<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(820px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;">
-      <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">⚔️ PRACTICE</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">教科ごとに実践フォルダを保存できます。</div></div>
+      <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">${ifty216Markup("⚔️ 実践","⚔️ PRACTICE")}</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">${ifty216Markup("教科ごとに実践フォルダを保存できます。","Save practice folders for each subject.")}</div></div>
       <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
     </div>
     ${renderIftyBasicPracticeTabs()}
@@ -20182,10 +19668,10 @@ function renderIftyBasicSentencePracticeHome(modal) {
     <div style="border:1px solid #c4b5fd;border-radius:10px;padding:14px;background:#faf5ff;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
         <div>
-          <b style="color:#4c1d95;">❓ クイズ</b>
-          <div style="font-size:.82em;color:#7c3aed;margin-top:2px;">他教科と同じく、フォルダごとに英文・問題形式・問題数を保存します。</div>
+          <b style="color:#4c1d95;">${ifty216Markup("❓ クイズ","❓ Quiz")}</b>
+          <div style="font-size:.82em;color:#7c3aed;margin-top:2px;">${ifty216Markup("他教科と同じく、フォルダごとに英文・問題形式・問題数を保存します。","Save sentences, question types and question counts per folder.")}</div>
         </div>
-        <button type="button" onclick="createIftyBasicPracticeSet()" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">＋ クイズフォルダ</button>
+        <button type="button" onclick="createIftyBasicPracticeSet()" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">${ifty216Markup("＋ クイズフォルダ","＋ Quiz folder")}</button>
       </div>
       <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
         ${sets.length ? sets.map(set => {
@@ -20199,7 +19685,7 @@ function renderIftyBasicSentencePracticeHome(modal) {
               <button type="button" onclick="moveIftyBasicPracticeSet('${set.id}',-1)" style="border:none;background:#ede9fe;border-radius:4px;padding:5px;cursor:pointer;">⬆️</button>
               <button type="button" onclick="moveIftyBasicPracticeSet('${set.id}',1)" style="border:none;background:#ede9fe;border-radius:4px;padding:5px;cursor:pointer;">⬇️</button>
               <button type="button" onclick="duplicateIftyBasicPracticeSet('${set.id}')" style="border:none;background:#ede9fe;border-radius:4px;padding:5px;cursor:pointer;">複製</button>
-              <button type="button" onclick="deleteIftyBasicPracticeSet('${set.id}')" style="border:none;background:#ef4444;color:white;border-radius:4px;padding:5px 7px;cursor:pointer;">削除</button>
+              <button type="button" onclick="deleteIftyBasicPracticeSet('${set.id}')" style="border:none;background:#ef4444;color:white;border-radius:4px;padding:5px 7px;cursor:pointer;">${ifty216Markup("削除","Delete")}</button>
             </div>
           </div>`;
         }).join('') : '<div style="color:#a78bfa;text-align:center;padding:16px;">まだクイズフォルダがありません。</div>'}
@@ -20399,33 +19885,33 @@ window.openIftyBasicPracticeSet = function(setId) {
 
   modal.innerHTML = `<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(900px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">◀ 戻る</button>
+      <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">${ifty216Markup("◀ 戻る","◀ Back")}</button>
       <button type="button" onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;">
       <div>
-        <div style="font-size:.78em;color:#7c3aed;">BASIC SENTENCES / クイズ</div>
+        <div style="font-size:.78em;color:#7c3aed;">${ifty216Markup("BASIC SENTENCES / クイズ","Basic sentences / Quiz")}</div>
         <h2 style="margin:2px 0 0;color:#4c1d95;font-size:1.3em;">${escapeHtml(set.name)}</h2>
         <div style="font-size:.82em;color:#64748b;margin-top:3px;">${items.length}英文 ・ ${set.questionCount}問</div>
       </div>
-      <button type="button" onclick="renameIftyBasicPracticeSet('${set.id}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">名前変更</button>
+      <button type="button" onclick="renameIftyBasicPracticeSet('${set.id}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">${ifty216Markup("名前変更","Rename")}</button>
     </div>
 
     <div style="margin-top:14px;padding:12px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:8px;">
-      <b style="color:#581c87;">1. 問題形式（複数選択可）</b><div style="font-size:.8em;color:#475569;margin-top:5px;">選択した形式を1回の実践で出題します。正誤・訂正を含む場合は後半の専用パートに進みます。</div>
+      <b style="color:#581c87;">${ifty216Markup("1. 問題形式（複数選択可）","1. Question types (multiple allowed)")}</b><div style="font-size:.8em;color:#475569;margin-top:5px;">${ifty216Markup("選択した形式を1回の実践で出題します。正誤・訂正を含む場合は後半の専用パートに進みます。","Use the selected types in one session. True/false and correction questions appear in a separate later section.")}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin-top:9px;">
         <label style="display:flex;gap:8px;align-items:flex-start;border:1px solid ${modeWritten?'#a78bfa':'#e2e8f0'};background:${modeWritten?'#f5f3ff':'white'};border-radius:8px;padding:10px;cursor:pointer;">
           <input type="checkbox" ${modeWritten?'checked':''} onchange="ifty197ToggleBasicMode('${set.id}','written',this.checked)" style="width:18px;height:18px;accent-color:#7c3aed;flex:none;margin-top:2px;">
-          <span><b style="color:#4c1d95;">✍️ 記述</b><span style="display:block;font-size:.78em;color:#64748b;margin-top:2px;line-height:1.4;">日→英 / 英→日。回答内容をALLIAが採点。</span></span>
+          <span><b style="color:#4c1d95;">${ifty216Markup("✍️ 記述","✍️ Written response")}</b><span style="display:block;font-size:.78em;color:#64748b;margin-top:2px;line-height:1.4;">${ifty216Markup("日→英 / 英→日。回答内容をALLIAが採点。","Japanese to English or English to Japanese. ALLIA grades the response.")}</span></span>
         </label>
         <label style="display:flex;gap:8px;align-items:flex-start;border:1px solid ${modeCloze?'#60a5fa':'#e2e8f0'};background:${modeCloze?'#eff6ff':'white'};border-radius:8px;padding:10px;cursor:pointer;">
           <input type="checkbox" ${modeCloze?'checked':''} onchange="ifty197ToggleBasicMode('${set.id}','cloze',this.checked)" style="width:18px;height:18px;accent-color:#2563eb;flex:none;margin-top:2px;">
-          <span><b style="color:#1d4ed8;">🧩 穴埋め</b><span style="display:block;font-size:.78em;color:#64748b;margin-top:2px;line-height:1.4;">英文の一語を穴埋め。通常採点は端末内。</span></span>
+          <span><b style="color:#1d4ed8;">${ifty216Markup("🧩 穴埋め","🧩 Fill in the blanks")}</b><span style="display:block;font-size:.78em;color:#64748b;margin-top:2px;line-height:1.4;">${ifty216Markup("英文の一語を穴埋め。通常採点は端末内。","Fill in a missing word. Standard grading runs on this device.")}</span></span>
         </label>
         <label style="display:flex;gap:8px;align-items:flex-start;border:1px solid ${modeTruth?'#86efac':'#e2e8f0'};background:${modeTruth?'#f0fdf4':'white'};border-radius:8px;padding:10px;cursor:pointer;">
           <input type="checkbox" ${modeTruth?'checked':''} onchange="ifty197ToggleBasicMode('${set.id}','truefalse',this.checked)" style="width:18px;height:18px;accent-color:#0f766e;flex:none;margin-top:2px;">
-          <span><b style="color:#166534;">⭕ 正誤・訂正</b><span style="display:block;font-size:.78em;color:#64748b;margin-top:2px;line-height:1.4;">正しい英文は○、誤っている英文は修正して回答。ALLIAが採点。</span></span>
+          <span><b style="color:#166534;">${ifty216Markup("⭕ 正誤・訂正","⭕ True/false & correction")}</b><span style="display:block;font-size:.78em;color:#64748b;margin-top:2px;line-height:1.4;">${ifty216Markup("正しい英文は○、誤っている英文は修正して回答。ALLIAが採点。","Mark correct English sentences as true and correct the others. ALLIA grades the response.")}</span></span>
         </label>
       </div>
     </div>
@@ -20440,27 +19926,27 @@ window.openIftyBasicPracticeSet = function(setId) {
       <label style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-top:12px;font-weight:900;color:#f1f5f9;">
         <span>🎯 空欄の選び方</span>
         <select aria-label="穴埋めで空欄にする語の選び方" onchange="setIftyBasicPracticeSetClozeSelection('${set.id}',this.value)" style="max-width:100%;min-height:40px;padding:7px 10px;border-radius:8px;border:1px solid #93c5fd;background:#0f172a;color:#f8fafc;font:inherit;">
-          <option value="smart" ${set.clozeSelection!=='legacy'?'selected':''}>自動・重要表現と苦手を優先</option>
-          <option value="legacy" ${set.clozeSelection==='legacy'?'selected':''}>従来・長い単語を優先</option>
+          <option value="smart" ${set.clozeSelection!=='legacy'?'selected':''}>${ifty216Markup("自動・重要表現と苦手を優先","Auto: important expressions and weak points")}</option>
+          <option value="legacy" ${set.clozeSelection==='legacy'?'selected':''}>${ifty216Markup("従来・長い単語を優先","Classic: longer words first")}</option>
         </select>
       </label>
       <div style="font-size:.79em;color:#cbd5e1;line-height:1.5;margin-top:7px;">自動判定では文法・熟語・登録メモの要点、以前誤答した空欄を優先します。学習効果を保証するものではありません。短い文は穴数を調整し、番号順に回答できます。</div>
     </div>` : ''}
 
     <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
-      <b style="color:#334155;">2. 問題数</b>
-      <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${set.questionCount}" onchange="setIftyBasicPracticeSetQuestionCount('${set.id}',this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
-      <span style="font-size:.76em;color:#64748b;">登録英文が少ない場合は、ある分だけ出題します。</span>
+      <b style="color:#334155;">${ifty216Markup("2. 問題数","2. Number of questions")}</b>
+      <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="${ifty216Markup("問題数","Number of questions")}" value="${set.questionCount}" onchange="setIftyBasicPracticeSetQuestionCount('${set.id}',this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
+      <span style="font-size:.76em;color:#64748b;">${ifty216Markup("登録英文が少ない場合は、ある分だけ出題します。","If there are too few sentences, only available ones will be used.")}</span>
     </div>
 
     <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
-      <b style="color:#334155;">3. 英文を追加</b>
+      <b style="color:#334155;">${ifty216Markup("3. 英文を追加","3. Add sentences")}</b>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
-        <button type="button" onclick="addAllToIftyBasicPracticeSet('${set.id}')" style="border:none;background:#5b21b6;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">全英文を追加</button>
-        <button type="button" onclick="clearIftyBasicPracticeSetItems('${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">フォルダを空にする</button>
+        <button type="button" onclick="addAllToIftyBasicPracticeSet('${set.id}')" style="border:none;background:#5b21b6;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">${ifty216Markup("全英文を追加","Add all sentences")}</button>
+        <button type="button" onclick="clearIftyBasicPracticeSetItems('${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">${ifty216Markup("フォルダを空にする","Empty folder")}</button>
       </div>
       ${folders.length ? `<div style="margin-top:9px;padding:9px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:8px;">
-        <div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:6px;">学習フォルダ単位で追加</div>
+        <div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:6px;">${ifty216Markup("学習フォルダ単位で追加","Add by study folder")}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">${folders.map(folder => {
           const count = getIftyBasicPracticeEligibleItems([folder.id]).length;
           return `<button type="button" onclick="addIftyBasicFolderToPracticeSet('${set.id}','${folder.id}')" style="border:1px solid #7dd3fc;background:white;color:#075985;border-radius:999px;padding:7px 10px;font-weight:900;cursor:pointer;">＋ ${escapeHtml(folder.name)} (${count})</button>`;
@@ -20470,26 +19956,26 @@ window.openIftyBasicPracticeSet = function(setId) {
 
     ${ifty149ConfigPanel('BASIC SENTENCES',set,items.map(item=>({id:item.id,name:item.en||item.ja||'英文'})),[['written','記述'],['cloze','穴埋め'],['truefalse','正誤・訂正']])}
     <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
-      <b style="color:#334155;">4. 実践設定</b>
+      <b style="color:#334155;">${ifty216Markup("4. 実践設定","4. Practice settings")}</b>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:9px;">
         <label style="display:flex;align-items:center;gap:7px;font-weight:800;color:#334155;">
-          <input type="checkbox" ${set.random?'checked':''} onchange="setIftyBasicPracticeSetRandom('${set.id}',this.checked)" style="width:18px;height:18px;accent-color:#0ea5e9;"> ランダム順
+          <input type="checkbox" ${set.random?'checked':''} onchange="setIftyBasicPracticeSetRandom('${set.id}',this.checked)" style="width:18px;height:18px;accent-color:#0ea5e9;"> ${ifty216Markup("ランダム順","Random order")}
         </label>
-        <label style="font-weight:800;color:#334155;">記述の方向
+        <label style="font-weight:800;color:#334155;">${ifty216Markup("記述の方向","Written response direction")}
           <select onchange="setIftyBasicPracticeSetDirection('${set.id}',this.value)" ${modeWritten?'':'disabled'} style="margin-left:6px;padding:8px;border:1px solid #cbd5e1;border-radius:7px;background:white;opacity:${modeWritten?'1':'.55'};">
-            <option value="mixed" ${set.direction==='mixed'?'selected':''}>日英・英日 MIX</option>
-            <option value="ja_to_en" ${set.direction==='ja_to_en'?'selected':''}>日 → 英</option>
-            <option value="en_to_ja" ${set.direction==='en_to_ja'?'selected':''}>英 → 日</option>
+            <option value="mixed" ${set.direction==='mixed'?'selected':''}>${ifty216Markup("日英・英日 MIX","Mixed Japanese / English")}</option>
+            <option value="ja_to_en" ${set.direction==='ja_to_en'?'selected':''}>${ifty216Markup("日 → 英","Japanese → English")}</option>
+            <option value="en_to_ja" ${set.direction==='en_to_ja'?'selected':''}>${ifty216Markup("英 → 日","English → Japanese")}</option>
           </select>
         </label>
-        <button type="button" onclick="startIftyBasicPracticeSet('${set.id}')" ${items.length?'':'disabled'} style="margin-left:auto;background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 14px;font-weight:900;cursor:${items.length?'pointer':'default'};opacity:${items.length?'1':'.45'};">▶ 開始</button>
+        <button type="button" onclick="startIftyBasicPracticeSet('${set.id}')" ${items.length?'':'disabled'} style="margin-left:auto;background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 14px;font-weight:900;cursor:${items.length?'pointer':'default'};opacity:${items.length?'1':'.45'};">${ifty216Markup("▶ 開始","▶ Start")}</button>
       </div>
     </div>
 
     <div style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
         <b style="color:#334155;">登録英文 ${items.length}件</b>
-        <input id="iftyBasicPracticeSetSearch_${set.id}" type="search" placeholder="英文・和訳を検索" oninput="filterIftyBasicPracticeSetList('${set.id}',this.value)" style="flex:1;min-width:180px;max-width:360px;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e1;border-radius:7px;">
+        <input id="iftyBasicPracticeSetSearch_${set.id}" type="search" placeholder="${ifty216Markup("英文・和訳を検索","Search sentences and translations")}" oninput="filterIftyBasicPracticeSetList('${set.id}',this.value)" style="flex:1;min-width:180px;max-width:360px;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e1;border-radius:7px;">
       </div>
       <div id="iftyBasicPracticeSetList_${set.id}" style="min-height:${items.length?'110px':'0'};max-height:min(38vh,420px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border:1px solid ${items.length?'#e2e8f0':'transparent'};border-radius:8px;padding:${items.length?'0 8px':'0'};">
         ${items.length ? items.map(item => {
@@ -20497,7 +19983,7 @@ window.openIftyBasicPracticeSet = function(setId) {
           const search = `${item.en||''} ${item.ja||''} ${folder?.name||''}`.toLowerCase();
           return `<div data-ifty-basic-set-row data-search="${escapeHtml(search)}" style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:8px 2px;border-bottom:1px solid #f1f5f9;">
             <span style="min-width:0;overflow-wrap:anywhere;"><b>${escapeHtml(item.en||'')}</b><span style="display:block;color:#64748b;font-size:.86em;margin-top:2px;">${escapeHtml(item.ja||'')}</span><span style="display:block;color:#94a3b8;font-size:.72em;margin-top:2px;">📁 ${escapeHtml(folder?.name||'未分類')}</span></span>
-            <button type="button" onclick="toggleIftyBasicPracticeSetItem('${set.id}','${item.id}',false)" style="border:none;background:none;color:#ef4444;cursor:pointer;flex:none;">削除</button>
+            <button type="button" onclick="toggleIftyBasicPracticeSetItem('${set.id}','${item.id}',false)" style="border:none;background:none;color:#ef4444;cursor:pointer;flex:none;">${ifty216Markup("削除","Delete")}</button>
           </div>`;
         }).join('') : '<div style="color:#94a3b8;text-align:center;padding:16px;">英文を追加してください。</div>'}
       </div>
@@ -20562,7 +20048,7 @@ function renderIftyBasicPracticeQuestion() {
     const total=st.correct+st.wrong+(st.unknown||0);
     const back = st.setId ? `openIftyBasicPracticeSet('${st.setId}')` : `setIftyUnifiedPracticeSubject('BASIC SENTENCES')`;
     const truthNext=st.truthRemaining>0 && st.setId ? `<button onclick="ifty197StartTruthPart('${st.setId}',${st.truthRemaining})" style="width:100%;margin-bottom:10px;border:none;background:#0f766e;color:white;border-radius:8px;padding:12px;font-weight:900;">▶ 続いて正誤・訂正 ${st.truthRemaining}問へ</button>` : '';
-    modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h2 style="color:#4c1d95;">BASIC SENTENCES 完了</h2><div style="font-size:1.15em;margin:14px 0;">正解 ${st.correct} / ${total}　分からない ${st.unknown||0}　正答率 ${total?Math.round(st.correct/total*100):0}%</div>${ifty182Summary(st.history182)}${truthNext}<button onclick="${back}" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:11px 16px;font-weight:900;">設定へ戻る</button></div>`; return;
+    modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h2 style="color:#4c1d95;">BASIC SENTENCES 完了</h2><div style="font-size:1.15em;margin:14px 0;">正解 ${st.correct} / ${total}　分からない ${st.unknown||0}　正答率 ${total?Math.round(st.correct/total*100):0}%</div>${ifty182Summary(st.history182)}${truthNext}<button onclick="${back}" style="border:none;background:#7c3aed;color:white;border-radius:8px;padding:11px 16px;font-weight:900;">${ifty216Markup("設定へ戻る","Back to settings")}</button></div>`; return;
   }
   setIftyPracticeQuestionActive(modal, true);
   const item=findIftyBasicSentenceById(st.queue[st.index]); if(!item){st.index++;renderIftyBasicPracticeQuestion();return;}
@@ -20583,7 +20069,7 @@ function renderIftyBasicPracticeQuestion() {
   st.ifty143Prompt=prompt;
   const degreeNote=st.mode==='written'&&st.difficulty==='hard'?'※ HARD：時制・語法・語順まで自然な翻訳を意識してください。':st.mode==='written'&&st.difficulty==='extreme'?'※ EXTREME：意味の細部、前置詞や語形、ニュアンスまで正確に訳してください。':'';
   const answerField = st.mode==='cloze' ? `<div style="margin-top:14px;"><div style="font-weight:900;color:#f1f5f9;margin-bottom:7px;">空欄の答え（番号順）</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:9px;">${(st.cloze.answers||[st.cloze.answer]).map((_,i)=>`<label style="display:grid;gap:5px;color:#cbd5e1;font-weight:800;">${i+1}番目<input data-ifty202-cloze-answer="${i}" aria-label="${i+1}番目の空欄" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="単語を入力" style="width:100%;min-width:0;box-sizing:border-box;min-height:43px;background:#0f172a;color:#f8fafc;border:1px solid #93c5fd;border-radius:8px;padding:9px 11px;font:inherit;"></label>`).join('')}</div></div>` : `<label style="display:block;margin-top:14px;font-weight:800;color:#334155;">${label}<textarea id="iftyBasicPracticeAnswer" rows="3" style="width:100%;box-sizing:border-box;margin-top:7px;padding:11px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;"></textarea></label>`;
-  modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(700px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:10px;"><div style="font-weight:900;color:${st.mode==='cloze'?'#1d4ed8':'#5b21b6'};">${st.mode==='cloze'?'🧩 穴埋め':'✍️ 記述'}　${st.index+1}/${st.queue.length}</div><button onclick="${closeAction}" style="border:none;background:none;font-size:1.3em;color:#64748b;">✕</button></div><div style="margin-top:18px;padding:16px;border-radius:10px;background:#f8fafc;font-size:1.08em;line-height:1.7;white-space:pre-wrap;">${escapeHtml(prompt)}</div>${degreeNote?`<p style="font-size:.85em;color:#475569;">${escapeHtml(degreeNote)}</p>`:''}${answerField}<button id="iftyBasicPracticeSubmit" onclick="submitIftyBasicPracticeAnswer()" style="width:100%;margin-top:11px;border:none;background:${st.mode==='cloze'?'#2563eb':'#7c3aed'};color:white;border-radius:8px;padding:11px;font-weight:900;">回答</button><button type="button" onclick="ifty182UnknownBasic()" style="width:100%;margin-top:9px;padding:11px;background:#475569;color:white;border:0;border-radius:8px;font-weight:850;">？ 分からない（答えを見る）</button><div style="margin-top:8px;color:#64748b;font-size:.78em;">Enterで回答 / Shift+Enterで改行${st.mode==='cloze'?'。通常はALLIAを使用しません。':''}</div></div>`;
+  modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(700px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);"><div style="display:flex;justify-content:space-between;gap:10px;"><div style="font-weight:900;color:${st.mode==='cloze'?'#1d4ed8':'#5b21b6'};">${st.mode==='cloze'?ifty216T("🧩 穴埋め","🧩 Fill in the blanks"):ifty216T("✍️ 記述","✍️ Written response")}　${st.index+1}/${st.queue.length}</div><button onclick="${closeAction}" style="border:none;background:none;font-size:1.3em;color:#64748b;">✕</button></div><div style="margin-top:18px;padding:16px;border-radius:10px;background:#f8fafc;font-size:1.08em;line-height:1.7;white-space:pre-wrap;">${escapeHtml(prompt)}</div>${degreeNote?`<p style="font-size:.85em;color:#475569;">${escapeHtml(degreeNote)}</p>`:''}${answerField}<button id="iftyBasicPracticeSubmit" onclick="submitIftyBasicPracticeAnswer()" style="width:100%;margin-top:11px;border:none;background:${st.mode==='cloze'?'#2563eb':'#7c3aed'};color:white;border-radius:8px;padding:11px;font-weight:900;">${ifty216Markup("回答","Answer")}</button><button type="button" onclick="ifty182UnknownBasic()" style="width:100%;margin-top:9px;padding:11px;background:#475569;color:white;border:0;border-radius:8px;font-weight:850;">${ifty216Markup("？ 分からない（答えを見る）","? Don't know (show answer)")}</button><div style="margin-top:8px;color:#64748b;font-size:.78em;">Enterで回答 / Shift+Enterで改行${st.mode==='cloze'?'。通常はALLIAを使用しません。':''}</div></div>`;
   const inputs=st.mode==='cloze' ? [...modal.querySelectorAll('[data-ifty202-cloze-answer]')] : [document.getElementById('iftyBasicPracticeAnswer')].filter(Boolean);
   inputs.forEach((input,i)=>{
     input.onkeydown=e=>{
@@ -20617,14 +20103,14 @@ window.submitIftyBasicPracticeAnswer = async function() {
   // ALLIA may accept alternative wording, but must not replace the registered model.
   const registeredAnswer=st.currentDirection==='ja_to_en'?item.en:item.ja;
   if(!ensureIftyOnline('BASIC SENTENCES記述採点')){st.answered=false;return;}
-  modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><h3 style="color:#5b21b6;">ALLIAが採点中…</h3></div>`;
+  modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><h3 style="color:#5b21b6;">${ifty216Markup("ALLIAが採点中…","ALLIA is grading…")}</h3></div>`;
   try{
     const response=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'basic_sentence_grade',difficulty:st.difficulty,direction:st.currentDirection,prompt:st.currentDirection==='ja_to_en'?item.ja:item.en,referenceAnswer:registeredAnswer,userAnswer:answer})});
     const data=await response.json(); if(!response.ok)throw alliaHttpError(response,data,'採点に失敗しました。');
     const correct=data.correct===true; if(correct)st.correct++;else st.wrong++; st.last={answer,correct}; if(!correct)ifty162Capture('BASIC SENTENCES',{prompt:st.ifty143Prompt||'',referenceAnswer:registeredAnswer,instruction:st.currentDirection==='ja_to_en'?'英訳を入力':'和訳を入力'},'written',registeredAnswer,item.id); recordIftyBasicSentenceStudy(item.id,correct); savePracticeData(); renderIftyBasicPracticeFeedback(correct,data.feedback||'',registeredAnswer,false);
   }catch(error){
     st.answered=false;
-    modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h3 style="color:#ef4444;">採点に失敗しました</h3><p>${escapeHtml(String(error.message||error))}</p><button onclick="renderIftyBasicPracticeQuestion()" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;">問題に戻る</button></div>`;
+    modal.innerHTML=`<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h3 style="color:#ef4444;">${ifty216Markup("採点に失敗しました","Grading failed")}</h3><p>${escapeHtml(String(error.message||error))}</p><button onclick="renderIftyBasicPracticeQuestion()" style="border:none;background:#7c3aed;color:white;border-radius:7px;padding:9px 12px;">${ifty216Markup("問題に戻る","Back to question")}</button></div>`;
   }
 };
 
@@ -20634,14 +20120,14 @@ function renderIftyBasicPracticeFeedback(correct, feedback, modelAnswer, canChal
   const prompt=String(st.ifty143Prompt||'');
   const referenceLabel=st.mode==='cloze'?'空欄の正解（番号順）':'登録済みの模範解答';
   modal.innerHTML=`<div class="ifty-practice-config ifty202-basic-feedback" style="background:#1e293b;border:1px solid #64748b;border-radius:14px;width:min(650px,100%);padding:22px;color:#f8fafc;">
-    <h2 style="margin-top:0;color:${unknown?'#fda4af':correct?'#86efac':'#fca5a5'};">${unknown?'📖 解答確認（分からない）':correct?'⭕ 正解':'❌ 不正解'}</h2>
-    ${prompt?`<div style="padding:12px;border:1px solid #64748b;background:#24364e;border-radius:9px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;"><b style="color:#bfdbfe;">今回の問題：</b><div style="margin-top:4px;color:#f8fafc;">${escapeHtml(prompt)}</div></div>`:''}
-    <div style="padding:11px;background:#293b53;border-radius:9px;margin-top:9px;color:#f8fafc;overflow-wrap:anywhere;"><b>あなたの回答：</b>${escapeHtml(st.last?.answer||(unknown?'（分からないを選択）':'（未回答）'))}</div>
+    <h2 style="margin-top:0;color:${unknown?'#fda4af':correct?'#86efac':'#fca5a5'};">${unknown?'📖 解答確認（分からない）':correct?ifty216T("⭕ 正解","⭕ Correct"):ifty216T("❌ 不正解","❌ Incorrect")}</h2>
+    ${prompt?`<div style="padding:12px;border:1px solid #64748b;background:#24364e;border-radius:9px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;"><b style="color:#bfdbfe;">${ifty216Markup("今回の問題：","Current question:")}</b><div style="margin-top:4px;color:#f8fafc;">${escapeHtml(prompt)}</div></div>`:''}
+    <div style="padding:11px;background:#293b53;border-radius:9px;margin-top:9px;color:#f8fafc;overflow-wrap:anywhere;"><b>${ifty216Markup("あなたの回答：","Your answer:")}</b>${escapeHtml(st.last?.answer||(unknown?'（分からないを選択）':'（未回答）'))}</div>
     <div style="padding:11px;background:#37254a;border:1px solid #815ba6;border-radius:9px;margin-top:9px;color:#f5d0fe;overflow-wrap:anywhere;"><b>${referenceLabel}：</b>${escapeHtml(modelAnswer||'')}</div>
     <div style="margin-top:10px;color:#e2e8f0;white-space:pre-wrap;line-height:1.6;">${escapeHtml(feedback||'')}</div>
     ${st.mode==='cloze'&&st.cloze?.selectionMode==='smart'&&st.cloze?.parts?.length?`<details style="margin-top:12px;border:1px solid #64748b;border-radius:8px;padding:9px;color:#e2e8f0;"><summary style="cursor:pointer;font-weight:900;color:#bfdbfe;">🎯 この語を空欄にした理由</summary><div style="margin-top:7px;font-size:.88em;line-height:1.6;">${st.cloze.parts.map((p,i)=>`<div>${i+1}. <b>${escapeHtml(p.text)}</b> — ${escapeHtml(p.reason||'重要語を確認')}</div>`).join('')}</div></details>`:''}
     ${canChallenge?`<div style="margin-top:13px;padding:11px;background:#382e20;border:1px solid #eab308;border-radius:8px;color:#fef3c7;"><div style="font-weight:900;">別解だと思う場合</div><textarea id="iftyBasicChallengeReason" rows="2" placeholder="理由（任意）" style="width:100%;box-sizing:border-box;margin-top:7px;padding:9px;border:1px solid #f59e0b;border-radius:7px;"></textarea><button onclick="submitIftyBasicClozeChallenge()" style="width:100%;margin-top:7px;border:none;background:#d97706;color:white;border-radius:7px;padding:9px;font-weight:900;">⚖️ Challenge（ALLIA）</button></div>`:''}
-    <button onclick="nextIftyBasicPracticeQuestion()" style="width:100%;margin-top:13px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:12px;font-weight:900;">次の問題へ →</button>
+    <button onclick="nextIftyBasicPracticeQuestion()" style="width:100%;margin-top:13px;border:none;background:#7c3aed;color:white;border-radius:8px;padding:12px;font-weight:900;">${ifty216Markup("次の問題へ →","Next question →")}</button>
   </div>`;
 }
 
@@ -21173,9 +20659,9 @@ function ifty149ConfigPanel(subject,set,rows,allowedModes){
     @media(max-width:520px){.ifty150-config{padding:12px!important}.ifty150-config .ifty150-row select{flex:1 1 100%;width:100%;}.ifty150-config .ifty150-row{gap:9px!important}.ifty150-config .ifty150-name{flex:1 1 135px!important;}}
   </style>`;
   return `${styles}<section class="ifty150-config" style="margin-top:12px;padding:14px;border:1px solid;border-radius:12px;box-sizing:border-box;">
-   <h3 class="ifty150-heading" style="margin:0 0 11px;font-size:1.08em;font-weight:900;">難易度・派生記述・単語別ルール</h3>
-   <label class="ifty150-label" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-weight:800;">難易度
-   <select aria-label="クイズの難易度" onchange="ifty149Config('${safe(key)}','${safe(set.id)}','difficulty',this.value)" style="padding:9px;border-radius:8px;font:inherit;font-weight:800;">${IFTY149_DIFFICULTIES.map(d=>`<option value="${d}" ${ifty149Difficulty(set.difficulty)===d?'selected':''}>${d.toUpperCase()}</option>`).join('')}</select></label>
+   <h3 class="ifty150-heading" style="margin:0 0 11px;font-size:1.08em;font-weight:900;">${ifty216Markup("難易度・派生記述・単語別ルール","Difficulty, derived questions & item rules")}</h3>
+   <label class="ifty150-label" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-weight:800;">${ifty216Markup("難易度","Difficulty")}
+   <select aria-label="${ifty216Markup("クイズの難易度","Quiz difficulty")}" onchange="ifty149Config('${safe(key)}','${safe(set.id)}','difficulty',this.value)" style="padding:9px;border-radius:8px;font:inherit;font-weight:800;">${IFTY149_DIFFICULTIES.map(d=>`<option value="${d}" ${ifty149Difficulty(set.difficulty)===d?'selected':''}>${d.toUpperCase()}</option>`).join('')}</select></label>
    <p class="ifty150-help" style="font-size:.88em;margin:9px 0;">EASY：基礎確認／NORMAL：標準／HARD：理由・関連知識／EXTREME：比較・因果関係・複数条件。AI生成問題で適用します。</p>
    ${showDerived?`<fieldset class="ifty150-inner ifty150-kinds" style="padding:10px 12px;margin:10px 0;">
      <legend class="ifty150-label" style="font-weight:850;padding:0 6px;">派生記述の方向（ALLIA）</legend>
@@ -21185,7 +20671,7 @@ function ifty149ConfigPanel(subject,set,rows,allowedModes){
    <p class="ifty150-help" style="font-size:.8em;margin:6px 0 12px;">※画像・並べ替えなどの専用形式は、従来のクイズとして開始します。派生記述と混在させた場合、対応形式だけを詳細設定付きで実行します。</p>
    <div class="ifty150-inner" style="max-height:310px;overflow:auto;overscroll-behavior:contain;">
     ${rows.map(row=>{const id=String(row.id),must=required.has(id);return `<div class="ifty150-row" style="padding:10px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
-      <button type="button" class="ifty150-star" aria-label="${esc(row.name)}を必ず出す" aria-pressed="${must?'true':'false'}" onclick="ifty149Config('${safe(key)}','${safe(set.id)}','forced:${safe(id)}',this.getAttribute('aria-pressed')!=='true',this)">${must?'★ 必出中':'☆ 必ず出す'}</button>
+      <button type="button" class="ifty150-star" aria-label="${esc(row.name)}を必ず出す" aria-pressed="${must?'true':'false'}" onclick="ifty149Config('${safe(key)}','${safe(set.id)}','forced:${safe(id)}',this.getAttribute('aria-pressed')!=='true',this)">${must?'★ 必出中':ifty216T("☆ 必ず出す","☆ Always include")}</button>
       <span class="ifty150-name" style="flex:1 1 150px;min-width:0;overflow-wrap:anywhere;font-weight:800;">${esc(row.name)}</span>
       <select aria-label="${esc(row.name)}の固定出題形式" onchange="ifty149Config('${safe(key)}','${safe(set.id)}','mode:${safe(id)}',this.value)" style="padding:8px;border-radius:8px;font:inherit;">${modeOptions(id)}</select>
      </div>`;}).join('')||'<div class="ifty150-help" style="padding:14px;">出題する単語を先に追加してください。</div>'}
@@ -21216,7 +20702,7 @@ window.ifty149Config=function(subject,setId,field,value,sourceEl){
   }
   if(field.startsWith('forced:') && sourceEl instanceof HTMLElement && sourceEl.classList.contains('ifty150-star')){
     sourceEl.setAttribute('aria-pressed',value?'true':'false');
-    sourceEl.textContent=value?'★ 必出中':'☆ 必ず出す';
+    sourceEl.textContent=value?'★ 必出中':ifty216T("☆ 必ず出す","☆ Always include");
   }
   set.updatedAt=Date.now();savePracticeData();
 };
@@ -21641,7 +21127,7 @@ function renderFolders() {
   if (folders.length === 0) {
     container.innerHTML = reviewFolder + weakFolder + selectionToolbar + `
       <p style="color:#94a3b8;text-align:center;padding:30px;background:white;border-radius:8px;border:1px dashed #cbd5e1;">
-        フォルダがありません。下のフォームからフォルダを作成してください。
+        ${ifty216Markup("フォルダがありません。下のフォームからフォルダを作成してください。","No folders yet. Create one using the form below.")}
       </p>
     `;
     return;
@@ -21659,7 +21145,7 @@ function renderFolders() {
   if (globalSearchActive && renderedFolders.length === 0) {
     container.innerHTML = reviewFolder + weakFolder + selectionToolbar + `
       <p style="color:#64748b;text-align:center;padding:28px;background:white;border-radius:8px;border:1px dashed #cbd5e1;">
-        全フォルダ検索に一致する単語がありません。
+        ${ifty216Markup("全フォルダ検索に一致する単語がありません。","No words match the all-folder search.")}
       </p>`;
     return;
   }
@@ -21683,26 +21169,26 @@ function renderFolders() {
           </div>
         </div>
         <div class="ifty-folder-actions" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
-          <button onclick="selectAllWordsInFolder('${folder.id}')" title="フォルダ内全選択" style="background:${allWordsSelected ? '#10b981' : '#e2e8f0'};color:${allWordsSelected ? 'white' : '#334155'};border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:.75em;">全選択</button>
-          ${ifty135ThemeButton('ENGLISH',folder)}<button onclick="renameIftyVocabularyFolder('${folder.id}')" title="フォルダ名を変更" style="background:#64748b;color:white;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:.75em;font-weight:800;">名前変更</button>
+          <button onclick="selectAllWordsInFolder('${folder.id}')" title="フォルダ内全選択" style="background:${allWordsSelected ? '#10b981' : '#e2e8f0'};color:${allWordsSelected ? 'white' : '#334155'};border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:.75em;">${ifty216Markup("全選択","Select all")}</button>
+          ${ifty135ThemeButton('ENGLISH',folder)}<button onclick="renameIftyVocabularyFolder('${folder.id}')" title="フォルダ名を変更" style="background:#64748b;color:white;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:.75em;font-weight:800;">${ifty216Markup("名前変更","Rename")}</button>
           <button onclick="moveFolder(${fIndex}, -1)" title="上に移動" style="background:#e2e8f0;border:none;padding:2px 6px;border-radius:4px;cursor:pointer;font-size:.8em;">⬆️</button>
           <button onclick="moveFolder(${fIndex}, 1)" title="下に移動" style="background:#e2e8f0;border:none;padding:2px 6px;border-radius:4px;cursor:pointer;font-size:.8em;">⬇️</button>
           ${ifty132RegenerateFolderButton('ENGLISH',folder.id,words.length)}
           <button onclick="clearFolderWords('${folder.id}')" title="全消し" style="background:#f59e0b;color:white;border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:.75em;">全消し</button>
-          <button onclick="deleteFolder('${folder.id}')" title="削除" style="background:#ef4444;color:white;border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:.75em;">削除</button>
+          <button onclick="deleteFolder('${folder.id}')" title="${ifty216Markup("削除","Delete")}" style="background:#ef4444;color:white;border:none;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:.75em;">${ifty216Markup("削除","Delete")}</button>
         </div>
       </div>
 
       ${visuallyCollapsed ? '' : `
         <div class="ifty-word-add-row" style="display:flex;gap:6px;margin-bottom:10px;margin-top:8px;">
           <input id="wordInput_${folder.id}" value="${escapeHtml(wordInputDrafts[folder.id] || '')}" placeholder="単語を入力（Enterまたは追加でALLIA生成）" oninput="saveWordInputDraft('${folder.id}', this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); addWordToFolder('${folder.id}');}" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:4px;font-size:.9em;min-width:0;">
-          <button onclick="addWordToFolder('${folder.id}')" style="background:#0284c7;color:white;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:.9em;font-weight:bold;">追加</button>
+          <button onclick="addWordToFolder('${folder.id}')" style="background:#0284c7;color:white;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:.9em;font-weight:bold;">${ifty216Markup("追加","Add")}</button>
           <button onclick="addBlankWordToFolder('${folder.id}')" title="ALLIAを使わず白紙から自分で作成" style="background:white;color:#334155;border:1px solid #94a3b8;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:.9em;font-weight:bold;white-space:nowrap;">白紙</button>
         </div>
         <div id="spellingSuggestion_${folder.id}">${suggestion ? renderSpellingSuggestion(folder.id, suggestion) : ''}</div>
 <div style="display:flex;gap:6px;align-items:center;margin:8px 0 10px;flex-wrap:wrap;">
           <input id="folderSearch_${folder.id}" value="${escapeHtml(iftyFolderSearchQueries[folder.id] || '')}" oninput="setIftyFolderSearchQuery('${folder.id}', this.value)" placeholder="このフォルダ内をスペル・意味で検索" style="flex:1;min-width:170px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-size:.86em;">
-          <button type="button" onclick="clearIftyFolderSearchQuery('${folder.id}')" style="border:none;background:#e2e8f0;color:#334155;padding:8px 10px;border-radius:6px;font-size:.8em;font-weight:800;cursor:pointer;">クリア</button>
+          <button type="button" onclick="clearIftyFolderSearchQuery('${folder.id}')" style="border:none;background:#e2e8f0;color:#334155;padding:8px 10px;border-radius:6px;font-size:.8em;font-weight:800;cursor:pointer;">${ifty216Markup("クリア","Clear")}</button>
           <span id="folderSearchCount_${folder.id}" style="font-size:.76em;color:#64748b;white-space:nowrap;">${getIftyVisibleWordEntries(folder).length}/${words.length}件</span>
         </div>
         <div id="wordList_${folder.id}" style="display:flex;flex-direction:column;gap:8px;">
@@ -21822,12 +21308,12 @@ function keepWordInputFocused(folderId) {
 function renderSpellingSuggestion(folderId, suggestion) {
   return `
     <div style="margin-bottom: 10px; padding: 10px 12px; background: #eff6ff; border: 1px solid #93c5fd; border-radius: 7px; color: #334155; font-size: 0.9em;">
-      <div style="margin-bottom: 5px;">もしかして <b>${escapeHtml(suggestion.suggested)}</b> ？</div>
+      <div style="margin-bottom: 5px;">${ifty216Markup("もしかして","Did you mean")} <b>${escapeHtml(suggestion.suggested)}</b> ？</div>
       <div style="margin-bottom:8px;color:#64748b;font-size:.82em;">${iftySpellingAutoAcceptSeconds}秒以内に応答がなければ <b>${escapeHtml(suggestion.suggested)}</b> を自動追加します。</div>
       <div style="display: flex; gap: 7px; flex-wrap: wrap;">
         <button onclick="acceptSpellingSuggestion('${folderId}')" style="background: #0284c7; color: white; border: none; padding: 6px 10px; border-radius: 5px; cursor: pointer; font-weight: bold;">${escapeHtml(suggestion.suggested)} を追加</button>
         <button onclick="keepOriginalSpelling('${folderId}')" style="background: #e2e8f0; color: #334155; border: none; padding: 6px 10px; border-radius: 5px; cursor: pointer;">${escapeHtml(suggestion.original)} のまま追加</button>
-        <button onclick="cancelSpellingSuggestion('${folderId}')" style="background: transparent; color: #64748b; border: none; padding: 6px; cursor: pointer;">キャンセル</button>
+        <button onclick="cancelSpellingSuggestion('${folderId}')" style="background: transparent; color: #64748b; border: none; padding: 6px; cursor: pointer;">${ifty216Markup("キャンセル","Cancel")}</button>
       </div>
     </div>
   `;
@@ -21938,12 +21424,12 @@ function renderIftyAcademicTermSuggestion(subject, folderId) {
   if (!suggestion) return '';
   return `
     <div style="margin-top:8px;padding:10px 12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;color:#334155;font-size:.88em;">
-      <div style="margin-bottom:5px;">もしかして <b>${escapeHtml(suggestion.suggested)}</b> ？</div>
+      <div style="margin-bottom:5px;">${ifty216Markup("もしかして","Did you mean")} <b>${escapeHtml(suggestion.suggested)}</b> ？</div>
       <div style="margin-bottom:8px;color:#64748b;font-size:.82em;">${iftySpellingAutoAcceptSeconds}秒以内に応答がなければ <b>${escapeHtml(suggestion.suggested)}</b> を自動追加します。</div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;">
         <button type="button" onclick="acceptIftyAcademicTermSuggestion('${subject}','${folderId}')" style="background:#0284c7;color:white;border:none;padding:6px 10px;border-radius:5px;cursor:pointer;font-weight:900;">${escapeHtml(suggestion.suggested)} を追加</button>
         <button type="button" onclick="keepOriginalIftyAcademicTerm('${subject}','${folderId}')" style="background:#e2e8f0;color:#334155;border:none;padding:6px 10px;border-radius:5px;cursor:pointer;">${escapeHtml(suggestion.original)} のまま追加</button>
-        <button type="button" onclick="cancelIftyAcademicTermSuggestion('${subject}','${folderId}')" style="background:transparent;color:#64748b;border:none;padding:6px;cursor:pointer;">キャンセル</button>
+        <button type="button" onclick="cancelIftyAcademicTermSuggestion('${subject}','${folderId}')" style="background:transparent;color:#64748b;border:none;padding:6px;cursor:pointer;">${ifty216Markup("キャンセル","Cancel")}</button>
       </div>
     </div>`;
 }
@@ -22070,7 +21556,7 @@ function setIftyRegenerateButtonState(buttonId, loading) {
   const button = document.getElementById(buttonId);
   if (!button) return;
   button.disabled = !!loading;
-  button.textContent = loading ? '再生成中…' : '再生成';
+  button.textContent = loading ? '再生成中…' : ifty216T("再生成","Regenerate");
   button.style.opacity = loading ? '.62' : '1';
   button.style.cursor = loading ? 'wait' : 'pointer';
 }
@@ -22100,7 +21586,7 @@ window.ifty132RegenerateFolder=async function(subject, folderId){
   const ids=items.map(x=>String(x.id));
   const st={key,folderId,cancelled:false,total:ids.length,done:0,failed:0,request,errors:[]};ifty132BatchRegeneration=st;
   const box=document.createElement('div');box.id='ifty132BatchProgress';box.style.cssText='position:fixed;right:12px;bottom:calc(148px + env(safe-area-inset-bottom));z-index:13060;width:min(350px,calc(100vw - 24px));border:1px solid #c4b5fd;border-radius:12px;background:#fff;color:#0f172a;box-shadow:0 9px 30px #0004;padding:12px;box-sizing:border-box;';
-  box.innerHTML=`<b>↻ 全件再生成</b><div id="ifty132BatchLabel" role="status" aria-live="polite" style="margin-top:7px;font-size:.88em;"></div><progress id="ifty132BatchMeter" max="${ids.length}" value="0" style="width:100%;height:10px;margin-top:8px;"></progress><button type="button" onclick="ifty132CancelBatchRegeneration()" style="display:block;margin-top:9px;padding:8px 12px;border:0;border-radius:7px;background:#e2e8f0;color:#334155;font-weight:900;">残りを中止</button>`;
+  box.innerHTML=`<b>${ifty216Markup("↻ 全件再生成","↻ Regenerate all")}</b><div id="ifty132BatchLabel" role="status" aria-live="polite" style="margin-top:7px;font-size:.88em;"></div><progress id="ifty132BatchMeter" max="${ids.length}" value="0" style="width:100%;height:10px;margin-top:8px;"></progress><button type="button" onclick="ifty132CancelBatchRegeneration()" style="display:block;margin-top:9px;padding:8px 12px;border:0;border-radius:7px;background:#e2e8f0;color:#334155;font-weight:900;">${ifty216Markup("残りを中止","Cancel remaining items")}</button>`;
   document.body.appendChild(box);
   const funcs={'YEARS': async (fid,id)=>{const row=getIftyYearEntries().find(x=>String(x.id)===String(id));if(row)await lookupIftyYear(row.era,row.year,fid);},'ENGLISH':regenerateIftyVocabularyWord,'SCIENCE':regenerateIftyScienceItem,'SOCIAL STUDIES':regenerateIftySocialItem,'ANCIENT':regenerateIftyAncientItem,'KANBUN':regenerateIftyKanbunItem,'KANJI':regenerateIftyKanjiItem,'OTHERS':regenerateIftyOthersItem};
   const func=funcs[key];
@@ -22157,17 +21643,17 @@ function requestIftyRegeneration124(label, options = null) {
     veil.id = 'iftyRegenerationRequest124';
     veil.style.cssText = 'position:fixed;inset:0;z-index:13000;background:rgba(15,23,42,.76);display:flex;justify-content:center;align-items:center;padding:12px;box-sizing:border-box;';
     veil.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="iftyRegen124Title" style="width:min(540px,100%);max-height:90vh;overflow-y:auto;background:#1e293b;color:#f8fafc;border:1px solid #64748b;border-radius:12px;padding:17px;box-sizing:border-box;box-shadow:0 15px 45px rgba(0,0,0,.35);">
-      <h2 id="iftyRegen124Title" style="font-size:1.1rem;margin:0 0 8px;">🔄 再生成の要望</h2>
+      <h2 id="iftyRegen124Title" style="font-size:1.1rem;margin:0 0 8px;">${ifty216Markup("🔄 再生成の要望","🔄 Regeneration instructions")}</h2>
       <div style="font-size:.88rem;line-height:1.6;overflow-wrap:anywhere;">${escapeHtml(String(label || 'この項目'))} を再生成します。修正したい点を指定できます。</div>
-      <label for="iftyRegen124Text" style="display:block;margin-top:12px;font-weight:800;">ALLIAへの要望（任意）</label>
+      <label for="iftyRegen124Text" style="display:block;margin-top:12px;font-weight:800;">${ifty216Markup("ALLIAへの要望（任意）","Instructions for ALLIA (optional)")}</label>
       <textarea id="iftyRegen124Text" maxlength="1000" rows="5" placeholder="例：意味をもっと詳しく／誤っている年代を訂正／例文を2つ追加" style="display:block;margin-top:6px;width:100%;min-height:100px;box-sizing:border-box;border:1px solid #94a3b8;border-radius:8px;padding:10px;color:#0f172a;background:#fff;font:inherit;resize:vertical;"></textarea>
-      ${factMode ? `<label for="iftyRegen171Facts" style="display:block;margin-top:10px;font-weight:800;">✅ 確認済みの事実（次回以降も引き継ぐ）</label>
+      ${factMode ? `<label for="iftyRegen171Facts" style="display:block;margin-top:10px;font-weight:800;">${ifty216Markup("✅ 確認済みの事実（次回以降も引き継ぐ）","✅ Verified facts (retain for future requests)")}</label>
       <textarea id="iftyRegen171Facts" rows="3" maxlength="2200" placeholder="例：『対比列伝』の著者はプルタルコス。" style="display:block;margin-top:5px;width:100%;box-sizing:border-box;border:1px solid #94a3b8;border-radius:8px;background:white;color:#0f172a;padding:10px;font:inherit;resize:vertical;">${escapeHtml(existingFacts.join('\n'))}</textarea>
       <p style="font-size:.78rem;color:#cbd5e1;">確認済みの事実だけを1行ずつ入力。誤った内容は固定しないでください。再生成が失敗した場合は保存されません。</p>` : ''}
       <p style="font-size:.8rem;color:#cbd5e1;line-height:1.6;">要望がなくても再生成できます。正確性を優先し、既存の復習状態や画像は維持します。</p>
       <div style="display:flex;flex-wrap:wrap;gap:9px;justify-content:flex-end;">
-        <button type="button" data-ifty-regen-cancel style="padding:10px 15px;border:1px solid #94a3b8;border-radius:8px;background:#334155;color:#fff;font-weight:800;cursor:pointer;">キャンセル</button>
-        <button type="button" data-ifty-regen-confirm style="padding:10px 15px;border:0;border-radius:8px;background:#7c3aed;color:#fff;font-weight:900;cursor:pointer;">この内容で再生成</button>
+        <button type="button" data-ifty-regen-cancel style="padding:10px 15px;border:1px solid #94a3b8;border-radius:8px;background:#334155;color:#fff;font-weight:800;cursor:pointer;">${ifty216Markup("キャンセル","Cancel")}</button>
+        <button type="button" data-ifty-regen-confirm style="padding:10px 15px;border:0;border-radius:8px;background:#7c3aed;color:#fff;font-weight:900;cursor:pointer;">${ifty216Markup("この内容で再生成","Regenerate with these instructions")}</button>
       </div>
     </div>`;
     document.body.appendChild(veil);
@@ -22229,7 +21715,7 @@ function renderWordItem(w, folderId, wIndex) {
 
           ${(forms.past || forms.pastParticiple || forms.ing || forms.thirdPerson) ? `
             <div style="margin-top: 7px; padding: 6px 8px; background: #eef2ff; border-radius: 5px; font-size: 0.82em; color: #334155;">
-              <b>活用：</b>
+              <b>${ifty216Markup("活用：","Conjugation:")}</b>
               ${forms.past ? `過去 ${escapeHtml(forms.past)}　` : ''}
               ${forms.pastParticiple ? `過去分詞 ${escapeHtml(forms.pastParticiple)}　` : ''}
               ${forms.ing ? `-ing ${escapeHtml(forms.ing)}　` : ''}
@@ -22239,7 +21725,7 @@ function renderWordItem(w, folderId, wIndex) {
 
           ${examples.length > 0 ? `
             <div style="margin-top: 8px; color: #334155; line-height: 1.45;">
-              <b style="font-size: 0.82em;">例文</b>
+              <b style="font-size: 0.82em;">${ifty216Markup("例文","Example sentences")}</b>
               ${examples.map(ex => `
                 <div style="margin-top: 4px; padding-left: 4px;">
                   <div>
@@ -22252,7 +21738,7 @@ function renderWordItem(w, folderId, wIndex) {
             </div>
           ` : ''}
 
-          ${derivatives.length > 0 ? `<div style="margin-top: 7px; color: #475569; font-size: 0.82em;"><b>派生語：</b>${derivatives.map(d => escapeHtml(d)).join(' / ')}</div>` : ''}
+          ${derivatives.length > 0 ? `<div style="margin-top: 7px; color: #475569; font-size: 0.82em;"><b>${ifty216Markup("派生語：","Derived words:")}</b>${derivatives.map(d => escapeHtml(d)).join(' / ')}</div>` : ''}
 
           
           ${w.details ? `<div style="font-size: 0.8em; color: #0284c7; margin-top: 6px; line-height: 1.35;">💡 ${escapeHtml(w.details)}</div>` : ''}
@@ -22260,12 +21746,12 @@ function renderWordItem(w, folderId, wIndex) {
 
         <div class="ifty-word-card-actions" style="display: flex; gap: 3px; align-items: center; margin-left: 8px;">
           ${w.word ? `<button onclick="speakWord('${escapeHtml(String(w.word).replace(/'/g, "\\'"))}','${escapeHtml(getIftyWordLanguageInfo(w).code)}')" style="background: #0284c7; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="語彙を発音">🔊</button>` : ''}
-          <button id="iftyRegenVocab_${w.id}" onclick="regenerateIftyVocabularyWord('${folderId}','${w.id}')" style="background:#7c3aed;color:white;border:none;padding:3px 6px;border-radius:4px;font-size:.75em;cursor:pointer;font-weight:800;" title="言語・意味・用法を最初から慎重に再検討する">再生成</button>
-          <button onclick="openEditWordModal('${folderId}', ${wIndex})" style="background: #64748b; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="編集">編集</button>
+          <button id="iftyRegenVocab_${w.id}" onclick="regenerateIftyVocabularyWord('${folderId}','${w.id}')" style="background:#7c3aed;color:white;border:none;padding:3px 6px;border-radius:4px;font-size:.75em;cursor:pointer;font-weight:800;" title="言語・意味・用法を最初から慎重に再検討する">${ifty216Markup("再生成","Regenerate")}</button>
+          <button onclick="openEditWordModal('${folderId}', ${wIndex})" style="background: #64748b; color: white; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; cursor: pointer;" title="${ifty216Markup("編集","Edit")}">${ifty216Markup("編集","Edit")}</button>
           <button onclick="toggleIftyWordReview('${folderId}','${w.id}')" style="background:${isIftyReviewTagged(w) ? '#ea580c' : '#f59e0b'};color:white;border:none;padding:3px 6px;border-radius:4px;font-size:.75em;cursor:pointer;" title="${isIftyReviewTagged(w) ? '復習登録を解除' : 'この単語を復習に登録'}">${isIftyReviewTagged(w) ? '🔁 復習中' : '🔁 手動で復習登録'}</button>
           <button onclick="moveWordWithinFolder('${folderId}', ${wIndex}, -1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="上へ">⬆️</button>
           <button onclick="moveWordWithinFolder('${folderId}', ${wIndex}, 1)" style="background: #e2e8f0; border: none; padding: 2px 5px; border-radius: 3px; cursor: pointer; font-size: 0.75em;" title="下へ">⬇️</button>
-          <button onclick="deleteWord('${folderId}', ${wIndex})" style="background: none; border: none; color: #ef4444; cursor: pointer; font-weight: bold; font-size: 1.1em;" title="削除">×</button>
+          <button onclick="deleteWord('${folderId}', ${wIndex})" style="background: none; border: none; color: #ef4444; cursor: pointer; font-weight: bold; font-size: 1.1em;" title="${ifty216Markup("削除","Delete")}">×</button>
         </div>
       </div>
     </div>
@@ -22748,7 +22234,7 @@ window.openEditWordModal = function(folderId, wordIndex, options = {}) {
     <div id="editWordDialog" role="dialog" aria-modal="true" aria-label="${iftyEditWordModalState.isNewBlank ? '白紙から単語を作成' : '単語の編集'}" style="background:white;border-radius:12px;width:min(92vw,520px);max-height:92vh;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.3);position:relative;">
       <div style="position:sticky;top:0;z-index:4;background:white;padding:16px 18px 12px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <h3 style="margin:0;color:#0f172a;">${titleText}</h3>
-        <button type="button" onclick="closeEditWordModal()" aria-label="閉じる" title="閉じる" style="flex:0 0 auto;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.45em;line-height:1;cursor:pointer;font-weight:900;">×</button>
+        <button type="button" onclick="closeEditWordModal()" aria-label="${ifty216Markup("閉じる","Close")}" title="${ifty216Markup("閉じる","Close")}" style="flex:0 0 auto;width:38px;height:38px;border:none;border-radius:999px;background:#e2e8f0;color:#334155;font-size:1.45em;line-height:1;cursor:pointer;font-weight:900;">×</button>
       </div>
 
       <div style="padding:16px 18px 8px;">
@@ -22757,7 +22243,7 @@ window.openEditWordModal = function(folderId, wordIndex, options = {}) {
 
         <div style="display:flex;flex-direction:column;gap:10px;text-align:left;">
           <div>
-            <label style="font-size:.85em;font-weight:bold;color:#475569;">単語</label>
+            <label style="font-size:.85em;font-weight:bold;color:#475569;">${ifty216Markup("単語","Words")}</label>
             <div style="display:flex;gap:7px;align-items:center;">
               <input id="editWordText" value="${escapeHtml(w.word)}" autocomplete="off" style="flex:1;min-width:0;padding:8px;border:1px solid #cbd5e1;border-radius:4px;box-sizing:border-box;">
               <button type="button" onclick="speakWord((document.getElementById('editWordText')||{}).value || '', (document.getElementById('editLanguageCodeText')||{}).value || '')" title="入力中の語彙を発音" style="padding:8px 10px;background:#0284c7;color:white;border:none;border-radius:5px;cursor:pointer;">🔊</button>
@@ -22780,9 +22266,9 @@ window.openEditWordModal = function(folderId, wordIndex, options = {}) {
       </div>
 
       <div style="position:sticky;bottom:0;z-index:4;background:rgba(255,255,255,.98);border-top:1px solid #e2e8f0;padding:12px 18px;display:flex;gap:8px;flex-wrap:wrap;box-shadow:0 -4px 12px rgba(15,23,42,.06);">
-        <button type="button" onclick="saveEditedWord('${folder.id}', ${wordIndex})" style="flex:1;min-width:120px;padding:10px;background:#0284c7;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:bold;">保存</button>
+        <button type="button" onclick="saveEditedWord('${folder.id}', ${wordIndex})" style="flex:1;min-width:120px;padding:10px;background:#0284c7;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:bold;">${ifty216Markup("保存","Save")}</button>
         ${iftyEditWordModalState.isNewBlank ? `<button type="button" onclick="saveEditedWord('${folder.id}', ${wordIndex}, true)" style="flex:1;min-width:150px;padding:10px;background:#0f766e;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:bold;">保存して次の白紙</button>` : ''}
-        <button type="button" onclick="closeEditWordModal()" style="padding:10px 16px;background:#e2e8f0;color:#334155;border:none;border-radius:6px;cursor:pointer;font-weight:700;">キャンセル</button>
+        <button type="button" onclick="closeEditWordModal()" style="padding:10px 16px;background:#e2e8f0;color:#334155;border:none;border-radius:6px;cursor:pointer;font-weight:700;">${ifty216Markup("キャンセル","Cancel")}</button>
       </div>
     </div>
   `;
@@ -23247,24 +22733,24 @@ function renderPracticeHome() {
   modal.innerHTML = `
     <div style="background:white;border-radius:14px;width:min(760px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;">
-        <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">⚔️ PRACTICE</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">教科を切り替えて実践できます。</div></div>
+        <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">${ifty216Markup("⚔️ 実践","⚔️ PRACTICE")}</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">${ifty216Markup("教科を切り替えて実践できます。","Switch subjects to practise.")}</div></div>
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
       </div>
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">LANGUAGES</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANBUN</button>
-       <button type="button" onclick="setIftyUnifiedPracticeSubject('KANJI')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANJI</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('OTHERS')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">OTHERS</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("言語・語彙","LANGUAGES")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("古文","ANCIENT")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("漢文","KANBUN")}</button>
+       <button type="button" onclick="setIftyUnifiedPracticeSubject('KANJI')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("漢字","KANJI")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("社会","SOCIAL STUDIES")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("理科","SCIENCE")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('OTHERS')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("その他","OTHERS")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("基本文","BASIC SENTENCES")}</button>
       </div>
 
       <div style="border:1px solid #cbd5e1;border-radius:10px;padding:14px;background:#f8fafc;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-          <div><b style="color:#0f172a;">📇 フラッシュカード</b><div style="font-size:.82em;color:#64748b;margin-top:2px;">セットごとに保存・編集・再開できます</div></div>
-          <button onclick="createPracticeFlashcardSet()" style="background:#0284c7;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">＋ 新規セット</button>
+          <div><b style="color:#0f172a;">${ifty216Markup("📇 フラッシュカード","📇 Flashcards")}</b><div style="font-size:.82em;color:#64748b;margin-top:2px;">${ifty216Markup("セットごとに保存・編集・再開できます","Save, edit and resume each set")}</div></div>
+          <button onclick="createPracticeFlashcardSet()" style="background:#0284c7;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">${ifty216Markup("＋ 新規セット","＋ New set")}</button>
         </div>
         <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
           ${sets.length ? sets.map(set => `
@@ -23277,7 +22763,7 @@ function renderPracticeHome() {
                 <button onclick="movePracticeSet('${set.id}',-1)" style="border:none;background:#e2e8f0;border-radius:4px;padding:5px;cursor:pointer;">⬆️</button>
                 <button onclick="movePracticeSet('${set.id}',1)" style="border:none;background:#e2e8f0;border-radius:4px;padding:5px;cursor:pointer;">⬇️</button>
                 <button onclick="duplicatePracticeSet('${set.id}')" style="border:none;background:#e2e8f0;border-radius:4px;padding:5px;cursor:pointer;">複製</button>
-                <button onclick="deletePracticeSet('${set.id}')" style="border:none;background:#ef4444;color:white;border-radius:4px;padding:5px 7px;cursor:pointer;">削除</button>
+                <button onclick="deletePracticeSet('${set.id}')" style="border:none;background:#ef4444;color:white;border-radius:4px;padding:5px 7px;cursor:pointer;">${ifty216Markup("削除","Delete")}</button>
               </div>
             </div>`).join('') : '<div style="color:#94a3b8;text-align:center;padding:16px;">まだセットがありません。</div>'}
         </div>
@@ -23287,8 +22773,8 @@ function renderPracticeHome() {
 
       <div style="border:1px solid #c4b5fd;border-radius:10px;padding:14px;background:#faf5ff;margin-top:14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-          <div><b style="color:#581c87;">❓ クエスチョン</b><div style="font-size:.82em;color:#7e22ce;margin-top:2px;">ALLIA判定の記述式クイズをフォルダごとに作れます</div></div>
-          <button onclick="createQuizSet()" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">＋ クイズフォルダ</button>
+          <div><b style="color:#581c87;">${ifty216Markup("❓ クエスチョン","❓ Questions")}</b><div style="font-size:.82em;color:#7e22ce;margin-top:2px;">${ifty216Markup("ALLIA判定の記述式クイズをフォルダごとに作れます","Create ALLIA-graded written quizzes for each folder")}</div></div>
+          <button onclick="createQuizSet()" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">${ifty216Markup("＋ クイズフォルダ","＋ Quiz folder")}</button>
         </div>
         <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
           ${quizSets.length ? quizSets.map(set => `
@@ -23301,7 +22787,7 @@ function renderPracticeHome() {
                 <button onclick="moveQuizSet('${set.id}',-1)" style="border:none;background:#ede9fe;border-radius:4px;padding:5px;cursor:pointer;">⬆️</button>
                 <button onclick="moveQuizSet('${set.id}',1)" style="border:none;background:#ede9fe;border-radius:4px;padding:5px;cursor:pointer;">⬇️</button>
                 <button onclick="duplicateQuizSet('${set.id}')" style="border:none;background:#ede9fe;border-radius:4px;padding:5px;cursor:pointer;">複製</button>
-                <button onclick="deleteQuizSet('${set.id}')" style="border:none;background:#ef4444;color:white;border-radius:4px;padding:5px 7px;cursor:pointer;">削除</button>
+                <button onclick="deleteQuizSet('${set.id}')" style="border:none;background:#ef4444;color:white;border-radius:4px;padding:5px 7px;cursor:pointer;">${ifty216Markup("削除","Delete")}</button>
               </div>
             </div>`).join('') : '<div style="color:#a78bfa;text-align:center;padding:16px;">まだクイズフォルダがありません。</div>'}
         </div>
@@ -23448,15 +22934,15 @@ window.ifty132OpenSelectionActions = function(subject) {
   const mask=document.createElement('div');mask.id='ifty132SelectionModal';
   mask.style.cssText='position:fixed;inset:0;z-index:13090;background:rgba(15,23,42,.66);display:flex;align-items:flex-end;justify-content:center;padding:10px;box-sizing:border-box;';
   const folderOptions=key==='ENGLISH'? folders.map(f=>`<option value="${escapeHtml(f.id)}">${escapeHtml(f.name)}</option>`).join('') : '';
-  mask.innerHTML=`<div role="dialog" aria-modal="true" aria-label="選択した項目の操作" style="width:min(520px,100%);max-height:85vh;overflow:auto;background:#fff;color:#0f172a;border-radius:14px;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom));box-sizing:border-box;box-shadow:0 16px 46px #0005;">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><b>選択した項目の操作（${count}件）</b><button type="button" onclick="document.getElementById('ifty132SelectionModal')?.remove()" style="padding:8px;border:0;border-radius:8px;background:#e2e8f0;">閉じる ✕</button></div>
+  mask.innerHTML=`<div role="dialog" aria-modal="true" aria-label="${ifty216Markup("選択した項目の操作","Selected item actions")}" style="width:min(520px,100%);max-height:85vh;overflow:auto;background:#fff;color:#0f172a;border-radius:14px;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom));box-sizing:border-box;box-shadow:0 16px 46px #0005;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><b>選択した項目の操作（${count}件）</b><button type="button" onclick="document.getElementById('ifty132SelectionModal')?.remove()" style="padding:8px;border:0;border-radius:8px;background:#e2e8f0;">${ifty216Markup("閉じる ✕","Close ✕")}</button></div>
   ${key==='ENGLISH'?`<label style="display:block;margin-top:12px;">移動先<select id="ifty132MoveTo" style="display:block;width:100%;padding:10px;border:1px solid #94a3b8;border-radius:8px;margin-top:5px;">${folderOptions}</select></label>`:''}
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px;">
-  <button type="button" data-a="move" ${!count||!moveAllowed?'disabled':''} style="padding:12px;border:0;border-radius:9px;background:#0284c7;color:white;font-weight:800;">移動</button>
-  <button type="button" data-a="copy" ${!count||!moveAllowed?'disabled':''} style="padding:12px;border:0;border-radius:9px;background:#0f766e;color:white;font-weight:800;">📋 複製</button>
-  <button type="button" data-a="delete" ${!count?'disabled':''} style="padding:12px;border:0;border-radius:9px;background:#dc2626;color:white;font-weight:800;">削除</button>
-  <button type="button" data-a="all" ${!hasItems?'disabled':''} style="padding:12px;border:1px solid #94a3b8;border-radius:9px;background:#f1f5f9;color:#0f172a;font-weight:800;">全選択</button>
-  <button type="button" data-a="clear" ${!count?'disabled':''} style="padding:12px;border:1px solid #94a3b8;border-radius:9px;background:#f1f5f9;color:#0f172a;font-weight:800;">選択解除</button>
+  <button type="button" data-a="move" ${!count||!moveAllowed?'disabled':''} style="padding:12px;border:0;border-radius:9px;background:#0284c7;color:white;font-weight:800;">${ifty216Markup("移動","Move")}</button>
+  <button type="button" data-a="copy" ${!count||!moveAllowed?'disabled':''} style="padding:12px;border:0;border-radius:9px;background:#0f766e;color:white;font-weight:800;">${ifty216Markup("📋 複製","📋 Duplicate")}</button>
+  <button type="button" data-a="delete" ${!count?'disabled':''} style="padding:12px;border:0;border-radius:9px;background:#dc2626;color:white;font-weight:800;">${ifty216Markup("削除","Delete")}</button>
+  <button type="button" data-a="all" ${!hasItems?'disabled':''} style="padding:12px;border:1px solid #94a3b8;border-radius:9px;background:#f1f5f9;color:#0f172a;font-weight:800;">${ifty216Markup("全選択","Select all")}</button>
+  <button type="button" data-a="clear" ${!count?'disabled':''} style="padding:12px;border:1px solid #94a3b8;border-radius:9px;background:#f1f5f9;color:#0f172a;font-weight:800;">${ifty216Markup("選択解除","Clear selection")}</button>
   </div><p style="font-size:.78em;color:#64748b;margin:12px 0 0;">この画面は下から開きます。キャンセルしても選択状態は保持されます。</p></div>`;
   document.body.appendChild(mask);
   mask.onclick=e=>{
@@ -23726,24 +23212,24 @@ window.openIfty170CopySelectedDialog = function(subject) {
   const modal = document.createElement('div');
   modal.id = 'ifty170CopyModal';
   modal.style.cssText = 'position:fixed;inset:0;z-index:13110;background:rgba(15,23,42,.66);display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';
-  modal.innerHTML = `<section role="dialog" aria-modal="true" aria-label="選択項目の複製" style="width:min(490px,100%);max-height:min(85vh,800px);overflow-y:auto;background:#fff;color:#0f172a;border-radius:14px;padding:18px;box-sizing:border-box;box-shadow:0 16px 40px #0005;">
+  modal.innerHTML = `<section role="dialog" aria-modal="true" aria-label="${ifty216Markup("選択項目の複製","Duplicate selected items")}" style="width:min(490px,100%);max-height:min(85vh,800px);overflow-y:auto;background:#fff;color:#0f172a;border-radius:14px;padding:18px;box-sizing:border-box;box-shadow:0 16px 40px #0005;">
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
-      <strong style="font-size:1.1em;">📋 別フォルダに複製</strong>
+      <strong style="font-size:1.1em;">${ifty216Markup("📋 別フォルダに複製","📋 Duplicate to another folder")}</strong>
       <button type="button" data-ifty170="cancel" style="min-width:44px;min-height:44px;border:0;border-radius:9px;background:#e2e8f0;color:#0f172a;">✕</button>
     </div>
     <p style="color:#475569;font-size:.86em;line-height:1.55;margin:8px 0 12px;">選択中 ${ifty170Selection(key).size}件。元のフォルダは変更せず、別のフォルダに複製します。コピー先と同じフォルダ内の項目は対象外です。</p>
-    <label style="display:block;font-weight:800;">複製先のフォルダ
+    <label style="display:block;font-weight:800;">${ifty216Markup("複製先のフォルダ","Destination folder")}
       <select id="ifty170CopyTarget" style="display:block;width:100%;min-height:46px;margin-top:6px;padding:10px;border:1px solid #94a3b8;border-radius:9px;background:white;color:#0f172a;font:inherit;box-sizing:border-box;">
       ${sourceFolders.map(f=>`<option value="${escapeHtml(String(f.id))}">${escapeHtml(f.name)}</option>`).join('')}
       </select>
     </label>
     <label style="display:flex;align-items:center;gap:9px;margin-top:14px;font-size:.9em;line-height:1.45;">
-      <input id="ifty170AllowDuplicate" type="checkbox" style="width:21px;height:21px;flex:none;" /> 複製先に同じ名前があっても複製する
+      <input id="ifty170AllowDuplicate" type="checkbox" style="width:21px;height:21px;flex:none;" /> ${ifty216Markup("複製先に同じ名前があっても複製する","Duplicate even if the name already exists")}
     </label>
     <p id="ifty170CopyPreview" aria-live="polite" style="color:#475569;font-size:.85em;line-height:1.6;margin:12px 0;"></p>
     <div style="display:flex;gap:9px;flex-wrap:wrap;">
-      <button type="button" data-ifty170="commit" style="flex:1;min-width:155px;min-height:46px;border:0;border-radius:9px;background:#0f766e;color:white;font-weight:900;font:inherit;">📋 複製する</button>
-      <button type="button" data-ifty170="cancel" style="min-height:46px;border:1px solid #cbd5e1;border-radius:9px;background:#f8fafc;color:#0f172a;font:inherit;">キャンセル</button>
+      <button type="button" data-ifty170="commit" style="flex:1;min-width:155px;min-height:46px;border:0;border-radius:9px;background:#0f766e;color:white;font-weight:900;font:inherit;">${ifty216Markup("📋 複製する","📋 Duplicate")}</button>
+      <button type="button" data-ifty170="cancel" style="min-height:46px;border:1px solid #cbd5e1;border-radius:9px;background:#f8fafc;color:#0f172a;font:inherit;">${ifty216Markup("キャンセル","Cancel")}</button>
     </div>
     <p style="font-size:.77em;color:#64748b;margin:12px 0 0;">同じ名前の項目は初期設定でスキップします。複製後もチェックは保持されるので、続けて別フォルダへ複製できます。</p>
   </section>`;
@@ -23881,8 +23367,8 @@ function renderIftySubjectQuizSetsSection(subject) {
   const sets = getIftySubjectQuizSets(key);
   return `<div style="border:1px solid #c4b5fd;border-radius:10px;padding:14px;background:#faf5ff;margin-top:14px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-      <div><b style="color:#4c1d95;">❓ クイズ</b><div style="font-size:.82em;color:#7c3aed;margin-top:2px;">LANGUAGESと同じく、クイズフォルダごとに出題項目・形式・問題数を保存します。</div></div>
-      <button type="button" onclick="createIftySubjectQuizSet('${key}')" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">＋ クイズフォルダ</button>
+      <div><b style="color:#4c1d95;">${ifty216Markup("❓ クイズ","❓ Quiz")}</b><div style="font-size:.82em;color:#7c3aed;margin-top:2px;">LANGUAGESと同じく、クイズフォルダごとに出題項目・形式・問題数を保存します。</div></div>
+      <button type="button" onclick="createIftySubjectQuizSet('${key}')" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">${ifty216Markup("＋ クイズフォルダ","＋ Quiz folder")}</button>
     </div>
     <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
       ${sets.length ? sets.map(set => {
@@ -23897,7 +23383,7 @@ function renderIftySubjectQuizSetsSection(subject) {
             <button type="button" onclick="moveIftySubjectQuizSet('${key}','${set.id}',-1)" style="border:none;background:#ede9fe;border-radius:4px;padding:5px;cursor:pointer;">⬆️</button>
             <button type="button" onclick="moveIftySubjectQuizSet('${key}','${set.id}',1)" style="border:none;background:#ede9fe;border-radius:4px;padding:5px;cursor:pointer;">⬇️</button>
             <button type="button" onclick="duplicateIftySubjectQuizSet('${key}','${set.id}')" style="border:none;background:#ede9fe;border-radius:4px;padding:5px;cursor:pointer;">複製</button>
-<button type="button" onclick="deleteIftySubjectQuizSet('${key}','${set.id}')" style="border:none;background:#ef4444;color:white;border-radius:4px;padding:5px 7px;cursor:pointer;">削除</button>
+<button type="button" onclick="deleteIftySubjectQuizSet('${key}','${set.id}')" style="border:none;background:#ef4444;color:white;border-radius:4px;padding:5px 7px;cursor:pointer;">${ifty216Markup("削除","Delete")}</button>
           </div>
         </div>`;
       }).join('') : '<div style="color:#a78bfa;text-align:center;padding:16px;">まだクイズフォルダがありません。</div>'}
@@ -23974,17 +23460,17 @@ window.openIftySubjectQuizSet = function(subject, setId) {
 
   modal.innerHTML = `<div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(900px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <button type="button" onclick="setIftyUnifiedPracticeSubject('${key}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">◀ 戻る</button>
+      <button type="button" onclick="setIftyUnifiedPracticeSubject('${key}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">${ifty216Markup("◀ 戻る","◀ Back")}</button>
       <button type="button" onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;">
       <div>
-        <div style="font-size:.78em;color:#7c3aed;">${escapeHtml(getIftySubjectDisplayName(key))} / クイズ</div>
+        <div style="font-size:.78em;color:#7c3aed;">${escapeHtml(ifty216Ui(getIftySubjectDisplayName(key)))} / クイズ</div>
         <h2 style="margin:2px 0 0;color:#4c1d95;font-size:1.3em;">${escapeHtml(set.name)}</h2>
         <div style="font-size:.82em;color:#64748b;margin-top:3px;">${selectedRefs.length}${noun} ・ ${set.questionCount}問</div>
       </div>
-      <button type="button" onclick="renameIftySubjectQuizSet('${key}','${set.id}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">名前変更</button>
+      <button type="button" onclick="renameIftySubjectQuizSet('${key}','${set.id}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">${ifty216Markup("名前変更","Rename")}</button>
     </div>
 
     <div style="margin-top:14px;padding:12px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:8px;">
@@ -23993,9 +23479,9 @@ window.openIftySubjectQuizSet = function(subject, setId) {
     </div>
 
     <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
-      <b style="color:#334155;">2. 問題数</b>
-      <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${set.questionCount}" onchange="setIftySubjectQuizQuestionCount('${key}','${set.id}',this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
-      <span style="font-size:.76em;color:#64748b;">登録項目が少ない場合は、ある分だけ出題します。</span>
+      <b style="color:#334155;">${ifty216Markup("2. 問題数","2. Number of questions")}</b>
+      <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="${ifty216Markup("問題数","Number of questions")}" value="${set.questionCount}" onchange="setIftySubjectQuizQuestionCount('${key}','${set.id}',this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
+      <span style="font-size:.76em;color:#64748b;">${ifty216Markup("登録項目が少ない場合は、ある分だけ出題します。","Only available items will be used if there are too few.")}</span>
     </div>
 
     <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
@@ -24003,16 +23489,16 @@ window.openIftySubjectQuizSet = function(subject, setId) {
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
         <button type="button" onclick="addCheckedToIftySubjectQuizSet('${key}','${set.id}')" ${checkedCount?'':'disabled'} style="border:none;background:#7c3aed;color:white;border-radius:5px;padding:7px 9px;cursor:${checkedCount?'pointer':'default'};opacity:${checkedCount?'1':'.45'};">教科画面でチェック中を追加（${checkedCount}）</button>
         <button type="button" onclick="addAllToIftySubjectQuizSet('${key}','${set.id}')" style="border:none;background:#5b21b6;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">全${noun}を追加</button>
-        <button type="button" onclick="clearIftySubjectQuizSetItems('${key}','${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">フォルダを空にする</button>
+        <button type="button" onclick="clearIftySubjectQuizSetItems('${key}','${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">${ifty216Markup("フォルダを空にする","Empty folder")}</button>
       </div>
       ${sourceFolders.length ? `<div style="margin-top:9px;padding:9px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:8px;">
-        <div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:6px;">学習フォルダ単位で追加</div>
+        <div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:6px;">${ifty216Markup("学習フォルダ単位で追加","Add by study folder")}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">${sourceFolders.map(folder=>`<button type="button" onclick="addIftySubjectFolderToQuizSet('${key}','${set.id}','${folder.id}')" style="border:1px solid #7dd3fc;background:white;color:#075985;border-radius:999px;padding:7px 10px;font-weight:900;cursor:pointer;">＋ ${escapeHtml(folder.name)} (${(folder.items||[]).length})</button>`).join('')}</div>
       </div>` : ''}
     </div>
 
     <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-      <button type="button" onclick="startIftySubjectQuizSet('${key}','${set.id}')" ${selectedRefs.length?'':'disabled'} style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${selectedRefs.length?'pointer':'default'};opacity:${selectedRefs.length?'1':'.45'};">▶ 開始</button>
+      <button type="button" onclick="startIftySubjectQuizSet('${key}','${set.id}')" ${selectedRefs.length?'':'disabled'} style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${selectedRefs.length?'pointer':'default'};opacity:${selectedRefs.length?'1':'.45'};">${ifty216Markup("▶ 開始","▶ Start")}</button>
     </div>
 
     ${ifty149ConfigPanel(key,set,selectedRefs.map(ref=>({id:ref.item.id,name:getIftySubjectFlashcardFront(key,ref.item)})),getIftySubjectQuizModeOptions(key).map(m=>[m.mode,m.title]))}
@@ -24028,7 +23514,7 @@ window.openIftySubjectQuizSet = function(subject, setId) {
           const search = `${front} ${back} ${ref.folder?.name||''}`.toLowerCase();
           return `<div data-ifty-subject-quiz-row data-search="${escapeHtml(search)}" style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:8px 2px;border-bottom:1px solid #f1f5f9;">
             <span style="min-width:0;overflow-wrap:anywhere;"><b>${escapeHtml(front)}</b>　<span style="color:#64748b;font-size:.88em;">${escapeHtml(back)}</span><span style="display:block;color:#94a3b8;font-size:.72em;margin-top:2px;">📁 ${escapeHtml(ref.folder?.name||'未分類')}</span></span>
-            <button type="button" onclick="toggleIftySubjectQuizSetItem('${key}','${set.id}','${ref.item.id}',false)" style="border:none;background:none;color:#ef4444;cursor:pointer;flex:none;">削除</button>
+            <button type="button" onclick="toggleIftySubjectQuizSetItem('${key}','${set.id}','${ref.item.id}',false)" style="border:none;background:none;color:#ef4444;cursor:pointer;flex:none;">${ifty216Markup("削除","Delete")}</button>
           </div>`;
         }).join('') : `<div style="color:#94a3b8;text-align:center;padding:16px;">${noun}を追加してください。</div>`}
       </div>
@@ -24167,7 +23653,7 @@ function advanceIftySubjectQuizSequence124(subject, progress) {
       <div style="color:#475569;overflow-wrap:anywhere;">${escapeHtml(titles)}</div>
       <div style="font-weight:900;color:#0f172a;margin-top:15px;font-size:1.2em;">正解 ${seq.correct} / ${total}　不正解 ${seq.wrong}　分からない ${seq.unknown}　正答率 ${rate}%</div>
       ${ifty182Summary(seq.history182)}
-      <button type="button" onclick="openPracticeHome('${subject}')" style="margin-top:18px;background:#7c3aed;color:white;border:0;border-radius:8px;padding:11px 17px;font-weight:900;">PRACTICEへ戻る</button>
+      <button type="button" onclick="openPracticeHome('${subject}')" style="margin-top:18px;background:#7c3aed;color:white;border:0;border-radius:8px;padding:11px 17px;font-weight:900;">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button>
     </section>`, 'subject-quiz-result');
   }
   return true;
@@ -24285,12 +23771,12 @@ function ifty149QuestionPanel(){
  const q=st.current;
  const subject=escapeHtml(st.subject);
  const answerOptions=q?.kind==='choice' && Array.isArray(q.options)&&q.options.length===4;
- const opts=q?.kind==='year'?`<label style="display:block;margin-top:12px;font-size:.9em;color:#e2e8f0;font-weight:800;">年号を入力<input id="ifty149YearAnswer" inputmode="text" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" ${st.answered||st.busy?'disabled':''} placeholder="例：1861 / 紀元前44 / 44 BC" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();ifty149Submit();}" style="display:block;margin-top:7px;width:100%;box-sizing:border-box;padding:13px;min-height:48px;border:1px solid #93c5fd;border-radius:9px;background:#fff;color:#0f172a;font-size:1.05rem;" value="${escapeHtml(st.answer||'')}"></label>`:q?.kind==='truefalse'?ifty151AnswerControls('ifty149Truth','ifty149TruthCorrection',st.answered||st.busy):answerOptions?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px;margin-top:12px;">${q.options.map((value,i)=>`<label style="display:flex;gap:7px;padding:10px;border:1px solid #93c5fd;border-radius:8px;align-items:center;"><input type="radio" name="ifty149Choice" value="${escapeHtml(value)}" ${st.busy||st.answered?'disabled':''} ${st.answer===String(value)?'checked':''}>${String.fromCharCode(65+i)}. ${escapeHtml(value)}</label>`).join('')}</div>`:`<textarea id="ifty149Answer" rows="4" ${st.answered||st.busy?'disabled':''} placeholder="理由や根拠を含めて説明してください（記述）" style="width:100%;box-sizing:border-box;margin-top:12px;padding:12px;font:inherit;border:1px solid #94a3b8;border-radius:8px;resize:vertical;">${escapeHtml(st.answer||'')}</textarea>`;
+ const opts=q?.kind==='year'?`<label style="display:block;margin-top:12px;font-size:.9em;color:#e2e8f0;font-weight:800;">${ifty216Markup("年号を入力","Enter the year")}<input id="ifty149YearAnswer" inputmode="text" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" ${st.answered||st.busy?'disabled':''} placeholder="例：1861 / 紀元前44 / 44 BC" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();ifty149Submit();}" style="display:block;margin-top:7px;width:100%;box-sizing:border-box;padding:13px;min-height:48px;border:1px solid #93c5fd;border-radius:9px;background:#fff;color:#0f172a;font-size:1.05rem;" value="${escapeHtml(st.answer||'')}"></label>`:q?.kind==='truefalse'?ifty151AnswerControls('ifty149Truth','ifty149TruthCorrection',st.answered||st.busy):answerOptions?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px;margin-top:12px;">${q.options.map((value,i)=>`<label style="display:flex;gap:7px;padding:10px;border:1px solid #93c5fd;border-radius:8px;align-items:center;"><input type="radio" name="ifty149Choice" value="${escapeHtml(value)}" ${st.busy||st.answered?'disabled':''} ${st.answer===String(value)?'checked':''}>${String.fromCharCode(65+i)}. ${ifty216QuizText(value, ifty216EligibleSubject(st.subject), false)}</label>`).join('')}</div>`:`<textarea id="ifty149Answer" rows="4" ${st.answered||st.busy?'disabled':''} placeholder="${ifty216Markup("理由や根拠を含めて説明してください（記述）","Explain your reasoning and evidence (written response)")}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:12px;font:inherit;border:1px solid #94a3b8;border-radius:8px;resize:vertical;">${escapeHtml(st.answer||'')}</textarea>`;
  const verdictText=st.lastCorrect===true?'⭕ 正解':st.lastCorrect===false?'❌ 不正解':'？ 分からない';
- const result=st.answered?`<div class="ifty172-grade-panel ${st.lastCorrect===true?'ifty172-correct':st.lastCorrect===false?'ifty172-wrong':''}" role="status" aria-live="polite" data-ifty172-graded="1"><strong class="ifty172-result-title">${verdictText}</strong><div>${escapeHtml(st.feedback||'')}</div><div class="ifty172-model"><b>模範解答：</b> ${escapeHtml(st.modelAnswer||q.referenceAnswer||'')}</div>${q.explanation?`<div style="margin-top:9px;">${escapeHtml(q.explanation)}</div>`:''}</div>${q._ifty175Saved?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"><button type="button" class="ifty172-alt-action" onclick="ifty175CorrectManagedSelfGrade(true)" style="flex:1;">⭕ 自己採点：正解</button><button type="button" class="ifty172-alt-action" onclick="ifty175CorrectManagedSelfGrade(false)" style="flex:1;">❌ 自己採点：不正解</button></div>`:''}${st.lastCorrect===false&&st.gradeOrigin==='allia'&&!st.challenged?`<div class="ifty173-appeal-status"><b>⚖️ ALLIAの判定に反論する</b><p style="font-size:.86em;margin:6px 0;">元の回答が正しいと思う理由を入力してください。再審査で認められた場合、この問題のカウントを訂正します。</p><textarea id="ifty173ManagedReason" rows="2" ${st.challengePending?'disabled':''} placeholder="反論理由（任意）" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;">${escapeHtml(st.challengeReason||'')}</textarea><button type="button" class="ifty172-alt-action" style="width:100%;margin-top:7px;" onclick="ifty173ManagedChallenge()" ${st.challengePending?'disabled':''}>${st.challengePending?'審査中…':'⚖️ Challenge（ALLIA）'}</button>${st.challengeError?`<p role="alert">${escapeHtml(st.challengeError)}</p>`:''}</div>`:''}<button type="button" onclick="ifty149Next()" class="ifty172-main-action" data-ifty172-next="1" ${st.challengePending?'disabled':''}>次へ →</button>`:'';
+ const result=st.answered?`<div class="ifty172-grade-panel ${st.lastCorrect===true?'ifty172-correct':st.lastCorrect===false?'ifty172-wrong':''}" role="status" aria-live="polite" data-ifty172-graded="1"><strong class="ifty172-result-title">${ifty216Ui(verdictText)}</strong><div>${escapeHtml(st.feedback||'')}</div><div class="ifty172-model"><b>${ifty216Markup("模範解答：","Model answer:")}</b> ${escapeHtml(st.modelAnswer||q.referenceAnswer||'')}</div>${q.explanation?`<div style="margin-top:9px;">${escapeHtml(q.explanation)}</div>`:''}</div>${q._ifty175Saved?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"><button type="button" class="ifty172-alt-action" onclick="ifty175CorrectManagedSelfGrade(true)" style="flex:1;">${ifty216Markup("⭕ 自己採点：正解","⭕ Self-assessment: Correct")}</button><button type="button" class="ifty172-alt-action" onclick="ifty175CorrectManagedSelfGrade(false)" style="flex:1;">${ifty216Markup("❌ 自己採点：不正解","❌ Self-assessment: Incorrect")}</button></div>`:''}${st.lastCorrect===false&&st.gradeOrigin==='allia'&&!st.challenged?`<div class="ifty173-appeal-status"><b>${ifty216Markup("⚖️ ALLIAの判定に反論する","⚖️ Challenge ALLIA grading")}</b><p style="font-size:.86em;margin:6px 0;">元の回答が正しいと思う理由を入力してください。再審査で認められた場合、この問題のカウントを訂正します。</p><textarea id="ifty173ManagedReason" rows="2" ${st.challengePending?'disabled':''} placeholder="${ifty216Markup("反論理由（任意）","Reason for challenge (optional)")}" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;">${escapeHtml(st.challengeReason||'')}</textarea><button type="button" class="ifty172-alt-action" style="width:100%;margin-top:7px;" onclick="ifty173ManagedChallenge()" ${st.challengePending?'disabled':''}>${st.challengePending?'審査中…':'⚖️ Challenge（ALLIA）'}</button>${st.challengeError?`<p role="alert">${escapeHtml(st.challengeError)}</p>`:''}</div>`:''}<button type="button" onclick="ifty149Next()" class="ifty172-main-action" data-ifty172-next="1" ${st.challengePending?'disabled':''}>${ifty216Markup("次へ →","Next →")}</button>`:'';
  const grading=st.busy?`<div class="ifty172-message" role="status" aria-live="polite">⏳ ALLIAが採点中…<div style="font-size:.9em;margin-top:4px;">採点完了まで現在の問題を維持します。通信に時間がかかる場合は再試行・自己採点を選べます。</div></div>`:'';
- const error=st.gradeError?`<div class="ifty172-message" role="alert" data-ifty172-error="1"><b>⚠ 採点を完了できませんでした</b><div style="white-space:pre-wrap;margin:8px 0;">${escapeHtml(st.gradeError)}</div><div style="font-size:.85em;">回答は保持されています。未採点のため正誤には加算していません。</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"><button type="button" class="ifty172-alt-action" onclick="ifty149Submit()">🔄 採点を再試行</button><button type="button" class="ifty172-alt-action" onclick="ifty172RevealManagedAnswer()">📖 模範解答で自己採点</button></div></div>`:'';
- const manual=st.manualReveal&&!st.answered?`<div class="ifty172-grade-panel" role="status"><strong class="ifty172-result-title">📖 模範解答を確認</strong><div class="ifty172-model"><b>模範解答：</b> ${escapeHtml(q.referenceAnswer||'保存された模範解答がありません。')}</div><div style="margin-top:11px;">解答内容を照合し、自分で正誤を選んでください。ALLIAは使用しません。</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:11px;"><button type="button" class="ifty172-alt-action" onclick="ifty172ManualGradeManaged(true)">⭕ 正解にする</button><button type="button" class="ifty172-alt-action" onclick="ifty172ManualGradeManaged(false)">❌ 不正解にする</button></div></div>`:'';
+ const error=st.gradeError?`<div class="ifty172-message" role="alert" data-ifty172-error="1"><b>${ifty216Markup("⚠ 採点を完了できませんでした","⚠ Grading could not be completed")}</b><div style="white-space:pre-wrap;margin:8px 0;">${escapeHtml(st.gradeError)}</div><div style="font-size:.85em;">${ifty216Markup("回答は保持されています。未採点のため正誤には加算していません。","Your answer is retained. No score has been recorded yet.")}</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"><button type="button" class="ifty172-alt-action" onclick="ifty149Submit()">${ifty216Markup("🔄 採点を再試行","🔄 Retry grading")}</button><button type="button" class="ifty172-alt-action" onclick="ifty172RevealManagedAnswer()">${ifty216Markup("📖 模範解答で自己採点","📖 Self-assess with model answer")}</button></div></div>`:'';
+ const manual=st.manualReveal&&!st.answered?`<div class="ifty172-grade-panel" role="status"><strong class="ifty172-result-title">${ifty216Markup("📖 模範解答を確認","📖 Check model answer")}</strong><div class="ifty172-model"><b>${ifty216Markup("模範解答：","Model answer:")}</b> ${escapeHtml(q.referenceAnswer||'保存された模範解答がありません。')}</div><div style="margin-top:11px;">${ifty216Markup("解答内容を照合し、自分で正誤を選んでください。ALLIAは使用しません。","Compare your answer and mark it yourself. No ALLIA call is made.")}</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:11px;"><button type="button" class="ifty172-alt-action" onclick="ifty172ManualGradeManaged(true)">${ifty216Markup("⭕ 正解にする","⭕ Mark correct")}</button><button type="button" class="ifty172-alt-action" onclick="ifty172ManualGradeManaged(false)">${ifty216Markup("❌ 不正解にする","❌ Mark incorrect")}</button></div></div>`:'';
  // STEP172: grading/feedback redraw is not a navigation. Preserve the scroll position.
  if(q&&(st.answered||st.busy||st.gradeError||st.manualReveal)){
    window.__iftyPreserveHubViewport=true;
@@ -24298,10 +23784,10 @@ function ifty149QuestionPanel(){
  }
  showIftyHubContent(`<section class="ifty-portal-shell" style="max-width:860px;margin:0 auto;color:#e2e8f0;">
  <div style="background:#1e293b;border:1px solid #475569;border-radius:14px;padding:clamp(13px,3vw,24px);box-sizing:border-box;">
- <div style="display:flex;justify-content:space-between;gap:9px;align-items:center;flex-wrap:wrap;"><b>✍️ ${subject}・${st.index+1}/${st.queue.length}　${escapeHtml(st.mode||'')}</b><button onclick="ifty149Exit()" style="padding:8px;border-radius:7px;">PRACTICEに戻る</button></div>
+ <div style="display:flex;justify-content:space-between;gap:9px;align-items:center;flex-wrap:wrap;"><b>✍️ ${subject}・${st.index+1}/${st.queue.length}　${escapeHtml(st.mode||'')}</b><button onclick="ifty149Exit()" style="padding:8px;border-radius:7px;">${ifty216Markup("PRACTICEに戻る","Back to practice")}</button></div>
  <p style="font-size:.81em;color:#93c5fd;">難易度：${escapeHtml(ifty149Difficulty(getIftySubjectQuizSet(st.subject,st.setId)?.difficulty))}／正解${st.correct}・不正解${st.wrong}・分からない${st.unknown}</p>${st.fallbackNote?`<div style="padding:10px;border:1px solid #fbbf24;background:#422d15;color:#fff7d6;border-radius:8px;margin-bottom:10px;">${escapeHtml(st.fallbackNote)}</div>`:''}
- <div style="background:#0c3047;border:1px solid #64748b;border-radius:9px;padding:15px;white-space:pre-wrap;line-height:1.65;overflow-wrap:anywhere;">${q?escapeHtml(q.question):'問題を生成しています…'}</div>
- ${q?`<div style="margin-top:7px;color:#cbd5e1;font-size:.87em;">${escapeHtml(q.instruction||'')}</div>${!st.answered&&!st.manualReveal?`${opts}${!st.gradeError?`<div style="display:flex;gap:8px;flex-direction:column;margin-top:10px;"><button type="button" onclick="ifty149Submit()" ${st.busy?'disabled':''} style="padding:12px;background:#2563eb;color:#fff;border:0;border-radius:8px;font-weight:900;">${st.busy?'採点中…':'回答'}</button><button type="button" onclick="ifty149Unknown()" ${st.busy?'disabled':''} style="padding:12px;border:1px solid #cbd5e1;border-radius:8px;">？ 分からない（答えを見る）</button></div>`:''}`:''}<button type="button" onclick="ifty149Help()" style="margin-top:9px;border:1px solid #a78bfa;padding:9px;border-radius:8px;">💬 ALLIAに質問</button>${grading}${error}${manual}${result}`:''}
+ <div style="background:#0c3047;border:1px solid #64748b;border-radius:9px;padding:15px;white-space:pre-wrap;line-height:1.65;overflow-wrap:anywhere;">${q?ifty216QuizText(q.question,ifty216EligibleSubject(st.subject),false):ifty216T('問題を生成しています…','Generating question…')}</div>
+ ${q?`<div style="margin-top:7px;color:#cbd5e1;font-size:.87em;">${ifty216QuizText(q.instruction||'', ifty216EligibleSubject(st.subject), false)}</div>${!st.answered&&!st.manualReveal?`${opts}${!st.gradeError?`<div style="display:flex;gap:8px;flex-direction:column;margin-top:10px;"><button type="button" onclick="ifty149Submit()" ${st.busy?'disabled':''} style="padding:12px;background:#2563eb;color:#fff;border:0;border-radius:8px;font-weight:900;">${st.busy?ifty216T("採点中…","Grading…"):ifty216T("回答","Answer")}</button><button type="button" onclick="ifty149Unknown()" ${st.busy?'disabled':''} style="padding:12px;border:1px solid #cbd5e1;border-radius:8px;">${ifty216Markup("？ 分からない（答えを見る）","? Don't know (show answer)")}</button></div>`:''}`:''}<button type="button" onclick="ifty149Help()" style="margin-top:9px;border:1px solid #a78bfa;padding:9px;border-radius:8px;">${ifty216Markup("💬 ALLIAに質問","💬 Ask ALLIA")}</button>${grading}${error}${manual}${result}`:''}
  </div></section>`,'ifty149-managed');
  if(q?.kind==='truefalse'&&!st.answered&&!st.busy){
    const truth=document.querySelector(`input[name="ifty149Truth"][value="${st.verdict==='correct'?'correct':'incorrect'}"]`);
@@ -24318,7 +23804,7 @@ async function ifty149RenderManaged(){
     ifty149Run=null;
     if(advanceIftySubjectQuizSequence124(st.subject,st))return;
   }
-  showIftyHubContent(`<section class="ifty-portal-shell" style="max-width:720px;margin:auto;padding:25px;"><h2>練習完了</h2><p>正解 ${st.correct}・不正解 ${st.wrong}・分からない ${st.unknown}</p>${ifty182Summary(st.history182)}<button onclick="ifty149Exit()">PRACTICEに戻る</button></section>`,'ifty149-result');return;
+  showIftyHubContent(`<section class="ifty-portal-shell" style="max-width:720px;margin:auto;padding:25px;"><h2>${ifty216Markup("練習完了","Practice complete")}</h2><p>正解 ${st.correct}・不正解 ${st.wrong}・分からない ${st.unknown}</p>${ifty182Summary(st.history182)}<button onclick="ifty149Exit()">${ifty216Markup("PRACTICEに戻る","Back to practice")}</button></section>`,'ifty149-result');return;
  }
  const ref=ifty149QuizRef(st,st.queue[st.index]);if(!ref){alert('項目が見つからないため中止します。');window.ifty149Exit();return;}
  const set=getIftySubjectQuizSet(st.subject,st.setId);st.mode=ifty149CurrentMode(st,ref);st.current=null;st.answered=false;st.answer='';st.feedback='';st.modelAnswer='';st.gradeError='';st.manualReveal=false;st.lastCorrect=null;st.gradeOrigin='';st.challenged=false;st.challengePending=false;st.challengeReason='';st.challengeError='';st.verdict='';st.correction='';st.fallbackNote='';st.currentSourceId=String(ref.item.id);st.busy=true;ifty149QuestionPanel();
@@ -24368,7 +23854,7 @@ async function ifty149RenderManaged(){
     ifty149QuestionPanel();return;
   }
   st.fallbackNote='';
-  showIftyHubContent(`<section class="ifty-portal-shell" style="padding:20px;"><h3>問題生成に失敗しました</h3><p>${escapeHtml(String(error.message||error))}</p><button onclick="ifty176RetryManagedTruth()">再試行</button> ${st.mode==='year_written'?'<button onclick="ifty154SkipYearQuestion()">この項目をスキップ →</button>':st.mode==='truefalse'?'<button type="button" onclick="ifty176SkipManagedTruth()">この問題をスキップ →</button>':''} <button onclick="ifty175OpenLibrary(ifty149Run.subject,ifty149Run.setId)">📚 保存済み問題</button> <button onclick="ifty175OpenEditor(ifty149Run.subject,ifty149Run.setId)">＋ 問題を手動追加</button> <button onclick="ifty149Exit()">戻る</button></section>`,'ifty149-error');}
+  showIftyHubContent(`<section class="ifty-portal-shell" style="padding:20px;"><h3>${ifty216Markup("問題生成に失敗しました","Question generation failed")}</h3><p>${escapeHtml(String(error.message||error))}</p><button onclick="ifty176RetryManagedTruth()">${ifty216Markup("再試行","Retry")}</button> ${st.mode==='year_written'?'<button onclick="ifty154SkipYearQuestion()">この項目をスキップ →</button>':st.mode==='truefalse'?'<button type="button" onclick="ifty176SkipManagedTruth()">この問題をスキップ →</button>':''} <button onclick="ifty175OpenLibrary(ifty149Run.subject,ifty149Run.setId)">${ifty216Markup("📚 保存済み問題","📚 Saved questions")}</button> <button onclick="ifty175OpenEditor(ifty149Run.subject,ifty149Run.setId)">${ifty216Markup("＋ 問題を手動追加","＋ Add question manually")}</button> <button onclick="ifty149Exit()">${ifty216Markup("戻る","Back")}</button></section>`,'ifty149-error');}
 }
 // STEP176: If no cached T/F question exists, do not trap the student on a failed request.
 window.ifty176RetryManagedTruth=function(){const st=ifty149Run;if(!st||st.busy||st.current)return;st.offlineFallback=false;void ifty149RenderManaged();};
@@ -24539,16 +24025,16 @@ function renderIftySubjectPracticeFolderHub(modal, subject) {
   const key=normalizeIftySubject(subject);
   const active=(target)=>target===key?'border:none;background:#0f766e;color:white':'border:1px solid #cbd5e1;background:white;color:#334155';
   modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(820px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;"><div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">⚔️ PRACTICE</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">教科ごとにフラッシュカードとクイズフォルダを保存できます。</div></div><button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;"><div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">${ifty216Markup("⚔️ 実践","⚔️ PRACTICE")}</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">教科ごとにフラッシュカードとクイズフォルダを保存できます。</div></div><button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button></div>
     <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
-      <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="${active('ENGLISH')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">LANGUAGES</button>
-      <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="${active('ANCIENT')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
-      <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="${active('KANBUN')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANBUN</button>
-     <button type="button" onclick="setIftyUnifiedPracticeSubject('KANJI')" style="${active('KANJI')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANJI</button>
-      <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="${active('SOCIAL STUDIES')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
-      <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="${active('SCIENCE')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
-      <button type="button" onclick="setIftyUnifiedPracticeSubject('OTHERS')" style="${active('OTHERS')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">OTHERS</button>
-      <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
+      <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="${active('ENGLISH')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("言語・語彙","LANGUAGES")}</button>
+      <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="${active('ANCIENT')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("古文","ANCIENT")}</button>
+      <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="${active('KANBUN')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("漢文","KANBUN")}</button>
+     <button type="button" onclick="setIftyUnifiedPracticeSubject('KANJI')" style="${active('KANJI')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("漢字","KANJI")}</button>
+      <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="${active('SOCIAL STUDIES')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("社会","SOCIAL STUDIES")}</button>
+      <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="${active('SCIENCE')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("理科","SCIENCE")}</button>
+      <button type="button" onclick="setIftyUnifiedPracticeSubject('OTHERS')" style="${active('OTHERS')};border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("その他","OTHERS")}</button>
+      <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("基本文","BASIC SENTENCES")}</button>
     </div>
     ${renderIftySubjectFlashcardSetsSection(key)}
     ${renderIftySubjectQuizSetsSection(key)}
@@ -24672,10 +24158,10 @@ function renderIftySubjectFlashcardSetsSection(subject) {
   return `<div style="border:1px solid #cbd5e1;border-radius:10px;padding:14px;background:#f8fafc;margin-top:14px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
       <div>
-        <b style="color:#0f172a;">📇 フラッシュカード</b>
+        <b style="color:#0f172a;">${ifty216Markup("📇 フラッシュカード","📇 Flashcards")}</b>
         <div style="font-size:.82em;color:#64748b;margin-top:2px;">LANGUAGESと同じ形式。セット保存・ランダム・方向切替・中断再開・ミスだけ周回に対応。</div>
       </div>
-      <button type="button" onclick="createIftySubjectFlashcardSet('${key}')" style="background:#0284c7;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">＋ 新規セット</button>
+      <button type="button" onclick="createIftySubjectFlashcardSet('${key}')" style="background:#0284c7;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">${ifty216Markup("＋ 新規セット","＋ New set")}</button>
     </div>
     <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
       ${sets.length ? sets.map(set => `
@@ -24688,7 +24174,7 @@ function renderIftySubjectFlashcardSetsSection(subject) {
             <button type="button" onclick="moveIftySubjectFlashcardSet('${key}','${set.id}',-1)" style="border:none;background:#e2e8f0;border-radius:4px;padding:5px;cursor:pointer;">⬆️</button>
             <button type="button" onclick="moveIftySubjectFlashcardSet('${key}','${set.id}',1)" style="border:none;background:#e2e8f0;border-radius:4px;padding:5px;cursor:pointer;">⬇️</button>
             <button type="button" onclick="duplicateIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#e2e8f0;border-radius:4px;padding:5px;cursor:pointer;">複製</button>
-            <button type="button" onclick="deleteIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#ef4444;color:white;border-radius:4px;padding:5px 7px;cursor:pointer;">削除</button>
+            <button type="button" onclick="deleteIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#ef4444;color:white;border-radius:4px;padding:5px 7px;cursor:pointer;">${ifty216Markup("削除","Delete")}</button>
           </div>
         </div>`).join('') : `<div style="color:#94a3b8;text-align:center;padding:16px;">${escapeHtml(label)}のフラッシュカードセットはまだありません。</div>`}
     </div>
@@ -24781,24 +24267,24 @@ window.openIftySubjectFlashcardSet = function(subject, setId) {
   modal.innerHTML = `
     <div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(900px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('${key}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">◀ 戻る</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('${key}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">${ifty216Markup("◀ 戻る","◀ Back")}</button>
         <button type="button" onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;">
-        <div><div style="font-size:.78em;color:#0284c7;">${escapeHtml(getIftySubjectDisplayName(key))} / フラッシュカード</div><h2 style="margin:2px 0 0;color:#0f172a;font-size:1.3em;">${escapeHtml(set.name)}</h2><div style="font-size:.82em;color:#64748b;margin-top:3px;">${refs.length}${noun}</div></div>
-        <button type="button" onclick="renameIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">名前変更</button>
+        <div><div style="font-size:.78em;color:#0284c7;">${escapeHtml(ifty216Ui(getIftySubjectDisplayName(key)))} / フラッシュカード</div><h2 style="margin:2px 0 0;color:#0f172a;font-size:1.3em;">${escapeHtml(set.name)}</h2><div style="font-size:.82em;color:#64748b;margin-top:3px;">${refs.length}${noun}</div></div>
+        <button type="button" onclick="renameIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">${ifty216Markup("名前変更","Rename")}</button>
       </div>
 
       <div style="margin-top:14px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
-        <b style="color:#334155;">1. 表示方向</b>
+        <b style="color:#334155;">${ifty216Markup("1. 表示方向","1. Card direction")}</b>
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:9px;">
           ${[['front',directionLabels.front],['back',directionLabels.back]].map(([value,label])=>`<label style="display:flex;align-items:center;justify-content:center;gap:7px;padding:10px;border:2px solid ${set.direction===value?'#0ea5e9':'#e2e8f0'};background:${set.direction===value?'#f0f9ff':'white'};border-radius:8px;color:${set.direction===value?'#0369a1':'#475569'};font-weight:900;cursor:pointer;"><input type="radio" name="subjectFlashDirection_${set.id}" ${set.direction===value?'checked':''} onchange="setIftySubjectFlashcardDirection('${key}','${set.id}','${value}')" style="accent-color:#0284c7;">${escapeHtml(label)}</label>`).join('')}
         </div>
       </div>
 
       <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
-        <b style="color:#334155;">2. 出題順</b>
-        <label style="display:flex;align-items:center;gap:7px;margin-top:9px;color:#334155;font-weight:800;"><input type="checkbox" ${set.random?'checked':''} onchange="setIftySubjectFlashcardRandom('${key}','${set.id}',this.checked)"> ランダム順</label>
+        <b style="color:#334155;">${ifty216Markup("2. 出題順","2. Question order")}</b>
+        <label style="display:flex;align-items:center;gap:7px;margin-top:9px;color:#334155;font-weight:800;"><input type="checkbox" ${set.random?'checked':''} onchange="setIftySubjectFlashcardRandom('${key}','${set.id}',this.checked)"> ${ifty216Markup("ランダム順","Random order")}</label>
       </div>
 
       <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
@@ -24806,14 +24292,14 @@ window.openIftySubjectFlashcardSet = function(subject, setId) {
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
           <button type="button" onclick="addSelectedToIftySubjectFlashcardSet('${key}','${set.id}')" ${selectedCount?'':'disabled'} style="border:none;background:#7c3aed;color:white;border-radius:5px;padding:7px 9px;cursor:${selectedCount?'pointer':'default'};opacity:${selectedCount?'1':'.45'};">教科画面でチェック中を追加（${selectedCount}）</button>
           <button type="button" onclick="addAllToIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#5b21b6;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">全${noun}を追加（${allCount}）</button>
-          <button type="button" onclick="clearIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">セットを空にする</button>
+          <button type="button" onclick="clearIftySubjectFlashcardSet('${key}','${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">${ifty216Markup("セットを空にする","Empty set")}</button>
         </div>
-        ${sourceFolders.length?`<div style="margin-top:9px;padding:9px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:8px;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:6px;">学習フォルダ単位で追加</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${sourceFolders.map(folder=>`<button type="button" onclick="addIftySubjectFolderToFlashcardSet('${key}','${set.id}','${folder.id}')" style="border:1px solid #7dd3fc;background:white;color:#075985;border-radius:999px;padding:7px 10px;font-weight:900;cursor:pointer;">＋ ${escapeHtml(folder.name)} (${(folder.items||[]).length})</button>`).join('')}</div></div>`:''}
+        ${sourceFolders.length?`<div style="margin-top:9px;padding:9px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:8px;"><div style="font-size:.76em;font-weight:900;color:#075985;margin-bottom:6px;">${ifty216Markup("学習フォルダ単位で追加","Add by study folder")}</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${sourceFolders.map(folder=>`<button type="button" onclick="addIftySubjectFolderToFlashcardSet('${key}','${set.id}','${folder.id}')" style="border:1px solid #7dd3fc;background:white;color:#075985;border-radius:999px;padding:7px 10px;font-weight:900;cursor:pointer;">＋ ${escapeHtml(folder.name)} (${(folder.items||[]).length})</button>`).join('')}</div></div>`:''}
       </div>
 
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <button type="button" onclick="startIftySubjectFlashcardSet('${key}','${set.id}',false)" ${refs.length?'':'disabled'} style="background:#0284c7;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${refs.length?'pointer':'default'};opacity:${refs.length?'1':'.45'};">▶ ${set.progress?'続きから':'開始'}</button>
-        <button type="button" onclick="startIftySubjectFlashcardSet('${key}','${set.id}',true)" ${refs.length?'':'disabled'} style="background:#334155;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${refs.length?'pointer':'default'};opacity:${refs.length?'1':'.45'};">↻ 最初から</button>
+        <button type="button" onclick="startIftySubjectFlashcardSet('${key}','${set.id}',false)" ${refs.length?'':'disabled'} style="background:#0284c7;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${refs.length?'pointer':'default'};opacity:${refs.length?'1':'.45'};">▶ ${set.progress?'続きから':ifty216T("開始","Start")}</button>
+        <button type="button" onclick="startIftySubjectFlashcardSet('${key}','${set.id}',true)" ${refs.length?'':'disabled'} style="background:#334155;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${refs.length?'pointer':'default'};opacity:${refs.length?'1':'.45'};">${ifty216Markup("↻ 最初から","↻ Restart")}</button>
       </div>
 
       <div style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px;">
@@ -24825,7 +24311,7 @@ window.openIftySubjectFlashcardSet = function(subject, setId) {
           ${refs.length ? refs.map(ref => {
             const front=getIftySubjectFlashcardFront(key,ref.item), back=getIftySubjectFlashcardBack(key,ref.item);
             const search=`${front} ${back} ${ref.folder?.name||''}`.toLowerCase();
-            return `<div data-ifty-subject-flash-row data-search="${escapeHtml(search)}" style="display:flex;justify-content:space-between;gap:8px;padding:8px 2px;border-bottom:1px solid #f1f5f9;"><span style="min-width:0;overflow-wrap:anywhere;"><b>${escapeHtml(front)}</b>　<span style="color:#64748b;font-size:.88em;">${escapeHtml(back)}</span><span style="display:block;color:#94a3b8;font-size:.72em;margin-top:2px;">📁 ${escapeHtml(ref.folder?.name||'未分類')}</span></span><button type="button" onclick="removeFromIftySubjectFlashcardSet('${key}','${set.id}','${ref.item.id}')" style="border:none;background:none;color:#ef4444;cursor:pointer;flex:none;">削除</button></div>`;
+            return `<div data-ifty-subject-flash-row data-search="${escapeHtml(search)}" style="display:flex;justify-content:space-between;gap:8px;padding:8px 2px;border-bottom:1px solid #f1f5f9;"><span style="min-width:0;overflow-wrap:anywhere;"><b>${escapeHtml(front)}</b>　<span style="color:#64748b;font-size:.88em;">${escapeHtml(back)}</span><span style="display:block;color:#94a3b8;font-size:.72em;margin-top:2px;">📁 ${escapeHtml(ref.folder?.name||'未分類')}</span></span><button type="button" onclick="removeFromIftySubjectFlashcardSet('${key}','${set.id}','${ref.item.id}')" style="border:none;background:none;color:#ef4444;cursor:pointer;flex:none;">${ifty216Markup("削除","Delete")}</button></div>`;
           }).join('') : `<div style="color:#94a3b8;text-align:center;padding:16px;">${noun}を追加してください。</div>`}
         </div>
       </div>
@@ -25110,12 +24596,12 @@ function renderIftySubjectFlashcardPlayer(subject, setId) {
       set.progress = null;
       savePracticeData();
       modal.innerHTML = `<div style="background:white;border-radius:14px;width:min(520px,100%);padding:26px;text-align:center;">
-        <h2 style="color:#0f172a;margin-top:0;">🎉 完了</h2>
+        <h2 style="color:#0f172a;margin-top:0;">${ifty216Markup("🎉 完了","🎉 Complete")}</h2>
         <p style="color:#475569;">「${escapeHtml(set.name)}」をすべて覚えました。</p>
         <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">
           ${ifty168FinishedSetUndo ? ifty168BackButton(`ifty168BackFromCompletedSet('subject','${key}','${set.id}')`, true) : ''}
-          <button type="button" onclick="startIftySubjectFlashcardSet('${key}','${set.id}',true)" style="background:#0284c7;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">最初から</button>
-          <button type="button" onclick="openIftySubjectFlashcardSet('${key}','${set.id}')" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">セットへ戻る</button>
+          <button type="button" onclick="startIftySubjectFlashcardSet('${key}','${set.id}',true)" style="background:#0284c7;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">${ifty216Markup("最初から","Restart")}</button>
+          <button type="button" onclick="openIftySubjectFlashcardSet('${key}','${set.id}')" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">${ifty216Markup("セットへ戻る","Back to set")}</button>
         </div>
       </div>`;
       return;
@@ -25521,8 +25007,8 @@ function renderIftyUnifiedAncientPracticeHome(modal) {
     else if (!selectedItems.length) disabledReason = '学習する単語を選択してください。';
     const disabled = !!disabledReason;
     return `<button type="button" onclick="startIftyAncientPractice('${mode}')" ${disabled ? 'disabled' : ''} style="text-align:left;border:1px solid ${disabled ? '#e2e8f0' : meta.color};background:${disabled ? '#f8fafc' : '#fff'};border-radius:12px;padding:12px;cursor:${disabled ? 'not-allowed' : 'pointer'};min-height:112px;opacity:${disabled ? '.62' : '1'};">
-      <div style="font-size:1.04em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(meta.title)}</div>
-      <div style="margin-top:6px;color:#475569;font-size:.82em;line-height:1.5;">${escapeHtml(meta.description)}</div>
+      <div style="font-size:1.04em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(ifty216Ui(meta.title))}</div>
+      <div style="margin-top:6px;color:#475569;font-size:.82em;line-height:1.5;">${escapeHtml(ifty216Ui(meta.description))}</div>
       ${disabledReason ? `<div style="margin-top:7px;font-size:.7em;color:#94a3b8;font-weight:800;">${escapeHtml(disabledReason)}</div>` : ''}
     </button>`;
   };
@@ -25530,19 +25016,19 @@ function renderIftyUnifiedAncientPracticeHome(modal) {
   modal.innerHTML = `
     <div style="background:white;border-radius:14px;width:min(820px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;">
-        <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">⚔️ PRACTICE</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">ANCIENT / 古文単語の実践</div></div>
+        <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">${ifty216Markup("⚔️ 実践","⚔️ PRACTICE")}</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">ANCIENT / 古文単語の実践</div></div>
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
       </div>
 
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">LANGUAGES</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANBUN</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANJI')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANJI</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('OTHERS')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">OTHERS</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("言語・語彙","LANGUAGES")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("古文","ANCIENT")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("漢文","KANBUN")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANJI')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("漢字","KANJI")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("社会","SOCIAL STUDIES")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("理科","SCIENCE")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('OTHERS')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("その他","OTHERS")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("基本文","BASIC SENTENCES")}</button>
       </div>
 
       <div style="padding:13px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;">
@@ -25552,7 +25038,7 @@ function renderIftyUnifiedAncientPracticeHome(modal) {
             <div style="font-size:.76em;color:#64748b;margin-top:3px;">選択 ${selectedFolders.length}フォルダ / ${selectedItems.length}語</div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button type="button" onclick="selectAllIftyAncientPracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">すべて</button>
+            <button type="button" onclick="selectAllIftyAncientPracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${ifty216Markup("すべて","All")}</button>
 <button type="button" onclick="selectAllIftyAncientPracticeFolders(false)" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">解除</button>
           </div>
         </div>
@@ -25560,8 +25046,8 @@ function renderIftyUnifiedAncientPracticeHome(modal) {
       </div>
 
       <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
-        <strong style="color:#334155;">問題数</strong>
-        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${iftyAncientPracticeQuestionCount}" onchange="setIftyAncientPracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
+        <strong style="color:#334155;">${ifty216Markup("問題数","Number of questions")}</strong>
+        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="${ifty216Markup("問題数","Number of questions")}" value="${iftyAncientPracticeQuestionCount}" onchange="setIftyAncientPracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
         <span style="font-size:.74em;color:#64748b;">リスニングは古文単語では使用しません。</span>
       </div>
 
@@ -25832,8 +25318,8 @@ function renderIftyAncientPracticeQuestion() {
     modal.innerHTML = `<div style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;">
       <h2 style="color:#0f766e;margin-top:0;">ANCIENT PRACTICE 完了</h2>
       <div style="font-size:1.15em;margin:14px 0;">正解 ${st.correct} / ${total}　分からない ${st.unknown||0}　正答率 ${rate}%</div>${ifty182Summary(st.history182)}
-      <button onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:11px 16px;font-weight:900;">PRACTICEへ戻る</button>
-      <button type="button" onclick="ifty182UnknownAncient()" style="margin-top:12px;width:100%;background:#475569;color:white;border:0;border-radius:8px;padding:12px;font-weight:850;">？ 分からない（答えを見る）</button>
+      <button onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:#0f766e;color:white;border-radius:8px;padding:11px 16px;font-weight:900;">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button>
+      <button type="button" onclick="ifty182UnknownAncient()" style="margin-top:12px;width:100%;background:#475569;color:white;border:0;border-radius:8px;padding:12px;font-weight:850;">${ifty216Markup("？ 分からない（答えを見る）","? Don't know (show answer)")}</button>
     </div>`;
     return;
   }
@@ -25844,10 +25330,10 @@ function renderIftyAncientPracticeQuestion() {
 
   if (st.mode === 'choice') {
     modal.innerHTML = `<div style="background:white;border-radius:14px;width:min(700px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
-      <div style="display:flex;justify-content:space-between;gap:10px;"><div style="font-weight:900;color:${meta.color};">${escapeHtml(meta.title)}　${st.index + 1}/${st.questions.length}</div><button onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:none;font-size:1.3em;color:#64748b;">✕</button></div>
+      <div style="display:flex;justify-content:space-between;gap:10px;"><div style="font-weight:900;color:${meta.color};">${escapeHtml(ifty216Ui(meta.title))}　${st.index + 1}/${st.questions.length}</div><button onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:none;font-size:1.3em;color:#64748b;">✕</button></div>
       <div style="margin-top:18px;padding:15px;border-radius:10px;background:#f8fafc;font-size:1.05em;line-height:1.65;">${escapeHtml(q.prompt)}</div>
       <div style="display:grid;gap:8px;margin-top:12px;">${q.options.map(option => `<button type="button" onclick="answerIftyAncientPracticeChoice('${option.id}')" style="text-align:left;border:2px solid #cbd5e1;background:white;border-radius:9px;padding:11px;font-weight:800;cursor:pointer;">${escapeHtml(option.label)}</button>`).join('')}</div>
-      <button type="button" onclick="ifty182UnknownAncient()" style="margin-top:12px;width:100%;background:#475569;color:white;border:0;border-radius:8px;padding:12px;font-weight:850;">？ 分からない（答えを見る）</button>
+      <button type="button" onclick="ifty182UnknownAncient()" style="margin-top:12px;width:100%;background:#475569;color:white;border:0;border-radius:8px;padding:12px;font-weight:850;">${ifty216Markup("？ 分からない（答えを見る）","? Don't know (show answer)")}</button>
     </div>`;
     return;
   }
@@ -25867,13 +25353,13 @@ function renderIftyAncientPracticeQuestion() {
                         : (st.mode === 'example' ? '文脈での意味を記述' : '意味を記述'))))));
 
   modal.innerHTML = `<div style="background:white;border-radius:14px;width:min(700px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
-    <div style="display:flex;justify-content:space-between;gap:10px;"><div style="font-weight:900;color:${meta.color};">${escapeHtml(meta.title)}　${st.index + 1}/${st.questions.length}</div><button onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:none;font-size:1.3em;color:#64748b;">✕</button></div>
+    <div style="display:flex;justify-content:space-between;gap:10px;"><div style="font-weight:900;color:${meta.color};">${escapeHtml(ifty216Ui(meta.title))}　${st.index + 1}/${st.questions.length}</div><button onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:none;background:none;font-size:1.3em;color:#64748b;">✕</button></div>
     <div style="margin-top:18px;padding:15px;border-radius:10px;background:#f8fafc;font-size:1.05em;line-height:1.7;white-space:pre-wrap;">${escapeHtml(q.prompt)}</div>
     <label style="display:block;margin-top:14px;font-weight:800;color:#334155;">${label}
       <textarea id="iftyAncientPracticeAnswer" rows="3" style="width:100%;box-sizing:border-box;margin-top:7px;padding:11px;border:1px solid #94a3b8;border-radius:8px;font:inherit;resize:vertical;"></textarea>
     </label>
-    <button onclick="submitIftyAncientPracticeAnswer()" style="width:100%;margin-top:11px;border:none;background:${meta.color};color:white;border-radius:8px;padding:11px;font-weight:900;">回答</button>
-    <button type="button" onclick="ifty182UnknownAncient()" style="width:100%;margin-top:9px;padding:12px;background:#475569;color:white;border:0;border-radius:8px;font-weight:850;">？ 分からない（答えを見る）</button>
+    <button onclick="submitIftyAncientPracticeAnswer()" style="width:100%;margin-top:11px;border:none;background:${meta.color};color:white;border-radius:8px;padding:11px;font-weight:900;">${ifty216Markup("回答","Answer")}</button>
+    <button type="button" onclick="ifty182UnknownAncient()" style="width:100%;margin-top:9px;padding:12px;background:#475569;color:white;border:0;border-radius:8px;font-weight:850;">${ifty216Markup("？ 分からない（答えを見る）","? Don't know (show answer)")}</button>
     <div style="margin-top:8px;color:#64748b;font-size:.78em;">Enterで回答 / Shift+Enterで改行${(['term_write','reading_write','grammar_conjugate','grammar_identify'].includes(st.mode)) ? '。通常採点ではALLIAを使用しません。不正解時はChallengeできます。' : '。記述内容はALLIAが採点します。'}</div>
   </div>`;
 
@@ -25999,9 +25485,9 @@ function renderIftyAncientPracticeFeedback(correct, feedback, modelAnswer, canCh
   if (!modal) return;
 
   modal.innerHTML = `<div style="background:white;border-radius:14px;width:min(650px,100%);padding:22px;">
-    <h2 style="margin-top:0;color:${correct ? '#059669' : '#dc2626'};">${st.last?.unknown?'？ 分からない':correct ? '⭕ 正解' : '❌ 不正解'}</h2>
-    <div style="padding:10px;background:#f8fafc;border-radius:8px;"><b>あなたの回答：</b>${escapeHtml(st.last?.userAnswer || '')}</div>
-    <div style="padding:10px;background:#f5f3ff;border-radius:8px;margin-top:8px;color:#4c1d95;"><b>登録・模範：</b>${escapeHtml(modelAnswer || '')}</div>
+    <h2 style="margin-top:0;color:${correct ? '#059669' : '#dc2626'};">${st.last?.unknown?ifty216T("？ 分からない","? Don't know"):correct ? ifty216T("⭕ 正解","⭕ Correct") : ifty216T("❌ 不正解","❌ Incorrect")}</h2>
+    <div style="padding:10px;background:#f8fafc;border-radius:8px;"><b>${ifty216Markup("あなたの回答：","Your answer:")}</b>${escapeHtml(st.last?.userAnswer || '')}</div>
+    <div style="padding:10px;background:#f5f3ff;border-radius:8px;margin-top:8px;color:#4c1d95;"><b>${ifty216Markup("登録・模範：","Saved / model:")}</b>${escapeHtml(modelAnswer || '')}</div>
     <div style="margin-top:10px;color:#475569;white-space:pre-wrap;line-height:1.55;">${escapeHtml(feedback || '')}</div>
 
     ${canChallenge && st.last && !st.last.challenged ? `<div style="margin-top:13px;padding:11px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
@@ -26010,7 +25496,7 @@ function renderIftyAncientPracticeFeedback(correct, feedback, modelAnswer, canCh
       <button onclick="submitIftyAncientPracticeChallenge()" style="width:100%;margin-top:7px;border:none;background:#d97706;color:white;border-radius:7px;padding:9px;font-weight:900;">⚖️ Challenge（ALLIA）</button>
     </div>` : ''}
 
-    <button onclick="nextIftyAncientPracticeQuestion()" data-ifty-enter-primary="true" style="width:100%;margin-top:13px;border:none;background:#0f766e;color:white;border-radius:8px;padding:11px;font-weight:900;">次へ</button>
+    <button onclick="nextIftyAncientPracticeQuestion()" data-ifty-enter-primary="true" style="width:100%;margin-top:13px;border:none;background:#0f766e;color:white;border-radius:8px;padding:11px;font-weight:900;">${ifty216Markup("次へ","Next")}</button>
   </div>`;
 }
 
@@ -26096,8 +25582,8 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
     else if (!selectedItems.length) disabledReason = '学習する項目を選択してください。';
     const disabled = !!disabledReason;
     return `<button type="button" onclick="closePracticeModal();startIftySocialPractice('${mode}')" ${disabled ? 'disabled' : ''} style="text-align:left;border:1px solid ${disabled ? '#e2e8f0' : meta.color};background:${disabled ? '#f8fafc' : '#fff'};border-radius:12px;padding:12px;cursor:${disabled ? 'not-allowed' : 'pointer'};min-height:112px;opacity:${disabled ? '.62' : '1'};">
-      <div style="font-size:1.04em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(meta.title)}</div>
-      <div style="margin-top:6px;color:#475569;font-size:.82em;line-height:1.5;">${escapeHtml(meta.description)}</div>
+      <div style="font-size:1.04em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(ifty216Ui(meta.title))}</div>
+      <div style="margin-top:6px;color:#475569;font-size:.82em;line-height:1.5;">${escapeHtml(ifty216Ui(meta.description))}</div>
       ${disabledReason ? `<div style="margin-top:7px;font-size:.7em;color:#94a3b8;font-weight:800;">${escapeHtml(disabledReason)}</div>` : ''}
     </button>`;
   };
@@ -26105,18 +25591,18 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
   modal.innerHTML = `
     <div style="background:white;border-radius:14px;width:min(820px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;">
-        <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">⚔️ PRACTICE</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">教科を切り替えて実践できます。</div></div>
+        <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">${ifty216Markup("⚔️ 実践","⚔️ PRACTICE")}</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">${ifty216Markup("教科を切り替えて実践できます。","Switch subjects to practise.")}</div></div>
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
       </div>
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">LANGUAGES</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANBUN</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANJI')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANJI</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('OTHERS')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">OTHERS</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("言語・語彙","LANGUAGES")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("古文","ANCIENT")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("漢文","KANBUN")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANJI')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("漢字","KANJI")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("社会","SOCIAL STUDIES")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("理科","SCIENCE")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('OTHERS')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("その他","OTHERS")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("基本文","BASIC SENTENCES")}</button>
       </div>
 
       <div style="padding:13px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;">
@@ -26126,7 +25612,7 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
             <div style="font-size:.76em;color:#64748b;margin-top:3px;">選択 ${selectedFolders.length}フォルダ / ${selectedItems.length}項目${selectedSubjects.length ? ` ・ ${escapeHtml(selectedSubjects.join('・'))}` : ''}</div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button type="button" onclick="selectAllIftySocialPracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">すべて</button>
+            <button type="button" onclick="selectAllIftySocialPracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${ifty216Markup("すべて","All")}</button>
             <button type="button" onclick="selectAllIftySocialPracticeFolders(false)" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">解除</button>
           </div>
         </div>
@@ -26134,8 +25620,8 @@ function renderIftyUnifiedSocialPracticeHome(modal) {
       </div>
 
       <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
-        <strong style="color:#334155;">問題数</strong>
-        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${iftySocialPracticeQuestionCount}" onchange="setIftySocialPracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
+        <strong style="color:#334155;">${ifty216Markup("問題数","Number of questions")}</strong>
+        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="${ifty216Markup("問題数","Number of questions")}" value="${iftySocialPracticeQuestionCount}" onchange="setIftySocialPracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
         <span style="font-size:.74em;color:#64748b;">時代・並べ替え・説明は開始時にALLIAが問題を作ります。</span>
       </div>
 
@@ -26181,8 +25667,8 @@ function renderIftyUnifiedSciencePracticeHome(modal) {
     else if (!selectedItems.length) disabledReason = '学習する項目を選択してください。';
     const disabled = !!disabledReason;
     return `<button type="button" onclick="closePracticeModal();startIftySciencePractice('${mode}')" ${disabled ? 'disabled' : ''} style="text-align:left;border:1px solid ${disabled ? '#e2e8f0' : meta.color};background:${disabled ? '#f8fafc' : '#fff'};border-radius:12px;padding:12px;cursor:${disabled ? 'not-allowed' : 'pointer'};min-height:112px;opacity:${disabled ? '.62' : '1'};">
-      <div style="font-size:1.04em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(meta.title)}</div>
-      <div style="margin-top:6px;color:#475569;font-size:.82em;line-height:1.5;">${escapeHtml(meta.description)}</div>
+      <div style="font-size:1.04em;font-weight:900;color:${disabled ? '#94a3b8' : meta.color};">${escapeHtml(ifty216Ui(meta.title))}</div>
+      <div style="margin-top:6px;color:#475569;font-size:.82em;line-height:1.5;">${escapeHtml(ifty216Ui(meta.description))}</div>
       ${disabledReason ? `<div style="margin-top:7px;font-size:.7em;color:#94a3b8;font-weight:800;">${escapeHtml(disabledReason)}</div>` : ''}
     </button>`;
   };
@@ -26190,17 +25676,17 @@ function renderIftyUnifiedSciencePracticeHome(modal) {
   modal.innerHTML = `
     <div style="background:white;border-radius:14px;width:min(820px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;">
-        <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">⚔️ PRACTICE</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">教科を切り替えて実践できます。</div></div>
+        <div><h2 style="margin:0;color:#0f172a;font-size:1.3em;">${ifty216Markup("⚔️ 実践","⚔️ PRACTICE")}</h2><div style="color:#64748b;font-size:.85em;margin-top:3px;">${ifty216Markup("教科を切り替えて実践できます。","Switch subjects to practise.")}</div></div>
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
       </div>
       <div style="display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;">
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">LANGUAGES</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">ANCIENT</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANBUN</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANJI')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">KANJI</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SOCIAL STUDIES</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">SCIENCE</button>
-        <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">BASIC SENTENCES</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ENGLISH')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("言語・語彙","LANGUAGES")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('ANCIENT')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("古文","ANCIENT")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANBUN')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("漢文","KANBUN")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('KANJI')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("漢字","KANJI")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SOCIAL STUDIES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("社会","SOCIAL STUDIES")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('SCIENCE')" style="border:none;background:#0f766e;color:white;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("理科","SCIENCE")}</button>
+        <button type="button" onclick="setIftyUnifiedPracticeSubject('BASIC SENTENCES')" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;">${ifty216Markup("基本文","BASIC SENTENCES")}</button>
       </div>
 
       <div style="padding:13px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;">
@@ -26210,7 +25696,7 @@ function renderIftyUnifiedSciencePracticeHome(modal) {
             <div style="font-size:.76em;color:#64748b;margin-top:3px;">選択 ${selectedFolders.length}フォルダ / ${selectedItems.length}項目${selectedSubjects.length ? ` ・ ${escapeHtml(selectedSubjects.join('・'))}` : ''}</div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button type="button" onclick="selectAllIftySciencePracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">すべて</button>
+            <button type="button" onclick="selectAllIftySciencePracticeFolders(true)" style="border:none;background:#e0f2fe;color:#075985;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">${ifty216Markup("すべて","All")}</button>
             <button type="button" onclick="selectAllIftySciencePracticeFolders(false)" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 9px;font-weight:900;cursor:pointer;">解除</button>
           </div>
         </div>
@@ -26218,8 +25704,8 @@ function renderIftyUnifiedSciencePracticeHome(modal) {
       </div>
 
       <div style="margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
-        <strong style="color:#334155;">問題数</strong>
-        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${iftySciencePracticeQuestionCount}" onchange="setIftySciencePracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
+        <strong style="color:#334155;">${ifty216Markup("問題数","Number of questions")}</strong>
+        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="${ifty216Markup("問題数","Number of questions")}" value="${iftySciencePracticeQuestionCount}" onchange="setIftySciencePracticeQuestionCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #94a3b8;border-radius:7px;background:white;font-size:1em;">
         <span style="font-size:.74em;color:#64748b;">公式・単位・並べ替え・説明は開始時にALLIAが問題を作ります。</span>
       </div>
 
@@ -26436,45 +25922,45 @@ function renderIfty208KanjiWriteQuestion() {
     if(advanceIftySubjectQuizSequence124(st.subject,st))return;
     const n=st.correct+st.wrong+(st.unknown||0);
     showIftyHubContent(`<section class="ifty-portal-shell" style="color:#f8fafc;max-width:800px;margin:auto;">
-      <h1 style="color:#f8fafc">漢字手書き 完了</h1>
+      <h1 style="color:#f8fafc">${ifty216Markup("漢字手書き 完了","Kanji handwriting complete")}</h1>
       <p style="color:#dbeafe">正解 ${st.correct} / ${n}　要復習 ${st.wrong}　分からない ${st.unknown||0}</p>
       ${ifty182Summary(st.history182)}
-      <button onclick="openPracticeHome('${st.subject}')" type="button" style="min-height:44px;padding:11px 16px;margin-top:16px;background:#0f766e;color:white;border:0;border-radius:10px;font-weight:900">PRACTICEへ戻る</button>
+      <button onclick="openPracticeHome('${st.subject}')" type="button" style="min-height:44px;padding:11px 16px;margin-top:16px;background:#0f766e;color:white;border:0;border-radius:10px;font-weight:900">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button>
     </section>`,'kanji-write-practice');return;
   }
   const q=st.queue[st.index];
   const result=st.answered?`<div style="background:${st.last?.correct?'#064e3b':'#3b2532'};border:1px solid ${st.last?.correct?'#34d399':'#fb7185'};border-radius:12px;padding:14px;margin-top:12px;color:#fff">
-      <div style="font-size:1.08em;font-weight:900">${st.last?.unknown?'分からない':st.last?.correct?'正解':'要復習'}</div>
-      <div style="margin-top:6px;overflow-wrap:anywhere">登録済みの用語：<strong>${escapeHtml(q.answer)}</strong></div>
-      <button onclick="nextIftySubjectTermWriteQuestion()" data-ifty-enter-primary="true" type="button" style="margin-top:12px;width:100%;min-height:46px;border-radius:9px;border:0;background:#2563eb;color:white;font-weight:900">次へ</button>
+      <div style="font-size:1.08em;font-weight:900">${st.last?.unknown?ifty216T("分からない","Don't know"):st.last?.correct?ifty216T("正解","Correct"):ifty216T("要復習","Review needed")}</div>
+      <div style="margin-top:6px;overflow-wrap:anywhere">${ifty216Markup("登録済みの用語：","Saved term:")}<strong>${escapeHtml(q.answer)}</strong></div>
+      <button onclick="nextIftySubjectTermWriteQuestion()" data-ifty-enter-primary="true" type="button" style="margin-top:12px;width:100%;min-height:46px;border-radius:9px;border:0;background:#2563eb;color:white;font-weight:900">${ifty216Markup("次へ","Next")}</button>
     </div>`:st.revealed?`<div style="background:#102b3a;border:1px solid #2dd4bf;padding:14px;border-radius:12px;margin-top:12px;color:#f8fafc">
-      <div style="color:#a7f3d0;font-weight:800">模範解答（登録済み）</div>
+      <div style="color:#a7f3d0;font-weight:800">${ifty216Markup("模範解答（登録済み）","Saved model answer")}</div>
       <div style="font-size:clamp(22px,5vw,32px);font-weight:900;letter-spacing:.06em;margin:10px 0;overflow-wrap:anywhere">${escapeHtml(q.answer)}</div>
       <div style="font-size:.82em;color:#cbd5e1;margin-bottom:10px">自分の手書きと比較して判定してください。手書きはAIによる自動認識をしていません。</div>
       ${st.inkImage?`<img src="${st.inkImage}" alt="あなたが書いた文字" style="display:block;width:100%;max-height:200px;object-fit:contain;background:#f8fafc;border-radius:7px;margin-bottom:12px">`:''}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px">
-        <button type="button" onclick="ifty208KanjiMark('correct')" style="min-height:48px;padding:12px;border:0;border-radius:8px;background:#059669;color:white;font-weight:900">正しく書けた</button>
-        <button type="button" onclick="ifty208KanjiMark('wrong')" style="min-height:48px;padding:12px;border:0;border-radius:8px;background:#b91c1c;color:white;font-weight:900">書き間違えた</button>
-        <button type="button" onclick="ifty208KanjiMark('unknown')" style="min-height:48px;padding:12px;border:1px solid #fbbf24;border-radius:8px;background:#374151;color:#fde68a;font-weight:900">分からなかった</button>
+        <button type="button" onclick="ifty208KanjiMark('correct')" style="min-height:48px;padding:12px;border:0;border-radius:8px;background:#059669;color:white;font-weight:900">${ifty216Markup("正しく書けた","Written correctly")}</button>
+        <button type="button" onclick="ifty208KanjiMark('wrong')" style="min-height:48px;padding:12px;border:0;border-radius:8px;background:#b91c1c;color:white;font-weight:900">${ifty216Markup("書き間違えた","Written incorrectly")}</button>
+        <button type="button" onclick="ifty208KanjiMark('unknown')" style="min-height:48px;padding:12px;border:1px solid #fbbf24;border-radius:8px;background:#374151;color:#fde68a;font-weight:900">${ifty216Markup("分からなかった","Did not know")}</button>
       </div></div>`:null;
   const answerArea=st.revealed||st.answered?'':`<div style="margin-top:13px">
-    <p style="color:#dbeafe;font-size:.86em;margin:0 0 8px">指やペンで漢字を書いてください。ペン入力が難しければ下の文字入力も使えます。</p>
-    <canvas id="ifty208KanjiWritingCanvas" aria-label="漢字手書き欄" width="960" height="480" style="display:block;width:100%;height:clamp(190px,35vh,280px);border:2px solid #94a3b8;background:#f8fafc;border-radius:12px;touch-action:none;box-sizing:border-box;cursor:crosshair"></canvas>
+    <p style="color:#dbeafe;font-size:.86em;margin:0 0 8px">${ifty216Markup("指やペンで漢字を書いてください。ペン入力が難しければ下の文字入力も使えます。","Write kanji with your finger or stylus. You can also type below.")}</p>
+    <canvas id="ifty208KanjiWritingCanvas" aria-label="${ifty216Markup("漢字手書き欄","Kanji handwriting area")}" width="960" height="480" style="display:block;width:100%;height:clamp(190px,35vh,280px);border:2px solid #94a3b8;background:#f8fafc;border-radius:12px;touch-action:none;box-sizing:border-box;cursor:crosshair"></canvas>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
-      <button type="button" onclick="ifty208KanjiInkUndo()" style="flex:1;min-height:44px;padding:10px;border:1px solid #64748b;border-radius:9px;background:#30445e;color:#fff;font-weight:800">一画戻す</button>
-      <button type="button" onclick="ifty208KanjiInkClear()" style="flex:1;min-height:44px;padding:10px;border:1px solid #64748b;border-radius:9px;background:#30445e;color:#fff;font-weight:800">全消去</button>
+      <button type="button" onclick="ifty208KanjiInkUndo()" style="flex:1;min-height:44px;padding:10px;border:1px solid #64748b;border-radius:9px;background:#30445e;color:#fff;font-weight:800">${ifty216Markup("一画戻す","Undo one stroke")}</button>
+      <button type="button" onclick="ifty208KanjiInkClear()" style="flex:1;min-height:44px;padding:10px;border:1px solid #64748b;border-radius:9px;background:#30445e;color:#fff;font-weight:800">${ifty216Markup("全消去","Clear all")}</button>
     </div>
-    <button type="button" onclick="ifty208KanjiShowAnswer()" style="width:100%;min-height:48px;margin-top:12px;border:0;border-radius:9px;background:#0f766e;color:white;font-weight:900">模範解答を表示して自己採点</button>
+    <button type="button" onclick="ifty208KanjiShowAnswer()" style="width:100%;min-height:48px;margin-top:12px;border:0;border-radius:9px;background:#0f766e;color:white;font-weight:900">${ifty216Markup("模範解答を表示して自己採点","Show model answer and self-assess")}</button>
     <div style="margin-top:16px;padding:11px;border:1px solid #536d88;border-radius:10px;background:#13273e">
-      <label for="ifty208KanjiTypedInput" style="color:#e2e8f0;font-weight:800">キーボードで入力（任意・自動採点）</label>
-      <input id="ifty208KanjiTypedInput" lang="ja" autocomplete="off" autocapitalize="off" enterkeyhint="done" placeholder="日本語の用語を入力" style="display:block;box-sizing:border-box;width:100%;min-height:45px;margin:8px 0;padding:10px;border:1px solid #8298b2;border-radius:8px;background:#0e1c30;color:white;font-size:16px">
-      <button type="button" onclick="ifty208KanjiTypedGrade()" style="width:100%;min-height:44px;border:none;border-radius:9px;background:#2563eb;color:white;font-weight:900">入力した用語を自動採点</button>
+      <label for="ifty208KanjiTypedInput" style="color:#e2e8f0;font-weight:800">${ifty216Markup("キーボードで入力（任意・自動採点）","Type an answer (optional; auto-grading)")}</label>
+      <input id="ifty208KanjiTypedInput" lang="ja" autocomplete="off" autocapitalize="off" enterkeyhint="done" placeholder="${ifty216Markup("日本語の用語を入力","Enter the Japanese term")}" style="display:block;box-sizing:border-box;width:100%;min-height:45px;margin:8px 0;padding:10px;border:1px solid #8298b2;border-radius:8px;background:#0e1c30;color:white;font-size:16px">
+      <button type="button" onclick="ifty208KanjiTypedGrade()" style="width:100%;min-height:44px;border:none;border-radius:9px;background:#2563eb;color:white;font-weight:900">${ifty216Markup("入力した用語を自動採点","Grade typed term")}</button>
     </div></div>`;
   showIftyHubContent(`<section class="ifty-portal-shell" style="max-width:860px;margin:0 auto;color:#f8fafc;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-      <div><h1 class="ifty-portal-title" style="color:#5eead4">漢字手書き</h1>
-      <p class="ifty-portal-subtitle" style="color:#cbd5e1">${escapeHtml(getIftySubjectDisplayName(st.subject))} ・ ${st.index+1}/${st.queue.length} ・ 正解 ${st.correct} ・ 要復習 ${st.wrong}</p></div>
-      <button type="button" onclick="openPracticeHome('${st.subject}')" style="background:#334155;color:white;min-height:44px;border:1px solid #94a3b8;border-radius:9px;padding:10px 14px;font-weight:800">終了</button>
+      <div><h1 class="ifty-portal-title" style="color:#5eead4">${ifty216Markup("漢字手書き","Kanji handwriting")}</h1>
+      <p class="ifty-portal-subtitle" style="color:#cbd5e1">${escapeHtml(ifty216Ui(getIftySubjectDisplayName(st.subject)))} ・ ${st.index+1}/${st.queue.length} ・ 正解 ${st.correct} ・ 要復習 ${st.wrong}</p></div>
+      <button type="button" onclick="openPracticeHome('${st.subject}')" style="background:#334155;color:white;min-height:44px;border:1px solid #94a3b8;border-radius:9px;padding:10px 14px;font-weight:800">${ifty216Markup("終了","End")}</button>
     </div>
     <div style="margin-top:14px;background:#162b40;color:#f8fafc;border:1px solid #6b829d;padding:16px;border-radius:12px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(q.prompt)}</div>
     ${answerArea||''}${result||''}
@@ -26537,10 +26023,10 @@ function renderIftySubjectTermWriteQuestion() {
     showIftyHubContent(`
       <section class="ifty-portal-shell">
         <div style="text-align:center;padding:28px 8px;">
-          <div style="font-size:1.4em;font-weight:900;color:#1d4ed8;">用語記述 完了</div>
+          <div style="font-size:1.4em;font-weight:900;color:#1d4ed8;">${ifty216Markup("用語記述 完了","Term response complete")}</div>
           <div style="margin-top:12px;color:#334155;font-size:1.05em;">正解 ${st.correct} / ${total}　正答率 ${rate}%</div>
-          <div style="margin-top:7px;color:#64748b;font-size:.82em;">通常採点ではALLIAを使用していません。</div>
-          <button type="button" onclick="openPracticeHome('${st.subject}')" style="margin-top:18px;border:none;background:#334155;color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">PRACTICEへ戻る</button>
+          <div style="margin-top:7px;color:#64748b;font-size:.82em;">${ifty216Markup("通常採点ではALLIAを使用していません。","Standard grading does not use ALLIA.")}</div>
+          <button type="button" onclick="openPracticeHome('${st.subject}')" style="margin-top:18px;border:none;background:#334155;color:white;border-radius:8px;padding:10px 15px;font-weight:900;cursor:pointer;">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button>
         </div>
       </section>
     `, 'term-write-practice');
@@ -26552,19 +26038,19 @@ function renderIftySubjectTermWriteQuestion() {
     <section class="ifty-portal-shell">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
         <div>
-          <h1 class="ifty-portal-title">✍️ 用語記述</h1>
-          <div class="ifty-portal-subtitle">${escapeHtml(getIftySubjectDisplayName(st.subject))} ・ ${st.index + 1}/${st.queue.length} ・ 通常採点はALLIAなし</div>
+          <h1 class="ifty-portal-title">${ifty216Markup("✍️ 用語記述","✍️ Term response")}</h1>
+          <div class="ifty-portal-subtitle">${escapeHtml(ifty216Ui(getIftySubjectDisplayName(st.subject)))} ・ ${st.index + 1}/${st.queue.length} ・ 通常採点はALLIAなし</div>
         </div>
-        <button class="ifty-portal-back" type="button" onclick="openPracticeHome('${st.subject}')">PRACTICEへ戻る</button>
+        <button class="ifty-portal-back" type="button" onclick="openPracticeHome('${st.subject}')">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button>
       </div>
 
-      <div style="margin-top:16px;padding:15px;border:1px solid #bfdbfe;border-radius:11px;background:#eff6ff;white-space:pre-wrap;line-height:1.7;color:#0f172a;">${escapeHtml(q.prompt)}</div>
+      <div style="margin-top:16px;padding:15px;border:1px solid #bfdbfe;border-radius:11px;background:#eff6ff;white-space:pre-wrap;line-height:1.7;color:#0f172a;">${ifty216QuizText(q.prompt, ifty216EligibleSubject(st.subject), true)}</div>
 
       <div style="margin-top:13px;">
-        <label style="font-weight:900;color:#334155;">対応する用語を入力
+        <label style="font-weight:900;color:#334155;">${ifty216Markup("対応する用語を入力","Enter the corresponding term")}
           <input id="iftySubjectTermWriteInput" autocomplete="off" autocapitalize="off" style="width:100%;box-sizing:border-box;margin-top:7px;padding:11px;border:2px solid #93c5fd;border-radius:9px;font-size:1em;">
         </label>
-        <button type="button" onclick="submitIftySubjectTermWriteAnswer()" style="width:100%;margin-top:10px;border:none;background:#2563eb;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">回答</button>
+        <button type="button" onclick="submitIftySubjectTermWriteAnswer()" style="width:100%;margin-top:10px;border:none;background:#2563eb;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">${ifty216Markup("回答","Answer")}</button>
         <div style="margin-top:7px;color:#64748b;font-size:.76em;">Enterで回答。表記ゆれ・別名だと思う場合は、不正解後にChallengeできます。</div>
       </div>
     </section>
@@ -26612,8 +26098,8 @@ function renderIftySubjectTermWriteFeedback(correct, feedback) {
   showIftyHubContent(`
     <section class="ifty-portal-shell">
       <div style="max-width:720px;margin:0 auto;">
-        <h2 style="margin-top:0;color:${correct ? '#059669' : '#dc2626'};">${correct ? '⭕ 正解' : '❌ 不正解'}</h2>
-        <div style="padding:11px;background:#f8fafc;border-radius:8px;"><strong>あなたの回答：</strong>${escapeHtml(last.userAnswer || '')}</div>
+        <h2 style="margin-top:0;color:${correct ? '#059669' : '#dc2626'};">${correct ? ifty216T("⭕ 正解","⭕ Correct") : ifty216T("❌ 不正解","❌ Incorrect")}</h2>
+        <div style="padding:11px;background:#f8fafc;border-radius:8px;"><strong>${ifty216Markup("あなたの回答：","Your answer:")}</strong>${escapeHtml(last.userAnswer || '')}</div>
         <div style="padding:11px;background:#eff6ff;border-radius:8px;margin-top:8px;"><strong>登録用語：</strong>${escapeHtml(q.answer)}</div>
         <div style="margin-top:10px;color:#475569;line-height:1.55;">${escapeHtml(feedback || '')}</div>
 
@@ -26623,7 +26109,7 @@ function renderIftySubjectTermWriteFeedback(correct, feedback) {
           <button type="button" onclick="submitIftySubjectTermWriteChallenge()" style="width:100%;margin-top:7px;border:none;background:#d97706;color:white;border-radius:7px;padding:9px;font-weight:900;cursor:pointer;">⚖️ Challenge（ALLIA）</button>
         </div>` : ''}
 
-        <button type="button" onclick="nextIftySubjectTermWriteQuestion()" data-ifty-enter-primary="true" style="width:100%;margin-top:13px;border:none;background:#2563eb;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">次へ</button>
+        <button type="button" onclick="nextIftySubjectTermWriteQuestion()" data-ifty-enter-primary="true" style="width:100%;margin-top:13px;border:none;background:#2563eb;color:white;border-radius:8px;padding:11px;font-weight:900;cursor:pointer;">${ifty216Markup("次へ","Next")}</button>
       </div>
     </section>
   `, 'term-write-practice');
@@ -26705,8 +26191,8 @@ function openPracticeNamePrompt(title, defaultValue, onConfirm, options = {}) {
       <h3 style="margin:0 0 10px;color:#0f172a;">${escapeHtml(title)}</h3>
       <input id="practiceNameInput" value="${escapeHtml(defaultValue)}" style="width:100%;box-sizing:border-box;padding:10px;border:2px solid #93c5fd;border-radius:7px;font-size:1em;">
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
-        <button id="practiceNameCancel" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:8px 12px;cursor:pointer;">キャンセル</button>
-        <button id="practiceNameConfirm" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">作成</button>
+        <button id="practiceNameCancel" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:8px 12px;cursor:pointer;">${ifty216Markup("キャンセル","Cancel")}</button>
+        <button id="practiceNameConfirm" style="border:none;background:#0284c7;color:white;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:pointer;">${ifty216Markup("作成","Create")}</button>
       </div>
     </div>`;
   modal.style.display = 'flex';
@@ -26785,49 +26271,49 @@ window.openPracticeFlashcardSet = function(setId) {
   modal.innerHTML = `
     <div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(900px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-        <button onclick="renderPracticeHome()" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">◀ 戻る</button>
+        <button onclick="renderPracticeHome()" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">${ifty216Markup("◀ 戻る","◀ Back")}</button>
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;">
-        <div><div style="font-size:.78em;color:#0284c7;">LANGUAGES / フラッシュカード</div><h2 style="margin:2px 0 0;color:#0f172a;font-size:1.3em;">${escapeHtml(set.name)}</h2><div style="font-size:.82em;color:#64748b;margin-top:3px;">${available.length}語</div></div>
-        <button onclick="renamePracticeSet('${set.id}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">名前変更</button>
+        <div><div style="font-size:.78em;color:#0284c7;">${ifty216Markup("LANGUAGES / フラッシュカード","Languages / Flashcards")}</div><h2 style="margin:2px 0 0;color:#0f172a;font-size:1.3em;">${escapeHtml(set.name)}</h2><div style="font-size:.82em;color:#64748b;margin-top:3px;">${available.length}語</div></div>
+        <button onclick="renamePracticeSet('${set.id}')" style="border:none;background:#e2e8f0;color:#334155;border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:900;">${ifty216Markup("名前変更","Rename")}</button>
       </div>
 
       <div style="margin-top:14px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
-        <b style="color:#334155;">1. 表示方向</b>
+        <b style="color:#334155;">${ifty216Markup("1. 表示方向","1. Card direction")}</b>
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:9px;">
           ${[['front','単語 → 意味'],['back','意味 → 単語']].map(([value,label])=>`<label style="display:flex;align-items:center;justify-content:center;gap:7px;padding:10px;border:2px solid ${set.direction===value?'#0ea5e9':'#e2e8f0'};background:${set.direction===value?'#f0f9ff':'white'};border-radius:8px;color:${set.direction===value?'#0369a1':'#475569'};font-weight:900;cursor:pointer;"><input type="radio" name="practiceDirection_${set.id}" ${set.direction===value?'checked':''} onchange="setPracticeDirection('${set.id}','${value}');openPracticeFlashcardSet('${set.id}')" style="accent-color:#0284c7;">${label}</label>`).join('')}
         </div>
       </div>
 
       <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
-        <b style="color:#334155;">2. 出題順</b>
-        <label style="display:flex;align-items:center;gap:7px;margin-top:9px;color:#334155;font-weight:800;"><input type="checkbox" ${set.random?'checked':''} onchange="setPracticeRandom('${set.id}',this.checked)"> ランダム順</label>
+        <b style="color:#334155;">${ifty216Markup("2. 出題順","2. Question order")}</b>
+        <label style="display:flex;align-items:center;gap:7px;margin-top:9px;color:#334155;font-weight:800;"><input type="checkbox" ${set.random?'checked':''} onchange="setPracticeRandom('${set.id}',this.checked)"> ${ifty216Markup("ランダム順","Random order")}</label>
       </div>
 
       <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
-        <b style="color:#334155;">3. 語彙を追加</b>
+        <b style="color:#334155;">${ifty216Markup("3. 語彙を追加","3. Add vocabulary")}</b>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
-          <button onclick="addSelectedWordsToPracticeSet('${set.id}')" style="border:none;background:#7c3aed;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">チェックしたフォルダ・語彙から追加</button>
+          <button onclick="addSelectedWordsToPracticeSet('${set.id}')" style="border:none;background:#7c3aed;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">${ifty216Markup("チェックしたフォルダ・語彙から追加","Add selected folders and vocabulary")}</button>
           <select id="practiceFolderSource" style="padding:7px;border:1px solid #cbd5e1;border-radius:5px;">${folders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('')}</select>
-          <button onclick="addFolderWordsToPracticeSet('${set.id}')" style="border:none;background:#5b21b6;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">選択フォルダから追加</button>
-          <button onclick="addAllWordsToPracticeSet('${set.id}')" style="border:none;background:#5b21b6;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">全語彙を追加</button>
-          <button onclick="clearPracticeSetWords('${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">フォルダを空にする</button>
+          <button onclick="addFolderWordsToPracticeSet('${set.id}')" style="border:none;background:#5b21b6;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">${ifty216Markup("選択フォルダから追加","Add from selected folders")}</button>
+          <button onclick="addAllWordsToPracticeSet('${set.id}')" style="border:none;background:#5b21b6;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">${ifty216Markup("全語彙を追加","Add all vocabulary")}</button>
+          <button onclick="clearPracticeSetWords('${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">${ifty216Markup("フォルダを空にする","Empty folder")}</button>
         </div>
       </div>
 
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <button onclick="startPracticeSet('${set.id}', false)" ${available.length?'':'disabled'} style="background:#0284c7;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${available.length?'pointer':'default'};opacity:${available.length?'1':'.45'};">▶ ${set.progress?'続きから':'開始'}</button>
-        <button onclick="startPracticeSet('${set.id}', true)" ${available.length?'':'disabled'} style="background:#334155;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${available.length?'pointer':'default'};opacity:${available.length?'1':'.45'};">↻ 最初から</button>
+        <button onclick="startPracticeSet('${set.id}', false)" ${available.length?'':'disabled'} style="background:#0284c7;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${available.length?'pointer':'default'};opacity:${available.length?'1':'.45'};">▶ ${set.progress?'続きから':ifty216T("開始","Start")}</button>
+        <button onclick="startPracticeSet('${set.id}', true)" ${available.length?'':'disabled'} style="background:#334155;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${available.length?'pointer':'default'};opacity:${available.length?'1':'.45'};">${ifty216Markup("↻ 最初から","↻ Restart")}</button>
       </div>
 
       <div style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
           <b style="color:#334155;">登録語彙 ${available.length}語</b>
-          <input id="iftyPracticeWordSearch_${set.id}" type="search" placeholder="登録語彙を検索" oninput="filterIftyPracticeSetWordList('${set.id}',this.value)" style="flex:1;min-width:180px;max-width:360px;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e1;border-radius:7px;">
+          <input id="iftyPracticeWordSearch_${set.id}" type="search" placeholder="${ifty216Markup("登録語彙を検索","Search saved vocabulary")}" oninput="filterIftyPracticeSetWordList('${set.id}',this.value)" style="flex:1;min-width:180px;max-width:360px;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e1;border-radius:7px;">
         </div>
         <div id="iftyPracticeWordList_${set.id}" style="min-height:${available.length?'110px':'0'};max-height:min(38vh,420px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border:1px solid ${available.length?'#e2e8f0':'transparent'};border-radius:8px;padding:${available.length?'0 8px':'0'};">
-          ${available.length ? available.map(({word}) => `<div data-ifty-practice-word-row data-search="${escapeHtml(`${word.word} ${(word.meanings||[]).join(' ')}`.toLowerCase())}" style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:8px 2px;border-bottom:1px solid #f1f5f9;"><span style="min-width:0;overflow-wrap:anywhere;"><b>${escapeHtml(word.word)}</b>　<span style="color:#64748b;font-size:.88em;">${escapeHtml((word.meanings||[]).join(' / '))}</span></span><button onclick="removeWordFromPracticeSet('${set.id}','${word.id}')" style="border:none;background:none;color:#ef4444;cursor:pointer;flex:none;">削除</button></div>`).join('') : '<div style="color:#94a3b8;text-align:center;padding:16px;">単語を追加してください。</div>'}
+          ${available.length ? available.map(({word}) => `<div data-ifty-practice-word-row data-search="${escapeHtml(`${word.word} ${(word.meanings||[]).join(' ')}`.toLowerCase())}" style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:8px 2px;border-bottom:1px solid #f1f5f9;"><span style="min-width:0;overflow-wrap:anywhere;"><b>${escapeHtml(word.word)}</b>　<span style="color:#64748b;font-size:.88em;">${escapeHtml((word.meanings||[]).join(' / '))}</span></span><button onclick="removeWordFromPracticeSet('${set.id}','${word.id}')" style="border:none;background:none;color:#ef4444;cursor:pointer;flex:none;">${ifty216Markup("削除","Delete")}</button></div>`).join('') : '<div style="color:#94a3b8;text-align:center;padding:16px;">単語を追加してください。</div>'}
         </div>
       </div>
     </div>`;
@@ -26892,7 +26378,7 @@ function renderPracticePlayer(setId) {
     } else {
       ifty168TrackCompletedSet('english', '', set, p);
       set.progress=null; savePracticeData();
-      modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(520px,100%);padding:26px;text-align:center;"><h2 style="color:#0f172a;margin-top:0;">🎉 完了</h2><p style="color:#475569;">「${escapeHtml(set.name)}」をすべて覚えました。</p><div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">${ifty168FinishedSetUndo ? ifty168BackButton(`ifty168BackFromCompletedSet('english','','${set.id}')`, true) : ''}<button onclick="startPracticeSet('${set.id}',true)" style="background:#0284c7;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">最初から</button><button onclick="openPracticeFlashcardSet('${set.id}')" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">セットへ戻る</button></div></div>`;
+      modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(520px,100%);padding:26px;text-align:center;"><h2 style="color:#0f172a;margin-top:0;">${ifty216Markup("🎉 完了","🎉 Complete")}</h2><p style="color:#475569;">「${escapeHtml(set.name)}」をすべて覚えました。</p><div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">${ifty168FinishedSetUndo ? ifty168BackButton(`ifty168BackFromCompletedSet('english','','${set.id}')`, true) : ''}<button onclick="startPracticeSet('${set.id}',true)" style="background:#0284c7;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">${ifty216Markup("最初から","Restart")}</button><button onclick="openPracticeFlashcardSet('${set.id}')" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">${ifty216Markup("セットへ戻る","Back to set")}</button></div></div>`;
       return;
     }
   }
@@ -27084,8 +26570,8 @@ function ifty203AccentControls(question,setId) {
     return `<button type="button" aria-label="${escapeHtml(ch)}（${i+1}文字目）にアクセント" aria-pressed="${active}" data-ifty203-index="${i}" onclick="ifty203ChooseAccent('${escapeHtml(setId)}',${i})" onkeydown="event.stopPropagation()" style="min-width:44px;min-height:48px;flex:0 0 44px;touch-action:manipulation;border:2px solid ${active?'#c4b5fd':'#64748b'};border-radius:9px;background:${active?'#6d28d9':'#21344d'};color:#fff;font-size:1.3rem;font-weight:950;cursor:pointer;">${escapeHtml(active?ifty203MarkVowel(ch,0):ch)}</button>`;
   }).join('');
   return `<div style="margin-top:12px;padding:14px;border:1px solid #64748b;background:#17283e;border-radius:11px;color:#f8fafc;box-sizing:border-box;">
-    <b style="font-size:.94rem;">第一アクセントの母音をタップ</b>
-    <p style="font-size:.8rem;color:#cbd5e1;margin:5px 0 10px;">選んだ母音に ´ が付きます。横に長い語はスクロールできます。</p>
+    <b style="font-size:.94rem;">${ifty216Markup("第一アクセントの母音をタップ","Tap the vowel with primary stress")}</b>
+    <p style="font-size:.8rem;color:#cbd5e1;margin:5px 0 10px;">${ifty216Markup("選んだ母音に ´ が付きます。横に長い語はスクロールできます。","The selected vowel receives ´. Scroll horizontally for long words.")}</p>
     <div style="display:flex;align-items:center;gap:2px;overflow-x:auto;max-width:100%;padding:5px 2px;white-space:nowrap;overscroll-behavior-x:contain;" data-ifty203-letters="1">${letters}</div>
     <div style="margin-top:9px;font-size:.84rem;color:#d8b4fe;" data-ifty203-status="1">${selected<0?'母音を1つ選択してください。':'選択済み：'+escapeHtml(ifty203MarkVowel(name,selected))}</div>
   </div>`;
@@ -27232,16 +26718,16 @@ window.openQuizSet = function(setId) {
   modal.innerHTML = `
     <div class="ifty-practice-config" style="background:white;border-radius:14px;width:min(880px,100%);max-height:92vh;overflow:auto;padding:18px;box-shadow:0 15px 45px rgba(0,0,0,.28);box-sizing:border-box;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-        <button onclick="renderPracticeHome()" style="border:none;background:#ede9fe;color:#5b21b6;border-radius:6px;padding:7px 10px;cursor:pointer;">◀ 戻る</button>
+        <button onclick="renderPracticeHome()" style="border:none;background:#ede9fe;color:#5b21b6;border-radius:6px;padding:7px 10px;cursor:pointer;">${ifty216Markup("◀ 戻る","◀ Back")}</button>
         <button onclick="closePracticeModal()" style="background:none;border:none;font-size:1.4em;color:#64748b;cursor:pointer;">✕</button>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;">
         <div><h2 style="margin:0;color:#4c1d95;font-size:1.25em;">❓ ${escapeHtml(set.name)}</h2><div style="font-size:.82em;color:#7c3aed;margin-top:3px;">${available.length}語 ・ ${set.questionCount}問 ・ 復習対象 ${set.reviewWordIds.length}語</div></div>
-        <button onclick="renameQuizSet('${set.id}')" style="border:none;background:#ede9fe;color:#5b21b6;border-radius:6px;padding:7px 10px;cursor:pointer;">名前変更</button>
+        <button onclick="renameQuizSet('${set.id}')" style="border:none;background:#ede9fe;color:#5b21b6;border-radius:6px;padding:7px 10px;cursor:pointer;">${ifty216Markup("名前変更","Rename")}</button>
       </div>
 
       <div style="margin-top:14px;padding:12px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:8px;">
-        <b style="color:#581c87;">1. 出題方向</b>
+        <b style="color:#581c87;">${ifty216Markup("1. 出題方向","1. Question direction")}</b>
         <div class="ifty179-quiz-directions" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:8px;">
           ${[
             ['jp_to_en','意味→語彙','#0ea5e9'],
@@ -27252,33 +26738,33 @@ window.openQuizSet = function(setId) {
       </div>
 
       <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
-        <b style="color:#334155;">2. クイズ形式（複数選択可）</b>
+        <b style="color:#334155;">${ifty216Markup("2. クイズ形式（複数選択可）","2. Quiz types (multiple allowed)")}</b>
         <div class="ifty179-quiz-types" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin-top:9px;">
           ${typeCards.map(([key,label,desc]) => `<label style="display:flex;gap:8px;align-items:flex-start;border:1px solid ${set.types[key]?'#a78bfa':'#e2e8f0'};background:${set.types[key]?'#f5f3ff':'white'};border-radius:8px;padding:9px;cursor:pointer;"><input type="checkbox" ${set.types[key]?'checked':''} onchange="setQuizType('${set.id}','${key}',this.checked)" style="width:18px;height:18px;accent-color:#7c3aed;flex:none;margin-top:2px;"><span><b style="color:#4c1d95;">${label}</b><div style="font-size:.78em;color:#64748b;margin-top:2px;line-height:1.35;">${desc}</div></span></label>`).join('')}
         </div>
       </div>
 
       <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
-        <b style="color:#334155;">3. 問題数</b>
-        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${set.questionCount}" onchange="setQuizQuestionCount('${set.id}',this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
-        <span style="font-size:.76em;color:#64748b;">登録語数が少ない場合は、ある分だけ出題します。</span>
+        <b style="color:#334155;">${ifty216Markup("3. 問題数","3. Number of questions")}</b>
+        <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="${ifty216Markup("問題数","Number of questions")}" value="${set.questionCount}" onchange="setQuizQuestionCount('${set.id}',this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px 10px;border:1px solid #a78bfa;border-radius:7px;background:white;font-size:1em;">
+        <span style="font-size:.76em;color:#64748b;">${ifty216Markup("登録語数が少ない場合は、ある分だけ出題します。","Only available words will be used if there are too few.")}</span>
       </div>
 
       <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;">
-        <b style="color:#334155;">4. 語彙を追加</b>
+        <b style="color:#334155;">${ifty216Markup("4. 語彙を追加","4. Add vocabulary")}</b>
         <div class="ifty179-quiz-add" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
-          <button onclick="addSelectedWordsToQuizSet('${set.id}')" style="border:none;background:#7c3aed;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">チェックしたフォルダ・語彙から追加</button>
+          <button onclick="addSelectedWordsToQuizSet('${set.id}')" style="border:none;background:#7c3aed;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">${ifty216Markup("チェックしたフォルダ・語彙から追加","Add selected folders and vocabulary")}</button>
           <select id="quizFolderSource" style="padding:7px;border:1px solid #cbd5e1;border-radius:5px;">${folders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('')}</select>
-          <button onclick="addFolderWordsToQuizSet('${set.id}')" style="border:none;background:#5b21b6;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">選択フォルダから追加</button>
-          <button onclick="addAllWordsToQuizSet('${set.id}')" style="border:none;background:#5b21b6;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">全語彙を追加</button>
-          <button onclick="clearQuizSetWords('${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">フォルダを空にする</button>
+          <button onclick="addFolderWordsToQuizSet('${set.id}')" style="border:none;background:#5b21b6;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">${ifty216Markup("選択フォルダから追加","Add from selected folders")}</button>
+          <button onclick="addAllWordsToQuizSet('${set.id}')" style="border:none;background:#5b21b6;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">${ifty216Markup("全語彙を追加","Add all vocabulary")}</button>
+          <button onclick="clearQuizSetWords('${set.id}')" style="border:none;background:#f59e0b;color:white;border-radius:5px;padding:7px 9px;cursor:pointer;">${ifty216Markup("フォルダを空にする","Empty folder")}</button>
         </div>
       </div>
 
       <div class="ifty179-quiz-actions" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <label style="display:flex;align-items:center;gap:5px;color:#334155;"><input type="checkbox" ${set.random?'checked':''} onchange="setQuizRandom('${set.id}',this.checked)"> ランダム順</label>
-        <button onclick="startQuizSet('${set.id}',false,false)" ${available.length?'':'disabled'} style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${available.length?'pointer':'default'};opacity:${available.length?'1':'.45'};">▶ ${set.progress ? '続きから' : '開始'}</button>
-        <button onclick="startQuizSet('${set.id}',true,false)" ${available.length?'':'disabled'} style="background:#5b21b6;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${available.length?'pointer':'default'};opacity:${available.length?'1':'.45'};">↻ 最初から</button>
+        <label style="display:flex;align-items:center;gap:5px;color:#334155;"><input type="checkbox" ${set.random?'checked':''} onchange="setQuizRandom('${set.id}',this.checked)"> ${ifty216Markup("ランダム順","Random order")}</label>
+        <button onclick="startQuizSet('${set.id}',false,false)" ${available.length?'':'disabled'} style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${available.length?'pointer':'default'};opacity:${available.length?'1':'.45'};">▶ ${set.progress ? '続きから' : ifty216T("開始","Start")}</button>
+        <button onclick="startQuizSet('${set.id}',true,false)" ${available.length?'':'disabled'} style="background:#5b21b6;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${available.length?'pointer':'default'};opacity:${available.length?'1':'.45'};">${ifty216Markup("↻ 最初から","↻ Restart")}</button>
         <button onclick="startQuizSet('${set.id}',true,true)" ${set.reviewWordIds.length?'':'disabled'} style="background:#ea580c;color:white;border:none;border-radius:6px;padding:8px 12px;font-weight:bold;cursor:${set.reviewWordIds.length?'pointer':'default'};opacity:${set.reviewWordIds.length?'1':'.45'};">🔥 間違いだけ復習 (${set.reviewWordIds.length})</button>
         ${set.reviewWordIds.length ? `<button onclick="clearQuizReview('${set.id}')" style="background:#e2e8f0;color:#475569;border:none;border-radius:6px;padding:8px 10px;cursor:pointer;">復習記録を消す</button>` : ''}
       </div>
@@ -27287,10 +26773,10 @@ window.openQuizSet = function(setId) {
       <div style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
           <b style="color:#334155;">登録語彙 ${available.length}語</b>
-          <input id="iftyQuizWordSearch_${set.id}" type="search" placeholder="登録語彙を検索" oninput="filterIftyQuizSetWordList('${set.id}',this.value)" style="flex:1;min-width:180px;max-width:360px;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e1;border-radius:7px;">
+          <input id="iftyQuizWordSearch_${set.id}" type="search" placeholder="${ifty216Markup("登録語彙を検索","Search saved vocabulary")}" oninput="filterIftyQuizSetWordList('${set.id}',this.value)" style="flex:1;min-width:180px;max-width:360px;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e1;border-radius:7px;">
         </div>
         <div id="iftyQuizWordList_${set.id}" style="min-height:${available.length?'120px':'0'};max-height:min(38vh,420px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border:1px solid ${available.length?'#e2e8f0':'transparent'};border-radius:8px;padding:${available.length?'0 8px':'0'};">
-          ${available.length ? available.map(({word}) => `<div data-ifty-quiz-word-row data-search="${escapeHtml(`${word.word} ${(word.meanings||[]).join(' ')}`.toLowerCase())}" style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:8px 2px;border-bottom:1px solid #f1f5f9;"><span style="min-width:0;overflow-wrap:anywhere;"><b>${escapeHtml(word.word)}</b>　<span style="color:#64748b;font-size:.88em;">${escapeHtml((word.meanings||[]).join(' / '))}</span>${set.reviewWordIds.includes(word.id)?'<span style="margin-left:6px;color:#ea580c;font-size:.78em;font-weight:bold;">復習</span>':''}</span><button onclick="removeWordFromQuizSet('${set.id}','${word.id}')" style="border:none;background:none;color:#ef4444;cursor:pointer;flex:none;">削除</button></div>`).join('') : '<div style="color:#94a3b8;text-align:center;padding:16px;">単語を追加してください。</div>'}
+          ${available.length ? available.map(({word}) => `<div data-ifty-quiz-word-row data-search="${escapeHtml(`${word.word} ${(word.meanings||[]).join(' ')}`.toLowerCase())}" style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:8px 2px;border-bottom:1px solid #f1f5f9;"><span style="min-width:0;overflow-wrap:anywhere;"><b>${escapeHtml(word.word)}</b>　<span style="color:#64748b;font-size:.88em;">${escapeHtml((word.meanings||[]).join(' / '))}</span>${set.reviewWordIds.includes(word.id)?("<span style=\"margin-left:6px;color:#ea580c;font-size:.78em;font-weight:bold;\">" + ifty216Markup("復習","Review") + "</span>"):''}</span><button onclick="removeWordFromQuizSet('${set.id}','${word.id}')" style="border:none;background:none;color:#ef4444;cursor:pointer;flex:none;">${ifty216Markup("削除","Delete")}</button></div>`).join('') : '<div style="color:#94a3b8;text-align:center;padding:16px;">単語を追加してください。</div>'}
         </div>
       </div>
     </div>`;
@@ -27566,16 +27052,16 @@ async function renderQuizPlayer(setId) {
       const refForFallback=getWordById(p.queue[p.index]);
       const canFallback=!!ifty174LocalVocabularyQuestion(refForFallback?.word,'written','jp_to_en');
       modal.innerHTML=`<div role="alert" data-ifty174-error="1" style="background:#1e293b;color:#f8fafc;border:1px solid #64748b;border-radius:14px;width:min(660px,100%);padding:clamp(16px,4vw,24px);box-sizing:border-box;line-height:1.65;">
-        <h3 style="color:#fecaca;margin:0 0 10px;">⚠️ 問題生成に失敗しました</h3>
+        <h3 style="color:#fecaca;margin:0 0 10px;">${ifty216Markup("⚠️ 問題生成に失敗しました","⚠️ Question generation failed")}</h3>
         <p style="color:#e2e8f0;white-space:pre-wrap;overflow-wrap:anywhere;">${escapeHtml(String(error?.message||error))}</p>
         <p style="color:#cbd5e1;font-size:.82em;">${escapeHtml(retryText)}</p>
         <div style="color:#93c5fd;font-size:.78em;overflow-wrap:anywhere;">診断コード：${escapeHtml(code)}／STEP${IFTY_APP_STEP}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:15px;">
-          <button type="button" onclick="retryCurrentQuizQuestion('${set.id}')" style="background:#2563eb;color:white;border:0;border-radius:8px;padding:11px 14px;font-weight:800;">🔄 再試行</button>
+          <button type="button" onclick="retryCurrentQuizQuestion('${set.id}')" style="background:#2563eb;color:white;border:0;border-radius:8px;padding:11px 14px;font-weight:800;">${ifty216Markup("🔄 再試行","🔄 Retry")}</button>
           ${failedType==='truefalse'?`<button type="button" onclick="ifty186SkipEnglishTruth('${set.id}')" style="background:#475569;color:white;border:0;border-radius:8px;padding:11px 14px;font-weight:800;">問題生成不能のためスキップ →</button>`:''}
           ${canFallback?`<button type="button" onclick="ifty174UseSavedVocabularyQuestion('${set.id}')" style="background:#0f766e;color:white;border:0;border-radius:8px;padding:11px 14px;font-weight:800;">📖 保存済みデータから基本問題を出す（ALLIA不要）</button>`:''}
-          <button type="button" onclick="ifty175OpenLibrary('ENGLISH','${set.id}')" style="background:#304866;color:white;border:1px solid #94a3b8;border-radius:8px;padding:11px 14px;font-weight:800;">📚 保存済み問題</button>
-          <button type="button" onclick="openQuizSet('${set.id}')" style="background:#334155;color:#f8fafc;border:1px solid #94a3b8;border-radius:8px;padding:11px 14px;font-weight:800;">戻る</button>
+          <button type="button" onclick="ifty175OpenLibrary('ENGLISH','${set.id}')" style="background:#304866;color:white;border:1px solid #94a3b8;border-radius:8px;padding:11px 14px;font-weight:800;">${ifty216Markup("📚 保存済み問題","📚 Saved questions")}</button>
+          <button type="button" onclick="openQuizSet('${set.id}')" style="background:#334155;color:#f8fafc;border:1px solid #94a3b8;border-radius:8px;padding:11px 14px;font-weight:800;">${ifty216Markup("戻る","Back")}</button>
         </div>
       </div>`;
       return;
@@ -27585,11 +27071,11 @@ async function renderQuizPlayer(setId) {
   const q=p.currentQuestion;
   if(q.quizType==='accent_unavailable') {
     modal.innerHTML=`<div style="background:#1c2a3e;color:#f8fafc;border:1px solid #64748b;border-radius:14px;width:min(650px,100%);box-sizing:border-box;padding:clamp(16px,4vw,24px);line-height:1.6;">
-      <div style="font-weight:900;font-size:1.12rem;color:#fcd34d;">アクセント位置を確認できません</div>
+      <div style="font-weight:900;font-size:1.12rem;color:#fcd34d;">${ifty216Markup("アクセント位置を確認できません","Stress position unavailable")}</div>
       <div style="margin:14px 0;padding:13px;border:1px solid #64748b;border-radius:9px;font-size:1.25rem;">${escapeHtml(q.question)}</div>
       <p style="color:#cbd5e1;">${escapeHtml(q.instruction)}</p>
-      <button type="button" onclick="ifty203SkipUnavailableAccent('${set.id}')" style="width:100%;min-height:48px;padding:12px;border:0;border-radius:9px;background:#2563eb;color:white;font-weight:900;">採点せず次の語へ</button>
-      <button type="button" onclick="pauseQuizSet('${set.id}')" style="margin-top:8px;width:100%;min-height:44px;padding:9px;border:1px solid #94a3b8;border-radius:9px;background:#334155;color:#fff;">終了・戻る</button>
+      <button type="button" onclick="ifty203SkipUnavailableAccent('${set.id}')" style="width:100%;min-height:48px;padding:12px;border:0;border-radius:9px;background:#2563eb;color:white;font-weight:900;">${ifty216Markup("採点せず次の語へ","Skip without grading")}</button>
+      <button type="button" onclick="pauseQuizSet('${set.id}')" style="margin-top:8px;width:100%;min-height:44px;padding:9px;border:1px solid #94a3b8;border-radius:9px;background:#334155;color:#fff;">${ifty216Markup("終了・戻る","End / Back")}</button>
     </div>`;
     return;
   }
@@ -27601,7 +27087,7 @@ async function renderQuizPlayer(setId) {
       ${q.ifty175Fallback?'<div style="background:#fff7ed;border:1px solid #fdba74;color:#78350f;border-radius:8px;padding:9px;margin-top:10px;">⚠ ALLIAの生成に失敗したため保存済み教材から無AIで出題しています。表現違いは結果表示を確認してください。</div>':''}${q.instruction?`<div style="margin-top:7px;color:#64748b;font-size:.82em;">${escapeHtml(q.instruction)}</div>`:''}
       <div style="margin-top:9px;display:flex;justify-content:flex-end;"><button type="button" onclick="openIftyQuizAllia('${set.id}')" style="border:1px solid #c4b5fd;background:#faf5ff;color:#6d28d9;border-radius:8px;padding:8px 11px;font-weight:900;cursor:pointer;">🤖 ALLIA</button></div>
       ${q.quizType==='accent_tap'?ifty203AccentControls(q,set.id):q.quizType==='truefalse'?ifty151AnswerControls('ifty151EnglishTruth','ifty151EnglishCorrection',false):Array.isArray(q.options)&&q.options.length?`<div id="quizChoiceArea" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;">${q.options.map((option,i)=>`<label style="display:flex;gap:8px;align-items:center;border:2px solid #ddd6fe;background:white;border-radius:8px;padding:10px;cursor:pointer;"><input type="radio" name="quizChoice" value="${escapeHtml(option)}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuizAnswer('${set.id}');}" style="accent-color:#7c3aed;"><span>${String.fromCharCode(65+i)}. ${escapeHtml(option)}</span></label>`).join('')}</div>`:(q.localAnswerMode==='spelling'?`<input id="quizAnswerInput" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="${q.quizType==='inflection'?'活用形を入力してEnter':'スペルを入力してEnter'}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1.05em;">`:`<textarea id="quizAnswerInput" rows="4" placeholder="答えを入力（Enterで確定 / Shift+Enterで改行）" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitQuizAnswer('${set.id}');}" style="width:100%;box-sizing:border-box;margin-top:12px;padding:11px;border:2px solid #c4b5fd;border-radius:8px;font-size:1em;resize:vertical;"></textarea>`)}
-      <div style="display:flex;gap:8px;margin-top:10px;"><button onclick="submitQuizAnswer('${set.id}')" style="flex:1;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${q.quizType==='accent_tap'?'アクセントを判定':q.localGrade?'端末内で判定':(Array.isArray(q.options)&&q.options.length?'回答する':'ALLIAに判定してもらう')}</button></div><button type="button" class="ifty145-unknown-btn ifty145-english-unknown" onclick="ifty145RevealEnglishQuiz('${set.id}')">？ 分からない（答えを見る）</button>
+      <div style="display:flex;gap:8px;margin-top:10px;"><button onclick="submitQuizAnswer('${set.id}')" style="flex:1;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${q.quizType==='accent_tap'?'アクセントを判定':q.localGrade?'端末内で判定':(Array.isArray(q.options)&&q.options.length?ifty216T("回答する","Submit answer"):'ALLIAに判定してもらう')}</button></div><button type="button" class="ifty145-unknown-btn ifty145-english-unknown" onclick="ifty145RevealEnglishQuiz('${set.id}')">${ifty216Markup("？ 分からない（答えを見る）","? Don't know (show answer)")}</button>
       <div style="margin-top:9px;color:#94a3b8;font-size:.78em;text-align:center;">「選択」「リスニング」「活用」は端末内で問題生成・採点するためALLIAを使いません。活用は語彙カードに保存済みの過去形・過去分詞・-ing・三単現から出題します。リスニングは各語彙の言語に合った音声で見出し語を再生し、語彙4択・意味4択・表記記述の3形式をランダム出題します。その他の記述回答はALLIAが表記ゆれ・複数の意味・自然さを含めて判定します。</div>
     </div>`;
   const input=document.getElementById('quizAnswerInput');
@@ -27651,14 +27137,14 @@ function renderIftyQuizAlliaHelpModal(setId, loading = false) {
   modal.innerHTML = `
     <div style="width:min(680px,100%);max-height:88vh;display:flex;flex-direction:column;background:white;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.28);overflow:hidden;">
       <div style="padding:13px 15px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:10px;">
-        <div><b style="color:#1d4ed8;">💬 ALLIAに質問</b><div style="font-size:.73em;color:#64748b;margin-top:2px;">現在の問題を保持したまま質問できます</div></div>
+        <div><b style="color:#1d4ed8;">${ifty216Markup("💬 ALLIAに質問","💬 Ask ALLIA")}</b><div style="font-size:.73em;color:#64748b;margin-top:2px;">${ifty216Markup("現在の問題を保持したまま質問できます","Ask without leaving the current question")}</div></div>
         <button type="button" onclick="closeIftyQuizAlliaQuestion()" style="border:none;background:#e2e8f0;color:#475569;border-radius:7px;padding:7px 10px;cursor:pointer;">✕</button>
       </div>
       <div style="padding:11px 14px;background:#faf5ff;border-bottom:1px solid #ede9fe;color:#4c1d95;font-size:.82em;line-height:1.45;white-space:pre-wrap;max-height:120px;overflow:auto;">${escapeHtml(question.question || '')}</div>
       <div id="iftyQuizAlliaHelpHistory" style="padding:14px;display:flex;flex-direction:column;gap:9px;overflow:auto;min-height:150px;max-height:42vh;">${history}${loading ? '<div style="align-self:flex-start;padding:9px 11px;border-radius:10px;background:#f1f5f9;color:#64748b;">ALLIAが回答中…</div>' : ''}</div>
       <div style="padding:12px 14px;border-top:1px solid #e2e8f0;background:#fff;">
         <textarea id="iftyQuizAlliaHelpInput" rows="3" ${loading ? 'disabled' : ''} placeholder="例：この as はどういう役割？ / この部分の構文が分からない" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();sendIftyQuizAlliaQuestion('${setId}');}" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #93c5fd;border-radius:8px;font-size:1em;resize:vertical;"></textarea>
-        <div style="display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap;margin-top:8px;"><span style="font-size:.72em;color:#94a3b8;">Ctrl/⌘ + Enterでも送信</span><button type="button" ${loading ? 'disabled' : ''} onclick="sendIftyQuizAlliaQuestion('${setId}')" style="border:none;background:#2563eb;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:${loading ? 'wait' : 'pointer'};opacity:${loading ? '.6' : '1'};">送信</button></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap;margin-top:8px;"><span style="font-size:.72em;color:#94a3b8;">${ifty216Markup("Ctrl/⌘ + Enterでも送信","Send with Ctrl/⌘ + Enter")}</span><button type="button" ${loading ? 'disabled' : ''} onclick="sendIftyQuizAlliaQuestion('${setId}')" style="border:none;background:#2563eb;color:white;border-radius:8px;padding:9px 14px;font-weight:900;cursor:${loading ? 'wait' : 'pointer'};opacity:${loading ? '.6' : '1'};">${ifty216Markup("送信","Send")}</button></div>
       </div>
     </div>`;
 
@@ -27834,7 +27320,7 @@ ${q.accentSourceIPA?'参照IPA：'+q.accentSourceIPA+'\n':''}参照元：${q.acc
   if (!ensureIftyOnline('ALLIA採点')) return;
   if(q.quizType==='truefalse'){q.ifty176PendingVerdict=truthVerdict;q.ifty176PendingCorrection=truthCorrection;}
 
-  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><h3 style="color:#4c1d95;">ALLIAが採点中…</h3></div>`;
+  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:28px;text-align:center;"><h3 style="color:#4c1d95;">${ifty216Markup("ALLIAが採点中…","ALLIA is grading…")}</h3></div>`;
   try{
     let data;
     if(q.quizType==='truefalse'){
@@ -27885,7 +27371,7 @@ ${q.accentSourceIPA?'参照IPA：'+q.accentSourceIPA+'\n':''}参照元：${q.acc
       window.ifty176EnglishShowSelfGrade(setId,String(error?.message||error));
       return;
     }
-    modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h3 style="color:#ef4444;">採点に失敗しました</h3><p style="color:#64748b;">${escapeHtml(String(error.message||error))}</p><button onclick="renderQuizPlayer('${set.id}')" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">問題に戻る</button></div>`;
+    modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(620px,100%);padding:24px;text-align:center;"><h3 style="color:#ef4444;">${ifty216Markup("採点に失敗しました","Grading failed")}</h3><p style="color:#64748b;">${escapeHtml(String(error.message||error))}</p><button onclick="renderQuizPlayer('${set.id}')" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">${ifty216Markup("問題に戻る","Back to question")}</button></div>`;
   }
 };
 
@@ -27895,11 +27381,11 @@ window.ifty176EnglishShowSelfGrade=function(setId,errorMessage=''){
  if(!q||q.quizType!=='truefalse'||!modal)return;
  q.localGrade=true;
  modal.innerHTML=`<div style="box-sizing:border-box;width:min(650px,100%);border-radius:12px;background:#1b2c45;color:#f8fafc;padding:20px;line-height:1.65;">
-  <h3>📖 模範解答で自己採点</h3>
+  <h3>${ifty216Markup("📖 模範解答で自己採点","📖 Self-assess with model answer")}</h3>
   ${errorMessage?`<p style="color:#fde68a;white-space:pre-wrap;">ALLIAの採点に失敗しました：${escapeHtml(errorMessage)}</p>`:''}
   <p style="white-space:pre-wrap;">${escapeHtml(q.correctedSentence||q.referenceAnswer||'')}</p>
-  <p>元の回答は保持しています。模範解答と照合して正誤を選択してください。</p>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" onclick="ifty176EnglishSelfGrade('${setId}',true)" style="background:#047857;color:white;border:0;border-radius:8px;padding:12px;">⭕ 正解</button><button type="button" onclick="ifty176EnglishSelfGrade('${setId}',false)" style="background:#991b1b;color:white;border:0;border-radius:8px;padding:12px;">❌ 不正解</button></div></div>`;
+  <p>${ifty216Markup("元の回答は保持しています。模範解答と照合して正誤を選択してください。","Your original answer is retained. Compare it with the model answer and mark it.")}</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" onclick="ifty176EnglishSelfGrade('${setId}',true)" style="background:#047857;color:white;border:0;border-radius:8px;padding:12px;">${ifty216Markup("⭕ 正解","⭕ Correct")}</button><button type="button" onclick="ifty176EnglishSelfGrade('${setId}',false)" style="background:#991b1b;color:white;border:0;border-radius:8px;padding:12px;">${ifty216Markup("❌ 不正解","❌ Incorrect")}</button></div></div>`;
 };
 window.ifty176EnglishSelfGrade=function(setId,correct){
  const set=getQuizSet(setId),q=set?.progress?.currentQuestion;
@@ -27917,15 +27403,15 @@ function renderQuizFeedback(setId, correct, feedback, modelAnswer, userAnswer) {
   const modal=document.getElementById('practiceModal'); if(!modal)return;
   modal.innerHTML=`
     <div style="background:white;border-radius:14px;width:min(650px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
-      <h2 style="margin-top:0;color:${correct?'#059669':'#dc2626'};">${correct?'⭕ 正解':'❌ 不正解'}</h2>
-      <div style="padding:10px;background:#f8fafc;border-radius:8px;color:#334155;"><b>あなたの回答：</b>${escapeHtml(userAnswer)}</div>
-      ${modelAnswer?`<div style="padding:10px;background:#f5f3ff;border-radius:8px;color:#4c1d95;margin-top:8px;"><b>基準・模範：</b>${escapeHtml(modelAnswer)}</div>`:''}
+      <h2 style="margin-top:0;color:${correct?'#059669':'#dc2626'};">${correct?ifty216T("⭕ 正解","⭕ Correct"):ifty216T("❌ 不正解","❌ Incorrect")}</h2>
+      <div style="padding:10px;background:#f8fafc;border-radius:8px;color:#334155;"><b>${ifty216Markup("あなたの回答：","Your answer:")}</b>${escapeHtml(userAnswer)}</div>
+      ${modelAnswer?`<div style="padding:10px;background:#f5f3ff;border-radius:8px;color:#4c1d95;margin-top:8px;"><b>${ifty216Markup("基準・模範：","Reference / model:")}</b>${escapeHtml(modelAnswer)}</div>`:''}
       <div style="margin-top:10px;line-height:1.55;color:#475569;white-space:pre-wrap;">${escapeHtml(feedback)}</div>
       ${!correct?'<div style="margin-top:10px;color:#ea580c;font-size:.85em;font-weight:bold;">この単語は自動で「間違いだけ復習」に追加されました。</div>':''}
       <div style="margin-top:13px;display:flex;gap:8px;flex-wrap:wrap;">
         <button type="button" onclick="openIftyQuizAllia('${set.id}')" style="flex:1;min-width:150px;border:1px solid #c4b5fd;background:#faf5ff;color:#6d28d9;border-radius:8px;padding:10px;font-weight:900;cursor:pointer;">🤖 ALLIA${canChallenge?'（質問・Challenge）':'に質問'}</button>
       </div>
-      <button onclick="nextQuizQuestion('${set.id}')" style="width:100%;margin-top:14px;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">次へ</button>
+      <button onclick="nextQuizQuestion('${set.id}')" style="width:100%;margin-top:14px;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${ifty216Markup("次へ","Next")}</button>
     </div>`;
 }
 
@@ -28002,12 +27488,12 @@ function renderQuizChallengeResult(setId, accepted, feedback, modelAnswer, userA
   modal.innerHTML=`
     <div style="background:white;border-radius:14px;width:min(650px,100%);padding:22px;box-shadow:0 15px 45px rgba(0,0,0,.28);">
       <h2 style="margin-top:0;color:${accepted?'#059669':'#dc2626'};">${accepted?'⚖️ Challenge成立':'⚖️ Challenge却下'}</h2>
-      <div style="padding:10px;background:#f8fafc;border-radius:8px;color:#334155;"><b>元の回答：</b>${escapeHtml(userAnswer)}</div>
-      ${challengeReason?`<div style="padding:10px;background:#fffbeb;border-radius:8px;color:#92400e;margin-top:8px;"><b>Challenge理由：</b>${escapeHtml(challengeReason)}</div>`:''}
-      ${modelAnswer?`<div style="padding:10px;background:#f5f3ff;border-radius:8px;color:#4c1d95;margin-top:8px;"><b>基準・模範：</b>${escapeHtml(modelAnswer)}</div>`:''}
+      <div style="padding:10px;background:#f8fafc;border-radius:8px;color:#334155;"><b>${ifty216Markup("元の回答：","Original answer:")}</b>${escapeHtml(userAnswer)}</div>
+      ${challengeReason?`<div style="padding:10px;background:#fffbeb;border-radius:8px;color:#92400e;margin-top:8px;"><b>${ifty216Markup("Challenge理由：","Reason for challenge:")}</b>${escapeHtml(challengeReason)}</div>`:''}
+      ${modelAnswer?`<div style="padding:10px;background:#f5f3ff;border-radius:8px;color:#4c1d95;margin-top:8px;"><b>${ifty216Markup("基準・模範：","Reference / model:")}</b>${escapeHtml(modelAnswer)}</div>`:''}
       <div style="margin-top:10px;line-height:1.55;color:#475569;white-space:pre-wrap;">${escapeHtml(feedback)}</div>
       ${accepted?'<div style="margin-top:10px;color:#059669;font-size:.88em;font-weight:bold;">元の不正解記録を取り消し、この回答を正解として反映しました。</div>':'<div style="margin-top:10px;color:#dc2626;font-size:.88em;font-weight:bold;">元の不正解判定と復習記録を維持します。</div>'}
-      <button onclick="nextQuizQuestion('${set.id}')" style="width:100%;margin-top:14px;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">次へ</button>
+      <button onclick="nextQuizQuestion('${set.id}')" style="width:100%;margin-top:14px;background:#7c3aed;color:white;border:none;border-radius:7px;padding:11px;font-weight:bold;cursor:pointer;">${ifty216Markup("次へ","Next")}</button>
     </div>`;
 }
 
@@ -28026,13 +27512,13 @@ function renderQuizComplete(setId) {
     savePracticeData();
     renderFolders();
     const remaining = getIftyReviewEntries({ dueOnly: true }).length;
-    modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(560px,100%);padding:26px;text-align:center;"><h2 style="color:#4c1d95;margin-top:0;">🎉 今日の復習クイズ完了</h2><p style="color:#475569;">正解 ${correct} / 不正解 ${wrong}</p><p style="color:#c2410c;font-weight:bold;">今日まだ復習できる単語：${remaining}語</p>${ungradable203}${review182}<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">${remaining?'<button onclick="startIftyDueReviewQuiz()" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">残りを続ける</button>':''}<button onclick="closePracticeModal(); renderFolders();" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">復習フォルダへ戻る</button></div></div>`;
+    modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(560px,100%);padding:26px;text-align:center;"><h2 style="color:#4c1d95;margin-top:0;">${ifty216Markup("🎉 今日の復習クイズ完了","🎉 Today's review complete")}</h2><p style="color:#475569;">正解 ${correct} / 不正解 ${wrong}</p><p style="color:#c2410c;font-weight:bold;">今日まだ復習できる単語：${remaining}語</p>${ungradable203}${review182}<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">${remaining?'<button onclick="startIftyDueReviewQuiz()" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">残りを続ける</button>':''}<button onclick="closePracticeModal(); renderFolders();" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">${ifty216Markup("復習フォルダへ戻る","Back to review folder")}</button></div></div>`;
     return;
   }
 
    const review182=ifty182Summary(p.history182);
   set.progress=null; savePracticeData();
-  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(560px,100%);padding:26px;text-align:center;"><h2 style="color:#4c1d95;margin-top:0;">🎉 クイズ完了</h2><p style="color:#475569;">正解 ${correct} / 不正解 ${wrong}</p><p style="color:#ea580c;font-weight:bold;">復習対象：${set.reviewWordIds.length}語</p>${ungradable203}${review182}<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;"><button onclick="startQuizSet('${set.id}',true,false)" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">最初から</button><button onclick="startQuizSet('${set.id}',true,true)" ${set.reviewWordIds.length?'':'disabled'} style="background:#ea580c;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;opacity:${set.reviewWordIds.length?'1':'.45'};">間違いだけ復習</button><button onclick="openQuizSet('${set.id}')" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">設定へ戻る</button></div></div>`;
+  modal.innerHTML=`<div style="background:white;border-radius:14px;width:min(560px,100%);padding:26px;text-align:center;"><h2 style="color:#4c1d95;margin-top:0;">${ifty216Markup("🎉 クイズ完了","🎉 Quiz complete")}</h2><p style="color:#475569;">正解 ${correct} / 不正解 ${wrong}</p><p style="color:#ea580c;font-weight:bold;">復習対象：${set.reviewWordIds.length}語</p>${ungradable203}${review182}<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;"><button onclick="startQuizSet('${set.id}',true,false)" style="background:#7c3aed;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">${ifty216Markup("最初から","Restart")}</button><button onclick="startQuizSet('${set.id}',true,true)" ${set.reviewWordIds.length?'':'disabled'} style="background:#ea580c;color:white;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;opacity:${set.reviewWordIds.length?'1':'.45'};">${ifty216Markup("間違いだけ復習","Review mistakes only")}</button><button onclick="openQuizSet('${set.id}')" style="background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:9px 12px;cursor:pointer;">${ifty216Markup("設定へ戻る","Back to settings")}</button></div></div>`;
 }
 
 // 5. メイン機能ランチャー・画面切り替え
@@ -28087,7 +27573,6 @@ window.openMainLauncher = function() {
         gap: 8px;
       "
     >
-      ${renderIftyAlliaUsageBarHtml(true)}
       <button
         onclick="closeMainLauncher(); switchToChatView();"
         style="
@@ -28320,7 +27805,7 @@ function renderChatMessages() {
       </div>
     `).join('')
     : `<div style="margin:16px auto;max-width:560px;padding:13px 15px;background:#f1f5f9;color:#475569;border-radius:10px;text-align:center;font-size:.88em;line-height:1.55;">
-         ${escapeHtml(getIftySubjectDisplayName(activeSubject))} ALLIA<br>
+         ${escapeHtml(ifty216Ui(getIftySubjectDisplayName(activeSubject)))} ALLIA<br>
          この教科では${getIftyOrderForScope(activeSubject,'chat') ? `「${escapeHtml(getIftySubjectOrderName(activeSubject))}」をチャットに適用します。` : 'チャットORDERはOFFです。'}
        </div>`;
 
@@ -28600,7 +28085,7 @@ window.openMenuModal = function() {
       <div style="display: flex; flex-direction: column; gap: 10px;">
         <button onclick="${currentView === 'chat' ? 'switchToVocabView()' : 'switchToChatView()'}" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">${currentView === 'chat' ? '📚 単語帳に戻る' : '🤖 ALLIAを開く'}</button>
         <button onclick="openPlaySubMenu()" style="padding: 10px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">▶ プレイ</button>
-        <button onclick="closeMenuModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; margin-top: 4px;">閉じる</button>
+        <button onclick="closeMenuModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; margin-top: 4px;">${ifty216Markup("閉じる","Close")}</button>
       </div>
     </div>
   `;
@@ -28617,7 +28102,7 @@ window.openPlaySubMenu = function() {
       <h3 style="margin-top: 0; color: #0f172a; margin-bottom: 16px;">🎮 プレイモード選択</h3>
       <div style="display: flex; flex-direction: column; gap: 10px;">
         <button onclick="startQuiz()" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">📝 クイズ</button>
-        <button onclick="openMenuModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; margin-top: 6px;">◀ 戻る</button>
+        <button onclick="openMenuModal()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; margin-top: 6px;">${ifty216Markup("◀ 戻る","◀ Back")}</button>
       </div>
     </div>
   `;
@@ -28633,7 +28118,7 @@ window.openFlashcardDirectionMenu = function() {
       <div style="display: flex; flex-direction: column; gap: 10px;">
         <button onclick="startFlashcards('all', true, 'front')" style="padding: 10px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">表面：単語 / 裏面：意味</button>
         <button onclick="startFlashcards('all', true, 'back')" style="padding: 10px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">表面：意味 / 裏面：単語</button>
-        <button onclick="openPlaySubMenu()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; margin-top: 6px;">◀ 戻る</button>
+        <button onclick="openPlaySubMenu()" style="padding: 8px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; margin-top: 6px;">${ifty216Markup("◀ 戻る","◀ Back")}</button>
       </div>
     </div>
   `;
@@ -28730,14 +28215,14 @@ window.renderFlashcardModal = function() {
                       : (isScienceSession ? '理科PRACTICEへ戻る' : '閉じる')))))))));
     if (ifty195SubjectWeakSession) {
       const doneAction = ifty195WeakReturnActions[ifty195WeakSubject] || '';
-      modal.innerHTML = `<div style="background:#fff;border-radius:12px;padding:28px;width:min(400px,92vw);text-align:center;"><h3 style="color:#0f172a;">🎉 完了！</h3><p style="color:#475569;">苦手候補の学習を終了しました。</p><button type="button" onclick="closeFlashcardModal();${doneAction}" style="background:#e2e8f0;color:#334155;border:none;border-radius:8px;padding:12px 16px;font-weight:900;">教科へ戻る</button></div>`;
+      modal.innerHTML = `<div style="background:#fff;border-radius:12px;padding:28px;width:min(400px,92vw);text-align:center;"><h3 style="color:#0f172a;">${ifty216Markup("🎉 完了！","🎉 Complete!")}</h3><p style="color:#475569;">${ifty216Markup("苦手候補の学習を終了しました。","Practice of difficult items complete.")}</p><button type="button" onclick="closeFlashcardModal();${doneAction}" style="background:#e2e8f0;color:#334155;border:none;border-radius:8px;padding:12px 16px;font-weight:900;">${ifty216Markup("教科へ戻る","Back to subject")}</button></div>`;
       return;
     }
     if (isReviewSession || isWeakSession) renderFolders();
     modal.innerHTML = `
       <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
-        <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 10px;">🎉 完了！</h3>
-        <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">${(isReviewSession || isSocialReviewSession || isScienceReviewSession || isAncientReviewSession || isKanbunReviewSession || isKanjiReviewSession || isOthersReviewSession) ? '今日の復習を終了しました。' : (isWeakSession ? '苦手候補の学習を終了しました。' : 'すべてのカードを終了しました。')}</p>
+        <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 10px;">${ifty216Markup("🎉 完了！","🎉 Complete!")}</h3>
+        <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">${(isReviewSession || isSocialReviewSession || isScienceReviewSession || isAncientReviewSession || isKanbunReviewSession || isKanjiReviewSession || isOthersReviewSession) ? '今日の復習を終了しました。' : (isWeakSession ? ifty216T("苦手候補の学習を終了しました。","Practice of difficult items complete.") : 'すべてのカードを終了しました。')}</p>
         <div style="display: flex; flex-direction: column; gap: 10px;">
           ${ifty168SimpleLastTurn?.list === flashcardList ? ifty168BackButton('ifty168PreviousSimpleCard()', true) : ''}
           ${(isReviewSession || isWeakSession || isSocialSession || isScienceSession || isSocialReviewSession || isScienceReviewSession || isAncientSession || isAncientReviewSession || isKanbunReviewSession || isKanjiReviewSession || isOthersReviewSession) ? '' : '<button onclick="closeFlashcardModal(); openPracticeHome(\'ENGLISH\');" style="padding: 10px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">➡️ 他のモードでプレイ</button>'}
@@ -28935,9 +28420,9 @@ window.startQuiz = function() {
 
   modal.innerHTML = `
     <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 380px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
-      <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 10px;">📝 クイズモード</h3>
+      <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 10px;">${ifty216Markup("📝 クイズモード","📝 Quiz mode")}</h3>
       <p style="color: #475569; font-size: 0.95em; margin-bottom: 20px;">クイズ機能は現在準備中です！</p>
-      <button onclick="closeFlashcardModal()" style="padding: 10px 20px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">閉じる</button>
+      <button onclick="closeFlashcardModal()" style="padding: 10px 20px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">${ifty216Markup("閉じる","Close")}</button>
     </div>
   `;
 };
@@ -29050,10 +28535,6 @@ window.logout = async function() {
         -webkit-tap-highlight-color: transparent;
         touch-action: manipulation;
         backdrop-filter: blur(12px);
-      }
-      /* STEP153: keep MANUAL launcher clear of ALLIA quota status; other UI positions unchanged. */
-      body.ifty-allia-badge-visible .ifty-manual-launcher {
-        bottom: max(76px, calc(env(safe-area-inset-bottom) + 68px));
       }
       .ifty-manual-launcher:hover { transform: translateY(-1px); box-shadow: 0 13px 30px rgba(15,23,42,.24); }
       .ifty-manual-launcher:active { transform: translateY(0); }
@@ -29584,7 +29065,7 @@ touch-action: none;
 
   function renderHome(body) {
     body.innerHTML = `
-      <p class="ifty-manual-intro">確認したい項目を選択してください。</p>
+      <p class="ifty-manual-intro">${ifty216Markup("確認したい項目を選択してください。","Select an item to review.")}</p>
       <div class="ifty-manual-list">
         ${SECTIONS.map(s => `
           <button type="button" class="ifty-manual-card" data-ifty-manual-section="${s.id}">
@@ -29604,37 +29085,37 @@ touch-action: none;
     return `
       <div class="ifty-manual-guide">
         <div class="ifty-manual-guide-hero">
-          <div class="ifty-manual-guide-hero-title">IFTYを使い始める</div>
+          <div class="ifty-manual-guide-hero-title">${ifty216Markup("IFTYを使い始める","Getting started with IFTY")}</div>
           <div class="ifty-manual-guide-hero-text">
             IFTYは、覚えたい内容をフォルダに整理し、複数のPRACTICEやALLIA、TOOLSを使って反復する学習アプリです。
             迷ったら「科目を選ぶ → フォルダを作る → 教材を追加 → PRACTICE」の順で進めればOKです。
           </div>
           <div class="ifty-manual-quicksteps">
-            <div class="ifty-manual-quickstep"><b>1</b>科目を選ぶ</div>
-            <div class="ifty-manual-quickstep"><b>2</b>フォルダ・教材を作る</div>
-            <div class="ifty-manual-quickstep"><b>3</b>PRACTICEで反復</div>
+            <div class="ifty-manual-quickstep"><b>1</b>${ifty216Markup("科目を選ぶ","Choose a subject")}</div>
+            <div class="ifty-manual-quickstep"><b>2</b>${ifty216Markup("フォルダ・教材を作る","Create folders and study items")}</div>
+            <div class="ifty-manual-quickstep"><b>3</b>${ifty216Markup("PRACTICEで反復","Repeat in practice")}</div>
           </div>
         </div>
 
         <div class="ifty-manual-guide-note">
-          <strong>画面右下のMANUALはいつでも開けます。</strong> ヘッダーをドラッグして移動、<b>−</b>またはMANUALの欄外を押すと最小化、<b>×</b>で閉じられます。各ページの上部・下部にある「戻る」から一覧へ戻れます。<br>後から追加された機能は、すぐ下の<strong>ADDED FEATURES</strong>で確認できます。
+          <strong>${ifty216Markup("画面右下のMANUALはいつでも開けます。","Open the manual at any time from the lower right.")}</strong> ヘッダーをドラッグして移動、<b>−</b>またはMANUALの欄外を押すと最小化、<b>×</b>で閉じられます。各ページの上部・下部にある「戻る」から一覧へ戻れます。<br>後から追加された機能は、すぐ下の<strong>${ifty216Markup("追加機能","ADDED FEATURES")}</strong>で確認できます。
         </div>
 
 
         <!-- STEP153: STEP104〜152で追加された機能の操作説明。旧解説は変更しない。 -->
         <div class="ifty-manual-guide-group" id="iftyManualNewFunctions">
-          <div class="ifty-manual-guide-heading">ADDED FEATURES · STEP104–152</div>
+          <div class="ifty-manual-guide-heading">${ifty216Markup("追加機能 · STEP104–152","ADDED FEATURES · STEP104–152")}</div>
           <details>
             <summary>🔎 検索・完全一致の優先・元の場所へ移動</summary>
             <div class="ifty-manual-guide-content">
               <p>フォルダの<strong>＋ 追加／🔎 検索</strong>を切り替えて、教材を登録するか、すでに保存した教材を探します。検索中の入力は追加として登録されません。</p>
               <ul>
-                <li>検索結果は<strong>用語名の完全一致</strong>を最優先にします。例えば「イタリア王国」が保存されていれば、その語が説明文に登場する別の用語より上に表示されます。</li>
+                <li>${ifty216Markup("検索結果は","Search results")}<strong>${ifty216Markup("用語名の完全一致","Exact term matches")}</strong>を最優先にします。例えば「イタリア王国」が保存されていれば、その語が説明文に登場する別の用語より上に表示されます。</li>
                 <li>完全一致の次は別名の一致、名称の前方・部分一致、説明文への一致などの順に優先されます。全フォルダ検索では一致度の高い教材を含むフォルダも上に表示されます。</li>
-                <li>検索結果から<strong>元のフォルダ位置へ移動</strong>できる場合は、専用の移動ボタンを利用します。検索を解除すると元の並び順に戻ります。</li>
+                <li>検索結果から<strong>${ifty216Markup("元のフォルダ位置へ移動","Go to the original folder location")}</strong>できる場合は、専用の移動ボタンを利用します。検索を解除すると元の並び順に戻ります。</li>
                 <li>「追加」と「検索」を切り替えたときは、誤登録を防ぐため入力内容が引き継がれない場合があります。</li>
               </ul>
-              <div class="ifty-manual-guide-tip"><strong>例</strong>　「イタリア王国」と検索 → 見出しが「イタリア王国」のカードを先に確認 → 必要なら元の位置へ移動。</div>
+              <div class="ifty-manual-guide-tip"><strong>${ifty216Markup("例","Example")}</strong>　「イタリア王国」と検索 → 見出しが「イタリア王国」のカードを先に確認 → 必要なら元の位置へ移動。</div>
             </div>
           </details>
 
@@ -29642,8 +29123,8 @@ touch-action: none;
             <summary>📁 フォルダテーマ・別名・重複チェック</summary>
             <div class="ifty-manual-guide-content">
               <ul>
-                <li><strong>フォルダテーマ</strong>を設定すると、そのフォルダの教材生成時に学習範囲・文脈として利用できます。テーマは保存済みの用語そのものを書き換えるためのものではありません。</li>
-                <li>用語の<strong>別名・別表記</strong>は本来の用語名と分けて管理します。たとえば表記揺れや別称を保存すると、検索でも探しやすくなります。</li>
+                <li><strong>${ifty216Markup("フォルダテーマ","Folder theme")}</strong>を設定すると、そのフォルダの教材生成時に学習範囲・文脈として利用できます。テーマは保存済みの用語そのものを書き換えるためのものではありません。</li>
+                <li>用語の<strong>${ifty216Markup("別名・別表記","Aliases and alternate spellings")}</strong>は本来の用語名と分けて管理します。たとえば表記揺れや別称を保存すると、検索でも探しやすくなります。</li>
                 <li>同じフォルダに同じ用語を追加・移動しようとした場合は、重複確認が表示されることがあります。意図せぬ重複を防ぐため内容を確認してください。</li>
                 <li>編集・検索・フォルダ折りたたみ後も、可能な範囲で閲覧中のスクロール位置を維持します。</li>
               </ul>
@@ -29653,14 +29134,14 @@ touch-action: none;
           <details>
             <summary>⭕ クイズフォルダ：正誤・訂正</summary>
             <div class="ifty-manual-guide-content">
-              <p><strong>正誤・訂正</strong>では、保存済み教材を元にALLIAが作った文の正誤を判断します。LANGUAGES、BASIC SENTENCES、ANCIENT、KANBUN、KANJI、SOCIAL STUDIES、SCIENCE、OTHERS、YEARSに対応します。</p>
+              <p><strong>${ifty216Markup("正誤・訂正","True/false & correction")}</strong>では、保存済み教材を元にALLIAが作った文の正誤を判断します。LANGUAGES、BASIC SENTENCES、ANCIENT、KANBUN、KANJI、SOCIAL STUDIES、SCIENCE、OTHERS、YEARSに対応します。</p>
               <ol>
-                <li><strong>PRACTICE → クエスチョン → クイズフォルダ</strong>を開き、出題形式で<strong>正誤・訂正</strong>を選びます。各教科のクイズフォルダでも選択できます。問題数・難易度はクイズフォルダ内で設定します。</li>
-                <li>文が正しければ<strong>○ 正しい</strong>を選びます。</li>
-                <li>誤りがあれば<strong>✕ 誤りあり</strong>を選び、正しい内容に訂正します。修正後の全文でも、「aboutを削除」のような部分的な訂正でも構いません。</li>
+                <li><strong>PRACTICE → クエスチョン → クイズフォルダ</strong>を開き、出題形式で<strong>${ifty216Markup("正誤・訂正","True/false & correction")}</strong>を選びます。各教科のクイズフォルダでも選択できます。問題数・難易度はクイズフォルダ内で設定します。</li>
+                <li>文が正しければ<strong>${ifty216Markup("○ 正しい","○ True")}</strong>を選びます。</li>
+                <li>誤りがあれば<strong>${ifty216Markup("✕ 誤りあり","✕ False")}</strong>を選び、正しい内容に訂正します。修正後の全文でも、「aboutを削除」のような部分的な訂正でも構いません。</li>
                 <li>回答後に採点と模範解答・解説を確認します。</li>
               </ol>
-              <div class="ifty-manual-guide-tip"><strong>例</strong>　We discuss about the problem. → ✕ →「aboutを削除」。正しい文は We discuss the problem.</div>
+              <div class="ifty-manual-guide-tip"><strong>${ifty216Markup("例","Example")}</strong>　We discuss about the problem. → ✕ →「aboutを削除」。正しい文は We discuss the problem.</div>
               <p>問題生成と誤文の訂正採点はALLIAを使用するため、オンライン接続と利用可能なAI枠が必要です。</p>
             </div>
           </details>
@@ -29672,8 +29153,8 @@ touch-action: none;
               <ul>
                 <li>AI生成問題の難易度を<strong>EASY / NORMAL / HARD / EXTREME</strong>の4段階から選べます。</li>
                 <li>対応する記述形式では<strong>人物の功績・役割／出来事の背景・発生経緯／似た用語との違い</strong>などの派生問題の方向を指定できます。</li>
-                <li><strong>☆ 必ず出す</strong>を押すと、その教材を「必出」に指定します。問題数を超える数の必出指定はできません。通常の教材選択チェックとは別の設定です。</li>
-                <li>教材ごとに<strong>出題形式を固定</strong>できます。「自動」にするとフォルダ側の設定を利用します。</li>
+                <li><strong>${ifty216Markup("☆ 必ず出す","☆ Always include")}</strong>を押すと、その教材を「必出」に指定します。問題数を超える数の必出指定はできません。通常の教材選択チェックとは別の設定です。</li>
+                <li>教材ごとに<strong>${ifty216Markup("出題形式を固定","Fix question type")}</strong>できます。「自動」にするとフォルダ側の設定を利用します。</li>
                 <li>選択問題では、保存済み教材から関連性の高い誤答候補を優先する仕組みがあります。AI生成や採点結果は必要に応じて確認してください。</li>
                 <li>一部の専用形式（手書き・画像・並べ替え等）は、AI記述や正誤問題と同時に扱えない場合があります。そのときは別のクイズフォルダに分けてください。</li>
               </ul>
@@ -29684,9 +29165,9 @@ touch-action: none;
             <summary>✍️ PRACTICE：再生成・スキップ・ALLIAに質問</summary>
             <div class="ifty-manual-guide-content">
               <ul>
-                <li>対応する問題では<strong>再生成</strong>ができ、「どのような問題にしたいか」を自由入力できます。空欄のまま再生成できる場合もあります。</li>
-                <li><strong>分からない／スキップ</strong>を使うと、答えを確認したり次の問題へ進んだりできます。画面・形式に応じて扱いが異なるため、正誤集計の表示も確認してください。</li>
-                <li>対応問題では<strong>解答前・解答後にALLIAへ質問</strong>できます。問題文・選択肢・採点の理由を確認したいときに利用してください。</li>
+                <li>対応する問題では<strong>${ifty216Markup("再生成","Regenerate")}</strong>ができ、「どのような問題にしたいか」を自由入力できます。空欄のまま再生成できる場合もあります。</li>
+                <li><strong>${ifty216Markup("分からない／スキップ","Don't know / Skip")}</strong>を使うと、答えを確認したり次の問題へ進んだりできます。画面・形式に応じて扱いが異なるため、正誤集計の表示も確認してください。</li>
+                <li>対応問題では<strong>${ifty216Markup("解答前・解答後にALLIAへ質問","Ask ALLIA before or after answering")}</strong>できます。問題文・選択肢・採点の理由を確認したいときに利用してください。</li>
                 <li>問題数・出題形式などの設定は対応画面で保持されます。解答中に欄外をタップしても誤って閉じないよう調整されています。</li>
               </ul>
             </div>
@@ -29695,12 +29176,12 @@ touch-action: none;
           <details>
             <summary>📅 社会科クイズ：年号記述／YEARS</summary>
             <div class="ifty-manual-guide-content">
-              <p><strong>SOCIAL STUDIES → PRACTICE → クイズフォルダ</strong>で「📅 年号を答える（記述）」を選べます。出題される出来事の年を、西暦「1861」や「1861年」、紀元前「紀元前44」「44 BC」のように入力します。正誤は年と紀元の一致で判定します。年号が一意に決まらない項目では無理に出題せず再試行できます。</p><p>TOOLSの<strong>YEARS</strong>では、出来事と年号をフォルダ単位で保存して練習します。</p>
+              <p><strong>SOCIAL STUDIES → PRACTICE → クイズフォルダ</strong>で「📅 年号を答える（記述）」を選べます。出題される出来事の年を、西暦「1861」や「1861年」、紀元前「紀元前44」「44 BC」のように入力します。正誤は年と紀元の一致で判定します。年号が一意に決まらない項目では無理に出題せず再試行できます。</p><p>TOOLSの<strong>${ifty216Markup("年号","YEARS")}</strong>では、出来事と年号をフォルダ単位で保存して練習します。</p>
               <ul>
                 <li>フォルダの追加・検索・並び替えと、保存した問題セットの管理に対応します。</li>
                 <li>年号と出来事の対応を出題形式に応じて確認できます。</li>
-                <li>答えが分からない場合は、対応する問題画面の<strong>？ 分からない</strong>などから正答を確認できます。</li>
-                <li>保存済みのYEARS教材を元に<strong>⭕ 正誤・訂正</strong>も出題できます。</li>
+                <li>答えが分からない場合は、対応する問題画面の<strong>${ifty216Markup("？ 分からない","? Don't know")}</strong>などから正答を確認できます。</li>
+                <li>保存済みのYEARS教材を元に<strong>${ifty216Markup("⭕ 正誤・訂正","⭕ True/false & correction")}</strong>も出題できます。</li>
               </ul>
             </div>
           </details>
@@ -29709,11 +29190,11 @@ touch-action: none;
             <summary>🏫 クラスコード・役割・共有</summary>
             <div class="ifty-manual-guide-content">
               <ol>
-                <li>🏫 <strong>クラス</strong>を開き、クラス名を入力して作成するか、教えられたクラスコードで参加します。</li>
+                <li>🏫 <strong>${ifty216Markup("クラス","Class")}</strong>を開き、クラス名を入力して作成するか、教えられたクラスコードで参加します。</li>
                 <li>クラス内では役割に応じて、共有フォルダや問題・ゲームの管理などを行います。</li>
                 <li><strong>Owner / Editor / Member</strong>など役割によって、作成・編集・参加できる操作が異なります。</li>
               </ol>
-              <div class="ifty-manual-guide-tip"><strong>プライバシー</strong>　クラスに参加するだけで、自分の単語帳・成績・学習状況・フレンド情報が自動公開されるわけではありません。共有する内容を確認してください。</div>
+              <div class="ifty-manual-guide-tip"><strong>${ifty216Markup("プライバシー","Privacy")}</strong>　クラスに参加するだけで、自分の単語帳・成績・学習状況・フレンド情報が自動公開されるわけではありません。共有する内容を確認してください。</div>
               <p>対応画面ではフォルダの共有リンクやフレンド機能も利用できます。公開範囲・参加相手を確認して共有してください。</p>
             </div>
           </details>
@@ -29722,11 +29203,11 @@ touch-action: none;
             <summary>🎮 クラス対戦・問題バンク・CHAT GAME</summary>
             <div class="ifty-manual-guide-content">
               <ul>
-                <li>クラスの<strong>みんなで問題を解く</strong>では、保存済み問題やALLIA生成問題を使ったクラス対戦を管理できます。</li>
-                <li><strong>問題バンク</strong>は、作成した問題を保存・再利用する仕組みです。ゲームに使う問題の設定は対象画面で確認してください。</li>
-                <li><strong>CHAT GAME</strong>は別のゲーム画面です。作成権限のあるメンバーがゲームを設定し、参加者は回答・観戦などを行えます。</li>
+                <li>クラスの<strong>${ifty216Markup("みんなで問題を解く","Group quizzes")}</strong>では、保存済み問題やALLIA生成問題を使ったクラス対戦を管理できます。</li>
+                <li><strong>${ifty216Markup("問題バンク","Question bank")}</strong>は、作成した問題を保存・再利用する仕組みです。ゲームに使う問題の設定は対象画面で確認してください。</li>
+                <li><strong>${ifty216Markup("チャットゲーム","CHAT GAME")}</strong>は別のゲーム画面です。作成権限のあるメンバーがゲームを設定し、参加者は回答・観戦などを行えます。</li>
                 <li>参加承認が設定されている場合は、ゲームマスターの承認後に参加します。進行・回答方式などはゲーム設定に従います。</li>
-                <li><strong>1人プレイ</strong>ではクラスなしでALLIAとのゲームもできます。ALLIA使用量を消費します。</li>
+                <li><strong>${ifty216Markup("1人プレイ","Solo play")}</strong>ではクラスなしでALLIAとのゲームもできます。ALLIA使用量を消費します。</li>
               </ul>
             </div>
           </details>
@@ -29735,21 +29216,20 @@ touch-action: none;
             <summary>🧠 フラッシュカード・復習対象・レベル表示</summary>
             <div class="ifty-manual-guide-content">
               <ul>
-                <li>フラッシュカードは<strong>表→裏／裏→表</strong>など、対応する表示方向で復習できます。保存済みのフラッシュカードセットを使い分けられます。</li>
+                <li>フラッシュカードは<strong>${ifty216Markup("表→裏／裏→表","Front → Back / Back → Front")}</strong>など、対応する表示方向で復習できます。保存済みのフラッシュカードセットを使い分けられます。</li>
                 <li>復習対象・弱点の表示は科目に対応する管理画面から確認します。復習日付による判定を使う機能もあります。</li>
                 <li>長いフォルダや復習欄は折りたたみ可能な場合があります。</li>
-                <li>科目ごとの<strong>レベルバッジ</strong>や学習状況の表示がある場合は、自分の進捗の目安として利用してください。</li>
+                <li>科目ごとの<strong>${ifty216Markup("レベルバッジ","Level badge")}</strong>や学習状況の表示がある場合は、自分の進捗の目安として利用してください。</li>
               </ul>
             </div>
           </details>
 
           <details>
-            <summary>🖼️ ALLIAの画像添付・使用状況</summary>
+            <summary>🖼️ ALLIAの画像添付</summary>
             <div class="ifty-manual-guide-content">
               <ul>
                 <li>対応するALLIA画面では画像を添付して質問し、画像内の語句を教材登録につなげられる場合があります。</li>
-                <li>ALLIA使用状況はHOMEなどから確認できます。<strong>赤＝APIが確認した日次上限</strong>、<strong>橙＝一時的な制限または種類不明の制限</strong>、<strong>黄＝上限が近い可能性</strong>を示します。9:00のカウントダウンは端末の集計切替であり、APIの解除時刻ではありません。</li>
-                <li>残量表示が推定値の場合、処理量によって実際の利用可能回数は異なります。表示されるリセット時刻の案内も確認してください。</li>
+
               </ul>
             </div>
           </details>
@@ -29757,12 +29237,12 @@ touch-action: none;
           <details>
             <summary>↕️ 「移動先」4ボタンとページ履歴</summary>
             <div class="ifty-manual-guide-content">
-              <p>画面右側の<strong>↕ 移動先</strong>は長いページを移動するための操作パネルで、教材の「別フォルダへの移動」ではありません。</p>
+              <p>画面右側の<strong>${ifty216Markup("↕ 移動先","↕ Jump to")}</strong>は長いページを移動するための操作パネルで、教材の「別フォルダへの移動」ではありません。</p>
               <ul>
-                <li><strong>ページ ↑ 先頭</strong>：現在のページの一番上へ移動。</li>
-                <li><strong>ページ ↓ 末尾</strong>：現在のページの一番下へ移動。</li>
-                <li><strong>フォルダ ↑ 先頭</strong>：現在位置に対応するフォルダの先頭へ移動。</li>
-                <li><strong>フォルダ ↓ 末尾</strong>：そのフォルダの末尾へ移動。フォルダがない画面では下2つは利用できません。</li>
+                <li><strong>${ifty216Markup("ページ ↑ 先頭","Page ↑ Top")}</strong>：現在のページの一番上へ移動。</li>
+                <li><strong>${ifty216Markup("ページ ↓ 末尾","Page ↓ Bottom")}</strong>：現在のページの一番下へ移動。</li>
+                <li><strong>${ifty216Markup("フォルダ ↑ 先頭","Folder ↑ Top")}</strong>：現在位置に対応するフォルダの先頭へ移動。</li>
+                <li><strong>${ifty216Markup("フォルダ ↓ 末尾","Folder ↓ Bottom")}</strong>：そのフォルダの末尾へ移動。フォルダがない画面では下2つは利用できません。</li>
               </ul>
               <p>移動パネル上部の<strong>−</strong>で最小化でき、<strong>↕</strong>で再展開します。状態は次回も保持されます。</p>
               <p>画面左下などの<strong>❮／❯</strong>はページの移動履歴です。↕ 移動先はスクロール、❮／❯は画面履歴という違いがあります。</p>
@@ -29773,7 +29253,7 @@ touch-action: none;
             <summary>💾 データ管理・バックアップ・表示設定・不具合報告</summary>
             <div class="ifty-manual-guide-content">
               <ul>
-                <li>バックアップには<strong>PERIODIC（自動）</strong>と<strong>MANUAL（手動）</strong>があります。MANUALは異なる保存時点を残せます。重要なデータはファイルへの書き出しも検討してください。</li>
+                <li>バックアップには<strong>${ifty216Markup("PERIODIC（自動）","Periodic (automatic)")}</strong>と<strong>${ifty216Markup("MANUAL（手動）","Manual")}</strong>があります。MANUALは異なる保存時点を残せます。重要なデータはファイルへの書き出しも検討してください。</li>
                 <li>科目名の表示設定は、対応するHOMEやサイドメニューの表示にも反映されます。</li>
                 <li>操作しにくい場合は、フォルダ折りたたみを活用してください。</li>
                 <li>不具合の報告機能では、画面・環境情報をまとめた報告文をコピーできます。個人情報や復旧コードを入力しないでください。</li>
@@ -29783,14 +29263,14 @@ touch-action: none;
         </div>
 
         <div class="ifty-manual-guide-group">
-          <div class="ifty-manual-guide-heading">BASIC</div>
+          <div class="ifty-manual-guide-heading">${ifty216Markup("基本","BASIC")}</div>
           <details open>
             <summary>🏠 HOMEと基本の流れ</summary>
             <div class="ifty-manual-guide-content">
               <ol>
-                <li><strong>HOME</strong>から学習したい科目を開きます。</li>
-                <li>科目内で<strong>フォルダ</strong>を作成し、単語・文・用語などを追加します。</li>
-                <li>フォルダの<strong>PRACTICE</strong>から、その科目に対応した問題形式を選びます。</li>
+                <li><strong>${ifty216Markup("ホーム","HOME")}</strong>から学習したい科目を開きます。</li>
+                <li>科目内で<strong>${ifty216Markup("フォルダ","Folder")}</strong>を作成し、単語・文・用語などを追加します。</li>
+                <li>フォルダの<strong>${ifty216Markup("実践","PRACTICE")}</strong>から、その科目に対応した問題形式を選びます。</li>
                 <li>間違えた内容や覚えにくい内容は、繰り返し練習します。</li>
               </ol>
               <div class="ifty-manual-guide-tip"><strong>TIP</strong>　最初から大量に入れるより、テーマごとにフォルダを分けると復習しやすくなります。</div>
@@ -29811,9 +29291,9 @@ touch-action: none;
         </div>
 
         <div class="ifty-manual-guide-group">
-          <div class="ifty-manual-guide-heading">SUBJECTS</div>
+          <div class="ifty-manual-guide-heading">${ifty216Markup("教科","SUBJECTS")}</div>
           <details>
-            <summary>🌐 LANGUAGES</summary>
+            <summary>${ifty216Markup("🌐 言語・語彙","🌐 LANGUAGES")}</summary>
             <div class="ifty-manual-guide-content">
               <p>外国語の<strong>単語・熟語・表現</strong>を覚えるための科目です。意味や例文などを保存し、対応するクイズやフラッシュカードで練習できます。</p>
               <ul>
@@ -29825,7 +29305,7 @@ touch-action: none;
           </details>
 
           <details>
-            <summary>💬 BASIC SENTENCES</summary>
+            <summary>${ifty216Markup("💬 基本文","💬 BASIC SENTENCES")}</summary>
             <div class="ifty-manual-guide-content">
               <p>単語単体ではなく、<strong>短い例文・基本文</strong>をまとまりで覚えるための科目です。文を見て意味を思い出す、文そのものを再現する、といった練習に向いています。</p>
               <p>PRACTICEでは必要な問題数を選び、短いセットで繰り返すのがおすすめです。</p>
@@ -29833,7 +29313,7 @@ touch-action: none;
           </details>
 
           <details>
-            <summary>📜 KANBUN</summary>
+            <summary>${ifty216Markup("📜 漢文","📜 KANBUN")}</summary>
             <div class="ifty-manual-guide-content">
               <p>漢文の本文・句法を分けて整理し、<strong>和訳・書き下し・穴埋め・訓点</strong>などを練習する科目です。</p>
               <ul>
@@ -29845,7 +29325,7 @@ touch-action: none;
           </details>
 
           <details>
-            <summary>🈶 KANJI</summary>
+            <summary>${ifty216Markup("🈶 漢字","🈶 KANJI")}</summary>
             <div class="ifty-manual-guide-content">
               <p><strong>漢字1字・熟語</strong>の読み、意味、書き取り、類義語・対義語などをまとめて練習できます。</p>
               <p>書き取りはタイピングと手書きを使い分けられるので、「読める」だけでなく「書ける」状態まで確認できます。</p>
@@ -29855,21 +29335,21 @@ touch-action: none;
           <details>
             <summary>🗂️ OTHERS・その他の教科</summary>
             <div class="ifty-manual-guide-content">
-              <p>専用形式がない科目や、保健・情報などの暗記事項は<strong>OTHERS</strong>で管理できます。用語と説明をセットにして保存し、PRACTICEで確認します。</p>
+              <p>専用形式がない科目や、保健・情報などの暗記事項は<strong>${ifty216Markup("その他","OTHERS")}</strong>で管理できます。用語と説明をセットにして保存し、PRACTICEで確認します。</p>
               <p>ANCIENT / SCIENCE / SOCIAL STUDIESなど、専用の学習画面がある教科も同じく「保存 → PRACTICE」が基本です。</p>
             </div>
           </details>
         </div>
 
         <div class="ifty-manual-guide-group">
-          <div class="ifty-manual-guide-heading">AI & TOOLS</div>
+          <div class="ifty-manual-guide-heading">${ifty216Markup("AI・ツール","AI & TOOLS")}</div>
           <details>
             <summary>✨ ALLIAを使う</summary>
             <div class="ifty-manual-guide-content">
               <p>ALLIAは、教材生成や学習中の疑問の確認を補助するAI機能です。問題を解いている途中でも、対応画面から質問できます。</p>
               <ul>
                 <li>ALLIAを使う機能には<strong>インターネット接続</strong>が必要です。</li>
-                <li>1日の利用量には上限があり、画面上の使用状況表示で確認できます。</li>
+                <li>AIサービスが実際に利用制限を返した場合は、該当する操作でエラーを表示します。</li>
                 <li>AIの回答は誤る場合があるため、重要事項は教科書・辞書などでも確認してください。</li>
               </ul>
             </div>
@@ -29879,7 +29359,7 @@ touch-action: none;
             <summary>🎙️ TOOLS → 発音添削</summary>
             <div class="ifty-manual-guide-content">
               <ol>
-                <li>発音練習用の<strong>フォルダ</strong>を作るか、LANGUAGESからIMPORTします。</li>
+                <li>発音練習用の<strong>${ifty216Markup("フォルダ","Folder")}</strong>を作るか、LANGUAGESからIMPORTします。</li>
                 <li>短い単語・熟語・英文の<strong>標準発音</strong>を聞きます。</li>
                 <li>自分の発音を<strong>録音</strong>します。</li>
                 <li>比較・採点結果と、改善点・練習方法を確認します。</li>
@@ -29890,9 +29370,9 @@ touch-action: none;
           </details>
 
           <details>
-            <summary>📚 TOOLS → EXAMPLES</summary>
+            <summary>${ifty216Markup("📚 ツール → 例文","📚 TOOLS → EXAMPLES")}</summary>
             <div class="ifty-manual-guide-content">
-              <p><strong>EXAMPLES</strong>は、LANGUAGESなどで一度作成・保存した例文をまとめて確認し、再利用するための例文資産です。</p>
+              <p><strong>${ifty216Markup("例文","EXAMPLES")}</strong>は、LANGUAGESなどで一度作成・保存した例文をまとめて確認し、再利用するための例文資産です。</p>
               <ul>
                 <li>同じ単語で毎回ALLIAに新しい例文を作らせず、保存済みの例文を再利用できます。</li>
                 <li>例文を見直したいときや、BASIC SENTENCESへ使いたい文を探すときに便利です。</li>
@@ -29903,9 +29383,9 @@ touch-action: none;
           </details>
 
           <details>
-            <summary>📝 TOOLS → BASIC SENTENCES</summary>
+            <summary>${ifty216Markup("📝 ツール → 基本文","📝 TOOLS → BASIC SENTENCES")}</summary>
             <div class="ifty-manual-guide-content">
-              <p><strong>BASIC SENTENCES</strong>は、短い英文や基本例文を「文ごと」覚えるためのツールです。</p>
+              <p><strong>${ifty216Markup("基本文","BASIC SENTENCES")}</strong>は、短い英文や基本例文を「文ごと」覚えるためのツールです。</p>
               <ul>
                 <li>単語単体ではなく、語順・前置詞・構文を文の形で定着させたいときに使います。</li>
                 <li>EXAMPLESに保存した例文を学習素材として活用できます。</li>
@@ -29915,9 +29395,9 @@ touch-action: none;
           </details>
 
           <details>
-            <summary>📅 TOOLS → YEARS</summary>
+            <summary>${ifty216Markup("📅 ツール → 年号","📅 TOOLS → YEARS")}</summary>
             <div class="ifty-manual-guide-content">
-              <p><strong>YEARS</strong>は、歴史・社会などの<strong>年号と出来事</strong>を専用フォルダで覚えるためのツールです。</p>
+              <p><strong>${ifty216Markup("年号","YEARS")}</strong>は、歴史・社会などの<strong>年号と出来事</strong>を専用フォルダで覚えるためのツールです。</p>
               <ul>
                 <li>「日本史」「世界史」「近代史」など、範囲ごとにフォルダを分けて整理できます。</li>
                 <li>年号から出来事、出来事から年号のように、対応関係を素早く確認する用途に向いています。</li>
@@ -29928,9 +29408,9 @@ touch-action: none;
           </details>
 
           <details>
-            <summary>🎯 TOOLS → PRACTICE</summary>
+            <summary>${ifty216Markup("🎯 ツール → 実践","🎯 TOOLS → PRACTICE")}</summary>
             <div class="ifty-manual-guide-content">
-              <p><strong>PRACTICE</strong>は、現在選んでいる科目の学習セットをまとめて開く入口です。</p>
+              <p><strong>${ifty216Markup("実践","PRACTICE")}</strong>は、現在選んでいる科目の学習セットをまとめて開く入口です。</p>
               <ul>
                 <li>問題形式・出題順・問題数などを設定して開始します。</li>
                 <li>必要な項目だけ選ぶ、フォルダ単位で追加する、全項目から出す、といった使い分けができます。</li>
@@ -29941,7 +29421,7 @@ touch-action: none;
         </div>
 
         <div class="ifty-manual-guide-group">
-          <div class="ifty-manual-guide-heading">ACCOUNT & DATA</div>
+          <div class="ifty-manual-guide-heading">${ifty216Markup("アカウント・データ","ACCOUNT & DATA")}</div>
           <details>
             <summary>👤 アカウント・クラウド保存</summary>
             <div class="ifty-manual-guide-content">
@@ -29953,13 +29433,13 @@ touch-action: none;
           <details>
             <summary>🔑 パスワードを忘れたとき</summary>
             <div class="ifty-manual-guide-content">
-              <p>メールではなく<strong>復旧コード</strong>を使います。アカウント作成時・再発行時に表示された復旧コードを安全な場所に保存してください。</p>
+              <p>メールではなく<strong>${ifty216Markup("復旧コード","Recovery code")}</strong>を使います。アカウント作成時・再発行時に表示された復旧コードを安全な場所に保存してください。</p>
               <ol>
                 <li>ログイン画面でパスワード復旧を開く。</li>
                 <li>IFTY ID・復旧コード・新しいパスワードを入力する。</li>
                 <li>復旧後に新しく発行される復旧コードを保存する。</li>
               </ol>
-              <div class="ifty-manual-guide-tip"><strong>重要</strong>　復旧コードを再発行すると、古いコードは使えなくなります。</div>
+              <div class="ifty-manual-guide-tip"><strong>${ifty216Markup("重要","Important")}</strong>　復旧コードを再発行すると、古いコードは使えなくなります。</div>
             </div>
           </details>
 
@@ -29973,7 +29453,7 @@ touch-action: none;
         </div>
 
         <div class="ifty-manual-guide-group">
-          <div class="ifty-manual-guide-heading">SETTINGS & TROUBLE</div>
+          <div class="ifty-manual-guide-heading">${ifty216Markup("設定・トラブル対応","SETTINGS & TROUBLE")}</div>
           <details>
             <summary>🎨 表示と文字の見やすさ</summary>
             <div class="ifty-manual-guide-content">
@@ -30071,10 +29551,10 @@ touch-action: none;
           <div class="ifty-manual-ipa-examples">${item.words}</div>
         </div>
         <div class="ifty-manual-ipa-how">
-          <div><b>口：</b>${item.mouth}</div>
-          <div><b>舌：</b>${item.tongue}</div>
+          <div><b>${ifty216Markup("口：","Mouth:")}</b>${item.mouth}</div>
+          <div><b>${ifty216Markup("舌：","Tongue:")}</b>${item.tongue}</div>
         </div>
-        <div class="ifty-manual-ipa-tip"><b>コツ：</b>${item.tip}</div>
+        <div class="ifty-manual-ipa-tip"><b>${ifty216Markup("コツ：","Tip:")}</b>${item.tip}</div>
       </div>`;
 
     const renderGroup = (group) => `
@@ -30088,35 +29568,35 @@ touch-action: none;
     return `
       <div class="ifty-manual-ipa">
         <div class="ifty-manual-ipa-hero">
-          <div class="ifty-manual-ipa-hero-title">英語の発音記号（IPA）</div>
+          <div class="ifty-manual-ipa-hero-title">${ifty216Markup("英語の発音記号（IPA）","English phonetic symbols (IPA)")}</div>
           <div class="ifty-manual-ipa-hero-text">
             記号を「カタカナの代わり」として覚えるのではなく、<b>どこに舌を置き、唇をどう動かし、声を震わせるか</b>までセットで確認します。
             表記は辞書・英米差で少し異なることがあります。
           </div>
           <div class="ifty-manual-ipa-keyrow">
-            <span class="ifty-manual-ipa-key"><b>ˈ</b> 第一アクセント</span>
-            <span class="ifty-manual-ipa-key"><b>ˌ</b> 第二アクセント</span>
+            <span class="ifty-manual-ipa-key"><b>ˈ</b> ${ifty216Markup("第一アクセント","Primary stress")}</span>
+            <span class="ifty-manual-ipa-key"><b>ˌ</b> ${ifty216Markup("第二アクセント","Secondary stress")}</span>
             <span class="ifty-manual-ipa-key"><b>ː</b> 長く保つ</span>
 <span class="ifty-manual-ipa-key"><b>ə</b> 弱い中央母音</span>
           </div>
         </div>
 
         <div class="ifty-manual-ipa-note">
-          <strong>英米差：</strong> /ɒ/・/ɑː/・/ɜː/・/ɪə/ などは特に表記が変わります。発音記号が違って見えても、まず辞書が British / American のどちらを示しているか確認してください。
+          <strong>${ifty216Markup("英米差：","British / American differences:")}</strong> /ɒ/・/ɑː/・/ɜː/・/ɪə/ などは特に表記が変わります。発音記号が違って見えても、まず辞書が British / American のどちらを示しているか確認してください。
         </div>
 
         <div class="ifty-manual-ipa-group">
-          <div class="ifty-manual-ipa-heading">VOWELS</div>
+          <div class="ifty-manual-ipa-heading">${ifty216Markup("母音","VOWELS")}</div>
           ${vowelGroups.map(renderGroup).join('')}
         </div>
 
         <div class="ifty-manual-ipa-group">
-          <div class="ifty-manual-ipa-heading">CONSONANTS</div>
+          <div class="ifty-manual-ipa-heading">${ifty216Markup("子音","CONSONANTS")}</div>
           ${consonantGroups.map(renderGroup).join('')}
         </div>
 
         <div class="ifty-manual-ipa-group">
-          <div class="ifty-manual-ipa-heading">IMPORTANT CONTRASTS</div>
+          <div class="ifty-manual-ipa-heading">${ifty216Markup("重要な音の区別","IMPORTANT CONTRASTS")}</div>
           <details>
             <summary>日本語話者が区別しにくい音</summary>
             <div class="ifty-manual-ipa-contrast">
@@ -30132,11 +29612,11 @@ touch-action: none;
           </details>
 
           <details>
-            <summary>アクセント記号の読み方</summary>
+            <summary>${ifty216Markup("アクセント記号の読み方","Reading stress marks")}</summary>
             <div class="ifty-manual-ipa-contrast">
-              <div class="ifty-manual-ipa-contrastrow"><b><span class="ifty-manual-ipa-pair">ˈ</span> 第一アクセント</b>：記号の<b>直後の音節</b>を最も強くします。例：about <code>/əˈbaʊt/</code>。</div>
-              <div class="ifty-manual-ipa-contrastrow"><b><span class="ifty-manual-ipa-pair">ˌ</span> 第二アクセント</b>：第一アクセントほどではないが、弱勢よりは強く発音します。</div>
-              <div class="ifty-manual-ipa-contrastrow"><b><span class="ifty-manual-ipa-pair">ː</span> 長音記号</b>：直前の母音を長めに保ちます。ただし英語では<b>長さだけでなく母音の質</b>も重要です。</div>
+              <div class="ifty-manual-ipa-contrastrow"><b><span class="ifty-manual-ipa-pair">ˈ</span> ${ifty216Markup("第一アクセント","Primary stress")}</b>：記号の<b>${ifty216Markup("直後の音節","Following syllable")}</b>を最も強くします。例：about <code>/əˈbaʊt/</code>。</div>
+              <div class="ifty-manual-ipa-contrastrow"><b><span class="ifty-manual-ipa-pair">ˌ</span> ${ifty216Markup("第二アクセント","Secondary stress")}</b>：第一アクセントほどではないが、弱勢よりは強く発音します。</div>
+              <div class="ifty-manual-ipa-contrastrow"><b><span class="ifty-manual-ipa-pair">ː</span> ${ifty216Markup("長音記号","Length mark")}</b>：直前の母音を長めに保ちます。ただし英語では<b>${ifty216Markup("長さだけでなく母音の質","Vowel quality as well as length")}</b>も重要です。</div>
               <div class="ifty-manual-ipa-contrastrow"><b><span class="ifty-manual-ipa-pair">/ /</span> と <span class="ifty-manual-ipa-pair">[ ]</span></b>：/ / は音素レベル、[ ] は実際の細かな音声を表すときに使われます。IFTYの単語学習では通常 / / を中心に見ればOKです。</div>
             </div>
           </details>
@@ -30182,12 +29662,12 @@ touch-action: none;
         </div>
 
         <div class="ifty-manual-ref-group">
-          <div class="ifty-manual-ref-heading">CORE IMAGES</div>
+          <div class="ifty-manual-ref-heading">${ifty216Markup("核イメージ","CORE IMAGES")}</div>
           ${items.map(renderItem).join('')}
         </div>
 
         <div class="ifty-manual-ref-group">
-          <div class="ifty-manual-ref-heading">CONFUSING PAIRS</div>
+          <div class="ifty-manual-ref-heading">${ifty216Markup("混同しやすい表現","CONFUSING PAIRS")}</div>
           <details>
             <summary>in / into・on / onto</summary>
             <div class="ifty-manual-ref-content">
@@ -30230,7 +29710,7 @@ touch-action: none;
         <div class="ifty-manual-ref-content">
           <p>${item.body}</p>
           <div class="ifty-manual-example-list">${item.examples.map(ex => `<div class="ifty-manual-example"><b>${ex}</b></div>`).join('')}</div>
-          ${item.warn ? `<div class="ifty-manual-warning-box"><strong>注意：</strong>${item.warn}</div>` : ''}
+          ${item.warn ? `<div class="ifty-manual-warning-box"><strong>${ifty216Markup("注意：","Note:")}</strong>${item.warn}</div>` : ''}
         </div>
       </details>`;
 
@@ -30254,22 +29734,22 @@ touch-action: none;
         </div>
 
         <div class="ifty-manual-ref-group">
-          <div class="ifty-manual-ref-heading">WORD STRESS</div>
+          <div class="ifty-manual-ref-heading">${ifty216Markup("単語の強勢","WORD STRESS")}</div>
           ${stressRules.map((x,i) => renderRule(x, i === 0)).join('')}
         </div>
 
         <div class="ifty-manual-ref-group">
-          <div class="ifty-manual-ref-heading">CONNECTED SPEECH</div>
+          <div class="ifty-manual-ref-heading">${ifty216Markup("連続発話","CONNECTED SPEECH")}</div>
           ${connected.map((x,i) => renderRule(x, i === 0)).join('')}
         </div>
 
         <div class="ifty-manual-ref-group">
-          <div class="ifty-manual-ref-heading">WEAK FORMS & CONTRACTIONS</div>
+          <div class="ifty-manual-ref-heading">${ifty216Markup("弱形・短縮形","WEAK FORMS & CONTRACTIONS")}</div>
           ${weakForms.map((x,i) => renderRule(x, i === 0)).join('')}
         </div>
 
         <div class="ifty-manual-ref-group">
-          <div class="ifty-manual-ref-heading">BRITISH / AMERICAN / OTHER REGIONS</div>
+          <div class="ifty-manual-ref-heading">${ifty216Markup("英・米・その他の地域","BRITISH / AMERICAN / OTHER REGIONS")}</div>
           <details open>
             <summary>地域差の見方</summary>
             <div class="ifty-manual-ref-content">
@@ -30297,7 +29777,7 @@ touch-action: none;
         </div>
 
         <div class="ifty-manual-ref-group">
-          <div class="ifty-manual-ref-heading">PRACTICE ORDER</div>
+          <div class="ifty-manual-ref-heading">${ifty216Markup("実践用ORDER","PRACTICE ORDER")}</div>
           <details>
             <summary>発音練習はこの順番</summary>
             <div class="ifty-manual-ref-content">
@@ -30366,14 +29846,14 @@ touch-action: none;
 
     const pronunciations = Array.isArray(data?.pronunciations) ? data.pronunciations : [];
     if (pronunciations.length || data?.stress) {
-      blocks.push(`<div class="ifty-manual-lookup-card"><div class="ifty-manual-lookup-card-title">発音・強勢</div><div class="ifty-manual-lookup-badges">${pronunciations.map(p => `<span class="ifty-manual-lookup-badge">${esc(p.label || 'IPA')} ${esc(p.ipa || '')}</span>`).join('')}</div>${data?.stress ? `<div class="ifty-manual-lookup-card-text"><b>強勢：</b>${esc(data.stress)}</div>` : ''}${pronunciations.map(p => p.note ? `<div class="ifty-manual-lookup-card-text"><b>${esc(p.label || '')}</b> ${esc(p.note)}</div>` : '').join('')}</div>`);
+      blocks.push(`<div class="ifty-manual-lookup-card"><div class="ifty-manual-lookup-card-title">発音・強勢</div><div class="ifty-manual-lookup-badges">${pronunciations.map(p => `<span class="ifty-manual-lookup-badge">${esc(p.label || 'IPA')} ${esc(p.ipa || '')}</span>`).join('')}</div>${data?.stress ? `<div class="ifty-manual-lookup-card-text"><b>${ifty216Markup("強勢：","Stress:")}</b>${esc(data.stress)}</div>` : ''}${pronunciations.map(p => p.note ? `<div class="ifty-manual-lookup-card-text"><b>${esc(p.label || '')}</b> ${esc(p.note)}</div>` : '').join('')}</div>`);
     }
 
     const preps = Array.isArray(data?.prepositionMatches) ? data.prepositionMatches : [];
-    preps.forEach(row => blocks.push(`<div class="ifty-manual-lookup-card"><div class="ifty-manual-lookup-card-title">${esc(row.expression || row.preposition || '前置詞')}</div><div class="ifty-manual-lookup-card-text"><b>前置詞：</b>${esc(row.preposition || '—')}　<b>基本イメージ：</b>${esc(row.coreImage || '—')}<br>${esc(row.why || '')}</div>${Array.isArray(row.examples)&&row.examples.length ? `<div class="ifty-manual-lookup-example">${row.examples.map(esc).join('<br>')}</div>` : ''}</div>`));
+    preps.forEach(row => blocks.push(`<div class="ifty-manual-lookup-card"><div class="ifty-manual-lookup-card-title">${esc(row.expression || row.preposition || '前置詞')}</div><div class="ifty-manual-lookup-card-text"><b>${ifty216Markup("前置詞：","Preposition:")}</b>${esc(row.preposition || '—')}　<b>${ifty216Markup("基本イメージ：","Core image:")}</b>${esc(row.coreImage || '—')}<br>${esc(row.why || '')}</div>${Array.isArray(row.examples)&&row.examples.length ? `<div class="ifty-manual-lookup-example">${row.examples.map(esc).join('<br>')}</div>` : ''}</div>`));
 
     const rules = Array.isArray(data?.ruleMatches) ? data.ruleMatches : [];
-    rules.forEach(row => blocks.push(`<div class="ifty-manual-lookup-card"><div class="ifty-manual-lookup-card-title">${esc(row.rule || '該当ルール')}</div><div class="ifty-manual-lookup-card-text">${row.appliesTo ? `<b>該当：</b>${esc(row.appliesTo)}<br>` : ''}${esc(row.why || row.explanation || '')}</div>${Array.isArray(row.examples)&&row.examples.length ? `<div class="ifty-manual-lookup-example">${row.examples.map(esc).join('<br>')}</div>` : ''}</div>`));
+    rules.forEach(row => blocks.push(`<div class="ifty-manual-lookup-card"><div class="ifty-manual-lookup-card-title">${esc(row.rule || '該当ルール')}</div><div class="ifty-manual-lookup-card-text">${row.appliesTo ? `<b>${ifty216Markup("該当：","Applies to:")}</b>${esc(row.appliesTo)}<br>` : ''}${esc(row.why || row.explanation || '')}</div>${Array.isArray(row.examples)&&row.examples.length ? `<div class="ifty-manual-lookup-example">${row.examples.map(esc).join('<br>')}</div>` : ''}</div>`));
 
     const sounds = Array.isArray(data?.soundBreakdown) ? data.soundBreakdown : [];
     sounds.forEach(row => blocks.push(`<div class="ifty-manual-lookup-card"><div class="ifty-manual-lookup-card-title">${esc(row.part || '')}${row.ipa ? `　${esc(row.ipa)}` : ''}</div><div class="ifty-manual-lookup-card-text">${esc(row.how || '')}</div></div>`));
@@ -30448,7 +29928,7 @@ touch-action: none;
     root.innerHTML = `
       <button type="button" class="ifty-manual-launcher" id="iftyManualLauncher" onclick="window.openIftyManual?.()" aria-label="IFTYマニュアルを開く" aria-expanded="false">
         <span class="ifty-manual-launcher-icon" aria-hidden="true">📖</span>
-        <span>MANUAL</span>
+        <span>${ifty216Markup("マニュアル","MANUAL")}</span>
       </button>
       <section class="ifty-manual-panel" id="iftyManualPanel" role="dialog" aria-label="IFTYマニュアル" aria-modal="false">
         <header class="ifty-manual-header" id="iftyManualDragHandle">
@@ -30456,12 +29936,12 @@ touch-action: none;
             <div class="ifty-manual-kicker">IFTY MANUAL</div>
             <div class="ifty-manual-titleline">
               <div class="ifty-manual-title" id="iftyManualPanelTitle">マニュアル</div>
-              <button type="button" class="ifty-manual-header-back" id="iftyManualHeaderBack" aria-label="戻る">← 戻る</button>
+              <button type="button" class="ifty-manual-header-back" id="iftyManualHeaderBack" aria-label="${ifty216Markup("戻る","Back")}">← 戻る</button>
             </div>
           </div>
           <div class="ifty-manual-actions">
             <button type="button" class="ifty-manual-iconbtn" id="iftyManualMinimize" aria-label="最小化" title="最小化">−</button>
-            <button type="button" class="ifty-manual-iconbtn" id="iftyManualClose" aria-label="閉じる" title="閉じる">×</button>
+            <button type="button" class="ifty-manual-iconbtn" id="iftyManualClose" aria-label="${ifty216Markup("閉じる","Close")}" title="${ifty216Markup("閉じる","Close")}">×</button>
           </div>
         </header>
         <div class="ifty-manual-body" id="iftyManualBody"></div>
@@ -31296,7 +30776,7 @@ window.iftyMpRefreshSourceFolders=function(){
 window.openIftyMultiplayerClass=async function(classId){
   if(!iftyMpSafeId(classId))return;
   iftyMpStopPolling();iftyMpClassId=classId;iftyMpRoomId='';
-  showIftyHubContent(iftyMpShell('みんなで問題を解く',`<div id="iftyMpClassRoot"><div class="ifty-mp-panel">読み込み中…</div></div>`),'multiplayer');
+  showIftyHubContent(iftyMpShell('みんなで問題を解く',`<div id="iftyMpClassRoot"><div class="ifty-mp-panel">${ifty216Markup("読み込み中…","Loading…")}</div></div>`),'multiplayer');
   await iftyMpLoadClass();
 };
 async function iftyMpLoadClass(){
@@ -31309,25 +30789,25 @@ async function iftyMpLoadClass(){
     const subjects=iftyMpSubjectFolders();
     root.innerHTML=`
       <div class="ifty-mp-panel" id="iftyMpCreateRoomPanel" ${canCreateRoom?'':'hidden'}>
-        <h2 class="ifty-mp-title">新しいゲーム</h2>
-        <label class="ifty-mp-label" for="iftyMpGameTitle">ゲーム名</label><input id="iftyMpGameTitle" class="ifty-mp-input" maxlength="60" placeholder="例：世界史クイズ大会">
-        <label class="ifty-mp-label" for="iftyMpMode">出題方式</label><select id="iftyMpMode" class="ifty-mp-select" onchange="iftyMpToggleMode()"><option value="generated">① 用語からALLIAが毎問生成</option><option value="saved">② 保存済み問題を出題</option></select>
-        <div id="iftyMpGeneratedFields"><label class="ifty-mp-label" for="iftyMpSourceSubject">教科</label><select id="iftyMpSourceSubject" class="ifty-mp-select" onchange="iftyMpRefreshSourceFolders()">${subjects.map(x=>`<option value="${escapeHtml(x.id)}">${escapeHtml(x.label)}</option>`).join('')}</select><label class="ifty-mp-label" for="iftyMpSourceFolder">出題する学習フォルダ</label><select id="iftyMpSourceFolder" class="ifty-mp-select"></select><p class="ifty-mp-muted">選択したフォルダの用語情報だけをゲーム用に送信します。毎問ALLIAが新しい問題を作成します。</p></div>
-        <div id="iftyMpSavedFields" hidden><label class="ifty-mp-label" for="iftyMpSavedFolder">問題フォルダ</label><select id="iftyMpSavedFolder" class="ifty-mp-select">${bank.folders.map(f=>`<option value="${escapeHtml(f.id)}">${escapeHtml(f.name)} (${bank.questions.filter(q=>q.folderId===f.id).length}問)</option>`).join('')}</select><div class="ifty-mp-btnbar"><button class="ifty-mp-btn" onclick="openIftyMpQuestionBank()">📁 問題フォルダを管理</button></div></div>
-        <div class="ifty-mp-grid"><div><label class="ifty-mp-label" for="iftyMpTotal">問題数 (1〜30)</label><input id="iftyMpTotal" type="number" min="1" max="30" value="5" class="ifty-mp-input"></div><div><label class="ifty-mp-label" for="iftyMpGM">ゲームマスター</label><select id="iftyMpGM" class="ifty-mp-select" onchange="iftyMpToggleMaster()"><option value="no">なし（ALLIAが採点）</option><option value="yes">あり（作成後に変更可能）</option></select></div></div>
-        <div id="iftyMpGradeModeWrap" hidden><label class="ifty-mp-label" for="iftyMpGradeMode">採点方式</label><select id="iftyMpGradeMode" class="ifty-mp-select"><option value="ai_review">ALLIAが採点 → マスターが確認・修正</option><option value="master">マスターが採点 → 必要なときALLIAに相談</option><option value="ai">ALLIAが自動採点</option></select></div>
-        <label class="ifty-mp-label" for="iftyMpGradeTiming">採点タイミング</label><select id="iftyMpGradeTiming" class="ifty-mp-select"><option value="each">毎問採点</option><option value="end">全問終了後にまとめて採点</option></select>
-        <label class="ifty-mp-check"><input id="iftyMpHint" type="checkbox">解答中にALLIAへのヒント質問を許可する</label>
-        <label class="ifty-mp-check"><input id="iftyMpConsent" type="checkbox" checked>全回答者が納得したら次へ進む</label>
-        <label class="ifty-mp-check"><input id="iftyMpForceMaster" type="checkbox" disabled>マスターの操作で強制的に進める</label>
-        <div class="ifty-mp-grid"><div><label class="ifty-mp-label" for="iftyMpAnswerTime">解答の制限時間</label><select id="iftyMpAnswerTime" class="ifty-mp-select"><option value="0">なし</option><option value="30">30秒</option><option value="60">1分</option><option value="120">2分</option><option value="300">5分</option><option value="600">10分</option></select></div><div><label class="ifty-mp-label" for="iftyMpReviewTime">結果発表後、強制進行まで</label><select id="iftyMpReviewTime" class="ifty-mp-select"><option value="0">なし</option><option value="30">30秒</option><option value="60">1分</option><option value="120" selected>2分</option><option value="300">5分</option><option value="600">10分</option></select></div></div>
-        <div class="ifty-mp-btnbar"><button class="ifty-mp-btn good" type="button" onclick="iftyMpCreateRoom()">＋ ゲームを作成</button><button type="button" class="ifty-mp-btn" onclick="openIftyMpQuestionBank()">📁 問題フォルダ</button></div>
+        <h2 class="ifty-mp-title">${ifty216Markup("新しいゲーム","New game")}</h2>
+        <label class="ifty-mp-label" for="iftyMpGameTitle">${ifty216Markup("ゲーム名","Game name")}</label><input id="iftyMpGameTitle" class="ifty-mp-input" maxlength="60" placeholder="例：世界史クイズ大会">
+        <label class="ifty-mp-label" for="iftyMpMode">${ifty216Markup("出題方式","Question source")}</label><select id="iftyMpMode" class="ifty-mp-select" onchange="iftyMpToggleMode()"><option value="generated">${ifty216Markup("① 用語からALLIAが毎問生成","① ALLIA generates each question from terms")}</option><option value="saved">${ifty216Markup("② 保存済み問題を出題","② Use saved questions")}</option></select>
+        <div id="iftyMpGeneratedFields"><label class="ifty-mp-label" for="iftyMpSourceSubject">${ifty216Markup("教科","Subject")}</label><select id="iftyMpSourceSubject" class="ifty-mp-select" onchange="iftyMpRefreshSourceFolders()">${subjects.map(x=>`<option value="${escapeHtml(x.id)}">${escapeHtml(x.label)}</option>`).join('')}</select><label class="ifty-mp-label" for="iftyMpSourceFolder">${ifty216Markup("出題する学習フォルダ","Study folder for questions")}</label><select id="iftyMpSourceFolder" class="ifty-mp-select"></select><p class="ifty-mp-muted">選択したフォルダの用語情報だけをゲーム用に送信します。毎問ALLIAが新しい問題を作成します。</p></div>
+        <div id="iftyMpSavedFields" hidden><label class="ifty-mp-label" for="iftyMpSavedFolder">${ifty216Markup("問題フォルダ","Question folder")}</label><select id="iftyMpSavedFolder" class="ifty-mp-select">${bank.folders.map(f=>`<option value="${escapeHtml(f.id)}">${escapeHtml(f.name)} (${bank.questions.filter(q=>q.folderId===f.id).length}問)</option>`).join('')}</select><div class="ifty-mp-btnbar"><button class="ifty-mp-btn" onclick="openIftyMpQuestionBank()">${ifty216Markup("📁 問題フォルダを管理","📁 Manage question folders")}</button></div></div>
+        <div class="ifty-mp-grid"><div><label class="ifty-mp-label" for="iftyMpTotal">${ifty216Markup("問題数 (1〜30)","Questions (1–30)")}</label><input id="iftyMpTotal" type="number" min="1" max="30" value="5" class="ifty-mp-input"></div><div><label class="ifty-mp-label" for="iftyMpGM">${ifty216Markup("ゲームマスター","Game master")}</label><select id="iftyMpGM" class="ifty-mp-select" onchange="iftyMpToggleMaster()"><option value="no">${ifty216Markup("なし（ALLIAが採点）","None (ALLIA grades)")}</option><option value="yes">${ifty216Markup("あり（作成後に変更可能）","Yes (can change after creation)")}</option></select></div></div>
+        <div id="iftyMpGradeModeWrap" hidden><label class="ifty-mp-label" for="iftyMpGradeMode">${ifty216Markup("採点方式","Grading method")}</label><select id="iftyMpGradeMode" class="ifty-mp-select"><option value="ai_review">${ifty216Markup("ALLIAが採点 → マスターが確認・修正","ALLIA grades → master reviews and edits")}</option><option value="master">${ifty216Markup("マスターが採点 → 必要なときALLIAに相談","Master grades → consult ALLIA if needed")}</option><option value="ai">${ifty216Markup("ALLIAが自動採点","ALLIA auto-grades")}</option></select></div>
+        <label class="ifty-mp-label" for="iftyMpGradeTiming">${ifty216Markup("採点タイミング","Grading timing")}</label><select id="iftyMpGradeTiming" class="ifty-mp-select"><option value="each">${ifty216Markup("毎問採点","Grade each question")}</option><option value="end">${ifty216Markup("全問終了後にまとめて採点","Grade after all questions")}</option></select>
+        <label class="ifty-mp-check"><input id="iftyMpHint" type="checkbox">${ifty216Markup("解答中にALLIAへのヒント質問を許可する","Allow ALLIA hints while answering")}</label>
+        <label class="ifty-mp-check"><input id="iftyMpConsent" type="checkbox" checked>${ifty216Markup("全回答者が納得したら次へ進む","Proceed when all respondents agree")}</label>
+        <label class="ifty-mp-check"><input id="iftyMpForceMaster" type="checkbox" disabled>${ifty216Markup("マスターの操作で強制的に進める","Master can force progression")}</label>
+        <div class="ifty-mp-grid"><div><label class="ifty-mp-label" for="iftyMpAnswerTime">${ifty216Markup("解答の制限時間","Answer time limit")}</label><select id="iftyMpAnswerTime" class="ifty-mp-select"><option value="0">${ifty216Markup("なし","None")}</option><option value="30">${ifty216Markup("30秒","30 sec")}</option><option value="60">${ifty216Markup("1分","1 min")}</option><option value="120">${ifty216Markup("2分","2 min")}</option><option value="300">${ifty216Markup("5分","5 min")}</option><option value="600">${ifty216Markup("10分","10 min")}</option></select></div><div><label class="ifty-mp-label" for="iftyMpReviewTime">${ifty216Markup("結果発表後、強制進行まで","Time before forced progression after results")}</label><select id="iftyMpReviewTime" class="ifty-mp-select"><option value="0">${ifty216Markup("なし","None")}</option><option value="30">${ifty216Markup("30秒","30 sec")}</option><option value="60">${ifty216Markup("1分","1 min")}</option><option value="120" selected>${ifty216Markup("2分","2 min")}</option><option value="300">${ifty216Markup("5分","5 min")}</option><option value="600">${ifty216Markup("10分","10 min")}</option></select></div></div>
+        <div class="ifty-mp-btnbar"><button class="ifty-mp-btn good" type="button" onclick="iftyMpCreateRoom()">${ifty216Markup("＋ ゲームを作成","＋ Create game")}</button><button type="button" class="ifty-mp-btn" onclick="openIftyMpQuestionBank()">${ifty216Markup("📁 問題フォルダ","📁 Question folder")}</button></div>
       </div>
       ${canCreateRoom?'':'<div class="ifty-mp-panel"><p class="ifty-mp-muted">Memberはゲームに参加・観戦できます。新しいゲームを作るにはOwnerまたはEditor権限が必要です。</p></div>'}
       <div id="iftyMpMessage" role="status" aria-live="polite" class="ifty-mp-muted"></div>
-      <div class="ifty-mp-panel"><h2 class="ifty-mp-title">このクラスのゲーム (${rooms.rooms.length})</h2>${rooms.rooms.length?rooms.rooms.map(r=>`<div style="padding:12px 0;border-top:1px solid #475569"><div class="ifty-mp-row" style="justify-content:space-between;gap:12px"><div><strong>${escapeHtml(r.name)}</strong><div class="ifty-mp-muted">${escapeHtml(r.owner_username)} · ${r.phase==='lobby'?'準備中':r.phase==='finished'?'終了':'進行中'} · ${r.mode==='saved'?'保存済み問題':'ALLIA生成'} · ${r.total}問</div></div><button class="ifty-mp-btn primary" onclick="openIftyMpRoom('${escapeHtml(r.id)}')">開く</button></div></div>`).join(''):'<p class="ifty-mp-muted">まだゲームはありません。</p>'}</div>`;
+      <div class="ifty-mp-panel"><h2 class="ifty-mp-title">このクラスのゲーム (${rooms.rooms.length})</h2>${rooms.rooms.length?rooms.rooms.map(r=>`<div style="padding:12px 0;border-top:1px solid #475569"><div class="ifty-mp-row" style="justify-content:space-between;gap:12px"><div><strong>${escapeHtml(r.name)}</strong><div class="ifty-mp-muted">${escapeHtml(r.owner_username)} · ${r.phase==='lobby'?'準備中':r.phase==='finished'?'終了':'進行中'} · ${r.mode==='saved'?'保存済み問題':'ALLIA生成'} · ${r.total}問</div></div><button class="ifty-mp-btn primary" onclick="openIftyMpRoom('${escapeHtml(r.id)}')">開く</button></div></div>`).join(''):("<p class=\"ifty-mp-muted\">" + ifty216Markup("まだゲームはありません。","No games yet.") + "</p>")}</div>`;
     iftyMpRefreshSourceFolders();
-  }catch(e){root.innerHTML=`<div class="ifty-mp-panel">${escapeHtml(String(e.message||e))}<div class="ifty-mp-btnbar"><button class="ifty-mp-btn" onclick="iftyMpLoadClass()">再試行</button></div></div>`;}
+  }catch(e){root.innerHTML=`<div class="ifty-mp-panel">${escapeHtml(String(e.message||e))}<div class="ifty-mp-btnbar"><button class="ifty-mp-btn" onclick="iftyMpLoadClass()">${ifty216Markup("再試行","Retry")}</button></div></div>`;}
 }
 window.iftyMpToggleMode=function(){
   const saved=document.getElementById('iftyMpMode')?.value==='saved';
@@ -31355,7 +30835,7 @@ window.iftyMpCreateRoom=async function(){
 };
 window.openIftyMpQuestionBank=async function(){
   iftyMpStopPolling();iftyMpRoomId='';iftyMpEditingQuestionId='';
-  showIftyHubContent(iftyMpShell('問題フォルダ',`<div id="iftyMpBankRoot"><div class="ifty-mp-panel">読み込み中…</div></div>`),'mp-bank');
+  showIftyHubContent(iftyMpShell('問題フォルダ',`<div id="iftyMpBankRoot"><div class="ifty-mp-panel">${ifty216Markup("読み込み中…","Loading…")}</div></div>`),'mp-bank');
   await iftyMpLoadBank();
 };
 async function iftyMpLoadBank(){
@@ -31366,14 +30846,14 @@ async function iftyMpLoadBank(){
     root.innerHTML=`<div class="ifty-mp-panel"><h2 class="ifty-mp-title">新しい問題フォルダ</h2><div class="ifty-mp-row"><input id="iftyMpNewFolderName" class="ifty-mp-input" style="flex:1 1 180px" maxlength="60" placeholder="例：世界史・近世"><button class="ifty-mp-btn primary" onclick="iftyMpMakeFolder()">＋ フォルダを作成</button></div></div>
       <div class="ifty-mp-panel"><h2 class="ifty-mp-title">問題を作成・保存</h2><label class="ifty-mp-label" for="iftyMpBankFolder">保存先</label><select id="iftyMpBankFolder" class="ifty-mp-select">${data.folders.map(f=>`<option value="${escapeHtml(f.id)}">${escapeHtml(f.name)}</option>`).join('')}</select>
         <label class="ifty-mp-label" for="iftyMpAiTopic">ALLIAに問題を作ってもらう（任意）</label><input id="iftyMpAiTopic" class="ifty-mp-input" placeholder="出題したいテーマ・用語"><label class="ifty-mp-label" for="iftyMpAiRequest">追加の要望（任意）</label><textarea id="iftyMpAiRequest" class="ifty-mp-textarea" placeholder="例：記述問題、難関大学レベル、年代を問う"></textarea><div class="ifty-mp-btnbar"><button class="ifty-mp-btn" onclick="iftyMpAiMakeQuestion()">✨ ALLIAで生成</button></div>
-        <label class="ifty-mp-label" for="iftyMpBankQuestion">問題文</label><textarea id="iftyMpBankQuestion" class="ifty-mp-textarea" maxlength="1200"></textarea>
-        <label class="ifty-mp-label" for="iftyMpBankAnswer">模範解答</label><textarea id="iftyMpBankAnswer" class="ifty-mp-textarea" maxlength="800"></textarea>
-        <label class="ifty-mp-label" for="iftyMpBankExplanation">解説</label><textarea id="iftyMpBankExplanation" class="ifty-mp-textarea" maxlength="1800"></textarea>
+        <label class="ifty-mp-label" for="iftyMpBankQuestion">${ifty216Markup("問題文","Question text")}</label><textarea id="iftyMpBankQuestion" class="ifty-mp-textarea" maxlength="1200"></textarea>
+        <label class="ifty-mp-label" for="iftyMpBankAnswer">${ifty216Markup("模範解答","Model answer")}</label><textarea id="iftyMpBankAnswer" class="ifty-mp-textarea" maxlength="800"></textarea>
+        <label class="ifty-mp-label" for="iftyMpBankExplanation">${ifty216Markup("解説","Explanation")}</label><textarea id="iftyMpBankExplanation" class="ifty-mp-textarea" maxlength="1800"></textarea>
         <label class="ifty-mp-label" for="iftyMpBankRubric">採点基準</label><textarea id="iftyMpBankRubric" class="ifty-mp-textarea" maxlength="800"></textarea>
         <label class="ifty-mp-label" for="iftyMpBankOptions">選択肢（任意：改行区切り、2〜6個）</label><textarea id="iftyMpBankOptions" class="ifty-mp-textarea" placeholder="選択式にする場合だけ入力"></textarea>
         <div class="ifty-mp-btnbar"><button class="ifty-mp-btn good" onclick="iftyMpSaveQuestion()">＋ 問題を保存</button></div></div>
       <div id="iftyMpMessage" role="status" aria-live="polite"></div>
-      <div class="ifty-mp-panel"><h2 class="ifty-mp-title">保存済み問題</h2>${data.folders.length?data.folders.map(folder=>`<section style="margin-top:13px;border-top:1px solid #475569;padding-top:10px"><div class="ifty-mp-row" style="justify-content:space-between"><strong>📁 ${escapeHtml(folder.name)}</strong><button class="ifty-mp-btn danger" onclick="iftyMpDeleteFolder('${escapeHtml(folder.id)}')">フォルダ削除</button></div>${data.questions.filter(q=>q.folderId===folder.id).map(q=>`<div style="padding:12px 0;border-top:1px dotted #475569"><div style="font-weight:800;white-space:pre-wrap">${escapeHtml(q.question)}</div><div class="ifty-mp-muted">模範解答：${escapeHtml(q.answer)}</div><div class="ifty-mp-btnbar"><button class="ifty-mp-btn" onclick="iftyMpEditQuestion('${escapeHtml(q.id)}')">編集用に読み込む</button><button class="ifty-mp-btn danger" onclick="iftyMpDeleteQuestion('${escapeHtml(q.id)}')">削除</button></div></div>`).join('')||'<p class="ifty-mp-muted">まだ問題がありません。</p>'}</section>`).join(''):'<p class="ifty-mp-muted">最初にフォルダを作成してください。</p>'}</div>`;
+      <div class="ifty-mp-panel"><h2 class="ifty-mp-title">保存済み問題</h2>${data.folders.length?data.folders.map(folder=>`<section style="margin-top:13px;border-top:1px solid #475569;padding-top:10px"><div class="ifty-mp-row" style="justify-content:space-between"><strong>📁 ${escapeHtml(folder.name)}</strong><button class="ifty-mp-btn danger" onclick="iftyMpDeleteFolder('${escapeHtml(folder.id)}')">フォルダ削除</button></div>${data.questions.filter(q=>q.folderId===folder.id).map(q=>`<div style="padding:12px 0;border-top:1px dotted #475569"><div style="font-weight:800;white-space:pre-wrap">${escapeHtml(q.question)}</div><div class="ifty-mp-muted">模範解答：${escapeHtml(q.answer)}</div><div class="ifty-mp-btnbar"><button class="ifty-mp-btn" onclick="iftyMpEditQuestion('${escapeHtml(q.id)}')">編集用に読み込む</button><button class="ifty-mp-btn danger" onclick="iftyMpDeleteQuestion('${escapeHtml(q.id)}')">${ifty216Markup("削除","Delete")}</button></div></div>`).join('')||("<p class=\"ifty-mp-muted\">" + ifty216Markup("まだ問題がありません。","No questions yet.") + "</p>")}</section>`).join(''):("<p class=\"ifty-mp-muted\">" + ifty216Markup("最初にフォルダを作成してください。","Create a folder first.") + "</p>")}</div>`;
   }catch(e){root.innerHTML=`<div class="ifty-mp-panel">${escapeHtml(e.message||e)}</div>`;}
 }
 window.iftyMpMakeFolder=async function(){const name=document.getElementById('iftyMpNewFolderName')?.value;await iftyMpAction('mp_folder_create',{name},iftyMpLoadBank);};
@@ -31415,10 +30895,10 @@ async function iftyMpPollRoom(silent=false){
     const result=await iftyMpApi('mp_room_state',{roomId:iftyMpRoomId});
     if(root!==document.getElementById('iftyMpRoomRoot'))return;
     iftyMpRenderRoom(result,root);
-  }catch(e){if(!silent){root.innerHTML=`<div class="ifty-mp-panel">${escapeHtml(e.message||e)}<div class="ifty-mp-btnbar"><button class="ifty-mp-btn" onclick="iftyMpPollRoom()">再試行</button></div></div>`;}else iftyMpInfo(e.message,true);}
+  }catch(e){if(!silent){root.innerHTML=`<div class="ifty-mp-panel">${escapeHtml(e.message||e)}<div class="ifty-mp-btnbar"><button class="ifty-mp-btn" onclick="iftyMpPollRoom()">${ifty216Markup("再試行","Retry")}</button></div></div>`;}else iftyMpInfo(e.message,true);}
 }
 function iftyMpMembersHtml(r){
-  return `<div class="ifty-mp-panel"><h3 class="ifty-mp-title">メンバー (${r.members.length})</h3>${r.members.map(m=>`<div class="ifty-mp-row" style="justify-content:space-between;padding:6px 0;border-top:1px solid #334155"><span class="ifty-mp-row" style="gap:8px;flex:1;min-width:0;overflow-wrap:anywhere"><img src="${escapeHtml(getIftyClassMemberAvatarSrc(m.avatar))}" width="34" height="34" alt="" loading="lazy" style="width:34px;height:34px;border-radius:50%;object-fit:cover;background:white;flex:none"> ${escapeHtml(m.username)} <span class="ifty-mp-tag">${m.role==='gm'?'ゲームマスター':m.role==='participant'?'回答者':'観戦者'}</span></span>${r.isOwner&&r.phase==='lobby'?`<select class="ifty-mp-select" style="width:auto;max-width:45%" onchange="iftyMpSetRole('${escapeHtml(m.id)}',this.value)"><option value="${escapeHtml(m.role)}">役割を変更</option>${(r.settings.gmEnabled?['gm','participant','spectator']:['participant','spectator']).filter(x=>x!==m.role).map(x=>`<option value="${x}">${x==='gm'?'マスター':x==='participant'?'回答者':'観戦者'}</option>`).join('')}</select>`:''}</div>`).join('')}</div>`;
+  return `<div class="ifty-mp-panel"><h3 class="ifty-mp-title">メンバー (${r.members.length})</h3>${r.members.map(m=>`<div class="ifty-mp-row" style="justify-content:space-between;padding:6px 0;border-top:1px solid #334155"><span class="ifty-mp-row" style="gap:8px;flex:1;min-width:0;overflow-wrap:anywhere"><img src="${escapeHtml(getIftyClassMemberAvatarSrc(m.avatar))}" width="34" height="34" alt="" loading="lazy" style="width:34px;height:34px;border-radius:50%;object-fit:cover;background:white;flex:none"> ${escapeHtml(m.username)} <span class="ifty-mp-tag">${m.role==='gm'?ifty216T("ゲームマスター","Game master"):m.role==='participant'?'回答者':'観戦者'}</span></span>${r.isOwner&&r.phase==='lobby'?`<select class="ifty-mp-select" style="width:auto;max-width:45%" onchange="iftyMpSetRole('${escapeHtml(m.id)}',this.value)"><option value="${escapeHtml(m.role)}">役割を変更</option>${(r.settings.gmEnabled?['gm','participant','spectator']:['participant','spectator']).filter(x=>x!==m.role).map(x=>`<option value="${x}">${x==='gm'?'マスター':x==='participant'?'回答者':'観戦者'}</option>`).join('')}</select>`:''}</div>`).join('')}</div>`;
 }
 function iftyMpRenderRoom(r,root){
   if(iftyMpLastState?.id===r.id&&iftyMpLastState.index!==r.index)iftyMpLastResponse='';
@@ -31435,12 +30915,12 @@ function iftyMpRenderRoom(r,root){
   const activeLimit=r.phase==='question'?r.settings.answerSeconds:r.phase==='review'?r.settings.reviewSeconds:0;
   const remaining=activeLimit?Math.max(0,Math.ceil((Number(r.phaseAt)+activeLimit*1000-Date.now())/1000)):null;
   const labels={lobby:'開始待ち',question:'解答中',grading:'ALLIAが処理中',grading_retry:'採点の再試行待ち',review:'採点・解説・確認',finished:'終了'};
-  let html=`<div class="ifty-mp-panel"><div class="ifty-mp-row" style="justify-content:space-between"><div><h2 class="ifty-mp-title">${escapeHtml(r.name)}</h2><span class="ifty-mp-tag">${escapeHtml(labels[r.phase]||r.phase)}</span> <span class="ifty-mp-tag">${progress}</span> <span class="ifty-mp-tag">${role==='gm'?'ゲームマスター':role==='participant'?'回答者':role==='spectator'?'観戦者':'未参加'}</span>${remaining===null?'':`<span class="ifty-mp-tag">残り約${remaining}秒</span>`}</div><div class="ifty-mp-muted">${r.settings.timing==='end'?'最終問題後に一括採点':'毎問採点'}</div></div></div>`;
+  let html=`<div class="ifty-mp-panel"><div class="ifty-mp-row" style="justify-content:space-between"><div><h2 class="ifty-mp-title">${escapeHtml(r.name)}</h2><span class="ifty-mp-tag">${escapeHtml(labels[r.phase]||r.phase)}</span> <span class="ifty-mp-tag">${progress}</span> <span class="ifty-mp-tag">${role==='gm'?ifty216T("ゲームマスター","Game master"):role==='participant'?'回答者':role==='spectator'?'観戦者':'未参加'}</span>${remaining===null?'':`<span class="ifty-mp-tag">残り約${remaining}秒</span>`}</div><div class="ifty-mp-muted">${r.settings.timing==='end'?'最終問題後に一括採点':ifty216T("毎問採点","Grade each question")}</div></div></div>`;
   if(!role){
     html+=`<div class="ifty-mp-panel"><h3 class="ifty-mp-title">ゲームに参加する</h3><div class="ifty-mp-btnbar">${r.phase==='lobby'?`<button class="ifty-mp-btn primary" onclick="iftyMpJoinRoom('participant')">✏️ 回答者として参加</button>`:''}<button class="ifty-mp-btn" onclick="iftyMpJoinRoom('spectator')">👁 観戦者として参加</button></div></div>`;
   }
   if(r.phase==='lobby'){
-    html+=`<div class="ifty-mp-panel"><p class="ifty-mp-muted">参加者がそろったらゲーム作成者が開始してください。役割は開始前に変更できます。</p>${r.isOwner?`<button class="ifty-mp-btn good" onclick="iftyMpStartRoom()">▶ ゲーム開始</button><button class="ifty-mp-btn danger" onclick="iftyMpDeleteRoom()" style="margin-left:8px">削除</button>`:''}</div>`;
+    html+=`<div class="ifty-mp-panel"><p class="ifty-mp-muted">参加者がそろったらゲーム作成者が開始してください。役割は開始前に変更できます。</p>${r.isOwner?`<button class="ifty-mp-btn good" onclick="iftyMpStartRoom()">▶ ゲーム開始</button><button class="ifty-mp-btn danger" onclick="iftyMpDeleteRoom()" style="margin-left:8px">${ifty216Markup("削除","Delete")}</button>`:''}</div>`;
   }
   if(r.index>=0){
     html+=`<div class="ifty-mp-panel"><div class="ifty-mp-muted">${escapeHtml(progress)} · 提出 ${r.submitted||0} / ${participants}人</div><div class="ifty-mp-question" style="margin:12px 0">${escapeHtml(q.question||'準備中…')}</div>${Array.isArray(q.options)&&q.options.length?`<div class="ifty-mp-muted">選択肢：${q.options.map((x,i)=>`${i+1}. ${escapeHtml(x)}`).join(' / ')}</div>`:''}`;
@@ -31448,7 +30928,7 @@ function iftyMpRenderRoom(r,root){
       if(q.options?.length)html+=`<div class="ifty-mp-btnbar">${q.options.map((opt,i)=>`<button class="ifty-mp-btn" type="button" onclick="iftyMpPickOption(${i})">${i+1}. ${escapeHtml(opt)}</button>`).join('')}</div>`;
       html+=`<label class="ifty-mp-label" for="iftyMpAnswerDraft">あなたの解答</label><textarea class="ifty-mp-textarea" id="iftyMpAnswerDraft" maxlength="1800" placeholder="解答を入力"></textarea><div class="ifty-mp-btnbar"><button class="ifty-mp-btn primary" onclick="iftyMpSubmit()">解答を提出</button>${r.settings.allowHints?`<button class="ifty-mp-btn" onclick="iftyMpAsk('hint')">✨ ALLIAにヒントを聞く</button>`:''}</div>`;
     }else if(role==='participant'&&isSubmitted){html+=`<div class="ifty-mp-feedback">あなたの解答：${escapeHtml(me.answer||'未解答')}</div>`;}
-    if(showResult){html+=`<hr class="ifty-mp-divider"><h3 class="ifty-mp-title">正解・解説</h3><div class="ifty-mp-feedback"><strong>模範解答：</strong>${escapeHtml(q.answer||'')}<div style="margin-top:7px">${escapeHtml(q.explanation||'')}</div><div style="margin-top:7px">採点基準：${escapeHtml(q.rubric||'')}</div></div>`;}
+    if(showResult){html+=`<hr class="ifty-mp-divider"><h3 class="ifty-mp-title">正解・解説</h3><div class="ifty-mp-feedback"><strong>${ifty216Markup("模範解答：","Model answer:")}</strong>${escapeHtml(q.answer||'')}<div style="margin-top:7px">${escapeHtml(q.explanation||'')}</div><div style="margin-top:7px">採点基準：${escapeHtml(q.rubric||'')}</div></div>`;}
     if(r.phase==='review'&&r.settings.timing==='end'&&r.index===r.total-1){
       html+='<h3 class="ifty-mp-title" style="margin-top:15px">全問の解答・採点</h3>';
       const shown=new Set();
@@ -31461,7 +30941,7 @@ function iftyMpRenderRoom(r,root){
       const available=r.phase==='review'||r.phase==='finished';
       html+=`<hr class="ifty-mp-divider"><label class="ifty-mp-label" for="iftyMpAskText">ALLIAへの質問${available?'・採点への抗議':''}</label><textarea id="iftyMpAskText" class="ifty-mp-textarea" maxlength="700" placeholder="質問や抗議の理由を入力"></textarea><div class="ifty-mp-btnbar"><button class="ifty-mp-btn" onclick="iftyMpAsk('explain')">解説を求める</button>${available?`<button class="ifty-mp-btn" onclick="iftyMpAsk('appeal')">採点に抗議する</button>`:''}</div>`;
     }
-    if(role==='gm'&&r.phase==='question'){html+='<p class="ifty-mp-muted">全員が解答すると自動で締切ります。マスターは途中で解答を締め切ることもできます。</p><button class="ifty-mp-btn" onclick="iftyMpCloseQuestion()">解答を締め切る</button>';}
+    if(role==='gm'&&r.phase==='question'){html+=("<p class=\"ifty-mp-muted\">全員が解答すると自動で締切ります。マスターは途中で解答を締め切ることもできます。</p><button class=\"ifty-mp-btn\" onclick=\"iftyMpCloseQuestion()\">" + ifty216Markup("解答を締め切る","Close answers") + "</button>");}
     if(r.phase==='review'){
       const agreed=r.answers?.filter(x=>x.agreed).length||0;
       html+=`<hr class="ifty-mp-divider"><div class="ifty-mp-muted">納得した回答者 ${agreed} / ${participants} 人</div><div class="ifty-mp-btnbar">`;
@@ -31557,15 +31037,15 @@ async function iftyCgLoadClass(){
  if(root!==document.getElementById('iftyCgClassRoot'))return;
  iftyCgBank=bank;const canCreate=['owner','editor'].includes(data.role);
  let out='';
- if(canCreate){out+=`<div class="cg-panel" style="margin:0 0 15px"><h2>＋ 新しいCHAT GAME</h2><label class="cg-label" for="cgName">ゲーム名</label><input id="cgName" maxlength="70" placeholder="例：ESS 英語早押し大会"><div class="cg-grid"><div><label class="cg-label" for="cgMode">ゲームの種類</label><select id="cgMode" onchange="iftyCgModeFields()">${Object.entries(IFTY_CG_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div><div><label class="cg-label" for="cgRounds">ラウンド数</label><input id="cgRounds" type="number" min="1" max="200" value="10"></div></div>
- <div id="cgThemeGroup" class="cg-grid"><div><label class="cg-label" for="cgTheme">テーマ（連想・知識バトル）</label><input id="cgTheme" placeholder="例：世界史上の人物"></div><div><label class="cg-label" for="cgLose">しりとりの負け文字</label><input id="cgLose" value="ん" maxlength="24"></div></div>
- <div id="cgWolfGroup" class="cg-grid cg-hidden"><div><label class="cg-label" for="cgMajor">多数派のお題</label><input id="cgMajor" maxlength="200" placeholder="例：コーヒー"></div><div><label class="cg-label" for="cgMinor">少数派のお題</label><input id="cgMinor" maxlength="200" placeholder="例：紅茶"></div><div><label class="cg-label" for="cgMinorCount">少数派人数</label><input id="cgMinorCount" type="number" min="1" max="20" value="1"></div></div>
- <div id="cgQuizGroup" class="cg-hidden"><label class="cg-label" for="cgQuestionSource">早押し問題の登録方法</label><select id="cgQuestionSource" onchange="iftyCgSourceFields()"><option value="manual">手動入力（1行につき「問題 | 正解 | 解説」）</option><option value="saved">既存の問題フォルダを利用</option></select><div id="cgQuestionManual"><label class="cg-label" for="cgQuestions">問題一覧（1〜100問）</label><textarea id="cgQuestions" rows="6" placeholder="日本で一番高い山は？ | 富士山 | 標高3776m&#10;水の化学式は？ | H2O | 水素2原子と酸素1原子"></textarea></div><div id="cgQuestionSaved" class="cg-hidden"><label class="cg-label" for="cgSavedFolder">保存済み問題フォルダ</label><select id="cgSavedFolder">${(bank.folders||[]).map(f=>`<option value="${iftyCgE(f.id)}">${iftyCgE(f.name)} (${(bank.questions||[]).filter(q=>q.folderId===f.id).length}問)</option>`).join('')}</select><p class="cg-note">既存の「みんなで問題を解く」内の問題フォルダを利用します。自分に閲覧権限のない問題は使えません。</p></div></div>
- <details><summary>⚙️ ゲームマスターの詳細設定</summary><div class="cg-grid"><div><label class="cg-label" for="cgTime">回答制限時間（秒・0は無制限）</label><input id="cgTime" type="number" min="0" max="180" value="15"></div><div><label class="cg-label" for="cgMax">参加上限人数</label><input id="cgMax" type="number" min="2" max="100" value="30"></div><div><label class="cg-label" for="cgPoints">正答ポイント</label><input id="cgPoints" type="number" min="1" max="100" value="10"></div><div><label class="cg-label" for="cgPenalty">不正解時の得点変動</label><input id="cgPenalty" type="number" min="-100" max="0" value="0"></div><div><label class="cg-label" for="cgWrong">早押し・不正解時</label><select id="cgWrong"><option value="queue">次の回答権へ</option><option value="reopen">再度早押しを受け付ける</option><option value="end">問題を打ち切る</option></select></div><div><label class="cg-label" for="cgOrder">しりとり等の順番</label><select id="cgOrder"><option value="join">参加順</option><option value="random">ランダム</option></select></div><div><label class="cg-label" for="cgReveal">問題文表示</label><select id="cgReveal"><option value="instant">全文一括</option><option value="progressive">徐々に表示</option></select></div><div><label class="cg-label" for="cgRevealSeconds">徐々に表示する秒数</label><input id="cgRevealSeconds" type="number" min="1" max="120" value="15"></div></div>
- <label class="cg-check"><input id="cgMasterPlays" type="checkbox" checked>ゲームマスターも回答者として参加</label><label class="cg-check"><input id="cgAllia" type="checkbox">ALLIAも参加（手動呼び出し・AI利用枠を消費）</label><label class="cg-check"><input id="cgApproval" type="checkbox" checked>参加にゲームマスターの承認が必要</label><label class="cg-check"><input id="cgSpectators" type="checkbox" checked>観戦者を許可</label><label class="cg-check"><input id="cgTeams" type="checkbox">チーム制</label><label class="cg-check"><input id="cgVisibleScores" type="checkbox" checked>進行中の得点を表示</label><label class="cg-check"><input id="cgWinnerOnly" type="checkbox" checked>早押しは先着1人だけが回答可能</label><label class="cg-check"><input id="cgShiritoriSound" type="checkbox">しりとりは発音ベース（判定はマスター）</label></details><div class="cg-row" style="margin-top:12px"><button class="cg-main" onclick="iftyCgCreate()">ゲームを作成</button></div></div>`;}
+ if(canCreate){out+=`<div class="cg-panel" style="margin:0 0 15px"><h2>${ifty216Markup("＋ 新しいCHAT GAME","＋ New chat game")}</h2><label class="cg-label" for="cgName">${ifty216Markup("ゲーム名","Game name")}</label><input id="cgName" maxlength="70" placeholder="例：ESS 英語早押し大会"><div class="cg-grid"><div><label class="cg-label" for="cgMode">${ifty216Markup("ゲームの種類","Game type")}</label><select id="cgMode" onchange="iftyCgModeFields()">${Object.entries(IFTY_CG_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div><div><label class="cg-label" for="cgRounds">${ifty216Markup("ラウンド数","Number of rounds")}</label><input id="cgRounds" type="number" min="1" max="200" value="10"></div></div>
+ <div id="cgThemeGroup" class="cg-grid"><div><label class="cg-label" for="cgTheme">${ifty216Markup("テーマ（連想・知識バトル）","Topic (association / knowledge battle)")}</label><input id="cgTheme" placeholder="例：世界史上の人物"></div><div><label class="cg-label" for="cgLose">${ifty216Markup("しりとりの負け文字","Word-chain losing character")}</label><input id="cgLose" value="ん" maxlength="24"></div></div>
+ <div id="cgWolfGroup" class="cg-grid cg-hidden"><div><label class="cg-label" for="cgMajor">${ifty216Markup("多数派のお題","Majority topic")}</label><input id="cgMajor" maxlength="200" placeholder="例：コーヒー"></div><div><label class="cg-label" for="cgMinor">${ifty216Markup("少数派のお題","Minority topic")}</label><input id="cgMinor" maxlength="200" placeholder="例：紅茶"></div><div><label class="cg-label" for="cgMinorCount">${ifty216Markup("少数派人数","Minority count")}</label><input id="cgMinorCount" type="number" min="1" max="20" value="1"></div></div>
+ <div id="cgQuizGroup" class="cg-hidden"><label class="cg-label" for="cgQuestionSource">${ifty216Markup("早押し問題の登録方法","Buzzer question source")}</label><select id="cgQuestionSource" onchange="iftyCgSourceFields()"><option value="manual">${ifty216Markup("手動入力（1行につき「問題 | 正解 | 解説」）","Manual input (Question | Answer | Explanation per line)")}</option><option value="saved">${ifty216Markup("既存の問題フォルダを利用","Use existing question folder")}</option></select><div id="cgQuestionManual"><label class="cg-label" for="cgQuestions">${ifty216Markup("問題一覧（1〜100問）","Question list (1–100)")}</label><textarea id="cgQuestions" rows="6" placeholder="日本で一番高い山は？ | 富士山 | 標高3776m&#10;水の化学式は？ | H2O | 水素2原子と酸素1原子"></textarea></div><div id="cgQuestionSaved" class="cg-hidden"><label class="cg-label" for="cgSavedFolder">${ifty216Markup("保存済み問題フォルダ","Saved question folders")}</label><select id="cgSavedFolder">${(bank.folders||[]).map(f=>`<option value="${iftyCgE(f.id)}">${iftyCgE(f.name)} (${(bank.questions||[]).filter(q=>q.folderId===f.id).length}問)</option>`).join('')}</select><p class="cg-note">既存の「みんなで問題を解く」内の問題フォルダを利用します。自分に閲覧権限のない問題は使えません。</p></div></div>
+ <details><summary>${ifty216Markup("⚙️ ゲームマスターの詳細設定","⚙️ Game master settings")}</summary><div class="cg-grid"><div><label class="cg-label" for="cgTime">${ifty216Markup("回答制限時間（秒・0は無制限）","Answer time limit (seconds; 0 = unlimited)")}</label><input id="cgTime" type="number" min="0" max="180" value="15"></div><div><label class="cg-label" for="cgMax">${ifty216Markup("参加上限人数","Maximum participants")}</label><input id="cgMax" type="number" min="2" max="100" value="30"></div><div><label class="cg-label" for="cgPoints">${ifty216Markup("正答ポイント","Points for correct answers")}</label><input id="cgPoints" type="number" min="1" max="100" value="10"></div><div><label class="cg-label" for="cgPenalty">${ifty216Markup("不正解時の得点変動","Points for incorrect answers")}</label><input id="cgPenalty" type="number" min="-100" max="0" value="0"></div><div><label class="cg-label" for="cgWrong">${ifty216Markup("早押し・不正解時","Buzzer incorrect answer")}</label><select id="cgWrong"><option value="queue">${ifty216Markup("次の回答権へ","Next respondent")}</option><option value="reopen">${ifty216Markup("再度早押しを受け付ける","Reopen buzzer")}</option><option value="end">${ifty216Markup("問題を打ち切る","End question")}</option></select></div><div><label class="cg-label" for="cgOrder">${ifty216Markup("しりとり等の順番","Word-chain order")}</label><select id="cgOrder"><option value="join">${ifty216Markup("参加順","Join order")}</option><option value="random">${ifty216Markup("ランダム","Random")}</option></select></div><div><label class="cg-label" for="cgReveal">${ifty216Markup("問題文表示","Question display")}</label><select id="cgReveal"><option value="instant">${ifty216Markup("全文一括","Show all at once")}</option><option value="progressive">${ifty216Markup("徐々に表示","Reveal gradually")}</option></select></div><div><label class="cg-label" for="cgRevealSeconds">${ifty216Markup("徐々に表示する秒数","Gradual reveal duration")}</label><input id="cgRevealSeconds" type="number" min="1" max="120" value="15"></div></div>
+ <label class="cg-check"><input id="cgMasterPlays" type="checkbox" checked>${ifty216Markup("ゲームマスターも回答者として参加","Game master also answers")}</label><label class="cg-check"><input id="cgAllia" type="checkbox">${ifty216Markup("ALLIAも参加（手動呼び出し・AI利用枠を消費）","ALLIA participates (manual calls use AI quota)")}</label><label class="cg-check"><input id="cgApproval" type="checkbox" checked>${ifty216Markup("参加にゲームマスターの承認が必要","Require game master approval")}</label><label class="cg-check"><input id="cgSpectators" type="checkbox" checked>${ifty216Markup("観戦者を許可","Allow spectators")}</label><label class="cg-check"><input id="cgTeams" type="checkbox">${ifty216Markup("チーム制","Teams")}</label><label class="cg-check"><input id="cgVisibleScores" type="checkbox" checked>${ifty216Markup("進行中の得点を表示","Show current scores")}</label><label class="cg-check"><input id="cgWinnerOnly" type="checkbox" checked>${ifty216Markup("早押しは先着1人だけが回答可能","Only the first buzzer participant can answer")}</label><label class="cg-check"><input id="cgShiritoriSound" type="checkbox">${ifty216Markup("しりとりは発音ベース（判定はマスター）","Word chain uses pronunciation (master judges)")}</label></details><div class="cg-row" style="margin-top:12px"><button class="cg-main" onclick="iftyCgCreate()">${ifty216Markup("ゲームを作成","Create game")}</button></div></div>`;}
  else out+='<p class="cg-note">クラスのOwner/Editorがゲームを作成できます。Memberは参加と観戦ができます。</p>';
  out+=`<h2>このクラスのゲーム（${(data.rooms||[]).length}件）</h2>`;
- out+=(data.rooms||[]).length?(data.rooms||[]).map(r=>`<div class="cg-player"><strong>${iftyCgE(r.title)}<div class="cg-note">${iftyCgE(IFTY_CG_LABELS[r.mode]||r.mode)} · ${iftyCgE(r.owner)} · ${iftyCgE(r.phase==='lobby'?'準備中':r.phase==='finished'?'終了':'進行中')}</div></strong><button class="cg-main" onclick="openIftyCgRoom('${iftyCgE(r.id)}')">開く</button></div>`).join(''):'<p class="cg-note">まだCHAT GAMEはありません。</p>';
+ out+=(data.rooms||[]).length?(data.rooms||[]).map(r=>`<div class="cg-player"><strong>${iftyCgE(r.title)}<div class="cg-note">${iftyCgE(IFTY_CG_LABELS[r.mode]||r.mode)} · ${iftyCgE(r.owner)} · ${iftyCgE(r.phase==='lobby'?'準備中':r.phase==='finished'?'終了':'進行中')}</div></strong><button class="cg-main" onclick="openIftyCgRoom('${iftyCgE(r.id)}')">開く</button></div>`).join(''):("<p class=\"cg-note\">" + ifty216Markup("まだCHAT GAMEはありません。","No chat games yet.") + "</p>");
  out+='<div class="cg-row" style="margin-top:14px"><button onclick="iftyCgLoadClass()">↻ 一覧を更新</button></div>';
  root.innerHTML=out;if(canCreate)iftyCgModeFields();
  }catch(e){root.textContent='読み込みに失敗しました：'+String(e.message||e);iftyCgNotify(String(e.message||e),true);}
@@ -31617,22 +31097,22 @@ function iftyCgRenderRoom(s){
  const master=s.isMaster,player=s.role==='player'||master&&s.settings.masterPlays,playing=s.phase==='playing',lobby=s.phase==='lobby';
  const labels={lobby:'準備中',playing:'進行中',paused:'一時停止',finished:'終了'};
  const me=s.members.find(x=>x.id===s.ownerId)?.username||'';
- let html=`<div class="cg-panel"><div class="cg-head"><div><h2>${iftyCgE(s.title)}</h2><span class="cg-pill">${iftyCgE(IFTY_CG_LABELS[s.mode]||s.mode)}</span><span class="cg-pill">${iftyCgE(labels[s.phase]||s.phase)}</span><span class="cg-pill">第${Math.max(0,(s.round??-1)+1)}ラウンド</span></div><button onclick="iftyCgPoll(true)">↻ 更新</button></div><p class="cg-note">マスター：${iftyCgE(me)} · ${master?'管理者':s.role==='player'?'参加者':s.role==='spectator'?'観戦者':'未参加'} · 同期：約2.5秒ごと</p></div>`;
- if(s.role==='guest'&&!master){html+=`<div class="cg-panel"><h2>ゲームに参加する</h2>${s.pending?.length?'<p class="cg-note">参加申請済みです。マスターの承認を待ってください。</p>':'<p class="cg-note">クラスに所属している人が参加できます。</p>'}<div class="cg-row"><button class="cg-main" onclick="iftyCgJoin('player')">回答者として参加・申請</button>${s.settings.allowSpectators?'<button onclick="iftyCgJoin(\'spectator\')">観戦・申請</button>':''}</div></div>`;root.innerHTML=html;return;}
+ let html=`<div class="cg-panel"><div class="cg-head"><div><h2>${iftyCgE(s.title)}</h2><span class="cg-pill">${iftyCgE(IFTY_CG_LABELS[s.mode]||s.mode)}</span><span class="cg-pill">${iftyCgE(labels[s.phase]||s.phase)}</span><span class="cg-pill">第${Math.max(0,(s.round??-1)+1)}ラウンド</span></div><button onclick="iftyCgPoll(true)">${ifty216Markup("↻ 更新","↻ Refresh")}</button></div><p class="cg-note">マスター：${iftyCgE(me)} · ${master?'管理者':s.role==='player'?'参加者':s.role==='spectator'?'観戦者':'未参加'} · 同期：約2.5秒ごと</p></div>`;
+ if(s.role==='guest'&&!master){html+=`<div class="cg-panel"><h2>ゲームに参加する</h2>${s.pending?.length?("<p class=\"cg-note\">" + ifty216Markup("参加申請済みです。マスターの承認を待ってください。","Join request sent. Wait for master approval.") + "</p>"):("<p class=\"cg-note\">" + ifty216Markup("クラスに所属している人が参加できます。","Class members can participate.") + "</p>")}<div class="cg-row"><button class="cg-main" onclick="iftyCgJoin('player')">回答者として参加・申請</button>${s.settings.allowSpectators?'<button onclick="iftyCgJoin(\'spectator\')">観戦・申請</button>':''}</div></div>`;root.innerHTML=html;return;}
  if(master){
- html+=`<div class="cg-panel"><h2>👑 ゲームマスター操作</h2><div class="cg-row">${lobby?'<button class="cg-ok" onclick="iftyCgAction(\'start\')">▶ ゲーム開始</button>':''}${playing?'<button onclick="iftyCgAction(\'pause\')">⏸ 一時停止</button>':''}${s.phase==='paused'?'<button class="cg-ok" onclick="iftyCgAction(\'resume\')">▶ 再開</button>':''}${!lobby&&s.phase!=='finished'?'<button onclick="iftyCgAction(\'next\')">次の問題・ラウンドへ →</button>':''}${playing&&s.mode==='quiz'?'<button onclick="iftyCgAction(\'reveal\')">🔓 正解公開</button>':''}${s.settings.allowAllia&&playing?'<button onclick="iftyCgAction(\'ai_move\')">✨ ALLIAに参加させる</button>':''}${s.phase!=='finished'&&!lobby?'<button class="cg-danger" onclick="iftyCgAction(\'finish\')">試合終了</button>':''}</div><div class="cg-row" style="margin-top:10px"><button onclick="iftyCgAction('manual_save')">💾 今の状態を手動保存</button><button onclick="iftyCgRestore()">保存時点へ復元</button>${s.undoAvailable?'<button onclick="iftyCgAction(\'undo\')">↶ 直前の操作を取り消す</button>':''}<button class="cg-danger" onclick="iftyCgDelete()">ゲームを削除</button></div><p class="cg-note">得点の修正は履歴に残ります。途中保存は自動では行いません。</p>`;
- if(s.pending?.length){html+=`<h3>参加申請</h3>${s.pending.map(id=>`<div class="cg-player"><strong>${iftyCgE(id)}</strong><button class="cg-ok" onclick="iftyCgAction('approve',{target:'${iftyCgE(id)}'})">承認</button><button onclick="iftyCgAction('reject',{target:'${iftyCgE(id)}'})">却下</button></div>`).join('')}`;}
+ html+=`<div class="cg-panel"><h2>${ifty216Markup("👑 ゲームマスター操作","👑 Game master controls")}</h2><div class="cg-row">${lobby?'<button class="cg-ok" onclick="iftyCgAction(\'start\')">▶ ゲーム開始</button>':''}${playing?'<button onclick="iftyCgAction(\'pause\')">⏸ 一時停止</button>':''}${s.phase==='paused'?'<button class="cg-ok" onclick="iftyCgAction(\'resume\')">▶ 再開</button>':''}${!lobby&&s.phase!=='finished'?'<button onclick="iftyCgAction(\'next\')">次の問題・ラウンドへ →</button>':''}${playing&&s.mode==='quiz'?'<button onclick="iftyCgAction(\'reveal\')">🔓 正解公開</button>':''}${s.settings.allowAllia&&playing?'<button onclick="iftyCgAction(\'ai_move\')">✨ ALLIAに参加させる</button>':''}${s.phase!=='finished'&&!lobby?'<button class="cg-danger" onclick="iftyCgAction(\'finish\')">試合終了</button>':''}</div><div class="cg-row" style="margin-top:10px"><button onclick="iftyCgAction('manual_save')">${ifty216Markup("💾 今の状態を手動保存","💾 Save current state manually")}</button><button onclick="iftyCgRestore()">${ifty216Markup("保存時点へ復元","Restore saved state")}</button>${s.undoAvailable?'<button onclick="iftyCgAction(\'undo\')">↶ 直前の操作を取り消す</button>':''}<button class="cg-danger" onclick="iftyCgDelete()">${ifty216Markup("ゲームを削除","Delete game")}</button></div><p class="cg-note">得点の修正は履歴に残ります。途中保存は自動では行いません。</p>`;
+ if(s.pending?.length){html+=`<h3>参加申請</h3>${s.pending.map(id=>`<div class="cg-player"><strong>${iftyCgE(id)}</strong><button class="cg-ok" onclick="iftyCgAction('approve',{target:'${iftyCgE(id)}'})">${ifty216Markup("承認","Approve")}</button><button onclick="iftyCgAction('reject',{target:'${iftyCgE(id)}'})">却下</button></div>`).join('')}`;}
  html+='</div>';
  }
  if(s.mode==='wordwolf'){
- html+=`<div class="cg-panel"><h2>🐺 ワードウルフ</h2>${s.privateWord?`<p>あなたのお題：</p><div class="cg-question">${iftyCgE(s.privateWord)}</div>`:master?'マスター専用：お題は進行に合わせて確認できます。':'<p class="cg-note">参加すると自分のお題を表示します。</p>'}`;
+ html+=`<div class="cg-panel"><h2>🐺 ワードウルフ</h2>${s.privateWord?`<p>${ifty216Markup("あなたのお題：","Your topic:")}</p><div class="cg-question">${iftyCgE(s.privateWord)}</div>`:master?'マスター専用：お題は進行に合わせて確認できます。':("<p class=\"cg-note\">" + ifty216Markup("参加すると自分のお題を表示します。","Your topic appears when you join.") + "</p>")}`;
  if(master&&s.secrets)html+=`<details><summary>マスター専用：各参加者のお題</summary>${Object.entries(s.secrets).map(([id,word])=>`<div class="cg-player"><strong>${iftyCgE(iftyCgName(s,id))}</strong><span>${iftyCgE(word)}</span></div>`).join('')}</details>`;
  if(playing&&player)html+=`<h3>少数派だと思う人へ投票</h3><div class="cg-row">${s.members.filter(m=>m.role==='player'||(m.role==='master'&&s.settings.masterPlays)).filter(m=>m.id!=='ALLIA'&&m.id!==s.selfId).map(m=>`<button onclick="iftyCgVote('${iftyCgE(m.id)}')">${iftyCgE(m.username)}</button>`).join('')}</div>`;
  if(s.phase==='finished'&&s.finalWords)html+=`<div class="cg-answer">多数派：${iftyCgE(s.finalWords.majority)} / 少数派：${iftyCgE(s.finalWords.minority)}<div>少数派：${(s.finalWords.minorityIds||[]).map(id=>iftyCgE(iftyCgName(s,id))).join('、')}</div></div>`;
  html+='</div>';
  }else if(s.mode==='quiz'){
  const q=s.question||{};const buzz=s.buzz;const answerer=buzz?.userId;
- html+=`<div class="cg-panel"><h2>⚡ 早押しクイズ</h2>${playing||s.phase==='finished'||s.phase==='paused'?`<div class="cg-question" id="iftyCgQuestion">${iftyCgE(q.question||'出題終了')}</div>`:'<p class="cg-note">問題は開始後に表示されます。</p>'}`;
+ html+=`<div class="cg-panel"><h2>⚡ 早押しクイズ</h2>${playing||s.phase==='finished'||s.phase==='paused'?`<div class="cg-question" id="iftyCgQuestion">${iftyCgE(q.question||'出題終了')}</div>`:("<p class=\"cg-note\">" + ifty216Markup("問題は開始後に表示されます。","Questions appear after the game starts.") + "</p>")}`;
  if((q.options||[]).length)html+=`<div class="cg-grid">${q.options.map((o,i)=>`<button type="button" onclick="iftyCgPickChoice(${i})" ${!player?'disabled':''}>${i+1}. ${iftyCgE(o)}</button>`).join('')}</div>`;
  if(playing){html+=`<p class="cg-note">${answerer?`現在の回答権：${iftyCgE(iftyCgName(s,answerer))}`:'回答権はまだ決まっていません。'}${buzz?.deadlineAt&&!buzz.hasAnswered?` · 解答期限：${iftyCgE(new Date(buzz.deadlineAt).toLocaleTimeString('ja-JP'))}`:''}</p>`;
  if(player&&(!answerer||!s.settings.winnerOnly))html+=`<button class="cg-buzz" onclick="iftyCgAction('buzz')" ${s.buzz?.answered?.includes(s.selfId)?'disabled':''}>⚡ 早押し！</button>`;
@@ -31640,8 +31120,8 @@ function iftyCgRenderRoom(s){
  if(master&&buzz?.answer)html+=`<div class="cg-answer"><strong>判定待ちの回答：</strong>${iftyCgE(iftyCgName(s,buzz.userId))}：${iftyCgE(buzz.answer)}</div>`;
  if(master)html+=`<div class="cg-row">${buzz?.userId&&!buzz.hasAnswered?'<button onclick="iftyCgAction(\'extend\',{seconds:15})">＋15秒延長</button>':''}<button onclick="iftyCgAction('reset_buzz')">早押し権をリセット</button></div>`;
  }
- if(q.answer&&s.opened)html+=`<div class="cg-answer"><strong>正解：</strong>${iftyCgE(q.answer)}${q.explanation?`<p>${iftyCgE(q.explanation)}</p>`:''}</div>`;
- if(master&&playing)html+=`<details><summary>問題を差し替える</summary><label class="cg-label">問題文</label><textarea id="cgReplaceQuestion">${iftyCgE(q.question||'')}</textarea><label class="cg-label">正解</label><input id="cgReplaceAnswer" value="${iftyCgE(q.answer||'')}"><label class="cg-label">解説</label><textarea id="cgReplaceExplanation">${iftyCgE(q.explanation||'')}</textarea><button onclick="iftyCgReplaceQuestion()">差し替えを保存</button></details>`;
+ if(q.answer&&s.opened)html+=`<div class="cg-answer"><strong>${ifty216Markup("正解：","Correct answer:")}</strong>${iftyCgE(q.answer)}${q.explanation?`<p>${iftyCgE(q.explanation)}</p>`:''}</div>`;
+ if(master&&playing)html+=`<details><summary>問題を差し替える</summary><label class="cg-label">${ifty216Markup("問題文","Question text")}</label><textarea id="cgReplaceQuestion">${iftyCgE(q.question||'')}</textarea><label class="cg-label">${ifty216Markup("正解","Correct")}</label><input id="cgReplaceAnswer" value="${iftyCgE(q.answer||'')}"><label class="cg-label">${ifty216Markup("解説","Explanation")}</label><textarea id="cgReplaceExplanation">${iftyCgE(q.explanation||'')}</textarea><button onclick="iftyCgReplaceQuestion()">差し替えを保存</button></details>`;
  html+='</div>';
  }else{
  html+=`<div class="cg-panel"><h2>${iftyCgE(IFTY_CG_LABELS[s.mode])}</h2>${s.settings.theme?`<p class="cg-note">テーマ：${iftyCgE(s.settings.theme)}</p>`:''}${s.mode==='shiritori'?`<p class="cg-note">負け文字：${iftyCgE(s.settings.shiritoriLose||'なし')} · 手番：${iftyCgE(iftyCgName(s,s.turn))} · 使用済み：${(s.used||[]).length}個</p>`:''}${s.latest?`<div class="cg-question">${iftyCgE(s.latest.text)}</div><p class="cg-note">${iftyCgE(iftyCgName(s,s.latest.userId))} の言葉。マスターの判定待ちです。${s.latest.warning?`<strong style="color:#fda4af">${iftyCgE(s.latest.warning)}</strong>`:''}</p>`:''}`;
@@ -31652,7 +31132,7 @@ function iftyCgRenderRoom(s){
  if(master&&playing&&((s.latest&&s.mode!=='quiz')||(s.mode==='quiz'&&s.buzz?.answer))){html+=`<div class="cg-panel"><h2>マスターの判定</h2><div class="cg-row"><input id="cgJudgePoints" type="number" min="-1000" max="1000" value="${s.settings.quizScoring||10}" style="max-width:100px"><button class="cg-ok" onclick="iftyCgJudge(true)">✓ 正解</button><button class="cg-danger" onclick="iftyCgJudge(false)">× 不正解</button></div></div>`;}
  if(s.scores&&Object.keys(s.scores).length){const rows=Object.entries(s.scores).sort((a,b)=>b[1]-a[1]);html+=`<div class="cg-panel"><h2>🏆 得点</h2>${rows.map(([id,score],idx)=>`<div class="cg-player"><strong>${idx+1}. ${iftyCgE(id.startsWith('team:')?'チーム '+id.slice(5):iftyCgName(s,id))}</strong><span>${Number(score)||0}点</span>${master?`<input type="number" id="cgScore_${iftyCgE(id)}" value="${Number(score)||0}" style="width:90px!important"><button onclick="iftyCgChangeScore('${iftyCgE(id)}')">修正</button>`:''}</div>`).join('')}</div>`;}
  html+=`<div class="cg-panel"><h2>参加者（${s.members.length}）</h2>${s.members.map(m=>`<div class="cg-player"><strong>${iftyCgE(m.username)} ${m.id===s.ownerId?'👑':''}</strong><span class="cg-pill">${m.role==='player'?'回答者':m.role==='spectator'?'観戦':m.role==='master'?'マスター':'ALLIA'}</span>${m.team?`<span class="cg-pill">${iftyCgE(m.team)}</span>`:''}${master&&m.id!=='ALLIA'&&s.settings.teamMode?`<input id="cgTeam_${iftyCgE(m.id)}" maxlength="30" placeholder="チーム名" value="${iftyCgE(m.team||'')}" style="width:115px!important"><button onclick="iftyCgAssignTeam('${iftyCgE(m.id)}')">変更</button>`:''}</div>`).join('')}</div>`;
- if(s.phase!=='finished'){html+=`<div class="cg-panel"><h2>💬 チャット・相談</h2><div style="max-height:230px;overflow:auto">${(s.messages||[]).map(m=>`<div class="cg-message"><strong>${iftyCgE(m.username)}${m.team?' 🔒':''}：</strong>${iftyCgE(m.text)}</div>`).join('')||'<p class="cg-note">まだ発言がありません。</p>'}</div>${s.role!=='guest'?`<label class="cg-label" for="cgChatDraft">メッセージ</label><textarea id="cgChatDraft" rows="2" maxlength="600" placeholder="発言を入力"></textarea>${s.settings.teamMode?'<label class="cg-check"><input type="checkbox" id="cgTeamChat">チーム内だけに公開</label>':''}<button class="cg-main" onclick="iftyCgChat()">送信</button>`:''}</div>`;}
+ if(s.phase!=='finished'){html+=`<div class="cg-panel"><h2>💬 チャット・相談</h2><div style="max-height:230px;overflow:auto">${(s.messages||[]).map(m=>`<div class="cg-message"><strong>${iftyCgE(m.username)}${m.team?' 🔒':''}：</strong>${iftyCgE(m.text)}</div>`).join('')||("<p class=\"cg-note\">" + ifty216Markup("まだ発言がありません。","No messages yet.") + "</p>")}</div>${s.role!=='guest'?`<label class="cg-label" for="cgChatDraft">メッセージ</label><textarea id="cgChatDraft" rows="2" maxlength="600" placeholder="発言を入力"></textarea>${s.settings.teamMode?'<label class="cg-check"><input type="checkbox" id="cgTeamChat">チーム内だけに公開</label>':''}<button class="cg-main" onclick="iftyCgChat()">${ifty216Markup("送信","Send")}</button>`:''}</div>`;}
  if((s.history||[]).length)html+=`<div class="cg-panel"><details><summary>📜 対戦履歴（直近${s.history.length}件）</summary><div class="cg-history">${s.history.slice().reverse().map(h=>`<div><span class="cg-note">${new Date(h.at).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}</span> ${iftyCgE(iftyCgName(s,h.actor))}：${iftyCgE(h.text)}</div>`).join('')}</div></details></div>`;
  root.innerHTML=html;
 }
@@ -31793,7 +31273,7 @@ function iftyCgRenderRoom(s){
   function makeTabs(subject,id,host){
     const tabs=document.createElement('div');tabs.className='ifty128-mode-tabs';tabs.setAttribute('role','group');tabs.setAttribute('aria-label','フォルダの追加と検索を切り替える');
     const add=document.createElement('button'),lookup=document.createElement('button');
-    add.type=lookup.type='button';add.textContent='＋ 追加';lookup.textContent='🔎 検索';
+    add.type=lookup.type='button';add.textContent=ifty216T("＋ 追加","＋ Add");lookup.textContent=ifty216T("🔎 検索","🔎 Search");
     tabs.append(add,lookup);host.parentNode.insertBefore(tabs,host);
     return {tabs,add,lookup};
   }
@@ -31823,7 +31303,7 @@ function iftyCgRenderRoom(s){
     const originalPlaceholder=input.getAttribute('placeholder')||'';
     const title=inputWrap.classList.contains('ifty-input-purpose-wrap')?inputWrap.querySelector('.ifty-input-purpose-label'):null;
     const addFn={ENGLISH:()=>window.addWordToFolder(id),ANCIENT:()=>window.generateIftyAncientWord(id),KANBUN:()=>window.generateIftyKanbunItem(id),KANJI:()=>window.generateIftyKanjiItem(id),SCIENCE:()=>window.generateIftyScienceItem(id),'SOCIAL STUDIES':()=>window.generateIftySocialItem(id),OTHERS:()=>window.generateIftyOthersItem(id),PRONUNCIATION:()=>window.addIftyPronunciationItem(id)}[subject];
-    const action=document.createElement('button');action.type='button';action.className='ifty128-main-action';action.textContent='＋ 追加';action.onclick=()=>addFn?.();row.appendChild(action);
+    const action=document.createElement('button');action.type='button';action.className='ifty128-main-action';action.textContent=ifty216T("＋ 追加","＋ Add");action.onclick=()=>addFn?.();row.appendChild(action);
     // Avoid the old inline keydown + delegated keydown running twice.
     input.removeAttribute('onkeydown');
     input.onkeydown=null;
@@ -31835,7 +31315,7 @@ function iftyCgRenderRoom(s){
     const searchField=document.createElement('input');
     searchField.type='search';searchField.className='ifty128-unified-input ifty138-search-input';
     searchField.autocomplete='off';searchField.placeholder='このフォルダ内を検索';
-    searchField.setAttribute('aria-label','フォルダ内検索');
+    searchField.setAttribute('aria-label',ifty216T("フォルダ内検索","Search within folder"));
     searchField.style.display='none';
     searchField.style.cssText+=';padding:9px;border:1px solid #94a3b8;border-radius:7px;font:inherit;';
     searchField.addEventListener('input',()=>{
@@ -31847,7 +31327,7 @@ function iftyCgRenderRoom(s){
     // Search input is a sibling of the original add input/wrapper. Search never
     // sends an input event to add; add never writes to search input.
     inputWrap.after(searchField);
-    const clear=document.createElement('button');clear.type='button';clear.className='ifty128-clear';clear.textContent='クリア';
+    const clear=document.createElement('button');clear.type='button';clear.className='ifty128-clear';clear.textContent=ifty216T("クリア","Clear");
     clear.onclick=()=>{searchField.value='';search(subject,id,'');searchField.focus({preventScroll:true});};row.appendChild(clear);
     const count=document.createElement('span');count.className='ifty128-result-count';count.id='ifty128-count-'+subject.replace(/\W+/g,'_')+'-'+id;row.appendChild(count);
     const {tabs,add,lookup}=makeTabs(subject,id,row);
@@ -31901,7 +31381,7 @@ function iftyCgRenderRoom(s){
     const block=document.createElement('div');block.dataset.ifty128Special='1';block.className=subject==='YEARS'?'ifty128-years-row':'ifty128-basic-row';
     const tabs=document.createElement('div');tabs.className='ifty128-mode-tabs';tabs.style.margin='0';
     const add=document.createElement('button'),lookup=document.createElement('button');
-    add.type=lookup.type='button';add.textContent='＋ 追加';lookup.textContent='🔎 検索';
+    add.type=lookup.type='button';add.textContent=ifty216T("＋ 追加","＋ Add");lookup.textContent=ifty216T("🔎 検索","🔎 Search");
     // STEP200: BASIC SENTENCES already has the dedicated registration action.
     // Keep the real search button, remove only the redundant "＋ 追加" mode tab.
     if(subject==='BASIC SENTENCES') tabs.append(lookup);
@@ -31915,8 +31395,8 @@ function iftyCgRenderRoom(s){
       field.setAttribute('autocomplete','off');
       field.setAttribute('aria-label','年号を入力しEnterで追加');
     }
-    const submit=document.createElement('button');submit.type='button';submit.className='ifty128-main-action';submit.textContent='＋ 追加';
-    const clear=document.createElement('button');clear.type='button';clear.className='ifty128-clear';clear.textContent='クリア';
+    const submit=document.createElement('button');submit.type='button';submit.className='ifty128-main-action';submit.textContent=ifty216T("＋ 追加","＋ Add");
+    const clear=document.createElement('button');clear.type='button';clear.className='ifty128-clear';clear.textContent=ifty216T("クリア","Clear");
     const count=document.createElement('span');count.className='ifty128-result-count';
     row.append(field,submit,clear,count);block.append(tabs,row);
     const ifty167QuickStatus=document.createElement('div');
@@ -31941,10 +31421,10 @@ function iftyCgRenderRoom(s){
       filterLocal(subject,id);
       add.setAttribute('aria-pressed',String(!looking));
       lookup.setAttribute('aria-pressed',String(looking));
-      if(subject==='BASIC SENTENCES') lookup.textContent=looking?'← 登録へ戻る':'🔎 検索';
+      if(subject==='BASIC SENTENCES') lookup.textContent=looking?ifty216T("← 登録へ戻る","← Back to registration"):ifty216T("🔎 検索","🔎 Search");
       field.placeholder=looking?'このフォルダ内を検索':subject==='YEARS'?'年号を入力（例：1600）':'英文・和訳は登録画面で入力';
       field.style.display=subject==='BASIC SENTENCES'&&!looking?'none':'';
-      submit.textContent=subject==='BASIC SENTENCES'?'＋ 英文・和訳を登録':'＋ 追加';
+      submit.textContent=subject==='BASIC SENTENCES'?ifty216T("＋ 英文・和訳を登録","＋ Add sentence & translation"):ifty216T("＋ 追加","＋ Add");
       submit.style.display=looking?'none':'';
       clear.style.display=looking?'':'none';
       count.style.display=looking?'':'none';
@@ -32114,16 +31594,16 @@ async function iftyCgSoloLoad(){
  try{
   const data=await iftyCgApi('cg_solo_list');
   if(root!==document.getElementById('iftyCgSoloList'))return;
-  root.innerHTML=`<h2>🎮 1人プレイを始める</h2><p class="cg-note">クラス不要。ALLIAと1人で遊べます（AIの利用回数を消費します）。</p>
-  <label class="cg-label" for="cgSoloTitle">ゲーム名</label><input id="cgSoloTitle" maxlength="70" placeholder="例：ALLIAと単語対決">
-  <div class="cg-grid"><div><label class="cg-label" for="cgSoloMode">ゲームの種類</label><select id="cgSoloMode" onchange="iftyCgSoloModeChanged()">${Object.entries(IFTY_CG_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div>
-  <div><label class="cg-label" for="cgSoloRounds">ラウンド数</label><input id="cgSoloRounds" type="number" min="1" max="30" value="5"></div></div>
-  <label class="cg-label" for="cgSoloTheme">テーマ（自由でも可）</label><input id="cgSoloTheme" maxlength="160" placeholder="例：世界史、動物、英単語、日本史">
-  <div id="cgSoloLoseRow"><label class="cg-label" for="cgSoloLose">しりとりの負け文字</label><input id="cgSoloLose" value="ん" maxlength="24"></div>
+  root.innerHTML=`<h2>${ifty216Markup("🎮 1人プレイを始める","🎮 Start solo play")}</h2><p class="cg-note">クラス不要。ALLIAと1人で遊べます（AIの利用回数を消費します）。</p>
+  <label class="cg-label" for="cgSoloTitle">${ifty216Markup("ゲーム名","Game name")}</label><input id="cgSoloTitle" maxlength="70" placeholder="例：ALLIAと単語対決">
+  <div class="cg-grid"><div><label class="cg-label" for="cgSoloMode">${ifty216Markup("ゲームの種類","Game type")}</label><select id="cgSoloMode" onchange="iftyCgSoloModeChanged()">${Object.entries(IFTY_CG_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div>
+  <div><label class="cg-label" for="cgSoloRounds">${ifty216Markup("ラウンド数","Number of rounds")}</label><input id="cgSoloRounds" type="number" min="1" max="30" value="5"></div></div>
+  <label class="cg-label" for="cgSoloTheme">${ifty216Markup("テーマ（自由でも可）","Topic (optional)")}</label><input id="cgSoloTheme" maxlength="160" placeholder="例：世界史、動物、英単語、日本史">
+  <div id="cgSoloLoseRow"><label class="cg-label" for="cgSoloLose">${ifty216Markup("しりとりの負け文字","Word-chain losing character")}</label><input id="cgSoloLose" value="ん" maxlength="24"></div>
   <div id="cgSoloWolfRow" class="cg-hidden"><p class="cg-note">ALLIA A・ALLIA Bと3人で遊びます。2つのお題はALLIAが秘密に生成します。</p></div>
-  <div id="cgSoloQuizRow" class="cg-hidden"><label class="cg-label" for="cgSoloQuizSource">早押し問題の用意</label><select id="cgSoloQuizSource" onchange="iftyCgSoloQuizSourceChanged()"><option value="ai">ALLIAに問題を作ってもらう</option><option value="manual">自分で問題を入力</option><option value="saved">保存済み問題フォルダ</option></select><div id="cgSoloManualRow" class="cg-hidden"><label class="cg-label" for="cgSoloQuestions">問題 | 正解 | 解説（1行に1問）</label><textarea id="cgSoloQuestions" rows="5" placeholder="地球の衛星は？ | 月 | 月は地球の天然衛星です"></textarea></div><div id="cgSoloSavedRow" class="cg-hidden"><label class="cg-label" for="cgSoloFolder">問題フォルダ</label><select id="cgSoloFolder"><option value="">読み込み中</option></select></div></div>
-  <div class="cg-row" style="margin-top:14px"><button class="cg-ok" onclick="iftyCgSoloCreate()">▶ ALLIAと対戦を始める</button></div>
-  <h2 style="margin-top:22px">過去の1人プレイ</h2>${(data.rooms||[]).length?(data.rooms||[]).map(r=>`<div class="cg-player"><strong>${iftyCgE(r.title)}<div class="cg-note">${iftyCgE(IFTY_CG_LABELS[r.mode]||r.mode)} · ${iftyCgE(r.phase==='lobby'?'準備中':r.phase==='finished'?'終了':'進行中')}</div></strong><button onclick="openIftyCgRoom('${iftyCgE(r.id)}',{solo:true})">開く</button></div>`).join(''):'<p class="cg-note">まだ履歴はありません。</p>'}`;
+  <div id="cgSoloQuizRow" class="cg-hidden"><label class="cg-label" for="cgSoloQuizSource">${ifty216Markup("早押し問題の用意","Prepare buzzer questions")}</label><select id="cgSoloQuizSource" onchange="iftyCgSoloQuizSourceChanged()"><option value="ai">${ifty216Markup("ALLIAに問題を作ってもらう","Generate questions with ALLIA")}</option><option value="manual">${ifty216Markup("自分で問題を入力","Enter your own questions")}</option><option value="saved">${ifty216Markup("保存済み問題フォルダ","Saved question folders")}</option></select><div id="cgSoloManualRow" class="cg-hidden"><label class="cg-label" for="cgSoloQuestions">${ifty216Markup("問題 | 正解 | 解説（1行に1問）","Question | Answer | Explanation (one per line)")}</label><textarea id="cgSoloQuestions" rows="5" placeholder="地球の衛星は？ | 月 | 月は地球の天然衛星です"></textarea></div><div id="cgSoloSavedRow" class="cg-hidden"><label class="cg-label" for="cgSoloFolder">${ifty216Markup("問題フォルダ","Question folder")}</label><select id="cgSoloFolder"><option value="">${ifty216Markup("読み込み中","Loading")}</option></select></div></div>
+  <div class="cg-row" style="margin-top:14px"><button class="cg-ok" onclick="iftyCgSoloCreate()">${ifty216Markup("▶ ALLIAと対戦を始める","▶ Start game with ALLIA")}</button></div>
+  <h2 style="margin-top:22px">${ifty216Markup("過去の1人プレイ","Previous solo games")}</h2>${(data.rooms||[]).length?(data.rooms||[]).map(r=>`<div class="cg-player"><strong>${iftyCgE(r.title)}<div class="cg-note">${iftyCgE(IFTY_CG_LABELS[r.mode]||r.mode)} · ${iftyCgE(r.phase==='lobby'?'準備中':r.phase==='finished'?'終了':'進行中')}</div></strong><button onclick="openIftyCgRoom('${iftyCgE(r.id)}',{solo:true})">開く</button></div>`).join(''):("<p class=\"cg-note\">" + ifty216Markup("まだ履歴はありません。","No history yet.") + "</p>")}`;
   try{const bank=await iftyCgApi('mp_folder_list');iftyCgBank=bank;const folder=document.getElementById('cgSoloFolder');if(folder)folder.innerHTML=(bank.folders||[]).map(f=>`<option value="${iftyCgE(f.id)}">${iftyCgE(f.name)} (${(bank.questions||[]).filter(q=>q.folderId===f.id).length}問)</option>`).join('')||'<option value="">フォルダなし</option>';}catch(_){iftyCgBank={folders:[],questions:[]};}
   iftyCgSoloModeChanged();
  }catch(e){root.textContent='読み込みに失敗しました：'+String(e.message||e);}
@@ -32162,33 +31642,33 @@ window.iftyCgSoloTalk=async()=>{const text=iftyCgInput('cgSoloTalk');if(!text.tr
 window.iftyCgSoloVote=id=>{if(confirm('このALLIAが少数派だと思いますか？ 投票すると結果が公開されます。'))iftyCgAction('solo_wolf_vote',{target:id});};
 function iftyCgRenderSoloRoom(s,root){
  const label=IFTY_CG_LABELS[s.mode]||s.mode,playing=s.phase==='playing',finished=s.phase==='finished',lobby=s.phase==='lobby';
- let html=`<div class="cg-panel"><div class="cg-head"><h2>🎲 ${iftyCgE(s.title)}</h2><button onclick="iftyCgPoll(true)">↻ 更新</button></div><div class="cg-row"><span class="cg-pill">${iftyCgE(label)}</span><span class="cg-pill">${lobby?'準備中':finished?'終了':s.phase==='paused'?'一時停止':'対戦中'}</span><span class="cg-pill">第${Math.max(1,(s.round??-1)+1)}ラウンド</span></div><p class="cg-note">あなたがゲームマスターです。ALLIAはAIの利用枠を消費します。</p></div>`;
- html+=`<div class="cg-panel"><div class="cg-row">${lobby?'<button class="cg-ok" onclick="iftyCgAction(\'start\')">▶ ゲーム開始</button>':''}${playing?'<button onclick="iftyCgAction(\'pause\')">⏸ 一時停止</button>':''}${s.phase==='paused'?'<button class="cg-ok" onclick="iftyCgAction(\'resume\')">▶ 再開</button>':''}${s.mode==='quiz'&&!lobby&&!finished?'<button onclick="iftyCgAction(\'next\')">次の問題 〉</button>':''}${!lobby&&!finished?'<button onclick="iftyCgAction(\'finish\')">終了</button>':''}<button onclick="iftyCgAction('manual_save')">💾 手動保存</button><button onclick="iftyCgRestore()">保存から再開</button>${s.undoAvailable?'<button onclick="iftyCgAction(\'undo\')">↶ 取り消し</button>':''}<button class="cg-danger" onclick="iftyCgDelete()">削除</button></div></div>`;
+ let html=`<div class="cg-panel"><div class="cg-head"><h2>🎲 ${iftyCgE(s.title)}</h2><button onclick="iftyCgPoll(true)">${ifty216Markup("↻ 更新","↻ Refresh")}</button></div><div class="cg-row"><span class="cg-pill">${iftyCgE(label)}</span><span class="cg-pill">${lobby?'準備中':finished?ifty216T("終了","End"):s.phase==='paused'?'一時停止':'対戦中'}</span><span class="cg-pill">第${Math.max(1,(s.round??-1)+1)}ラウンド</span></div><p class="cg-note">あなたがゲームマスターです。ALLIAはAIの利用枠を消費します。</p></div>`;
+ html+=`<div class="cg-panel"><div class="cg-row">${lobby?'<button class="cg-ok" onclick="iftyCgAction(\'start\')">▶ ゲーム開始</button>':''}${playing?'<button onclick="iftyCgAction(\'pause\')">⏸ 一時停止</button>':''}${s.phase==='paused'?'<button class="cg-ok" onclick="iftyCgAction(\'resume\')">▶ 再開</button>':''}${s.mode==='quiz'&&!lobby&&!finished?'<button onclick="iftyCgAction(\'next\')">次の問題 〉</button>':''}${!lobby&&!finished?("<button onclick=\"iftyCgAction('finish')\">" + ifty216Markup("終了","End") + "</button>"):''}<button onclick="iftyCgAction('manual_save')">💾 手動保存</button><button onclick="iftyCgRestore()">保存から再開</button>${s.undoAvailable?'<button onclick="iftyCgAction(\'undo\')">↶ 取り消し</button>':''}<button class="cg-danger" onclick="iftyCgDelete()">${ifty216Markup("削除","Delete")}</button></div></div>`;
  if(s.mode==='quiz'){
   const q=s.question||{};
-  html+=`<div class="cg-panel"><h2>⚡ ALLIAの早押しクイズ</h2>${lobby?'<p class="cg-note">開始を押すと問題が表示されます。</p>':`<div class="cg-question">${iftyCgE(q.question||'全問題が終了しました。')}</div>`}`;
+  html+=`<div class="cg-panel"><h2>⚡ ALLIAの早押しクイズ</h2>${lobby?("<p class=\"cg-note\">" + ifty216Markup("開始を押すと問題が表示されます。","Press Start to show the question.") + "</p>"):`<div class="cg-question">${iftyCgE(q.question||'全問題が終了しました。')}</div>`}`;
   if(playing&&!s.opened){
-   if(s.buzz?.answer)html+=`<p class="cg-note">回答は送信済みです。採点を完了してください。</p><button class="cg-ok" onclick="iftyCgAction('solo_quiz_judge')">ALLIAの採点を再試行</button>`;
+   if(s.buzz?.answer)html+=`<p class="cg-note">${ifty216Markup("回答は送信済みです。採点を完了してください。","Answer sent. Complete grading.")}</p><button class="cg-ok" onclick="iftyCgAction('solo_quiz_judge')">${ifty216Markup("ALLIAの採点を再試行","Retry ALLIA grading")}</button>`;
    else if(!s.buzz?.userId)html+='<button class="cg-buzz" onclick="iftyCgAction(\'buzz\')">⚡ 早押し！</button>';
    else if(s.buzz.userId===s.selfId){html+=`<label class="cg-label" for="cgSoloAnswer">あなたの答え</label><input id="cgSoloAnswer" maxlength="400" placeholder="正解を入力" onkeydown="if(event.key==='Enter'){event.preventDefault();iftyCgSoloQuizAnswer()}">${(q.options||[]).length?`<div class="cg-grid" style="margin:9px 0">${q.options.map((v,i)=>`<button type="button" onclick="iftyCgSoloPickChoice(${i})">${i+1}. ${iftyCgE(v)}</button>`).join('')}</div>`:''}<div class="cg-row"><button class="cg-main" onclick="iftyCgSoloQuizAnswer()">ALLIAに採点してもらう</button></div>`;}
-   else html+='<p class="cg-note">判定待ちです。更新してください。</p>';
+   else html+=("<p class=\"cg-note\">" + ifty216Markup("判定待ちです。更新してください。","Awaiting judgment. Refresh to check.") + "</p>");
   }
-  if(s.opened)html+=`<div class="cg-answer">${s.soloJudgement?`<strong>${s.soloJudgement.correct?'✓ 正解':'× 不正解'}</strong><p>あなたの解答：${iftyCgE(s.soloJudgement.submitted||'')}</p>`:''}<strong>正解：</strong>${iftyCgE(q.answer||'')}${q.explanation?`<p>${iftyCgE(q.explanation)}</p>`:''}${s.soloJudgement?.reason?`<p class="cg-note">${iftyCgE(s.soloJudgement.reason)}</p>`:''}</div>`;
+  if(s.opened)html+=`<div class="cg-answer">${s.soloJudgement?`<strong>${s.soloJudgement.correct?'✓ 正解':'× 不正解'}</strong><p>あなたの解答：${iftyCgE(s.soloJudgement.submitted||'')}</p>`:''}<strong>${ifty216Markup("正解：","Correct answer:")}</strong>${iftyCgE(q.answer||'')}${q.explanation?`<p>${iftyCgE(q.explanation)}</p>`:''}${s.soloJudgement?.reason?`<p class="cg-note">${iftyCgE(s.soloJudgement.reason)}</p>`:''}</div>`;
   html+='</div>';
  }else if(s.mode==='wordwolf'){
-  html+=`<div class="cg-panel"><h2>🐺 3人ワードウルフ（あなた＋ALLIA A・B）</h2>${!finished?`<p class="cg-note">お題を直接言わず、ALLIAの2人と会話して少数派を探しましょう。</p><p>あなたにだけ見えるお題：</p><div class="cg-question">${iftyCgE(s.privateWord||'開始すると表示されます')}</div>`:''}`;
-  if(playing){html+=`<div class="cg-history">${(s.messages||[]).map(m=>`<div><strong>${iftyCgE(m.username)}：</strong>${iftyCgE(m.text)}</div>`).join('')||'<p class="cg-note">最初の質問やヒントを話しかけましょう。</p>'}</div><label class="cg-label" for="cgSoloTalk">あなたの発言</label><textarea id="cgSoloTalk" rows="2" maxlength="350" placeholder="例：日常生活でよく使いますか？"></textarea><div class="cg-row"><button class="cg-main" onclick="iftyCgSoloTalk()">送信して2人の返事を聞く</button></div><h3 style="margin-top:16px">誰が少数派？</h3><div class="cg-row"><button onclick="iftyCgSoloVote('ALLIA')">ALLIA A に投票</button><button onclick="iftyCgSoloVote('ALLIA_2')">ALLIA B に投票</button><button onclick="iftyCgSoloVote('${iftyCgE(s.selfId)}')">自分が少数派</button></div>`;}
+  html+=`<div class="cg-panel"><h2>🐺 3人ワードウルフ（あなた＋ALLIA A・B）</h2>${!finished?`<p class="cg-note">お題を直接言わず、ALLIAの2人と会話して少数派を探しましょう。</p><p>${ifty216Markup("あなたにだけ見えるお題：","Your private topic:")}</p><div class="cg-question">${iftyCgE(s.privateWord||'開始すると表示されます')}</div>`:''}`;
+  if(playing){html+=`<div class="cg-history">${(s.messages||[]).map(m=>`<div><strong>${iftyCgE(m.username)}：</strong>${iftyCgE(m.text)}</div>`).join('')||("<p class=\"cg-note\">" + ifty216Markup("最初の質問やヒントを話しかけましょう。","Start with a question or a clue.") + "</p>")}</div><label class="cg-label" for="cgSoloTalk">あなたの発言</label><textarea id="cgSoloTalk" rows="2" maxlength="350" placeholder="例：日常生活でよく使いますか？"></textarea><div class="cg-row"><button class="cg-main" onclick="iftyCgSoloTalk()">送信して2人の返事を聞く</button></div><h3 style="margin-top:16px">誰が少数派？</h3><div class="cg-row"><button onclick="iftyCgSoloVote('ALLIA')">ALLIA A に投票</button><button onclick="iftyCgSoloVote('ALLIA_2')">ALLIA B に投票</button><button onclick="iftyCgSoloVote('${iftyCgE(s.selfId)}')">自分が少数派</button></div>`;}
   if(finished&&s.wordwolfResult){const r=s.wordwolfResult;html+=`<div class="cg-answer">多数派：${iftyCgE(r.majority)} ／ 少数派：${iftyCgE(r.minority)}<p>少数派：${(r.minorityIds||[]).map(x=>iftyCgE(iftyCgName(s,x))).join('、')}</p>${s.soloJudgement?`<p>${s.soloJudgement.correct?'✓ 少数派を当てました！':'惜しい！ 少数派を外しました。'}</p>`:''}</div>`;}
   html+='</div>';
  }else{
   html+=`<div class="cg-panel"><h2>${iftyCgE(label)} — 対戦</h2>${s.settings.theme?`<p class="cg-note">テーマ：${iftyCgE(s.settings.theme)}</p>`:''}${s.mode==='shiritori'?`<p class="cg-note">負け文字：${iftyCgE(s.settings.shiritoriLose||'なし')} ／ 使用済み ${(s.used||[]).length}語</p>`:''}`;
-  if(s.soloLast)html+=`<div class="cg-grid"><div class="cg-question"><span class="cg-note">あなた</span><div>${iftyCgE(s.soloLast.human)}</div></div><div class="cg-question"><span class="cg-note">🤖 ALLIA</span><div>${iftyCgE(s.soloLast.ai)}</div></div></div>`;
+  if(s.soloLast)html+=`<div class="cg-grid"><div class="cg-question"><span class="cg-note">${ifty216Markup("あなた","You")}</span><div>${iftyCgE(s.soloLast.human)}</div></div><div class="cg-question"><span class="cg-note">🤖 ALLIA</span><div>${iftyCgE(s.soloLast.ai)}</div></div></div>`;
   if(playing)html+=`<label class="cg-label" for="cgSoloWord">あなたの言葉</label><input id="cgSoloWord" maxlength="180" placeholder="言葉を入力" onkeydown="if(event.key==='Enter'){event.preventDefault();iftyCgSoloWord()}"><div class="cg-row"><button class="cg-main" onclick="iftyCgSoloWord()">送信 → ALLIAの番</button></div>`;
-  if((s.used||[]).length)html+=`<details><summary>使用した言葉（${s.used.length}件）</summary><div class="cg-history">${s.used.map((w,i)=>`<div>${i%2===0?'あなた':'ALLIA'}：${iftyCgE(w)}</div>`).join('')}</div></details>`;
+  if((s.used||[]).length)html+=`<details><summary>使用した言葉（${s.used.length}件）</summary><div class="cg-history">${s.used.map((w,i)=>`<div>${i%2===0?ifty216T("あなた","You"):'ALLIA'}：${iftyCgE(w)}</div>`).join('')}</div></details>`;
   html+='</div>';
  }
  if(s.scores&&Object.keys(s.scores).length)html+=`<div class="cg-panel"><h2>🏆 得点</h2>${Object.entries(s.scores).map(([id,score])=>`<div class="cg-player"><strong>${iftyCgE(id===s.selfId?'あなた':iftyCgName(s,id))}</strong><span>${Number(score)||0}点</span><input id="cgScore_${iftyCgE(id)}" type="number" value="${Number(score)||0}" style="width:90px!important"><button onclick="iftyCgChangeScore('${iftyCgE(id)}')">修正</button></div>`).join('')}</div>`;
- if(finished)html+='<div class="cg-panel"><h2>おつかれさま！</h2><p>このゲームは終了しました。新しいゲームは「ゲーム一覧」から作成できます。</p></div>';
+ if(finished)html+=("<div class=\"cg-panel\"><h2>" + ifty216Markup("おつかれさま！","Well done!") + "</h2><p>このゲームは終了しました。新しいゲームは「ゲーム一覧」から作成できます。</p></div>");
  root.innerHTML=html;
 }
 
@@ -32717,12 +32197,12 @@ function ensureIfty142JumpDock() {
   const dock=document.createElement('nav');
   dock.id='ifty142JumpDock';
   dock.setAttribute('aria-label','ページ・フォルダ内の移動');
-  dock.innerHTML=`<div class="ifty142-nav-title"><span>↕ 移動先</span><button type="button" class="ifty173-jump-toggle" aria-label="移動パネルを最小化" aria-expanded="true" title="パネルを最小化">−</button></div>
+  dock.innerHTML=`<div class="ifty142-nav-title"><span>${ifty216Markup("↕ 移動先","↕ Jump to")}</span><button type="button" class="ifty173-jump-toggle" aria-label="移動パネルを最小化" aria-expanded="true" title="パネルを最小化">−</button></div>
     <div class="ifty142-nav-grid">
       <button type="button" data-ifty142-to="pageTop" title="ページの先頭へ" aria-label="ページの先頭へ"><span>ページ</span><span>↑ 先頭</span></button>
       <button type="button" data-ifty142-to="pageBottom" title="ページの末尾へ" aria-label="ページの末尾へ"><span>ページ</span><span>↓ 末尾</span></button>
-      <button type="button" data-ifty142-to="folderTop" title="今いるフォルダの先頭へ" aria-label="今いるフォルダの先頭へ"><span>フォルダ</span><span>↑ 先頭</span></button>
-      <button type="button" data-ifty142-to="folderBottom" title="今いるフォルダの末尾へ" aria-label="今いるフォルダの末尾へ"><span>フォルダ</span><span>↓ 末尾</span></button>
+      <button type="button" data-ifty142-to="folderTop" title="今いるフォルダの先頭へ" aria-label="今いるフォルダの先頭へ"><span>${ifty216Markup("フォルダ","Folder")}</span><span>↑ 先頭</span></button>
+      <button type="button" data-ifty142-to="folderBottom" title="今いるフォルダの末尾へ" aria-label="今いるフォルダの末尾へ"><span>${ifty216Markup("フォルダ","Folder")}</span><span>↓ 末尾</span></button>
     </div><div id="ifty142JumpStatus" aria-live="polite"></div>`;
   dock.addEventListener('click',e=>{
     const btn=e.target.closest('button[data-ifty142-to]');if(!btn)return;
@@ -32828,12 +32308,12 @@ function ifty143Toolbar(kind, options={}) {
   row.dataset.ifty143Toolbar=kind;
   row.style.cssText='display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 6px;max-width:100%;';
   if(!ctx.answered && !options.noSkip){
-    const skip=document.createElement('button');skip.type='button';skip.textContent='⏭ スキップ';
+    const skip=document.createElement('button');skip.type='button';skip.textContent=ifty216T("⏭ スキップ","⏭ Skip");
     skip.style.cssText='border:1px solid #94a3b8;color:#334155;background:#f1f5f9;border-radius:9px;min-height:42px;padding:10px 13px;font-weight:800;cursor:pointer;touch-action:manipulation;';
     skip.onclick=()=>window.ifty143Skip(kind);row.appendChild(skip);
   }
   if(!options.noHelp){
-    const ask=document.createElement('button');ask.type='button';ask.textContent='💬 ALLIAに質問';
+    const ask=document.createElement('button');ask.type='button';ask.textContent=ifty216T("💬 ALLIAに質問","💬 Ask ALLIA");
     ask.style.cssText='border:1px solid #c4b5fd;color:#5b21b6;background:#faf5ff;border-radius:9px;min-height:42px;padding:10px 13px;font-weight:800;cursor:pointer;touch-action:manipulation;';
     ask.onclick=()=>window.ifty143OpenHelp(kind);row.appendChild(ask);
   }
@@ -32891,11 +32371,11 @@ function ifty143RenderHelp(){
   modal.style.cssText='position:fixed;inset:0;z-index:12500;background:rgba(15,23,42,.68);padding:12px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;';
   const rows=IFTY143_HELP_MESSAGES.get(key)||[];
   const messages=rows.length?rows.map(m=>`<div style="margin:8px 0;padding:10px 12px;background:${m.role==='user'?'#18475a':'#302443'};border:1px solid ${m.role==='user'?'#4e9cae':'#8b6ab5'};border-radius:9px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;color:#f8fafc;-webkit-text-fill-color:#f8fafc;"><b>${m.role==='user'?'自分':'ALLIA'}</b><div>${escapeHtml(m.text)}</div></div>`).join(''):'<div style="color:#64748b;font-size:.85em;">分からない部分、考え方、用語、文法などを質問できます。</div>';
-  modal.innerHTML=`<section role="dialog" aria-modal="true" aria-label="ALLIAへの質問" style="width:min(680px,100%);max-height:min(88vh,820px);min-width:0;background:white;color:#0f172a;border-radius:14px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 16px 50px #0004;">
-    <header style="padding:13px 15px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #e2e8f0;"><div><b style="color:#6d28d9;">💬 ALLIAに質問</b><div style="font-size:.73em;color:#64748b;">${active.answered?'採点後：答えを含む解説も質問可能':'回答前：答えを伏せたままヒント・解説'}</div></div><button type="button" onclick="ifty143CloseHelp()" style="background:#e2e8f0;border:0;border-radius:8px;padding:9px 13px;color:#334155;">閉じる</button></header>
+  modal.innerHTML=`<section role="dialog" aria-modal="true" aria-label="${ifty216Markup("ALLIAへの質問","Question for ALLIA")}" style="width:min(680px,100%);max-height:min(88vh,820px);min-width:0;background:white;color:#0f172a;border-radius:14px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 16px 50px #0004;">
+    <header style="padding:13px 15px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #e2e8f0;"><div><b style="color:#6d28d9;">${ifty216Markup("💬 ALLIAに質問","💬 Ask ALLIA")}</b><div style="font-size:.73em;color:#64748b;">${active.answered?'採点後：答えを含む解説も質問可能':'回答前：答えを伏せたままヒント・解説'}</div></div><button type="button" onclick="ifty143CloseHelp()" style="background:#e2e8f0;border:0;border-radius:8px;padding:9px 13px;color:#334155;">${ifty216Markup("閉じる","Close")}</button></header>
     <div style="padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;max-height:130px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.84em;line-height:1.6;">${escapeHtml(active.question)}</div>
-    <div id="ifty143HelpHistory" aria-live="polite" style="padding:14px;min-height:100px;overflow:auto;flex:1;">${messages}${active.loading?'<p style="color:#64748b;">ALLIAが考えています…</p>':''}</div>
-    <div style="padding:12px 14px;border-top:1px solid #e2e8f0;"><textarea id="ifty143HelpInput" rows="2" ${active.loading?'disabled':''} placeholder="例：この用語の背景を説明して／答えは言わずにヒントを" style="width:100%;font:inherit;box-sizing:border-box;resize:vertical;border:1px solid #c4b5fd;border-radius:9px;padding:10px;color:#0f172a;background:#fff;"></textarea><div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:8px;"><span style="font-size:.72em;color:#64748b;">⌘/Ctrl + Enter で送信</span><button id="ifty143HelpSend" type="button" ${active.loading?'disabled':''} onclick="ifty143SendHelp()" style="background:#7c3aed;color:white;border:0;border-radius:8px;padding:10px 18px;font-weight:800;">送信</button></div></div>
+    <div id="ifty143HelpHistory" aria-live="polite" style="padding:14px;min-height:100px;overflow:auto;flex:1;">${messages}${active.loading?("<p style=\"color:#64748b;\">" + ifty216Markup("ALLIAが考えています…","ALLIA is thinking…") + "</p>"):''}</div>
+    <div style="padding:12px 14px;border-top:1px solid #e2e8f0;"><textarea id="ifty143HelpInput" rows="2" ${active.loading?'disabled':''} placeholder="例：この用語の背景を説明して／答えは言わずにヒントを" style="width:100%;font:inherit;box-sizing:border-box;resize:vertical;border:1px solid #c4b5fd;border-radius:9px;padding:10px;color:#0f172a;background:#fff;"></textarea><div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:8px;"><span style="font-size:.72em;color:#64748b;">${ifty216Markup("⌘/Ctrl + Enter で送信","Send with ⌘/Ctrl + Enter")}</span><button id="ifty143HelpSend" type="button" ${active.loading?'disabled':''} onclick="ifty143SendHelp()" style="background:#7c3aed;color:white;border:0;border-radius:8px;padding:10px 18px;font-weight:800;">${ifty216Markup("送信","Send")}</button></div></div>
   </section>`;
   const input=document.getElementById('ifty143HelpInput');
   if(input){
@@ -33032,12 +32512,12 @@ window.ifty144YearSelectionMenu=function(){
   node.style.cssText='position:fixed;inset:0;z-index:14000;background:#0009;display:flex;align-items:center;justify-content:center;padding:14px;';
   const folders=getIftySortedYearFolders();
   node.innerHTML=`<section role="dialog" aria-modal="true" aria-label="年号の選択操作" style="width:min(440px,100%);background:#fff;border-radius:14px;padding:18px;color:#0f172a;box-sizing:border-box;">
-    <div style="display:flex;justify-content:space-between;gap:10px;"><strong>選択操作（${ifty144SelectedYearIds.size}件）</strong><button type="button" data-a="close">閉じる</button></div>
+    <div style="display:flex;justify-content:space-between;gap:10px;"><strong>選択操作（${ifty144SelectedYearIds.size}件）</strong><button type="button" data-a="close">${ifty216Markup("閉じる","Close")}</button></div>
     <label style="display:block;margin-top:14px;">移動先<select id="ifty144YearMoveTarget" style="width:100%;padding:10px;margin-top:5px;">${folders.map(f=>`<option value="${ifty144SafeQuote(f.id)}">${escapeHtml(f.name)}</option>`).join('')}</select></label>
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px;">
-      <button type="button" data-a="move" ${!ifty144SelectedYearIds.size?'disabled':''}>移動</button>
-      <button type="button" data-a="delete" ${!ifty144SelectedYearIds.size?'disabled':''}>削除</button>
-      <button type="button" data-a="all">全選択</button><button type="button" data-a="clear">選択解除</button>
+      <button type="button" data-a="move" ${!ifty144SelectedYearIds.size?'disabled':''}>${ifty216Markup("移動","Move")}</button>
+      <button type="button" data-a="delete" ${!ifty144SelectedYearIds.size?'disabled':''}>${ifty216Markup("削除","Delete")}</button>
+      <button type="button" data-a="all">${ifty216Markup("全選択","Select all")}</button><button type="button" data-a="clear">${ifty216Markup("選択解除","Clear selection")}</button>
     </div></section>`;
   node.querySelectorAll('[data-a]').forEach(btn=>btn.style.cssText='min-height:42px;padding:10px;border:1px solid #94a3b8;border-radius:8px;cursor:pointer;background:#e2e8f0;color:#0f172a;font-weight:750;');
   node.onclick=e=>{
@@ -33096,7 +32576,7 @@ renderPracticeHome=function(){
   const modal=document.getElementById('practiceModal');
   const row=modal?.querySelector('button[onclick*="setIftyUnifiedPracticeSubject"]')?.parentElement;
   if(row && !row.querySelector('[data-ifty144-years-tab]')){
-    const b=document.createElement('button');b.type='button';b.dataset.ifty144YearsTab='1';b.textContent='YEARS';
+    const b=document.createElement('button');b.type='button';b.dataset.ifty144YearsTab='1';b.textContent=ifty216T("年号","YEARS");
     b.style.cssText='border:1px solid #cbd5e1;background:white;color:#334155;border-radius:999px;padding:8px 13px;font-weight:900;cursor:pointer;';
     b.onclick=()=>window.setIftyUnifiedPracticeSubject('YEARS');row.appendChild(b);
   }
@@ -33126,7 +32606,7 @@ window.ifty144YearToggleMode=function(kind,value,checked){
 };
 function ifty144YearTabButtons(){
   const tabs=['ENGLISH','ANCIENT','KANBUN','KANJI','SOCIAL STUDIES','SCIENCE','OTHERS','BASIC SENTENCES','YEARS'];
-  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px;">${tabs.map(k=>`<button type="button" onclick="setIftyUnifiedPracticeSubject('${k}')" style="border:${k==='YEARS'?'0':'1px solid #cbd5e1'};background:${k==='YEARS'?'#0f766e':'#fff'};color:${k==='YEARS'?'#fff':'#334155'};border-radius:999px;padding:8px 12px;font-weight:800;">${k==='ENGLISH'?'LANGUAGES':k}</button>`).join('')}</div>`;
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px;">${tabs.map(k=>`<button type="button" onclick="setIftyUnifiedPracticeSubject('${k}')" style="border:${k==='YEARS'?'0':'1px solid #cbd5e1'};background:${k==='YEARS'?'#0f766e':'#fff'};color:${k==='YEARS'?'#fff':'#334155'};border-radius:999px;padding:8px 12px;font-weight:800;">${k==='ENGLISH'?ifty216T("言語・語彙","LANGUAGES"):k}</button>`).join('')}</div>`;
 }
 function ifty144RenderYearPracticeHome(){
   const modal=document.getElementById('practiceModal');if(!modal)return;
@@ -33135,27 +32615,27 @@ function ifty144RenderYearPracticeHome(){
   const selected=ifty144YearSelectedEntries();
   const sets=ifty144YearSets();
   modal.innerHTML=`<section class="ifty144-years-modal" style="background:#fff;color:#0f172a;border-radius:14px;width:min(820px,100%);max-height:92dvh;overflow:auto;padding:18px;box-sizing:border-box;min-width:0;box-shadow:0 15px 45px #0004;">
-    <header style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><h2 style="margin:0;font-size:1.35em;">⚔️ PRACTICE / YEARS</h2><small>保存済みの年号・出来事から四択／記述を作成します。</small></div><button type="button" onclick="closePracticeModal()" aria-label="閉じる" style="padding:8px 11px;border-radius:8px;">✕</button></header>
+    <header style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><div><h2 style="margin:0;font-size:1.35em;">${ifty216Markup("⚔️ 実践 / 年号","⚔️ PRACTICE / YEARS")}</h2><small>${ifty216Markup("保存済みの年号・出来事から四択／記述を作成します。","Create multiple-choice or written questions from saved dates and events.")}</small></div><button type="button" onclick="closePracticeModal()" aria-label="${ifty216Markup("閉じる","Close")}" style="padding:8px 11px;border-radius:8px;">✕</button></header>
     ${ifty144YearTabButtons()}
     <div style="border:1px solid #c4b5fd;border-radius:11px;padding:14px;background:#faf5ff;">
-      <h3 style="margin:0 0 8px;color:#4c1d95;">📁 出題フォルダ</h3>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;">${folders.length?folders.map(f=>`<label style="border:1px solid #c4b5fd;padding:9px;border-radius:9px;background:#fff;"><input type="checkbox" ${ifty144YearSelection.has(String(f.id))?'checked':''} onchange="ifty144YearToggleFolder('${ifty144SafeQuote(f.id)}',this.checked)"> ${escapeHtml(f.name)} <small>(${getIftyYearEntriesForFolder(f.id).length}件)</small></label>`).join(''):'<p>年号のあるフォルダがありません。先に年号を登録してください。</p>'}</div>
+      <h3 style="margin:0 0 8px;color:#4c1d95;">${ifty216Markup("📁 出題フォルダ","📁 Question folder")}</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">${folders.length?folders.map(f=>`<label style="border:1px solid #c4b5fd;padding:9px;border-radius:9px;background:#fff;"><input type="checkbox" ${ifty144YearSelection.has(String(f.id))?'checked':''} onchange="ifty144YearToggleFolder('${ifty144SafeQuote(f.id)}',this.checked)"> ${escapeHtml(f.name)} <small>(${getIftyYearEntriesForFolder(f.id).length}件)</small></label>`).join(''):("<p>" + ifty216Markup("年号のあるフォルダがありません。先に年号を登録してください。","No folders with dates. Register dates first.") + "</p>")}</div>
       <p style="font-size:.84em;margin-bottom:0;">選択中：${selected.length}年号／他教科と同じように複数フォルダを指定できます。</p>
     </div>
     <div style="border:1px solid #cbd5e1;border-radius:11px;padding:14px;margin-top:12px;background:#f8fafc;">
-      <h3 style="margin:0 0 8px;color:#334155;">❓ 問題の設定</h3>
-      <fieldset style="border:0;padding:0;margin:0 0 12px;"><legend><b>出題方向</b></legend>
+      <h3 style="margin:0 0 8px;color:#334155;">${ifty216Markup("❓ 問題の設定","❓ Question settings")}</h3>
+      <fieldset style="border:0;padding:0;margin:0 0 12px;"><legend><b>${ifty216Markup("出題方向","Question direction")}</b></legend>
         ${[['event_year','出来事 → 年号'],['year_event','年号 → 出来事'],['year_period','年号 → 時代区分']].map(([key,label])=>`<label style="display:inline-flex;gap:5px;align-items:center;margin:5px 12px 5px 0;"><input type="checkbox" onchange="ifty144YearToggleMode('modes','${key}',this.checked)" ${ifty144YearSetup.modes.includes(key)?'checked':''}>${label}</label>`).join('')}
       </fieldset>
-      <fieldset style="border:0;padding:0;margin:0 0 12px;"><legend><b>回答方式</b></legend>
+      <fieldset style="border:0;padding:0;margin:0 0 12px;"><legend><b>${ifty216Markup("回答方式","Answer format")}</b></legend>
         ${[['choice','四択'],['written','記述']].map(([key,label])=>`<label style="display:inline-flex;gap:5px;align-items:center;margin:5px 15px 5px 0;"><input type="checkbox" onchange="ifty144YearToggleMode('formats','${key}',this.checked)" ${ifty144YearSetup.formats.includes(key)?'checked':''}>${label}</label>`).join('')}
       </fieldset>
-      <label>問題数 <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${ifty144YearSetup.count}" onchange="ifty144YearSetConfig('count',this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px;border-radius:8px;min-height:40px;"></label>
-      <label style="margin-left:14px;"><input type="checkbox" ${ifty144YearSetup.random?'checked':''} onchange="ifty144YearSetConfig('random',this.checked)">ランダム出題</label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;"><button type="button" onclick="ifty144StartYearPractice()" ${!selected.length||!ifty144YearSetup.modes.length||!ifty144YearSetup.formats.length?'disabled':''} style="background:#7c3aed;color:white;border:0;border-radius:8px;padding:12px 19px;font-weight:900;">▶ 練習開始</button><button type="button" onclick="ifty144SaveYearPracticeSet()" ${!selected.length?'disabled':''} style="background:#0f766e;color:#fff;border:0;border-radius:8px;padding:12px;">設定をクイズフォルダとして保存</button></div>
+      <label>${ifty216Markup("問題数","Number of questions")} <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="${ifty216Markup("問題数","Number of questions")}" value="${ifty144YearSetup.count}" onchange="ifty144YearSetConfig('count',this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;padding:8px;border-radius:8px;min-height:40px;"></label>
+      <label style="margin-left:14px;"><input type="checkbox" ${ifty144YearSetup.random?'checked':''} onchange="ifty144YearSetConfig('random',this.checked)">${ifty216Markup("ランダム出題","Random questions")}</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;"><button type="button" onclick="ifty144StartYearPractice()" ${!selected.length||!ifty144YearSetup.modes.length||!ifty144YearSetup.formats.length?'disabled':''} style="background:#7c3aed;color:white;border:0;border-radius:8px;padding:12px 19px;font-weight:900;">${ifty216Markup("▶ 練習開始","▶ Start practice")}</button><button type="button" onclick="ifty144SaveYearPracticeSet()" ${!selected.length?'disabled':''} style="background:#0f766e;color:#fff;border:0;border-radius:8px;padding:12px;">${ifty216Markup("設定をクイズフォルダとして保存","Save settings as a quiz folder")}</button></div>
     </div>
-    <div style="margin-top:12px;border:1px solid #ddd6fe;border-radius:11px;padding:14px;"><h3 style="margin:0 0 9px;">📚 保存済みクイズフォルダ</h3>
-      ${sets.length?sets.map(set=>`<div style="border:1px solid #e2e8f0;padding:10px;border-radius:8px;margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between;"><button type="button" style="background:transparent;border:0;text-align:left;color:#1e293b;font-weight:800;flex:1;" onclick="ifty144LoadYearPracticeSet('${ifty144SafeQuote(set.id)}')">${escapeHtml(set.name)} <small>(${set.itemIds?.length||0}件)</small></button><button type="button" onclick="ifty149EditYearSet('${ifty144SafeQuote(set.id)}')">⚙ 詳細</button><button type="button" onclick="ifty144RunYearPracticeSet('${ifty144SafeQuote(set.id)}')">▶ 実行</button><button type="button" onclick="ifty151StartSavedSet('YEARS','${ifty144SafeQuote(set.id)}')" style="color:#047857;font-weight:850;">⭕ 正誤</button><button type="button" onclick="ifty144DeleteYearPracticeSet('${ifty144SafeQuote(set.id)}')">削除</button></div>`).join(''):'<p style="color:#64748b;">まだ保存されていません。</p>'}
+    <div style="margin-top:12px;border:1px solid #ddd6fe;border-radius:11px;padding:14px;"><h3 style="margin:0 0 9px;">${ifty216Markup("📚 保存済みクイズフォルダ","📚 Saved quiz folders")}</h3>
+      ${sets.length?sets.map(set=>`<div style="border:1px solid #e2e8f0;padding:10px;border-radius:8px;margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between;"><button type="button" style="background:transparent;border:0;text-align:left;color:#1e293b;font-weight:800;flex:1;" onclick="ifty144LoadYearPracticeSet('${ifty144SafeQuote(set.id)}')">${escapeHtml(set.name)} <small>(${set.itemIds?.length||0}件)</small></button><button type="button" onclick="ifty149EditYearSet('${ifty144SafeQuote(set.id)}')">⚙ 詳細</button><button type="button" onclick="ifty144RunYearPracticeSet('${ifty144SafeQuote(set.id)}')">▶ 実行</button><button type="button" onclick="ifty151StartSavedSet('YEARS','${ifty144SafeQuote(set.id)}')" style="color:#047857;font-weight:850;">⭕ 正誤</button><button type="button" onclick="ifty144DeleteYearPracticeSet('${ifty144SafeQuote(set.id)}')">${ifty216Markup("削除","Delete")}</button></div>`).join(''):("<p style=\"color:#64748b;\">" + ifty216Markup("まだ保存されていません。","Nothing saved yet.") + "</p>")}
     </div>
   </section>`;
 }
@@ -33187,8 +32667,8 @@ window.ifty149EditYearSet=function(id){
  const rows=getIftyYearEntries().filter(e=>(set.itemIds||[]).map(String).includes(String(e.id))).map(e=>({id:e.id,name:e.yearLabel||formatIftyYearLabel(e.era,e.year)}));
  const modes=[['event_year|choice','出来事 → 年号（四択）'],['event_year|written','出来事 → 年号（記述）'],['year_event|choice','年号 → 出来事（四択）'],['year_event|written','年号 → 出来事（記述）'],['year_period|choice','年号 → 時代（四択）'],['year_period|written','年号 → 時代（記述）']];
  modal.innerHTML=`<section class="ifty144-years-modal" style="width:min(850px,100%);max-height:92vh;overflow:auto;padding:14px;background:#fff;color:#0f172a;border-radius:12px;box-sizing:border-box;">
- <button onclick="ifty144RenderYearPracticeHome()">◀ 一覧へ戻る</button><h2>${escapeHtml(set.name)}・詳細設定</h2>
- <label>問題数 <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${ifty212QuestionCount(set.count,10)}" onchange="ifty149YearCount('${escapeHtml(id)}',this.value)"></label>
+ <button onclick="ifty144RenderYearPracticeHome()">${ifty216Markup("◀ 一覧へ戻る","◀ Back to list")}</button><h2>${escapeHtml(set.name)}・詳細設定</h2>
+ <label>${ifty216Markup("問題数","Number of questions")} <input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="${ifty216Markup("問題数","Number of questions")}" value="${ifty212QuestionCount(set.count,10)}" onchange="ifty149YearCount('${escapeHtml(id)}',this.value)"></label>
  ${ifty149ConfigPanel('YEARS',set,rows,modes)}<p>年号データだけで出題します。難易度は出題形式・関連性の優先順に反映されます。</p>
  </section>`;
 };
@@ -33311,8 +32791,8 @@ function ifty144IsCorrectYearAnswer(q,v){
   return !!answer&&q.answers.some(a=>answer===ifty144SimpleNormalize(a));
 }
 function ifty144YearAnswerHtml(q){
-  if(q.format==='choice')return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;">${q.options.map((opt,i)=>`<button type="button" onclick="ifty144GradeYearAnswer(${i})" style="background:#eff6ff;color:#0f172a;border:1px solid #93c5fd;border-radius:9px;text-align:left;min-height:50px;padding:11px;overflow-wrap:anywhere;">${escapeHtml(opt)}</button>`).join('')}</div>`;
-  return `<form onsubmit="event.preventDefault();ifty144GradeYearAnswer()" style="display:grid;gap:9px;"><label style="font-weight:850;">回答を入力<input id="ifty144YearAnswer" style="display:block;margin-top:5px;width:100%;box-sizing:border-box;border:1px solid #94a3b8;border-radius:9px;padding:11px;min-height:47px;color:#0f172a;background:#fff;font:inherit;" placeholder="${q.mode==='event_year'?'例：1582 / 紀元前300':'出来事・時代区分'}" autocomplete="off"></label><button type="submit" style="border:0;border-radius:9px;padding:13px;background:#2563eb;color:#fff;font-weight:900;">回答する</button></form>`;
+  if(q.format==='choice')return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;">${q.options.map((opt,i)=>`<button type="button" onclick="ifty144GradeYearAnswer(${i})" style="background:#eff6ff;color:#0f172a;border:1px solid #93c5fd;border-radius:9px;text-align:left;min-height:50px;padding:11px;overflow-wrap:anywhere;">${ifty216QuizText(opt, true, false)}</button>`).join('')}</div>`;
+  return `<form onsubmit="event.preventDefault();ifty144GradeYearAnswer()" style="display:grid;gap:9px;"><label style="font-weight:850;">${ifty216Markup("回答を入力","Enter an answer")}<input id="ifty144YearAnswer" style="display:block;margin-top:5px;width:100%;box-sizing:border-box;border:1px solid #94a3b8;border-radius:9px;padding:11px;min-height:47px;color:#0f172a;background:#fff;font:inherit;" placeholder="${q.mode==='event_year'?'例：1582 / 紀元前300':'出来事・時代区分'}" autocomplete="off"></label><button type="submit" style="border:0;border-radius:9px;padding:13px;background:#2563eb;color:#fff;font-weight:900;">${ifty216Markup("回答する","Submit answer")}</button></form>`;
 }
 function ifty144RenderYearQuestion(){
   const modal=document.getElementById('practiceModal');const st=ifty144YearPracticeState;
@@ -33321,10 +32801,10 @@ function ifty144RenderYearQuestion(){
   const done=!q;
   modal.style.display='flex';
   modal.innerHTML=`<section class="ifty144-years-modal" style="background:white;color:#0f172a;border-radius:14px;width:min(710px,100%);max-height:92dvh;overflow:auto;padding:18px;box-sizing:border-box;box-shadow:0 16px 55px #0004;">
-    ${done?`<h2>YEARS PRACTICE 結果</h2><p>正解 ${st.correct}問／不正解 ${st.wrong}問／分からない ${st.skipped}問</p>${ifty182Summary(st.history182)}<button type="button" onclick="ifty144YearPracticeBack()" style="padding:12px;border:0;border-radius:9px;background:#0f766e;color:white;">PRACTICEへ戻る</button>`:
-    `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;"><div><h2 style="margin:0;">📅 YEARS / PRACTICE</h2><small>${st.index+1} / ${st.questions.length} ・${q.format==='choice'?'四択':'記述'}・正解${st.correct}／不正解${st.wrong}／分からない${st.skipped}</small></div><button type="button" onclick="ifty144YearPracticeBack()" style="padding:9px;border:1px solid #cbd5e1;border-radius:9px;">終了</button></div>
-    <div style="margin:14px 0;padding:15px;border:1px solid #7dd3fc;background:#f0f9ff;border-radius:11px;line-height:1.65;font-weight:800;overflow-wrap:anywhere;">${escapeHtml(q.prompt)}</div>
-    ${st.answered?`<h2 style="color:${st.last.correct?'#059669':'#dc2626'};">${st.last.correct?'⭕ 正解':'❌ 不正解'}</h2><p>あなたの回答：${escapeHtml(st.last.answer)}</p><p>正答例：${escapeHtml(q.answers.join(' ／ '))}</p><div style="padding:10px;background:#f8fafc;border-radius:9px;">${escapeHtml(q.explanation)}</div><button type="button" onclick="ifty144NextYearQuestion(false)" style="width:100%;margin-top:14px;background:#2563eb;color:#fff;border:0;border-radius:9px;padding:13px;">次へ</button>`:ifty144YearAnswerHtml(q)}
+    ${done?`<h2>${ifty216Markup("YEARS PRACTICE 結果","Years practice results")}</h2><p>正解 ${st.correct}問／不正解 ${st.wrong}問／分からない ${st.skipped}問</p>${ifty182Summary(st.history182)}<button type="button" onclick="ifty144YearPracticeBack()" style="padding:12px;border:0;border-radius:9px;background:#0f766e;color:white;">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button>`:
+    `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;"><div><h2 style="margin:0;">📅 YEARS / PRACTICE</h2><small>${st.index+1} / ${st.questions.length} ・${q.format==='choice'?'四択':'記述'}・正解${st.correct}／不正解${st.wrong}／分からない${st.skipped}</small></div><button type="button" onclick="ifty144YearPracticeBack()" style="padding:9px;border:1px solid #cbd5e1;border-radius:9px;">${ifty216Markup("終了","End")}</button></div>
+    <div style="margin:14px 0;padding:15px;border:1px solid #7dd3fc;background:#f0f9ff;border-radius:11px;line-height:1.65;font-weight:800;overflow-wrap:anywhere;">${ifty216QuizText(q.prompt, true, true)}</div>
+    ${st.answered?`<h2 style="color:${st.last.correct?'#059669':'#dc2626'};">${st.last.correct?ifty216T("⭕ 正解","⭕ Correct"):ifty216T("❌ 不正解","❌ Incorrect")}</h2><p>あなたの回答：${escapeHtml(st.last.answer)}</p><p>正答例：${escapeHtml(q.answers.join(' ／ '))}</p><div style="padding:10px;background:#f8fafc;border-radius:9px;">${ifty216QuizText(q.explanation, true, false)}</div><button type="button" onclick="ifty144NextYearQuestion(false)" style="width:100%;margin-top:14px;background:#2563eb;color:#fff;border:0;border-radius:9px;padding:13px;">${ifty216Markup("次へ","Next")}</button>`:ifty144YearAnswerHtml(q)}
     <div id="ifty144YearsTools" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>`}
   </section>`;
   if(!done){
@@ -33497,7 +32977,7 @@ function ifty145AnswerPlace(root,kind){
   const buttons=[...root.querySelectorAll('button')];
   const submit=buttons.filter(b=>{
     const t=b.textContent.trim();
-    return /^(回答|回答する|採点する|答える|回答を送信)$/.test(t)&&!b.closest('[data-ifty143-toolbar]');
+    return /^(回答|回答する|採点する|答える|回答を送信|Answer|Submit answer|Grade)$/.test(t)&&!b.closest('[data-ifty143-toolbar]');
   }).pop();
   if(submit){
     if(submit.closest('form'))return submit.closest('form');
@@ -33530,8 +33010,8 @@ function ifty145InstallUnknown(kind,options){
     root.querySelectorAll('.ifty145-unknown-btn').forEach(el=>el.remove());
     if(root.querySelector('.ifty145-reveal'))return;
     const card=document.createElement('div');card.className='ifty145-reveal';
-    card.innerHTML=`<strong>💡 正答・解答例</strong><p>${escapeHtml(ifty145Answer(ctx))}</p>`;
-    const next=document.createElement('button');next.type='button';next.className='ifty145-next';next.textContent='次へ';
+    card.innerHTML=`<strong>${ifty216Markup("💡 正答・解答例","💡 Correct / sample answer")}</strong><p>${escapeHtml(ifty145Answer(ctx))}</p>`;
+    const next=document.createElement('button');next.type='button';next.className='ifty145-next';next.textContent=ifty216T("次へ","Next");
     next.onclick=()=>window.ifty145NextUnknown(kind);
     card.appendChild(next);
     insertAfter.insertAdjacentElement('afterend',card);
@@ -33546,12 +33026,12 @@ function ifty145InstallUnknown(kind,options){
       if(button.hidden || button.style.display==='none')return false;
       const label=String(button.textContent||'').trim();
       const action=String(button.getAttribute('onclick')||'');
-      return /分からない/.test(label) && (/答えを見る|模範|解答を見る/.test(label) || /unknown|reveal/i.test(action));
+      return /分からない|don.t know/i.test(label) && (/答えを見る|模範|解答を見る|show answer|model answer/i.test(label) || /unknown|reveal/i.test(action));
     });
     if(alreadyHasNativeUnknown){root.querySelectorAll('.ifty145-unknown-btn').forEach(btn=>btn.remove());return;}
     if(root.querySelector('.ifty145-unknown-btn'))return;
     const btn=document.createElement('button');btn.type='button';btn.className='ifty145-unknown-btn';
-    btn.textContent='？ 分からない（答えを見る）';btn.onclick=()=>window.ifty145RevealUnknown(kind);
+    btn.textContent=ifty216T("？ 分からない（答えを見る）","? Don't know (show answer)");btn.onclick=()=>window.ifty145RevealUnknown(kind);
     insertAfter.insertAdjacentElement('afterend',btn);
   }
 }
@@ -33564,7 +33044,7 @@ window.ifty145RevealUnknown=function(kind){
   ifty145InstallUnknown(kind,opt);
   // Existing generic toolbar no longer needs a Skip button here.
   const row=ifty145Root(kind,opt)?.querySelector('[data-ifty143-toolbar]');
-  row?.querySelectorAll('button').forEach(b=>{if(b.textContent.includes('スキップ'))b.remove();});
+  row?.querySelectorAll('button').forEach(b=>{if(/スキップ|skip/i.test(b.textContent))b.remove();});
 };
 window.ifty145NextUnknown=function(kind){
   const ctx=ifty145BaseContext(kind);
@@ -33602,7 +33082,7 @@ ifty143Toolbar=function(kind,options={}){
     if(intentional.test(action)||el.closest('#ifty142ScrollPanel,#ifty129NavControls'))return;
     const folderRelated=!!el.closest('.ifty-portal-shell,#folders,.ifty-year-folder,#iftyBasicSentenceList') &&
       (/move|delete|remove|edit|rename|save|toggle|select|regenerate|collapse|folder|item|ifty14[0-9]/i.test(action)||
-        /^(↑|↓|削除|編集|保存|移動|選択|折りたたむ|名前変更)/.test(el.textContent.trim())||el.matches('input[type="checkbox"]'));
+        /^(↑|↓|削除|編集|保存|移動|選択|折りたたむ|名前変更|Delete|Edit|Save|Move|Select|Collapse|Rename)/i.test(el.textContent.trim())||el.matches('input[type="checkbox"]'));
     if(!folderRelated)return;
     const key=pageKey();if(key==='other')return;
     const y=readY();if(y<1)return;
@@ -33651,8 +33131,8 @@ window.ifty145RevealEnglishQuiz=function(setId){
   }
   if(!answer)answer='保存済みのカードに解答例がありません。登録カードをご確認ください。';
   const card=document.createElement('div');card.className='ifty145-reveal';
-  card.innerHTML=`<strong>💡 正答・解答例</strong><p>${escapeHtml(answer)}</p>`;
-  const btn=document.createElement('button');btn.type='button';btn.className='ifty145-next';btn.textContent='次へ';
+  card.innerHTML=`<strong>${ifty216Markup("💡 正答・解答例","💡 Correct / sample answer")}</strong><p>${escapeHtml(answer)}</p>`;
+  const btn=document.createElement('button');btn.type='button';btn.className='ifty145-next';btn.textContent=ifty216T("次へ","Next");
   btn.onclick=()=>window.ifty145NextEnglishQuiz(setId);
   card.appendChild(btn);
   const trigger=modal.querySelector('.ifty145-english-unknown');
@@ -33751,7 +33231,7 @@ window.ifty145NextEnglishQuiz=function(setId){
     if(global && String(global.value||'').trim())return true;
     const tabs=folderTabs(subject,folder,card);
     if(!tabs)return false;
-    const lookup=Array.from(tabs.querySelectorAll('button')).find(b=>b.textContent.includes('検索'));
+    const lookup=Array.from(tabs.querySelectorAll('button')).find(b=>/検索|search/i.test(b.textContent));
     if(!lookup || lookup.getAttribute('aria-pressed')!=='true')return false;
     const row=tabs.nextElementSibling;
     // In ordinary folders the search input has a separate node. In YEARS / BASIC,
@@ -33801,7 +33281,7 @@ window.ifty145NextEnglishQuiz=function(setId){
     // clears the legacy filter and both input drafts without altering saved words.
     let tabs=folderTabs(subject,folderId,card);
     if(tabs){
-      const add=Array.from(tabs.querySelectorAll('button')).find(b=>b.textContent.includes('追加'));
+      const add=Array.from(tabs.querySelectorAll('button')).find(b=>/追加|add/i.test(b.textContent));
       if(add && add.getAttribute('aria-pressed')==='false')add.click();
     }
     // A global search may additionally be active; clear that filter as well.
@@ -33875,8 +33355,8 @@ function ifty151EnglishTarget(word, folder) {
 function ifty151AnswerControls(radioName, correctionId, disabled=false) {
   const lock=disabled?'disabled':'';
   return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px;">
-    <label style="display:flex;align-items:center;gap:8px;min-width:0;border:2px solid #86efac;border-radius:11px;padding:12px 9px;background:#f0fdf4;color:#14532d;font-weight:900;cursor:pointer;"><input type="radio" name="${radioName}" value="correct" ${lock} onchange="ifty151UpdateCorrection('${radioName}','${correctionId}')" style="width:20px;height:20px;flex:none;accent-color:#16a34a;">○ 正しい</label>
-    <label style="display:flex;align-items:center;gap:8px;min-width:0;border:2px solid #fca5a5;border-radius:11px;padding:12px 9px;background:#fef2f2;color:#991b1b;font-weight:900;cursor:pointer;"><input type="radio" name="${radioName}" value="incorrect" ${lock} onchange="ifty151UpdateCorrection('${radioName}','${correctionId}')" style="width:20px;height:20px;flex:none;accent-color:#dc2626;">✕ 誤りあり</label>
+    <label style="display:flex;align-items:center;gap:8px;min-width:0;border:2px solid #86efac;border-radius:11px;padding:12px 9px;background:#f0fdf4;color:#14532d;font-weight:900;cursor:pointer;"><input type="radio" name="${radioName}" value="correct" ${lock} onchange="ifty151UpdateCorrection('${radioName}','${correctionId}')" style="width:20px;height:20px;flex:none;accent-color:#16a34a;">${ifty216Markup("○ 正しい","○ True")}</label>
+    <label style="display:flex;align-items:center;gap:8px;min-width:0;border:2px solid #fca5a5;border-radius:11px;padding:12px 9px;background:#fef2f2;color:#991b1b;font-weight:900;cursor:pointer;"><input type="radio" name="${radioName}" value="incorrect" ${lock} onchange="ifty151UpdateCorrection('${radioName}','${correctionId}')" style="width:20px;height:20px;flex:none;accent-color:#dc2626;">${ifty216Markup("✕ 誤りあり","✕ False")}</label>
   </div>
   <div id="${correctionId}Wrap" style="display:none;margin-top:12px;">
     <label for="${correctionId}" style="display:block;color:#334155;font-weight:800;margin-bottom:5px;">訂正内容</label>
@@ -34019,19 +33499,19 @@ function ifty151DrawSetup(){
   setIftyPracticeQuestionActive(modal,false);
   const sources=ifty151Sources(state.subject);
   modal.innerHTML=`<section style="box-sizing:border-box;width:min(760px,100%);min-width:0;max-height:92dvh;overflow:auto;background:#fff;color:#0f172a;border-radius:14px;padding:clamp(13px,3vw,22px);box-shadow:0 16px 40px #0004;">
-    <div style="display:flex;gap:9px;align-items:center;justify-content:space-between;flex-wrap:wrap;"><button type="button" onclick="renderPracticeHome()" style="border:none;padding:10px 12px;border-radius:8px;background:#e2e8f0;color:#334155;font-weight:800;">◀ PRACTICEへ戻る</button><button type="button" onclick="closePracticeModal()" style="border:none;padding:9px 13px;border-radius:8px;background:#f1f5f9;color:#475569;">✕</button></div>
-    <h2 style="font-size:1.35rem;margin:15px 0 4px;color:#0f172a;">⭕ 正誤・訂正</h2>
+    <div style="display:flex;gap:9px;align-items:center;justify-content:space-between;flex-wrap:wrap;"><button type="button" onclick="renderPracticeHome()" style="border:none;padding:10px 12px;border-radius:8px;background:#e2e8f0;color:#334155;font-weight:800;">${ifty216Markup("◀ PRACTICEへ戻る","◀ Back to practice")}</button><button type="button" onclick="closePracticeModal()" style="border:none;padding:9px 13px;border-radius:8px;background:#f1f5f9;color:#475569;">✕</button></div>
+    <h2 style="font-size:1.35rem;margin:15px 0 4px;color:#0f172a;">${ifty216Markup("⭕ 正誤・訂正","⭕ True/false & correction")}</h2>
     <p style="color:#475569;margin:0 0 15px;font-size:.9rem;">${escapeHtml(state.subject)}｜正しい文章なら○、誤っていれば✕を選び、誤りを訂正します。</p>
     <div style="border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;padding:12px;">
-      <b style="color:#334155;">出題フォルダ</b><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">${sources.length?sources.map(s=>`<label style="display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;padding:10px;border:1px solid #cbd5e1;background:#fff;border-radius:9px;overflow-wrap:anywhere;"><input type="checkbox" data-ifty151-folder="${escapeHtml(s.id)}" ${state.folderIds.has(s.id)?'checked':''} onchange="ifty151ToggleFolder(this.dataset.ifty151Folder,this.checked)" style="width:19px;height:19px;accent-color:#0f766e;flex:none;"><span>${escapeHtml(s.name)} <small style="color:#64748b;">${s.refs.length}件</small></span></label>`).join(''):'<span style="color:#b91c1c;">使用可能な学習項目がありません。先に単語や教材を登録してください。</span>'}</div>
-      <p style="font-size:.85rem;color:#64748b;margin:10px 0 0;">選択項目：<b id="ifty151SelectedCount">${sources.filter(s=>state.folderIds.has(s.id)).reduce((n,s)=>n+s.refs.length,0)}</b> 件</p>
+      <b style="color:#334155;">${ifty216Markup("出題フォルダ","Question folder")}</b><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">${sources.length?sources.map(s=>`<label style="display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;padding:10px;border:1px solid #cbd5e1;background:#fff;border-radius:9px;overflow-wrap:anywhere;"><input type="checkbox" data-ifty151-folder="${escapeHtml(s.id)}" ${state.folderIds.has(s.id)?'checked':''} onchange="ifty151ToggleFolder(this.dataset.ifty151Folder,this.checked)" style="width:19px;height:19px;accent-color:#0f766e;flex:none;"><span>${escapeHtml(s.name)} <small style="color:#64748b;">${s.refs.length}件</small></span></label>`).join(''):'<span style="color:#b91c1c;">使用可能な学習項目がありません。先に単語や教材を登録してください。</span>'}</div>
+      <p style="font-size:.85rem;color:#64748b;margin:10px 0 0;">${ifty216Markup("選択項目：","Selected items:")}<b id="ifty151SelectedCount">${sources.filter(s=>state.folderIds.has(s.id)).reduce((n,s)=>n+s.refs.length,0)}</b> ${ifty216Markup("件","items")}</p>
     </div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;align-items:end;">
-      <label style="min-width:115px;flex:1;color:#334155;font-weight:850;">問題数<input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="${state.count}" onchange="ifty151SetCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;display:block;width:100%;font-size:16px;padding:10px;border:1px solid #94a3b8;border-radius:8px;margin-top:6px;"></label>
-      <label style="min-width:180px;flex:2;color:#334155;font-weight:850;">難易度<select onchange="ifty151SetDifficulty(this.value)" style="display:block;width:100%;font-size:16px;padding:10px;border:1px solid #94a3b8;border-radius:8px;margin-top:6px;">${[['easy','easy'],['normal','normal'],['hard','hard'],['extreme','extreme']].map(([v,t])=>`<option value="${v}" ${v===state.difficulty?'selected':''}>${t}</option>`).join('')}</select></label>
+      <label style="min-width:115px;flex:1;color:#334155;font-weight:850;">${ifty216Markup("問題数","Number of questions")}<input type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="${ifty216Markup("問題数","Number of questions")}" value="${state.count}" onchange="ifty151SetCount(this.value)" style="width:95px;max-width:100%;min-height:40px;box-sizing:border-box;font-size:16px;display:block;width:100%;font-size:16px;padding:10px;border:1px solid #94a3b8;border-radius:8px;margin-top:6px;"></label>
+      <label style="min-width:180px;flex:2;color:#334155;font-weight:850;">${ifty216Markup("難易度","Difficulty")}<select onchange="ifty151SetDifficulty(this.value)" style="display:block;width:100%;font-size:16px;padding:10px;border:1px solid #94a3b8;border-radius:8px;margin-top:6px;">${[['easy','easy'],['normal','normal'],['hard','hard'],['extreme','extreme']].map(([v,t])=>`<option value="${v}" ${v===state.difficulty?'selected':''}>${t}</option>`).join('')}</select></label>
     </div>
     <div style="font-size:.82rem;color:#64748b;margin:10px 0 12px;">正しい問題と誤った問題を混ぜて出題します。記述の表現差はALLIAが判定します。</div>
-    <button type="button" onclick="ifty151Start()" ${sources.length?'':'disabled'} style="width:100%;padding:14px;border:none;border-radius:9px;background:#0f766e;color:white;font-size:1rem;font-weight:900;">▶ 正誤問題を開始</button>
+    <button type="button" onclick="ifty151Start()" ${sources.length?'':'disabled'} style="width:100%;padding:14px;border:none;border-radius:9px;background:#0f766e;color:white;font-size:1rem;font-weight:900;">${ifty216Markup("▶ 正誤問題を開始","▶ Start true/false practice")}</button>
   </section>`;
 }
 // BASIC SENTENCES / YEARS の保存済みクイズフォルダでも正誤問題を直接開始できる。
@@ -34087,17 +33567,17 @@ function ifty151DrawPlayer(){
   const st=ifty151Run,modal=document.getElementById('practiceModal');if(!st||!modal)return;
   setIftyPracticeQuestionActive(modal,st.index<st.questions.length);
   const finished=st.index>=st.questions.length;
-  const panel=finished?`<h2 style="margin:0 0 12px;">正誤問題 完了</h2><p style="color:#334155;font-size:1.1rem;">正解：${st.right} ／ 不正解：${st.wrong} ／ 分からない：${st.unknown}</p>${ifty182Summary(st.history182)}<button onclick="ifty151Exit()" style="width:100%;border:0;background:#0f766e;color:white;border-radius:9px;padding:13px;font-weight:900;">PRACTICEへ戻る</button>`:st.error?`<h3 style="color:#b91c1c;">問題生成に失敗しました</h3><p style="color:#475569;overflow-wrap:anywhere;">${escapeHtml(st.error)}</p><div style="display:flex;gap:8px;flex-wrap:wrap;"><button onclick="ifty175OpenLibrary(ifty151Run.subject)" style="padding:11px;background:#304866;color:white;border:0;border-radius:9px;">📚 保存済み問題で練習</button><button onclick="ifty151Retry()" style="padding:11px;background:#2563eb;color:white;border:0;border-radius:9px;">再試行</button><button onclick="ifty176SkipStandaloneTruth()" style="padding:11px;background:#475569;color:white;border:0;border-radius:9px;">この1問をスキップ →</button><button onclick="ifty151Exit()" style="padding:11px;border:1px solid #94a3b8;border-radius:9px;">戻る</button></div>`:!st.current?`<div style="padding:25px;text-align:center;color:#334155;font-weight:800;">問題を準備しています…</div>`:`
-    <h2 style="margin:12px 0;font-size:1.05rem;color:#0f172a;">次の文の正誤を判定しなさい。</h2>
+  const panel=finished?`<h2 style="margin:0 0 12px;">${ifty216Markup("正誤問題 完了","True/false practice complete")}</h2><p style="color:#334155;font-size:1.1rem;">正解：${st.right} ／ 不正解：${st.wrong} ／ 分からない：${st.unknown}</p>${ifty182Summary(st.history182)}<button onclick="ifty151Exit()" style="width:100%;border:0;background:#0f766e;color:white;border-radius:9px;padding:13px;font-weight:900;">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button>`:st.error?`<h3 style="color:#b91c1c;">${ifty216Markup("問題生成に失敗しました","Question generation failed")}</h3><p style="color:#475569;overflow-wrap:anywhere;">${escapeHtml(st.error)}</p><div style="display:flex;gap:8px;flex-wrap:wrap;"><button onclick="ifty175OpenLibrary(ifty151Run.subject)" style="padding:11px;background:#304866;color:white;border:0;border-radius:9px;">${ifty216Markup("📚 保存済み問題で練習","📚 Practise saved questions")}</button><button onclick="ifty151Retry()" style="padding:11px;background:#2563eb;color:white;border:0;border-radius:9px;">${ifty216Markup("再試行","Retry")}</button><button onclick="ifty176SkipStandaloneTruth()" style="padding:11px;background:#475569;color:white;border:0;border-radius:9px;">${ifty216Markup("この1問をスキップ →","Skip this question →")}</button><button onclick="ifty151Exit()" style="padding:11px;border:1px solid #94a3b8;border-radius:9px;">${ifty216Markup("戻る","Back")}</button></div>`:!st.current?`<div style="padding:25px;text-align:center;color:#334155;font-weight:800;">問題を準備しています…</div>`:`
+    <h2 style="margin:12px 0;font-size:1.05rem;color:#0f172a;">${ifty216Markup("次の文の正誤を判定しなさい。","Judge whether the following statement is true or false.")}</h2>
     <div style="border:2px solid #cbd5e1;background:#f8fafc;border-radius:10px;padding:clamp(12px,3vw,19px);font-size:1.12rem;color:#0f172a;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;">${escapeHtml(st.current.question)}</div>
     ${st.current._ifty175Saved?'<div style="padding:9px;margin-top:8px;border-radius:8px;background:#e0f2fe;color:#075985;font-weight:800;">📚 保存済み問題で出題中（ALLIA不要）</div>':''}
     <p style="font-size:.86rem;color:#475569;margin:8px 0;">${escapeHtml(st.current.instruction||'正しければ○、誤りがあれば✕を選び、正しい表現に訂正してください。')}</p>
-    ${st.gradeError?`<div role="alert" style="background:#fff7ed;color:#78350f;border:1px solid #f59e0b;border-radius:10px;padding:12px;margin:12px 0;"><b>⚠️ ALLIAの採点を完了できませんでした</b><p style="white-space:pre-wrap;">${escapeHtml(st.gradeError)}</p><p>回答は保存されています。正誤カウントはまだ変更していません。</p><div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" onclick="ifty176RetryStandaloneGrade()" style="padding:10px;color:white;background:#2563eb;border:0;border-radius:8px;">🔄 再採点</button><button type="button" onclick="ifty176RevealStandaloneTruth()" style="padding:10px;color:white;background:#0f766e;border:0;border-radius:8px;">📖 自己採点</button></div></div>`:''}
-    ${st.manualReveal&&!st.answered?`<div style="padding:13px;background:#ecfdf5;color:#064e3b;border:1px solid #10b981;border-radius:9px;margin:10px 0;"><b>📖 模範解答：</b><div style="white-space:pre-wrap;">${escapeHtml(st.current.correctedSentence||'')}</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><button type="button" onclick="ifty176FinishStandaloneGrade(true)" style="background:#047857;color:white;border:0;border-radius:8px;padding:11px;">⭕ 自己採点：正解</button><button type="button" onclick="ifty176FinishStandaloneGrade(false)" style="background:#991b1b;color:white;border:0;border-radius:8px;padding:11px;">❌ 自己採点：不正解</button></div></div>`:''}
-    ${st.answered?`<div style="border:1px solid ${st.feedback?.correct?'#86efac':'#fca5a5'};border-radius:11px;background:${st.feedback?.correct?'#f0fdf4':'#fef2f2'};padding:14px;color:#1e293b;overflow-wrap:anywhere;"><b style="color:${st.feedback?.correct?'#166534':'#991b1b'};">${st.feedback?.unknown?'？ 分からない':st.feedback?.correct?'⭕ 正解':'❌ 不正解'}</b><p style="white-space:pre-wrap;line-height:1.65;">${escapeHtml(st.feedback?.feedback||'')}</p><div><b>正しい文・訂正例：</b><div style="white-space:pre-wrap;margin-top:5px;">${escapeHtml(st.feedback?.modelAnswer||st.current.correctedSentence)}</div></div>${st.current.explanation?`<p style="font-size:.9rem;white-space:pre-wrap;">${escapeHtml(st.current.explanation)}</p>`:''}</div><button onclick="ifty151Next()" style="width:100%;margin-top:12px;padding:13px;background:#0f766e;color:white;border:0;border-radius:9px;font-weight:900;">次へ →</button>`:st.gradeError||st.manualReveal?'':ifty151AnswerControls('ifty151TruthVerdict','ifty151QuickCorrection')+`<div style="display:flex;flex-direction:column;gap:9px;margin-top:14px;"><button onclick="ifty151Submit()" style="width:100%;padding:13px;background:#2563eb;color:#fff;border:0;border-radius:9px;font-weight:900;">回答を確定</button><button onclick="ifty151Unknown()" style="width:100%;padding:11px;border:1px solid #94a3b8;background:#f8fafc;color:#334155;border-radius:9px;">？ 分からない（答えを見る）</button></div>`}
+    ${st.gradeError?`<div role="alert" style="background:#fff7ed;color:#78350f;border:1px solid #f59e0b;border-radius:10px;padding:12px;margin:12px 0;"><b>${ifty216Markup("⚠️ ALLIAの採点を完了できませんでした","⚠️ ALLIA could not finish grading")}</b><p style="white-space:pre-wrap;">${escapeHtml(st.gradeError)}</p><p>${ifty216Markup("回答は保存されています。正誤カウントはまだ変更していません。","Your answer is saved. The score has not changed.")}</p><div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" onclick="ifty176RetryStandaloneGrade()" style="padding:10px;color:white;background:#2563eb;border:0;border-radius:8px;">${ifty216Markup("🔄 再採点","🔄 Retry grading")}</button><button type="button" onclick="ifty176RevealStandaloneTruth()" style="padding:10px;color:white;background:#0f766e;border:0;border-radius:8px;">${ifty216Markup("📖 自己採点","📖 Self-assessment")}</button></div></div>`:''}
+    ${st.manualReveal&&!st.answered?`<div style="padding:13px;background:#ecfdf5;color:#064e3b;border:1px solid #10b981;border-radius:9px;margin:10px 0;"><b>${ifty216Markup("📖 模範解答：","📖 Model answer:")}</b><div style="white-space:pre-wrap;">${escapeHtml(st.current.correctedSentence||'')}</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><button type="button" onclick="ifty176FinishStandaloneGrade(true)" style="background:#047857;color:white;border:0;border-radius:8px;padding:11px;">${ifty216Markup("⭕ 自己採点：正解","⭕ Self-assessment: Correct")}</button><button type="button" onclick="ifty176FinishStandaloneGrade(false)" style="background:#991b1b;color:white;border:0;border-radius:8px;padding:11px;">${ifty216Markup("❌ 自己採点：不正解","❌ Self-assessment: Incorrect")}</button></div></div>`:''}
+    ${st.answered?`<div style="border:1px solid ${st.feedback?.correct?'#86efac':'#fca5a5'};border-radius:11px;background:${st.feedback?.correct?'#f0fdf4':'#fef2f2'};padding:14px;color:#1e293b;overflow-wrap:anywhere;"><b style="color:${st.feedback?.correct?'#166534':'#991b1b'};">${st.feedback?.unknown?ifty216T("？ 分からない","? Don't know"):st.feedback?.correct?ifty216T("⭕ 正解","⭕ Correct"):ifty216T("❌ 不正解","❌ Incorrect")}</b><p style="white-space:pre-wrap;line-height:1.65;">${escapeHtml(st.feedback?.feedback||'')}</p><div><b>${ifty216Markup("正しい文・訂正例：","Correct statement / correction:")}</b><div style="white-space:pre-wrap;margin-top:5px;">${escapeHtml(st.feedback?.modelAnswer||st.current.correctedSentence)}</div></div>${st.current.explanation?`<p style="font-size:.9rem;white-space:pre-wrap;">${escapeHtml(st.current.explanation)}</p>`:''}</div><button onclick="ifty151Next()" style="width:100%;margin-top:12px;padding:13px;background:#0f766e;color:white;border:0;border-radius:9px;font-weight:900;">${ifty216Markup("次へ →","Next →")}</button>`:st.gradeError||st.manualReveal?'':ifty151AnswerControls('ifty151TruthVerdict','ifty151QuickCorrection')+`<div style="display:flex;flex-direction:column;gap:9px;margin-top:14px;"><button onclick="ifty151Submit()" style="width:100%;padding:13px;background:#2563eb;color:#fff;border:0;border-radius:9px;font-weight:900;">回答を確定</button><button onclick="ifty151Unknown()" style="width:100%;padding:11px;border:1px solid #94a3b8;background:#f8fafc;color:#334155;border-radius:9px;">${ifty216Markup("？ 分からない（答えを見る）","? Don't know (show answer)")}</button></div>`}
   `;
   modal.innerHTML=`<section style="box-sizing:border-box;width:min(750px,100%);min-width:0;max-height:92dvh;overflow:auto;background:white;border-radius:14px;padding:clamp(14px,3vw,24px);color:#0f172a;box-shadow:0 16px 40px #0004;">
-    <header style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div style="font-weight:900;color:#0f766e;">⭕ ${escapeHtml(st.subject)} ${finished?'結果':`${st.index+1} / ${st.questions.length}`}</div><button onclick="ifty151Exit()" style="border:1px solid #cbd5e1;background:#f8fafc;color:#334155;border-radius:8px;padding:8px 10px;">終了</button></header>
+    <header style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div style="font-weight:900;color:#0f766e;">⭕ ${escapeHtml(st.subject)} ${finished?'結果':`${st.index+1} / ${st.questions.length}`}</div><button onclick="ifty151Exit()" style="border:1px solid #cbd5e1;background:#f8fafc;color:#334155;border-radius:8px;padding:8px 10px;">${ifty216Markup("終了","End")}</button></header>
     <div style="margin-top:6px;color:#64748b;font-size:.83rem;">正解 ${st.right} ・ 不正解 ${st.wrong} ・ 分からない ${st.unknown}　／ ${escapeHtml(st.difficulty)}</div>
     ${panel}
   </section>`;
@@ -34383,8 +33863,8 @@ function ifty162ReviewButton(subject) {
   const all=ifty162Entries(key);
   const due=all.filter(i=>!i.completed&&Number(i.dueAt||0)<=Date.now());
   return `<div data-ifty162-review style="margin:10px 0 13px;padding:11px;border:1px solid #7894b2;border-radius:11px;background:#142338;color:#f8fafc;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between;box-sizing:border-box;">
-    <div style="min-width:0;flex:1;"><b>🔁 実践の誤答をそのまま復習</b><div style="font-size:.82em;color:#cbd5e1;margin-top:3px;">今日 ${due.length}問 / 保存 ${all.length}問 ・ AI消費なし</div></div>
-    <button type="button" onclick="ifty162OpenReview('${key.replace(/'/g,'')}')" style="border:0;border-radius:8px;padding:10px 14px;min-height:44px;background:#2563eb;color:#fff;font-weight:900;cursor:pointer;">復習する →</button>
+    <div style="min-width:0;flex:1;"><b>${ifty216Markup("🔁 実践の誤答をそのまま復習","🔁 Review the same missed questions")}</b><div style="font-size:.82em;color:#cbd5e1;margin-top:3px;">今日 ${due.length}問 / 保存 ${all.length}問 ・ AI消費なし</div></div>
+    <button type="button" onclick="ifty162OpenReview('${key.replace(/'/g,'')}')" style="border:0;border-radius:8px;padding:10px 14px;min-height:44px;background:#2563eb;color:#fff;font-weight:900;cursor:pointer;">${ifty216Markup("復習する →","Review →")}</button>
   </div>`;
 }
 function ifty162MountButton(subject) {
@@ -34436,29 +33916,29 @@ function ifty162AnswerArea(item) {
   const isOrder=mode==='order'||Array.isArray(q.correctOrder);
   if (isOrder) {
     const events=Array.isArray(q.events)?q.events:[];
-    return `<div style="margin-top:12px;border:1px solid #50647e;border-radius:9px;padding:10px;background:#243449;color:#f8fafc;">${events.map((e,i)=>`<div style="padding:6px 0;">${i+1}. ${escapeHtml(e.text||e.label||e.title||'')}</div>`).join('')}<p style="font-size:.85em;color:#cbd5e1;">出題時と同じ出来事を正しい順に並べて考え、模範解答と照合してください。</p></div><textarea id="ifty162ReplayText" rows="3" placeholder="並び順を記入（自己採点）" style="width:100%;box-sizing:border-box;margin-top:9px;padding:10px;background:#fff;color:#0f172a;border-radius:8px;"></textarea><button type="button" onclick="ifty162Reveal()" style="margin-top:10px;width:100%;padding:12px;background:#2563eb;color:white;border:0;border-radius:8px;font-weight:900;">解答を確認</button>`;
+    return `<div style="margin-top:12px;border:1px solid #50647e;border-radius:9px;padding:10px;background:#243449;color:#f8fafc;">${events.map((e,i)=>`<div style="padding:6px 0;">${i+1}. ${escapeHtml(e.text||e.label||e.title||'')}</div>`).join('')}<p style="font-size:.85em;color:#cbd5e1;">出題時と同じ出来事を正しい順に並べて考え、模範解答と照合してください。</p></div><textarea id="ifty162ReplayText" rows="3" placeholder="${ifty216Markup("並び順を記入（自己採点）","Enter order (self-assessment)")}" style="width:100%;box-sizing:border-box;margin-top:9px;padding:10px;background:#fff;color:#0f172a;border-radius:8px;"></textarea><button type="button" onclick="ifty162Reveal()" style="margin-top:10px;width:100%;padding:12px;background:#2563eb;color:white;border:0;border-radius:8px;font-weight:900;">${ifty216Markup("解答を確認","Check answer")}</button>`;
   }
   if (mode==='truefalse'||q.kind==='truefalse') {
-    return `<div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;"><label style="padding:9px 14px;border:1px solid #93c5fd;border-radius:8px;"><input name="ifty162Verdict" type="radio" value="true"> ○ 正しい</label><label style="padding:9px 14px;border:1px solid #93c5fd;border-radius:8px;"><input name="ifty162Verdict" type="radio" value="false"> ✕ 誤りあり</label></div><textarea id="ifty162ReplayText" rows="3" placeholder="誤りがあれば修正後の全文または訂正内容を入力" style="width:100%;box-sizing:border-box;margin:5px 0;padding:11px;background:#fff;color:#0f172a;border-radius:8px;"></textarea><button type="button" onclick="ifty162Reveal()" style="width:100%;padding:12px;background:#2563eb;color:#fff;border:0;border-radius:8px;font-weight:900;">解答を確認</button>`;
+    return `<div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;"><label style="padding:9px 14px;border:1px solid #93c5fd;border-radius:8px;"><input name="ifty162Verdict" type="radio" value="true"> ${ifty216Markup("○ 正しい","○ True")}</label><label style="padding:9px 14px;border:1px solid #93c5fd;border-radius:8px;"><input name="ifty162Verdict" type="radio" value="false"> ${ifty216Markup("✕ 誤りあり","✕ False")}</label></div><textarea id="ifty162ReplayText" rows="3" placeholder="誤りがあれば修正後の全文または訂正内容を入力" style="width:100%;box-sizing:border-box;margin:5px 0;padding:11px;background:#fff;color:#0f172a;border-radius:8px;"></textarea><button type="button" onclick="ifty162Reveal()" style="width:100%;padding:12px;background:#2563eb;color:#fff;border:0;border-radius:8px;font-weight:900;">${ifty216Markup("解答を確認","Check answer")}</button>`;
   }
   if(options.length>=2){
-    return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:9px;margin-top:12px;">${options.map((o,i)=>`<label style="display:block;border:1px solid #829ab5;border-radius:9px;background:#293d58;color:#fff;padding:11px;overflow-wrap:anywhere;"><input type="${isMulti?'checkbox':'radio'}" name="ifty162Choice" value="${i}" style="margin-right:7px;">${String.fromCharCode(65+i)}. ${escapeHtml(o.text)}${ifty162Image(o.image)}</label>`).join('')}</div><button type="button" onclick="ifty162Reveal()" style="width:100%;margin-top:12px;padding:12px;background:#2563eb;color:#fff;border:0;border-radius:8px;font-weight:900;">回答する</button>`;
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:9px;margin-top:12px;">${options.map((o,i)=>`<label style="display:block;border:1px solid #829ab5;border-radius:9px;background:#293d58;color:#fff;padding:11px;overflow-wrap:anywhere;"><input type="${isMulti?'checkbox':'radio'}" name="ifty162Choice" value="${i}" style="margin-right:7px;">${String.fromCharCode(65+i)}. ${escapeHtml(o.text)}${ifty162Image(o.image)}</label>`).join('')}</div><button type="button" onclick="ifty162Reveal()" style="width:100%;margin-top:12px;padding:12px;background:#2563eb;color:#fff;border:0;border-radius:8px;font-weight:900;">${ifty216Markup("回答する","Submit answer")}</button>`;
   }
-  return `<textarea id="ifty162ReplayText" rows="4" placeholder="出題時と同じ問題です。答えを入力してください。" style="width:100%;box-sizing:border-box;margin-top:12px;padding:12px;background:white;color:#0f172a;border:1px solid #94a3b8;border-radius:9px;font:inherit;"></textarea><button type="button" onclick="ifty162Reveal()" style="width:100%;margin-top:11px;padding:12px;background:#2563eb;color:#fff;border:0;border-radius:8px;font-weight:900;">解答を確認</button>`;
+  return `<textarea id="ifty162ReplayText" rows="4" placeholder="出題時と同じ問題です。答えを入力してください。" style="width:100%;box-sizing:border-box;margin-top:12px;padding:12px;background:white;color:#0f172a;border:1px solid #94a3b8;border-radius:9px;font:inherit;"></textarea><button type="button" onclick="ifty162Reveal()" style="width:100%;margin-top:11px;padding:12px;background:#2563eb;color:#fff;border:0;border-radius:8px;font-weight:900;">${ifty216Markup("解答を確認","Check answer")}</button>`;
 }
 function ifty162RenderReview() {
   const st=ifty162Run;if(!st)return;
   const item=ifty162Current();
   if(!item){
-    showIftyHubContent(`<section class="ifty-portal-shell" style="max-width:760px;margin:auto;background:#1e293b;color:#fff;padding:22px;border-radius:14px;"><h2 style="color:#fff;">🔁 誤答問題の復習 完了</h2><p>問題文・選択肢・答えは保存済み。復習中のALLIA呼び出しは0回です。</p><button onclick="ifty162Exit()" style="background:#2563eb;border:0;border-radius:8px;color:white;padding:12px 16px;">PRACTICEへ戻る</button></section>`,'ifty162-review');return;
+    showIftyHubContent(`<section class="ifty-portal-shell" style="max-width:760px;margin:auto;background:#1e293b;color:#fff;padding:22px;border-radius:14px;"><h2 style="color:#fff;">${ifty216Markup("🔁 誤答問題の復習 完了","🔁 Mistake review complete")}</h2><p>問題文・選択肢・答えは保存済み。復習中のALLIA呼び出しは0回です。</p><button onclick="ifty162Exit()" style="background:#2563eb;border:0;border-radius:8px;color:white;padding:12px 16px;">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button></section>`,'ifty162-review');return;
   }
   const q=item.question||{};
   const extras=[q.instruction,q.sourceText&&q.sourceText!==item.prompt?q.sourceText:''].filter(x=>String(x||'').trim());
   const images=[q.imageDataUrl,q.imageUrl,q.image].filter(x=>typeof x==='string'&&x.trim());
   const finished=st.answered;
-  const output=finished?`<div style="margin-top:15px;padding:14px;border:1px solid #86efac;background:#f0fdf4;color:#14532d;border-radius:10px;overflow-wrap:anywhere;"><b>保存した正答・解説（AIは使用していません）</b><div style="margin-top:9px;white-space:pre-wrap;">${escapeHtml(item.modelAnswer||'保存時の正答データなし（元の教材を確認）')}</div>${q.explanation?`<p>${escapeHtml(q.explanation)}</p>`:''}${st.result!==null?`<p style="font-weight:900;">${st.result?'○ 一致':'✕ 不一致'}</p>`:''}</div><div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px;"><button onclick="ifty162Finish(false)" style="flex:1;min-width:125px;background:#b91c1c;color:white;border:0;border-radius:8px;padding:12px;font-weight:900;">✕ まだ不正解</button><button onclick="ifty162Finish(true)" style="flex:1;min-width:125px;background:#15803d;color:white;border:0;border-radius:8px;padding:12px;font-weight:900;">○ 正解・次へ</button></div>`:ifty162AnswerArea(item);
+  const output=finished?`<div style="margin-top:15px;padding:14px;border:1px solid #86efac;background:#f0fdf4;color:#14532d;border-radius:10px;overflow-wrap:anywhere;"><b>${ifty216Markup("保存した正答・解説（AIは使用していません）","Saved answer and explanation (no AI call)")}</b><div style="margin-top:9px;white-space:pre-wrap;">${escapeHtml(item.modelAnswer||'保存時の正答データなし（元の教材を確認）')}</div>${q.explanation?`<p>${escapeHtml(q.explanation)}</p>`:''}${st.result!==null?`<p style="font-weight:900;">${st.result?'○ 一致':'✕ 不一致'}</p>`:''}</div><div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px;"><button onclick="ifty162Finish(false)" style="flex:1;min-width:125px;background:#b91c1c;color:white;border:0;border-radius:8px;padding:12px;font-weight:900;">${ifty216Markup("✕ まだ不正解","✕ Still incorrect")}</button><button onclick="ifty162Finish(true)" style="flex:1;min-width:125px;background:#15803d;color:white;border:0;border-radius:8px;padding:12px;font-weight:900;">${ifty216Markup("○ 正解・次へ","○ Correct / Next")}</button></div>`:ifty162AnswerArea(item);
   showIftyHubContent(`<section class="ifty-portal-shell" style="max-width:850px;margin:auto;padding:14px;background:#17243a;border:1px solid #586b84;border-radius:14px;color:#f8fafc;box-sizing:border-box;">
-    <header style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><b>🔁 ${escapeHtml(st.subject)}　${st.index+1}/${st.queue.length}</b><button type="button" onclick="ifty162Exit()" style="background:#35465e;color:#f8fafc;border:1px solid #7c8da2;padding:9px;border-radius:8px;">終了</button></header>
+    <header style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><b>🔁 ${escapeHtml(st.subject)}　${st.index+1}/${st.queue.length}</b><button type="button" onclick="ifty162Exit()" style="background:#35465e;color:#f8fafc;border:1px solid #7c8da2;padding:9px;border-radius:8px;">${ifty216Markup("終了","End")}</button></header>
     <p style="font-size:.82em;color:#cbd5e1;margin:8px 0;">${escapeHtml(item.mode)} ・ 保存済みの問題をそのまま再出題 ・ ALLIA消費なし</p>
     <div style="padding:15px;border-radius:10px;background:#0b3047;border:1px solid #608aa7;color:#fff;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;font-weight:800;">${escapeHtml(item.prompt)}</div>
     ${extras.map(x=>`<div style="margin-top:7px;color:#cbd5e1;white-space:pre-wrap;">${escapeHtml(String(x))}</div>`).join('')}
@@ -34576,9 +34056,9 @@ function ifty182Summary(rows,limit=200){
  const wrong=list.filter(x=>x.status==='wrong').length;
  const unknown=list.filter(x=>x.status==='unknown').length;
  return `<section data-ifty182-review="1" style="margin-top:20px;padding:clamp(11px,3vw,18px);background:#18293f;color:#f8fafc;border:1px solid #63809e;border-radius:12px;text-align:left;max-width:100%;box-sizing:border-box;overflow-wrap:anywhere">
-  <h3 style="margin:0 0 7px;color:#f8fafc">📋 問題ごとの振り返り</h3>
+  <h3 style="margin:0 0 7px;color:#f8fafc">${ifty216Markup("📋 問題ごとの振り返り","📋 Review by question")}</h3>
   <p style="color:#dbeafe;margin:0 0 12px">記録 ${list.length}問 ／ ✅ ${right} ／ ❌ ${wrong} ／ ？ ${unknown}</p>
-  ${list.map((x,i)=>{const badge=x.status==='correct'?'✅ 正解':x.status==='wrong'?'❌ 不正解':'？ 分からない';const color=x.status==='correct'?'#6ee7b7':x.status==='wrong'?'#fda4af':'#fde68a';return `<details style="margin:8px 0;border:1px solid #526b89;border-radius:9px;background:#22354d;padding:10px" ${x.status==='correct'?'':'open'}><summary style="cursor:pointer;font-weight:800;color:${color};line-height:1.5">${i+1}問目・${badge} — ${safe(x.question).slice(0,120)}</summary><div style="margin-top:10px;line-height:1.65;white-space:pre-wrap;color:#f8fafc"><div><b>問題：</b>${safe(x.question)}</div><div><b>あなたの回答：</b>${safe(x.userAnswer||'（未回答）')}</div><div><b>模範解答：</b>${safe(x.reference||'（未登録）')}</div>${x.feedback?`<div style="color:#dbeafe"><b>解説：</b>${safe(x.feedback)}</div>`:''}</div></details>`}).join('')}
+  ${list.map((x,i)=>{const badge=x.status==='correct'?'✅ 正解':x.status==='wrong'?'❌ 不正解':'？ 分からない';const color=x.status==='correct'?'#6ee7b7':x.status==='wrong'?'#fda4af':'#fde68a';return `<details style="margin:8px 0;border:1px solid #526b89;border-radius:9px;background:#22354d;padding:10px" ${x.status==='correct'?'':'open'}><summary style="cursor:pointer;font-weight:800;color:${color};line-height:1.5">${i+1}問目・${badge} — ${safe(x.question).slice(0,120)}</summary><div style="margin-top:10px;line-height:1.65;white-space:pre-wrap;color:#f8fafc"><div><b>${ifty216Markup("問題：","Question:")}</b>${safe(x.question)}</div><div><b>${ifty216Markup("あなたの回答：","Your answer:")}</b>${safe(x.userAnswer||'（未回答）')}</div><div><b>${ifty216Markup("模範解答：","Model answer:")}</b>${safe(x.reference||'（未登録）')}</div>${x.feedback?`<div style="color:#dbeafe"><b>${ifty216Markup("解説：","Explanation:")}</b>${safe(x.feedback)}</div>`:''}</div></details>`}).join('')}
  </section>`;
 }
 
@@ -34746,7 +34226,7 @@ function mapSvg(m,mode){
  }
  return `<div class="mapbox"><svg id="iftyPlacesSVG" class="${isEdit?'pl-editor':''}" viewBox="0 0 1000 600" role="img" aria-label="${h(m.name)} 地図" onclick="iftyPlacesMapClick(event)" onpointerdown="iftyPlacesMapPointerDown(event)" onpointermove="iftyPlacesMapPointerMove(event);iftyPlacesPointerMove(event)" onpointerup="iftyPlacesMapPointerUp(event);iftyPlacesPointerUp(event)" onpointercancel="iftyPlacesMapPointerCancel(event);iftyPlacesPointerCancel(event)" onwheel="iftyPlacesWheel(event)"><rect width="1000" height="600" fill="#dbeafe"/><g id="pl169Viewport">${borders}${coast}${art}${preview}</g></svg><div class="maphint">${isEdit?pl169Tool==='place'?'配置モード：空白をタップして地点を追加。指でなぞると地図移動、2本指で拡大縮小。':'移動モード：指で地図を動かし、2本指で拡大縮小。アイコンを長く押さずにドラッグすると位置調整。書き込みには「配置」を選択。':'地図上の位置・範囲をタップして回答してください。'}</div></div>`;
 }
-function itemList(m){return `<div class="panel"><h3>書き込み ${m.items.length}件</h3><div class="buttons">${button('iftyPlacesStartQuiz()','⚔️ この地図をPRACTICE','')}</div>${m.items.map(it=>`<div class="item ${selected===it.id?'active':''}"><div><b>${h(it.icon||'📍')} ${h(itemName(it,m))}</b> <span class="muted">${h(THEMES[it.kind]||it.kind)} ${!it.coords?.length?'<strong style="color:#fde68a">⚠️ 位置未設定・PRACTICE対象外</strong>':''} ${h(it.from||'')}${it.to?'〜'+h(it.to):''}</span></div><div class="buttons" style="margin-top:6px">${button(`iftyPlacesChoose('${h(it.id)}')`,'編集')}${button(`iftyPlacesRestoreItem('${h(it.id)}')`,'↩ 基準位置へ')}${button(`iftyPlacesDeleteItem('${h(it.id)}')`,'削除','danger')}</div></div>`).join('')||'<p class="muted">まだ書き込みがありません。</p>'}</div>`}
+function itemList(m){return `<div class="panel"><h3>書き込み ${m.items.length}件</h3><div class="buttons">${button('iftyPlacesStartQuiz()','⚔️ この地図をPRACTICE','')}</div>${m.items.map(it=>`<div class="item ${selected===it.id?'active':''}"><div><b>${h(it.icon||'📍')} ${h(itemName(it,m))}</b> <span class="muted">${h(THEMES[it.kind]||it.kind)} ${!it.coords?.length?'<strong style="color:#fde68a">⚠️ 位置未設定・PRACTICE対象外</strong>':''} ${h(it.from||'')}${it.to?'〜'+h(it.to):''}</span></div><div class="buttons" style="margin-top:6px">${button(`iftyPlacesChoose('${h(it.id)}')`,'編集')}${button(`iftyPlacesRestoreItem('${h(it.id)}')`,'↩ 基準位置へ')}${button(`iftyPlacesDeleteItem('${h(it.id)}')`,'削除','danger')}</div></div>`).join('')||("<p class=\"muted\">" + ifty216Markup("まだ書き込みがありません。","No map entries yet.") + "</p>")}</div>`}
 // STEP188: Independent, user-selectable map practice formats. Only saved factual fields are tested.
 const PL188_MODES=[['locate','📍 地名から位置'],['name','🗺️ 地図から名称'],['choice','🔠 地図四択'],['person','👤 関連人物'],['related_event','⚔️ 関連出来事'],['year','📅 年号'],['explain','✍️ 重要性・地理的特徴']];
 function pl188Rows(v){
@@ -34757,26 +34237,26 @@ function pl188QuizSettings(map){
  const allowed=Array.isArray(map.quizModes188)?map.quizModes188:PL188_MODES.map(x=>x[0]);
  return `<details class="panel" style="margin-top:11px"><summary style="cursor:pointer;font-weight:800;color:#e0f2fe">⚙️ 地図PRACTICEの出題形式（${allowed.length}種類）</summary><p class="muted">関連人物・出来事・年号が未登録なら、その形式は自動的に除外します。四択は異なる項目が4件以上ある場合だけ出題します。</p><div class="pl188-mode-grid">${PL188_MODES.map(([mode,label])=>`<label class="pl188-mode-option"><input type="checkbox" ${allowed.includes(mode)?'checked':''} onchange="iftyPlacesQuizModeChange('${mode}',this.checked)"><span>${label}</span></label>`).join('')}</div><p class="muted">問題文と正解は保存済みの地図データを使います。通常の出題・採点にALLIA通信はありません。</p></details>`;
 }
-function renderList(){active=null;selected=null;draw=[];quiz=null;viewOverride=null;pl169ClearGesture();resetDraft();const maps=load();shell(`<h1>🗺️ ${displayLang(null)==='ja'?'地図・地名':'PLACES'}</h1><p class="muted">フォルダの代わりに地図を作成し、地名・河川・山脈・帝国領土・歴史イベントを記録。地図からそのまま練習できます。</p><div class="buttons">${button('iftyPlacesCreate()','＋ 新しい地図','')}${button('openIftyHome()','HOMEへ戻る')}</div><div class="maplist">${maps.map(m=>`<div class="panel"><h3>${h(mapName(m))}</h3><p class="muted">${h(REGIONS[m.region]?.label||'地域')} · ${m.items.length}件</p><div class="buttons">${button(`iftyPlacesOpen('${h(m.id)}')`,'地図を開く','')}${button(`iftyPlacesDeleteMap('${h(m.id)}')`,'削除','danger')}</div></div>`).join('')||'<p class="muted">地図はまだありません。「新しい地図」から始めてください。</p>'}</div><p class="muted">保存はこの端末・ブラウザのlocalStorageです。別端末への同期はまだありません。</p>`,'list')}
+function renderList(){active=null;selected=null;draw=[];quiz=null;viewOverride=null;pl169ClearGesture();resetDraft();const maps=load();shell(`<h1>🗺️ ${displayLang(null)==='ja'?'地図・地名':'PLACES'}</h1><p class="muted">フォルダの代わりに地図を作成し、地名・河川・山脈・帝国領土・歴史イベントを記録。地図からそのまま練習できます。</p><div class="buttons">${button('iftyPlacesCreate()','＋ 新しい地図','')}${button('openIftyHome()','HOMEへ戻る')}</div><div class="maplist">${maps.map(m=>`<div class="panel"><h3>${h(mapName(m))}</h3><p class="muted">${h(REGIONS[m.region]?.label||'地域')} · ${m.items.length}件</p><div class="buttons">${button(`iftyPlacesOpen('${h(m.id)}')`,'地図を開く','')}${button(`iftyPlacesDeleteMap('${h(m.id)}')`,'削除','danger')}</div></div>`).join('')||("<p class=\"muted\">" + ifty216Markup("地図はまだありません。「新しい地図」から始めてください。","No maps yet. Start with a new map.") + "</p>")}</div><p class="muted">保存はこの端末・ブラウザのlocalStorageです。別端末への同期はまだありません。</p>`,'list')}
 function renderEditor(){captureDraft();const m=current();if(!m)return renderList();quiz=null;const opt=(items,value)=>items.map(([k,v])=>`<option value="${h(k)}" ${k===value?'selected':''}>${h(v)}</option>`).join('');const selItem=m.items.find(x=>x.id===selected);const val=(k,f)=>draft?.[k]??f;const mapTitle=mapName(m);
  shell(`<div class="buttons">${button('openIftyPlaces()','← PLACES一覧')}${button('iftyPlacesStartQuiz()','⚔️ PRACTICE','')}</div><h1>🗺️ ${h(mapTitle)}</h1>
-  <section class="panel" style="border:2px solid #7692b4;padding:clamp(12px,3vw,20px)"><h2 style="font-size:1.1rem;margin:0 0 9px">① 書き込み方法を選ぶ</h2>
+  <section class="panel" style="border:2px solid #7692b4;padding:clamp(12px,3vw,20px)"><h2 style="font-size:1.1rem;margin:0 0 9px">${ifty216Markup("① 書き込み方法を選ぶ","① Choose an entry method")}</h2>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,255px),1fr));gap:10px">
-  <button type="button" onclick="iftyPlacesChooseFlow('manual')" aria-pressed="${pl182EditMode==='manual'}" style="min-height:76px;text-align:left;background:${pl182EditMode==='manual'?'#075985':'#304866'};border:2px solid ${pl182EditMode==='manual'?'#67e8f9':'#607a98'}"><b>📍 自分で位置を指定</b><span style="display:block;font-size:.78rem;line-height:1.5">配置モードで地図をタップ → 名前・説明を自分で入力 → 保存。ALLIAは使いません。</span></button>
-  <button type="button" onclick="iftyPlacesChooseFlow('ai')" aria-pressed="${pl182EditMode==='ai'}" style="min-height:76px;text-align:left;background:${pl182EditMode==='ai'?'#075985':'#304866'};border:2px solid ${pl182EditMode==='ai'?'#67e8f9':'#607a98'}"><b>✨ ALLIAに生成させる</b><span style="display:block;font-size:.78rem;line-height:1.5">名称を入力 →「ALLIAで生成」→ 推定地点と説明を確認・ドラッグ修正 → 保存。</span></button>
+  <button type="button" onclick="iftyPlacesChooseFlow('manual')" aria-pressed="${pl182EditMode==='manual'}" style="min-height:76px;text-align:left;background:${pl182EditMode==='manual'?'#075985':'#304866'};border:2px solid ${pl182EditMode==='manual'?'#67e8f9':'#607a98'}"><b>${ifty216Markup("📍 自分で位置を指定","📍 Set location manually")}</b><span style="display:block;font-size:.78rem;line-height:1.5">配置モードで地図をタップ → 名前・説明を自分で入力 → 保存。ALLIAは使いません。</span></button>
+  <button type="button" onclick="iftyPlacesChooseFlow('ai')" aria-pressed="${pl182EditMode==='ai'}" style="min-height:76px;text-align:left;background:${pl182EditMode==='ai'?'#075985':'#304866'};border:2px solid ${pl182EditMode==='ai'?'#67e8f9':'#607a98'}"><b>${ifty216Markup("✨ ALLIAに生成させる","✨ Generate with ALLIA")}</b><span style="display:block;font-size:.78rem;line-height:1.5">名称を入力 →「ALLIAで生成」→ 推定地点と説明を確認・ドラッグ修正 → 保存。</span></button>
   </div><p style="color:#f1f5f9;font-size:.88rem;margin:10px 0 0">${pl182EditMode==='manual'?'現在：手動入力。地図の空白をタップして地点を指定します。':pl182EditMode==='ai'?'現在：ALLIA生成。名前を入力して明示的に生成ボタンを押します。':'最初にどちらかを選んでください。既存のピンはそのまま表示されます。'}</p></section>${notice?`<p class="notice">${h(notice)}</p>`:''}
- <div class="pl169-toolbar" role="group" aria-label="地図操作モード">
- <button type="button" aria-pressed="${pl169Tool==='move'}" onclick="iftyPlacesSetTool('move')">🖐 移動</button><button type="button" aria-pressed="${pl169Tool==='place'}" onclick="iftyPlacesSetTool('place')">📍 配置</button>
+ <div class="pl169-toolbar" role="group" aria-label="${ifty216Markup("地図操作モード","Map interaction mode")}">
+ <button type="button" aria-pressed="${pl169Tool==='move'}" onclick="iftyPlacesSetTool('move')">${ifty216Markup("🖐 移動","🖐 Pan")}</button><button type="button" aria-pressed="${pl169Tool==='place'}" onclick="iftyPlacesSetTool('place')">${ifty216Markup("📍 配置","📍 Place")}</button>
  ${button('iftyPlacesZoom(0.72)','＋ 拡大')}${button('iftyPlacesZoom(1.39)','－ 縮小')}${button('iftyPlacesResetView()','⤢ 全体')}
- <label style="display:flex;align-items:center;gap:6px;flex:1 1 160px">表示名<select aria-label="地名の表示言語" onchange="iftyPlacesSetting('labelLanguage',this.value)">${opt([['auto','設定に従う'],['ja','日本語'],['en','English']],m.labelLanguage||'auto')}</select></label>
+ <label style="display:flex;align-items:center;gap:6px;flex:1 1 160px">${ifty216Markup("表示名","Display name")}<select aria-label="${ifty216Markup("地名の表示言語","Place-name language")}" onchange="iftyPlacesSetting('labelLanguage',this.value)">${opt([['auto','設定に従う'],['ja','日本語'],['en','English']],m.labelLanguage||'auto')}</select></label>
  <span class="pl169-tip">${pl169Tool==='move'?'指で地図を動かし、マーカーは直接ドラッグ。':'空白をタップして位置を追加。'} 2本指で拡大・縮小。</span></div>
  ${mapSvg(m,'edit')}
  ${pl188QuizSettings(m)}
  <div class="pl169-settings-toggle">${button('iftyPlacesToggleSettings()',pl169SettingsOpen?'⚙️ 地図設定を閉じる':'⚙️ 地図名・地域・国境線などの設定')}</div>
- ${pl169SettingsOpen?` <div class="panel"><div class="fields"><label>地図名（基本）<input id="pl164Name" value="${h(m.name)}" onchange="iftyPlacesSetting('name',this.value)"></label><label>日本語名（地図）<input value="${h(m.nameJa||'')}" placeholder="例：世界史の地図" onchange="iftyPlacesSetting('nameJa',this.value)"></label><label>英語名（地図）<input value="${h(m.nameEn||'')}" placeholder="e.g. History Map" onchange="iftyPlacesSetting('nameEn',this.value)"></label><label>地名の表示言語<select onchange="iftyPlacesSetting('labelLanguage',this.value)">${opt([['auto','全体設定に合わせる'],['ja','日本語'],['en','English']],m.labelLanguage||'auto')}</select></label><label>表示地域<select onchange="iftyPlacesSetting('region',this.value)">${opt(Object.entries(REGIONS).map(([k,v])=>[k,v.label]),m.region)}</select></label><label>投影法<select onchange="iftyPlacesSetting('projection',this.value)">${opt([['equirect','正距円筒図法'],['mercator','メルカトル図法'],['azimuthal','正距方位図法（中心周辺）']],m.projection)}</select></label><label>表示年代（空欄で全時代）<input type="number" value="${h(m.filterYear??'')}" placeholder="例：1453" onchange="iftyPlacesSetting('filterYear',this.value)"></label></div><div class="buttons" style="margin-top:9px">${button('iftyPlacesToggleBorders()','🗺️ 国境線：'+(m.showBorders===false?'OFF':'ON'))}</div><p class="muted" style="margin:8px 0 0">国境線は参考用の現代国境です。歴史上の帝国・王国の領土や勢力圏とは異なります。</p></div>`:''}
- <div class="row" style="${(!selItem&&!pl182EditMode)?'display:none;':''}"><div class="panel"><h3>${selItem?'マーカーを編集':'新しく書き込む'}</h3><div class="fields"><label>種類<select id="pl164Kind" onchange="iftyPlacesKindChanged()">${opt(Object.entries(THEMES),val('pl164Kind',selItem?.kind||(pl182EditMode==='ai'?'auto':'event')))}</select></label><label>アイコン<select id="pl164Icon">${opt(ICONS.map(i=>[i,i]),val('pl164Icon',selItem?.icon||'⚔️'))}</select></label><label>名称（基本・ALLIA検索用）<input id="pl164ItemName" value="${h(val('pl164ItemName',selItem?.name||''))}" placeholder="例：ワーテルローの戦い" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();this.blur();}"></label><label>日本語名（任意）<input id="pl169NameJa" value="${h(val('pl169NameJa',selItem?.nameJa||''))}" placeholder="例：ワーテルローの戦い"></label><label>English name（任意）<input id="pl169NameEn" value="${h(val('pl169NameEn',selItem?.nameEn||''))}" placeholder="e.g. Battle of Waterloo"></label><label>色<input type="color" id="pl164Color" value="${h(val('pl164Color',selItem?.color||'#dc2626'))}"></label><label>開始年（紀元前は負の値）<input type="number" id="pl164From" value="${h(val('pl164From',selItem?.from??''))}" placeholder="例：1815"></label><label>終了年<input type="number" id="pl164To" value="${h(val('pl164To',selItem?.to??''))}" placeholder="任意"></label></div><label style="margin-top:8px">関連人物（1人1行・複数可）<textarea id="pl188People" rows="2" placeholder="例：ナポレオン／ウェリントン。AI生成後に内容を確認してください。">${h(val('pl188People',(selItem?.relatedPeople||[]).join('\n')))}</textarea></label>
- <label style="margin-top:8px">関連する出来事（1件1行・複数可）<textarea id="pl188Events" rows="2" placeholder="例：ワーテルローの戦い">${h(val('pl188Events',(selItem?.relatedEvents||[]).join('\n')))}</textarea></label>
- <label style="margin-top:8px">解説・原因・結果<textarea id="pl164Desc" rows="3">${h(val('pl164Desc',selItem?.description||''))}</textarea></label><p class="pl-ai-note">${pl182EditMode==='ai'?'ALLIAの候補を生成してから、地図上の位置・年代・説明を確認してください。正確な位置は保証されません。':'自分で位置を指定し、名称と説明を入力して保存します。この操作ではALLIAを呼びません。'}</p><div class="buttons" style="margin-top:9px">${pl182EditMode==='ai'?button('iftyPlacesAutoGenerate(true)',aiPending?'⏳ ALLIA生成中':'✨ 名称からALLIAで生成','',aiPending):''}</div><p class="muted" id="pl165AiStatus" role="status" aria-live="polite">${h(aiStatus||'名称の入力を完了すると生成します。')}</p><p class="muted">${selItem?'既存マーカーは地図上でドラッグできます。線・面は選択後、頂点も編集できます。':'AIが提案する線・面は正確な境界ではなく仮形状です。頂点をドラッグして修正できます。位置を特定できない場合も内容を保存し、後から配置できます。'}</p><div class="buttons">${button('iftyPlacesSaveItem()','💾 '+(selItem?'変更を保存':'書き込みを保存'),'')}${selItem?button('iftyPlacesRestoreItem()', '↩ 基準位置へ戻す'):''}${selItem?button('iftyPlacesSetDefaultItem()', '📌 現位置を基準に設定'):''}${pl169LastMove?button('iftyPlacesUndoMove()', '⤺ 直前の移動を取消'):''}${button('iftyPlacesUndoPoint()','直前の点を戻す')}${button('iftyPlacesClearPoints()','描画取消')}${selItem?button('iftyPlacesChoose(null)','新規作成'):''}</div><p class="pl169-mini">${selItem?'基準位置：'+(selItem.defaultCoords?.length?'保存済み':'現在位置が初期基準（移動時に保存）'): '新規作成の位置は保存時に基準位置として登録されます。'}</p><p class="muted">現在の入力点：${draw.length}個 ${selItem?'／編集対象の座標を使用':''}</p></div>${itemList(m)}</div>`,'editor')}
+ ${pl169SettingsOpen?` <div class="panel"><div class="fields"><label>${ifty216Markup("地図名（基本）","Map name (primary)")}<input id="pl164Name" value="${h(m.name)}" onchange="iftyPlacesSetting('name',this.value)"></label><label>${ifty216Markup("日本語名（地図）","Japanese map name")}<input value="${h(m.nameJa||'')}" placeholder="例：世界史の地図" onchange="iftyPlacesSetting('nameJa',this.value)"></label><label>${ifty216Markup("英語名（地図）","English map name")}<input value="${h(m.nameEn||'')}" placeholder="e.g. History Map" onchange="iftyPlacesSetting('nameEn',this.value)"></label><label>${ifty216Markup("地名の表示言語","Place-name language")}<select onchange="iftyPlacesSetting('labelLanguage',this.value)">${opt([['auto','全体設定に合わせる'],['ja','日本語'],['en','English']],m.labelLanguage||'auto')}</select></label><label>${ifty216Markup("表示地域","Region")}<select onchange="iftyPlacesSetting('region',this.value)">${opt(Object.entries(REGIONS).map(([k,v])=>[k,v.label]),m.region)}</select></label><label>${ifty216Markup("投影法","Projection")}<select onchange="iftyPlacesSetting('projection',this.value)">${opt([['equirect','正距円筒図法'],['mercator','メルカトル図法'],['azimuthal','正距方位図法（中心周辺）']],m.projection)}</select></label><label>${ifty216Markup("表示年代（空欄で全時代）","Year filter (blank for all periods)")}<input type="number" value="${h(m.filterYear??'')}" placeholder="例：1453" onchange="iftyPlacesSetting('filterYear',this.value)"></label></div><div class="buttons" style="margin-top:9px">${button('iftyPlacesToggleBorders()','🗺️ 国境線：'+(m.showBorders===false?'OFF':'ON'))}</div><p class="muted" style="margin:8px 0 0">国境線は参考用の現代国境です。歴史上の帝国・王国の領土や勢力圏とは異なります。</p></div>`:''}
+ <div class="row" style="${(!selItem&&!pl182EditMode)?'display:none;':''}"><div class="panel"><h3>${selItem?'マーカーを編集':'新しく書き込む'}</h3><div class="fields"><label>${ifty216Markup("種類","Type")}<select id="pl164Kind" onchange="iftyPlacesKindChanged()">${opt(Object.entries(THEMES),val('pl164Kind',selItem?.kind||(pl182EditMode==='ai'?'auto':'event')))}</select></label><label>${ifty216Markup("アイコン","Icon")}<select id="pl164Icon">${opt(ICONS.map(i=>[i,i]),val('pl164Icon',selItem?.icon||'⚔️'))}</select></label><label>${ifty216Markup("名称（基本・ALLIA検索用）","Name (primary / ALLIA search)")}<input id="pl164ItemName" value="${h(val('pl164ItemName',selItem?.name||''))}" placeholder="例：ワーテルローの戦い" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();this.blur();}"></label><label>${ifty216Markup("日本語名（任意）","Japanese name (optional)")}<input id="pl169NameJa" value="${h(val('pl169NameJa',selItem?.nameJa||''))}" placeholder="例：ワーテルローの戦い"></label><label>${ifty216Markup("English name（任意）","English name (optional)")}<input id="pl169NameEn" value="${h(val('pl169NameEn',selItem?.nameEn||''))}" placeholder="e.g. Battle of Waterloo"></label><label>${ifty216Markup("色","Colour")}<input type="color" id="pl164Color" value="${h(val('pl164Color',selItem?.color||'#dc2626'))}"></label><label>${ifty216Markup("開始年（紀元前は負の値）","Start year (negative for BCE)")}<input type="number" id="pl164From" value="${h(val('pl164From',selItem?.from??''))}" placeholder="例：1815"></label><label>${ifty216Markup("終了年","End year")}<input type="number" id="pl164To" value="${h(val('pl164To',selItem?.to??''))}" placeholder="${ifty216Markup("任意","Optional")}"></label></div><label style="margin-top:8px">${ifty216Markup("関連人物（1人1行・複数可）","Related people (one per line)")}<textarea id="pl188People" rows="2" placeholder="例：ナポレオン／ウェリントン。AI生成後に内容を確認してください。">${h(val('pl188People',(selItem?.relatedPeople||[]).join('\n')))}</textarea></label>
+ <label style="margin-top:8px">${ifty216Markup("関連する出来事（1件1行・複数可）","Related events (one per line)")}<textarea id="pl188Events" rows="2" placeholder="例：ワーテルローの戦い">${h(val('pl188Events',(selItem?.relatedEvents||[]).join('\n')))}</textarea></label>
+ <label style="margin-top:8px">${ifty216Markup("解説・原因・結果","Explanation, causes and effects")}<textarea id="pl164Desc" rows="3">${h(val('pl164Desc',selItem?.description||''))}</textarea></label><p class="pl-ai-note">${pl182EditMode==='ai'?'ALLIAの候補を生成してから、地図上の位置・年代・説明を確認してください。正確な位置は保証されません。':'自分で位置を指定し、名称と説明を入力して保存します。この操作ではALLIAを呼びません。'}</p><div class="buttons" style="margin-top:9px">${pl182EditMode==='ai'?button('iftyPlacesAutoGenerate(true)',aiPending?'⏳ ALLIA生成中':'✨ 名称からALLIAで生成','',aiPending):''}</div><p class="muted" id="pl165AiStatus" role="status" aria-live="polite">${h(aiStatus||'名称の入力を完了すると生成します。')}</p><p class="muted">${selItem?'既存マーカーは地図上でドラッグできます。線・面は選択後、頂点も編集できます。':'AIが提案する線・面は正確な境界ではなく仮形状です。頂点をドラッグして修正できます。位置を特定できない場合も内容を保存し、後から配置できます。'}</p><div class="buttons">${button('iftyPlacesSaveItem()','💾 '+(selItem?'変更を保存':'書き込みを保存'),'')}${selItem?button('iftyPlacesRestoreItem()', '↩ 基準位置へ戻す'):''}${selItem?button('iftyPlacesSetDefaultItem()', '📌 現位置を基準に設定'):''}${pl169LastMove?button('iftyPlacesUndoMove()', '⤺ 直前の移動を取消'):''}${button('iftyPlacesUndoPoint()','直前の点を戻す')}${button('iftyPlacesClearPoints()','描画取消')}${selItem?button('iftyPlacesChoose(null)','新規作成'):''}</div><p class="pl169-mini">${selItem?'基準位置：'+(selItem.defaultCoords?.length?'保存済み':'現在位置が初期基準（移動時に保存）'): '新規作成の位置は保存時に基準位置として登録されます。'}</p><p class="muted">現在の入力点：${draw.length}個 ${selItem?'／編集対象の座標を使用':''}</p></div>${itemList(m)}</div>`,'editor')}
 function pl188QuestionPrompt(q){
  if(q.prompt)return q.prompt;
  if(q.type==='locate')return `「${q.answer}」の位置・範囲を地図上でタップしてください。`;
@@ -34805,10 +34285,10 @@ function pl188QuestionContent(q,m){
  const unknownButton=button('iftyPlacesUnknown()','？ 分からない（答えを見る）','pl188-secondary');
  const helpButton=button("ifty143OpenHelp('places')",'💬 ALLIAに質問','pl188-help');
  const choices=q.type==='choice'&&!answered?`<div class="pl188-option-grid">${(q.options||[]).map((opt,i)=>`<button class="pl188-quiz-choice" type="button" onclick="iftyPlacesAnswerChoice(${i})">${String.fromCharCode(65+i)}. ${h(opt)}</button>`).join('')}</div>`:'';
- const textbox=input&&!answered&&!pending?`<div class="panel"><label>${q.type==='year'?'年号を入力':q.type==='explain'?'説明を記入':'名称を入力'}${q.type==='explain'?'<textarea class="pl188-quiz-textarea" id="pl164Answer" rows="3" placeholder="自分の説明を書いてから模範解答と比較"> </textarea>':'<input id="pl164Answer" autocomplete="off" placeholder="回答を入力" onkeydown="if(event.key===\'Enter\'&&!event.isComposing){event.preventDefault();iftyPlacesAnswerText();}">'}</label><div class="buttons" style="margin-top:10px">${button('iftyPlacesAnswerText()',q.type==='explain'?'模範解答と比較':'回答する','')}${unknownButton}</div></div>`:'';
- const self=pending&&!answered?`<div class="panel" role="status"><h3>自分の説明を模範解答と比較してください</h3><p><b>自分の回答：</b>${h(pending.answer)}</p><div class="pl188-quiz-text"><b>模範解答：</b> ${h(q.answer)}</div><div class="buttons" style="margin-top:12px">${button('iftyPlacesSelfGrade(true)','⭕ 正解として記録','')}${button('iftyPlacesSelfGrade(false)','❌ 不正解として記録','danger')}${unknownButton}</div></div>`:'';
- const result=answered?`<div class="panel" role="status"><h3>${quiz.feedback.unknown?'？ 分からない':quiz.feedback.ok?'✅ 正解':'❌ 不正解'}</h3><p><b>正解：</b>${h(q.answer)}${(q.accepted||[]).length>1?`<span class="pl188-flag">（他の正解例：${h(q.accepted.slice(1,5).join('、'))}）</span>`:''}</p>${q.description?`<p class="muted">${h(q.description)}</p>`:''}<div class="buttons">${button('iftyPlacesNext()','次へ →','')}</div></div>`:'';
- return `<div class="buttons">${button('iftyPlacesOpenActive()','← 地図編集へ')}</div><h1>⚔️ PLACES PRACTICE</h1><p class="muted">${quiz.index+1} / ${quiz.questions.length}問 ／ ✅ ${quiz.correct} ／ ？ ${quiz.unknown||0}</p><h2>${h(prompt)}</h2>${mapSvg(snapshot,'quiz')}${choices}${textbox}${self}${(q.type==='locate'||q.type==='choice')&&!answered?`<div class="buttons" style="margin:10px 0">${unknownButton}</div>`:''}${!answered?`<div class="buttons" style="margin:10px 0">${helpButton}</div>`:`<div class="buttons" style="margin:10px 0">${helpButton}</div>`}${result}`;
+ const textbox=input&&!answered&&!pending?`<div class="panel"><label>${q.type==='year'?ifty216T("年号を入力","Enter the year"):q.type==='explain'?'説明を記入':'名称を入力'}${q.type==='explain'?'<textarea class="pl188-quiz-textarea" id="pl164Answer" rows="3" placeholder="自分の説明を書いてから模範解答と比較"> </textarea>':("<input id=\"pl164Answer\" autocomplete=\"off\" placeholder=\"" + ifty216Markup("回答を入力","Enter an answer") + "\" onkeydown=\"if(event.key==='Enter'&&!event.isComposing){event.preventDefault();iftyPlacesAnswerText();}\">")}</label><div class="buttons" style="margin-top:10px">${button('iftyPlacesAnswerText()',q.type==='explain'?'模範解答と比較':'回答する','')}${unknownButton}</div></div>`:'';
+ const self=pending&&!answered?`<div class="panel" role="status"><h3>${ifty216Markup("自分の説明を模範解答と比較してください","Compare your explanation with the model answer")}</h3><p><b>${ifty216Markup("自分の回答：","Your answer:")}</b>${h(pending.answer)}</p><div class="pl188-quiz-text"><b>${ifty216Markup("模範解答：","Model answer:")}</b> ${h(q.answer)}</div><div class="buttons" style="margin-top:12px">${button('iftyPlacesSelfGrade(true)','⭕ 正解として記録','')}${button('iftyPlacesSelfGrade(false)','❌ 不正解として記録','danger')}${unknownButton}</div></div>`:'';
+ const result=answered?`<div class="panel" role="status"><h3>${quiz.feedback.unknown?ifty216T("？ 分からない","? Don't know"):quiz.feedback.ok?'✅ 正解':ifty216T("❌ 不正解","❌ Incorrect")}</h3><p><b>${ifty216Markup("正解：","Correct answer:")}</b>${h(q.answer)}${(q.accepted||[]).length>1?`<span class="pl188-flag">（他の正解例：${h(q.accepted.slice(1,5).join('、'))}）</span>`:''}</p>${q.description?`<p class="muted">${h(q.description)}</p>`:''}<div class="buttons">${button('iftyPlacesNext()','次へ →','')}</div></div>`:'';
+ return `<div class="buttons">${button('iftyPlacesOpenActive()','← 地図編集へ')}</div><h1>${ifty216Markup("⚔️ 地図・地名の実践","⚔️ PLACES PRACTICE")}</h1><p class="muted">${quiz.index+1} / ${quiz.questions.length}問 ／ ✅ ${quiz.correct} ／ ？ ${quiz.unknown||0}</p><h2>${h(prompt)}</h2>${mapSvg(snapshot,'quiz')}${choices}${textbox}${self}${(q.type==='locate'||q.type==='choice')&&!answered?`<div class="buttons" style="margin:10px 0">${unknownButton}</div>`:''}${!answered?`<div class="buttons" style="margin:10px 0">${helpButton}</div>`:`<div class="buttons" style="margin:10px 0">${helpButton}</div>`}${result}`;
 }
 function renderQuiz(){
  const m=current();if(!m)return renderList();if(!quiz)return renderEditor();
@@ -35278,9 +34758,9 @@ function ifty175Pick(subject,{sourceId='',setId='',mode='',exclude=[]}={}){
 function ifty175Toolbar(subject,setId=''){
  const s=ifty175Subject(subject),count=ifty175Entries(s).length;
  return `<div data-ifty175-tools style="margin:12px 0;padding:12px;border:1px solid #617895;background:#1c304a;color:#f8fafc;border-radius:11px;display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
- <div style="flex:1;min-width:155px;"><b>📚 保存済み問題 ${count}問</b><div style="font-size:.8em;color:#cbd5e1;">ALLIAが使えないときも再出題／手動問題を追加できます</div></div>
- <button type="button" onclick="ifty175OpenEditor(${ifty175Arg(s)},${ifty175Arg(setId)})" style="border:0;background:#2563eb;color:white;font-weight:800;border-radius:8px;padding:11px;min-height:44px;">＋ 問題を作る</button>
- <button type="button" onclick="ifty175OpenLibrary(${ifty175Arg(s)},${ifty175Arg(setId)})" style="border:1px solid #93c5fd;background:#304866;color:white;font-weight:800;border-radius:8px;padding:11px;min-height:44px;">📖 保存問題で練習</button></div>`;
+ <div style="flex:1;min-width:155px;"><b>📚 保存済み問題 ${count}問</b><div style="font-size:.8em;color:#cbd5e1;">${ifty216Markup("ALLIAが使えないときも再出題／手動問題を追加できます","Reuse questions or add manual ones even when ALLIA is unavailable")}</div></div>
+ <button type="button" onclick="ifty175OpenEditor(${ifty175Arg(s)},${ifty175Arg(setId)})" style="border:0;background:#2563eb;color:white;font-weight:800;border-radius:8px;padding:11px;min-height:44px;">${ifty216Markup("＋ 問題を作る","＋ Create question")}</button>
+ <button type="button" onclick="ifty175OpenLibrary(${ifty175Arg(s)},${ifty175Arg(setId)})" style="border:1px solid #93c5fd;background:#304866;color:white;font-weight:800;border-radius:8px;padding:11px;min-height:44px;">${ifty216Markup("📖 保存問題で練習","📖 Practise saved questions")}</button></div>`;
 }
 function ifty175Modal(html){
  let modal=document.getElementById('practiceModal');
@@ -35295,8 +34775,8 @@ window.ifty175OpenLibrary=function(subject='ENGLISH',setId=''){
  ifty175View={subject:ifty175Subject(subject),setId:String(setId||'')};
  const rows=ifty175Entries(ifty175View.subject,ifty175View.setId);
  const idArg=row=>ifty175Arg(row.id);
- const buttons=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"><button type="button" onclick="ifty175OpenEditor(${ifty175Arg(ifty175View.subject)},${ifty175Arg(ifty175View.setId)})" style="${ifty175ButtonStyle}background:#2563eb;">＋ 手動で問題追加</button><button type="button" onclick="ifty175StartLibrary(${ifty175Arg(ifty175View.subject)},${ifty175Arg(ifty175View.setId)})" ${rows.length?'':'disabled'} style="${ifty175ButtonStyle}">▶ ${rows.length}問から出題</button><button type="button" onclick="ifty175Close()" style="${ifty175ButtonStyle}">PRACTICEに戻る</button></div>`;
- ifty175Modal(`<h2 style="margin:0 0 7px;">📚 ${escapeHtml(ifty175View.subject)} 問題ライブラリ</h2><p style="color:#cbd5e1;margin:0 0 12px;">手動登録した問題と、以前に生成・誤答した問題を再利用します。出題にALLIAは使いません。</p>${buttons}${rows.length?rows.map(row=>`<article style="border:1px solid #617895;background:#122239;border-radius:9px;padding:12px;margin:8px 0;"><div style="font-size:.78em;color:#93c5fd;">${row.origin==='manual'?'✍️ 手動':row.origin==='review'?'🔁 誤答履歴':'🤖 以前の出題'} ／ ${escapeHtml(row.kind)}</div><div style="font-weight:800;white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0;">${escapeHtml(row.question.question)}</div><div style="color:#cbd5e1;font-size:.85em;white-space:pre-wrap;">正答：${escapeHtml(row.question.referenceAnswer)}</div>${row.origin==='manual'?`<div style="display:flex;gap:8px;margin-top:8px;"><button type="button" onclick="ifty175OpenEditor(${ifty175Arg(ifty175View.subject)},${ifty175Arg(ifty175View.setId)},${idArg(row)})" style="${ifty175ButtonStyle}">編集</button><button type="button" onclick="ifty175Delete(${idArg(row)})" style="${ifty175ButtonStyle}background:#8f2434;">削除</button></div>`:''}</article>`).join(''):'<p>保存済み問題はまだありません。「＋ 手動で問題追加」から作成してください。</p>'}`);
+ const buttons=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"><button type="button" onclick="ifty175OpenEditor(${ifty175Arg(ifty175View.subject)},${ifty175Arg(ifty175View.setId)})" style="${ifty175ButtonStyle}background:#2563eb;">＋ 手動で問題追加</button><button type="button" onclick="ifty175StartLibrary(${ifty175Arg(ifty175View.subject)},${ifty175Arg(ifty175View.setId)})" ${rows.length?'':'disabled'} style="${ifty175ButtonStyle}">▶ ${rows.length}問から出題</button><button type="button" onclick="ifty175Close()" style="${ifty175ButtonStyle}">${ifty216Markup("PRACTICEに戻る","Back to practice")}</button></div>`;
+ ifty175Modal(`<h2 style="margin:0 0 7px;">📚 ${escapeHtml(ifty175View.subject)} 問題ライブラリ</h2><p style="color:#cbd5e1;margin:0 0 12px;">手動登録した問題と、以前に生成・誤答した問題を再利用します。出題にALLIAは使いません。</p>${buttons}${rows.length?rows.map(row=>`<article style="border:1px solid #617895;background:#122239;border-radius:9px;padding:12px;margin:8px 0;"><div style="font-size:.78em;color:#93c5fd;">${row.origin==='manual'?'✍️ 手動':row.origin==='review'?'🔁 誤答履歴':'🤖 以前の出題'} ／ ${escapeHtml(row.kind)}</div><div style="font-weight:800;white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0;">${escapeHtml(row.question.question)}</div><div style="color:#cbd5e1;font-size:.85em;white-space:pre-wrap;">正答：${escapeHtml(row.question.referenceAnswer)}</div>${row.origin==='manual'?`<div style="display:flex;gap:8px;margin-top:8px;"><button type="button" onclick="ifty175OpenEditor(${ifty175Arg(ifty175View.subject)},${ifty175Arg(ifty175View.setId)},${idArg(row)})" style="${ifty175ButtonStyle}">${ifty216Markup("編集","Edit")}</button><button type="button" onclick="ifty175Delete(${idArg(row)})" style="${ifty175ButtonStyle}background:#8f2434;">${ifty216Markup("削除","Delete")}</button></div>`:''}</article>`).join(''):'<p>保存済み問題はまだありません。「＋ 手動で問題追加」から作成してください。</p>'}`);
 };
 window.ifty175Close=function(){const s=ifty175View.subject;ifty175Run=null;window.openPracticeHome(s);};
 window.ifty175OpenEditor=function(subject='ENGLISH',setId='',rowId=''){
@@ -35307,13 +34787,13 @@ window.ifty175OpenEditor=function(subject='ENGLISH',setId='',rowId=''){
  const options=Array.isArray(q.options)?q.options.join('\n'):'';
  ifty175Modal(`<h2 style="margin:0 0 8px;">✍️ ${row?'問題を編集':'問題を手動追加'}</h2><p style="color:#cbd5e1;margin:0 0 10px;">${escapeHtml(ifty175View.subject)}・AI通信なし。保存した問題は問題ライブラリから練習できます。</p>
  <form id="ifty175Form" onsubmit="event.preventDefault();ifty175SaveManual(${ifty175Arg(rowId)});">
- <label style="font-weight:800;">出題形式<select id="ifty175Kind" onchange="ifty175EditorKindChanged()" style="${inputStyle}"><option value="choice" ${kind==='choice'?'selected':''}>四択・選択</option><option value="written" ${kind==='written'?'selected':''}>記述（自己採点）</option><option value="year" ${kind==='year'?'selected':''}>年号記述（年の一致で採点）</option><option value="truefalse" ${kind==='truefalse'?'selected':''}>正誤・訂正</option></select></label>
- <label style="font-weight:800;">問題文<textarea id="ifty175Question" rows="3" required maxlength="4000" style="${inputStyle}">${escapeHtml(q.question||'')}</textarea></label>
- <div id="ifty175ChoiceFields"><label style="font-weight:800;">選択肢（1行に1つ、2〜8個）<textarea id="ifty175Options" rows="5" style="${inputStyle}" placeholder="ローマ帝国\nアケメネス朝\n唐\nオスマン帝国">${escapeHtml(options)}</textarea></label></div>
- <div id="ifty175TFFields"><label style="font-weight:800;">正誤<select id="ifty175Truth" style="${inputStyle}"><option value="true" ${q.isCorrect===true?'selected':''}>正しい文（○）</option><option value="false" ${q.isCorrect===false?'selected':''}>誤りのある文（✕）</option></select></label></div>
- <label style="font-weight:800;">正答・模範解答<input id="ifty175Answer" required maxlength="2000" value="${escapeHtml(q.referenceAnswer||'')}" style="${inputStyle}" placeholder="選択問題では選択肢と同じ文字列を入力"></label>
- <label style="font-weight:800;">解説（任意）<textarea id="ifty175Explanation" rows="3" style="${inputStyle}">${escapeHtml(q.explanation||'')}</textarea></label>
- <div id="ifty175Validation" role="alert" style="color:#fecaca;font-weight:800;margin:8px 0;"></div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="submit" style="${ifty175ButtonStyle}background:#2563eb;">💾 保存する</button><button type="button" onclick="ifty175OpenLibrary(${ifty175Arg(ifty175View.subject)},${ifty175Arg(ifty175View.setId)})" style="${ifty175ButtonStyle}">戻る</button></div></form>`);
+ <label style="font-weight:800;">${ifty216Markup("出題形式","Question type")}<select id="ifty175Kind" onchange="ifty175EditorKindChanged()" style="${inputStyle}"><option value="choice" ${kind==='choice'?'selected':''}>${ifty216Markup("四択・選択","Multiple choice")}</option><option value="written" ${kind==='written'?'selected':''}>${ifty216Markup("記述（自己採点）","Written response (self-assessment)")}</option><option value="year" ${kind==='year'?'selected':''}>${ifty216Markup("年号記述（年の一致で採点）","Year response (exact year grading)")}</option><option value="truefalse" ${kind==='truefalse'?'selected':''}>${ifty216Markup("正誤・訂正","True/false & correction")}</option></select></label>
+ <label style="font-weight:800;">${ifty216Markup("問題文","Question text")}<textarea id="ifty175Question" rows="3" required maxlength="4000" style="${inputStyle}">${escapeHtml(q.question||'')}</textarea></label>
+ <div id="ifty175ChoiceFields"><label style="font-weight:800;">${ifty216Markup("選択肢（1行に1つ、2〜8個）","Options (2–8, one per line)")}<textarea id="ifty175Options" rows="5" style="${inputStyle}" placeholder="ローマ帝国\nアケメネス朝\n唐\nオスマン帝国">${escapeHtml(options)}</textarea></label></div>
+ <div id="ifty175TFFields"><label style="font-weight:800;">${ifty216Markup("正誤","True / false")}<select id="ifty175Truth" style="${inputStyle}"><option value="true" ${q.isCorrect===true?'selected':''}>${ifty216Markup("正しい文（○）","True statement (○)")}</option><option value="false" ${q.isCorrect===false?'selected':''}>${ifty216Markup("誤りのある文（✕）","False statement (✕)")}</option></select></label></div>
+ <label style="font-weight:800;">${ifty216Markup("正答・模範解答","Correct / model answer")}<input id="ifty175Answer" required maxlength="2000" value="${escapeHtml(q.referenceAnswer||'')}" style="${inputStyle}" placeholder="${ifty216Markup("選択問題では選択肢と同じ文字列を入力","For choice questions, enter an exact option")}"></label>
+ <label style="font-weight:800;">${ifty216Markup("解説（任意）","Explanation (optional)")}<textarea id="ifty175Explanation" rows="3" style="${inputStyle}">${escapeHtml(q.explanation||'')}</textarea></label>
+ <div id="ifty175Validation" role="alert" style="color:#fecaca;font-weight:800;margin:8px 0;"></div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="submit" style="${ifty175ButtonStyle}background:#2563eb;">${ifty216Markup("💾 保存する","💾 Save")}</button><button type="button" onclick="ifty175OpenLibrary(${ifty175Arg(ifty175View.subject)},${ifty175Arg(ifty175View.setId)})" style="${ifty175ButtonStyle}">${ifty216Markup("戻る","Back")}</button></div></form>`);
  window.ifty175EditorKindChanged();
 };
 window.ifty175EditorKindChanged=function(){
@@ -35363,13 +34843,13 @@ function ifty175RenderPlayer(){
  const st=ifty175Run;if(!st)return;
  const row=st.rows[st.index];
  if(!row){
-   ifty175Modal(`<h2>✅ 保存済み問題の練習完了</h2><p>正解 ${st.correct} ・ 不正解 ${st.wrong}（ALLIA使用なし）</p>${ifty182Summary(st.history182)}<button type="button" onclick="ifty175OpenLibrary(${ifty175Arg(ifty175View.subject)},${ifty175Arg(ifty175View.setId)})" style="${ifty175ButtonStyle}">問題一覧へ</button>`);return;
+   ifty175Modal(`<h2>${ifty216Markup("✅ 保存済み問題の練習完了","✅ Saved-question practice complete")}</h2><p>正解 ${st.correct} ・ 不正解 ${st.wrong}（ALLIA使用なし）</p>${ifty182Summary(st.history182)}<button type="button" onclick="ifty175OpenLibrary(${ifty175Arg(ifty175View.subject)},${ifty175Arg(ifty175View.setId)})" style="${ifty175ButtonStyle}">${ifty216Markup("問題一覧へ","Back to questions")}</button>`);return;
  }
  const q=row.question,kind=q.kind||'written';
  const options=kind==='choice'?(q.options||[]).map((op,i)=>`<label style="display:block;padding:10px;margin:7px 0;border:1px solid #7192b6;background:#263d59;border-radius:9px;overflow-wrap:anywhere;"><input type="radio" name="ifty175Pick" value="${i}" style="margin-right:8px;">${String.fromCharCode(65+i)}. ${escapeHtml(String(op))}</label>`).join(''):'';
- const input=kind==='choice'?options:kind==='truefalse'?`<div style="display:flex;gap:15px;margin-top:10px;"><label><input type="radio" name="ifty175TruthValue" value="true"> ○ 正しい</label><label><input type="radio" name="ifty175TruthValue" value="false"> ✕ 誤りあり</label></div><textarea id="ifty175AnswerInput" rows="2" placeholder="訂正後の全文（必要なら）" style="width:100%;box-sizing:border-box;margin-top:8px;border-radius:8px;padding:10px;font:inherit;background:#fff;color:#0f172a;"></textarea>`:`<textarea id="ifty175AnswerInput" rows="3" placeholder="${kind==='year'?'年号を入力':'回答を書いてから模範解答を確認'}" style="width:100%;box-sizing:border-box;margin-top:12px;border-radius:8px;padding:12px;font:inherit;background:#fff;color:#0f172a;"></textarea>`;
- const result=st.answered?`<div style="margin-top:14px;background:#10374a;border:1px solid #6ee7b7;border-radius:10px;padding:14px;"><div style="font-weight:900;font-size:1.12em;">${st.result===true?'⭕ 正解':st.result===false?'❌ 不正解':'📖 模範解答で自己採点'}</div><p style="white-space:pre-wrap;">正答：${escapeHtml(q.referenceAnswer)}</p>${q.explanation?`<p>${escapeHtml(q.explanation)}</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" onclick="ifty175Grade(true)" style="${ifty175ButtonStyle}background:#047857;">⭕ 正解として記録・次へ</button><button type="button" onclick="ifty175Grade(false)" style="${ifty175ButtonStyle}background:#9f233b;">❌ 不正解として記録・次へ</button></div></div>`:`${input}<button type="button" onclick="ifty175Reveal()" style="${ifty175ButtonStyle}display:block;width:100%;margin-top:12px;background:#2563eb;">${kind==='choice'||kind==='year'?'回答する':'模範解答を確認'}</button>`;
- ifty175Modal(`<header style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;"><b>📚 ${escapeHtml(ifty175View.subject)}・${st.index+1}/${st.rows.length}</b><button type="button" onclick="ifty175OpenLibrary(${ifty175Arg(ifty175View.subject)},${ifty175Arg(ifty175View.setId)})" style="${ifty175ButtonStyle}">終了</button></header><p style="font-size:.8em;color:#a5dbf5;">${row.origin==='manual'?'手動問題':row.origin==='review'?'過去の誤答':'保存済み過去問'} ／ ${escapeHtml(kind)} ／ AI消費なし</p><div style="white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75;background:#103047;border:1px solid #627c96;border-radius:10px;padding:14px;font-weight:800;">${escapeHtml(q.question)}</div>${result}`);
+ const input=kind==='choice'?options:kind==='truefalse'?`<div style="display:flex;gap:15px;margin-top:10px;"><label><input type="radio" name="ifty175TruthValue" value="true"> ${ifty216Markup("○ 正しい","○ True")}</label><label><input type="radio" name="ifty175TruthValue" value="false"> ${ifty216Markup("✕ 誤りあり","✕ False")}</label></div><textarea id="ifty175AnswerInput" rows="2" placeholder="訂正後の全文（必要なら）" style="width:100%;box-sizing:border-box;margin-top:8px;border-radius:8px;padding:10px;font:inherit;background:#fff;color:#0f172a;"></textarea>`:`<textarea id="ifty175AnswerInput" rows="3" placeholder="${kind==='year'?ifty216T("年号を入力","Enter the year"):'回答を書いてから模範解答を確認'}" style="width:100%;box-sizing:border-box;margin-top:12px;border-radius:8px;padding:12px;font:inherit;background:#fff;color:#0f172a;"></textarea>`;
+ const result=st.answered?`<div style="margin-top:14px;background:#10374a;border:1px solid #6ee7b7;border-radius:10px;padding:14px;"><div style="font-weight:900;font-size:1.12em;">${st.result===true?ifty216T("⭕ 正解","⭕ Correct"):st.result===false?ifty216T("❌ 不正解","❌ Incorrect"):ifty216T("📖 模範解答で自己採点","📖 Self-assess with model answer")}</div><p style="white-space:pre-wrap;">正答：${escapeHtml(q.referenceAnswer)}</p>${q.explanation?`<p>${escapeHtml(q.explanation)}</p>`:''}<div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" onclick="ifty175Grade(true)" style="${ifty175ButtonStyle}background:#047857;">${ifty216Markup("⭕ 正解として記録・次へ","⭕ Record correct / Next")}</button><button type="button" onclick="ifty175Grade(false)" style="${ifty175ButtonStyle}background:#9f233b;">${ifty216Markup("❌ 不正解として記録・次へ","❌ Record incorrect / Next")}</button></div></div>`:`${input}<button type="button" onclick="ifty175Reveal()" style="${ifty175ButtonStyle}display:block;width:100%;margin-top:12px;background:#2563eb;">${kind==='choice'||kind==='year'?ifty216T("回答する","Submit answer"):'模範解答を確認'}</button>`;
+ ifty175Modal(`<header style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;"><b>📚 ${escapeHtml(ifty175View.subject)}・${st.index+1}/${st.rows.length}</b><button type="button" onclick="ifty175OpenLibrary(${ifty175Arg(ifty175View.subject)},${ifty175Arg(ifty175View.setId)})" style="${ifty175ButtonStyle}">${ifty216Markup("終了","End")}</button></header><p style="font-size:.8em;color:#a5dbf5;">${row.origin==='manual'?'手動問題':row.origin==='review'?'過去の誤答':'保存済み過去問'} ／ ${escapeHtml(kind)} ／ AI消費なし</p><div style="white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75;background:#103047;border:1px solid #627c96;border-radius:10px;padding:14px;font-weight:800;">${escapeHtml(q.question)}</div>${result}`);
 };
 window.ifty175Reveal=function(){
  const st=ifty175Run,row=st?.rows?.[st.index];if(!row||st.answered)return;
@@ -35466,7 +34946,7 @@ function ifty177IpaLine(folderId,item){
   return `<div class="ifty177-ipa-row" style="margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:#0f172a;background:#eaf2ff;border:1px solid #bfdbfe;border-radius:8px;padding:6px 8px;font-size:.9em;line-height:1.5;">
     <span style="font-weight:900;color:#155e75;">IPA</span>
     <span data-ifty177-ipa="${escapeHtml(String(item.id))}" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:1.08em;overflow-wrap:anywhere;">${text}</span>
-    <button type="button" onclick="ifty177EditIpa(${ifty177Arg(folderId)},${ifty177Arg(item.id)})" style="border:1px solid #9fb7d3;background:#2b496c;color:#fff;border-radius:8px;padding:5px 9px;min-height:32px;cursor:pointer;">編集</button>
+    <button type="button" onclick="ifty177EditIpa(${ifty177Arg(folderId)},${ifty177Arg(item.id)})" style="border:1px solid #9fb7d3;background:#2b496c;color:#fff;border-radius:8px;padding:5px 9px;min-height:32px;cursor:pointer;">${ifty216Markup("編集","Edit")}</button>
   </div>`;
 }
 window.ifty177EditIpa=function(folderId,itemId){
@@ -35543,14 +35023,14 @@ function ifty177PracticeHomeSection(){
     <div style="font-size:.83em;color:#c7e2fb;margin:4px 0 12px;">フラッシュカードで単語をめくり、録音してALLIAに発音を添削してもらえます。</div>
     <div style="display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));">
       <label style="font-weight:800;font-size:.88em;">フォルダから練習<select id="ifty177Folder" style="${formStyle}">${choices||'<option value="">単語のあるフォルダがありません</option>'}</select></label>
-      <label style="font-weight:800;font-size:.88em;">問題数<input id="ifty177Count" type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="問題数" value="10" style="${formStyle}"></label>
+      <label style="font-weight:800;font-size:.88em;">${ifty216Markup("問題数","Number of questions")}<input id="ifty177Count" type="number" min="1" max="999" step="1" inputmode="numeric" aria-label="${ifty216Markup("問題数","Number of questions")}" value="10" style="${formStyle}"></label>
     </div>
     <button type="button" onclick="ifty177StartFolder()" ${choices?'':'disabled'} style="margin-top:9px;width:100%;border:0;border-radius:9px;background:#2563eb;color:#fff;padding:12px;min-height:46px;font-weight:900;cursor:pointer;">📇 このフォルダの発音練習</button>
     <div style="border-top:1px solid #537391;margin:15px 0 11px;"></div>
     <div style="font-weight:900;">🎲 フォルダなし・ランダム発音</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:8px;margin-top:9px;">
-      <label style="font-size:.87em;font-weight:800;">出題タイプ<select id="ifty177Kind" style="${formStyle}"><option value="word">単語</option><option value="sentence">短い英文</option><option value="mix">単語＋短文</option></select></label>
-      <label style="font-size:.87em;font-weight:800;">難易度<select id="ifty177Difficulty" style="${formStyle}"><option value="easy">EASY</option><option value="normal" selected>NORMAL</option><option value="hard">HARD</option><option value="extreme">EXTREME（難語・複雑な文）</option></select></label>
+      <label style="font-size:.87em;font-weight:800;">出題タイプ<select id="ifty177Kind" style="${formStyle}"><option value="word">${ifty216Markup("単語","Words")}</option><option value="sentence">短い英文</option><option value="mix">単語＋短文</option></select></label>
+      <label style="font-size:.87em;font-weight:800;">${ifty216Markup("難易度","Difficulty")}<select id="ifty177Difficulty" style="${formStyle}"><option value="easy">EASY</option><option value="normal" selected>NORMAL</option><option value="hard">HARD</option><option value="extreme">EXTREME（難語・複雑な文）</option></select></label>
     </div>
     <button type="button" onclick="ifty177StartRandom()" style="margin-top:9px;width:100%;border:0;border-radius:9px;background:#0f766e;color:#fff;padding:12px;min-height:46px;font-weight:900;cursor:pointer;">🎲 ランダム練習を開始</button>
     <div style="font-size:.73em;color:#cbd5e1;margin-top:8px;">ランダム出題自体はAI不要。録音の添削のみALLIAを使用します。スコアは音声認識を使った参考値です。</div>
@@ -35658,7 +35138,7 @@ function ifty177Render(){
   if(isFinished){
     const f=getIftyPronunciationFolder(s.folderId);
     const scores=(s.ids||[]).map(id=>f?.items.find(it=>String(it.id)===String(id))?.lastResult).filter(r=>r&&Number(r.createdAt)>=s.startedAt&&Number.isFinite(Number(r.overallScore))).map(r=>Number(r.overallScore));
-    body=`<h2 style="margin:8px 0;">🎉 発音練習終了</h2><p style="color:#cbd5e1;">${escapeHtml(s.sourceName)} ・ ${s.ids.length}題</p><p style="color:#a5f3fc;">${scores.length?'採点済みカードの参考平均：'+Math.round(scores.reduce((a,b)=>a+Number(b),0)/scores.length)+' / 100':'録音した問題はありません'}</p><button type="button" onclick="ifty177Close()" style="${common}background:#2563eb;">PRACTICEへ戻る</button>`;
+    body=`<h2 style="margin:8px 0;">${ifty216Markup("🎉 発音練習終了","🎉 Pronunciation practice complete")}</h2><p style="color:#cbd5e1;">${escapeHtml(s.sourceName)} ・ ${s.ids.length}題</p><p style="color:#a5f3fc;">${scores.length?'採点済みカードの参考平均：'+Math.round(scores.reduce((a,b)=>a+Number(b),0)/scores.length)+' / 100':'録音した問題はありません'}</p><button type="button" onclick="ifty177Close()" style="${common}background:#2563eb;">${ifty216Markup("PRACTICEへ戻る","Back to practice")}</button>`;
   } else {
     const item=ref.item;
     const ipa=ifty177GetIpa(item);
@@ -35669,22 +35149,22 @@ function ifty177Render(){
       <div style="background:#11263e;border:1px solid #6591bc;border-radius:15px;padding:clamp(17px,5vw,36px);text-align:center;min-height:155px;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;">
         <div style="font-size:clamp(1.4rem,4vw,2.2rem);font-weight:950;overflow-wrap:anywhere;line-height:1.45;">${escapeHtml(item.text)}</div>
         <div style="color:#a5f3fc;font-size:1.06rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere;">IPA <span data-ifty177-ipa="${escapeHtml(String(item.id))}">${label}</span></div>
-        <button type="button" onclick="ifty177EditIpa(${ifty177Arg(s.folderId)},${ifty177Arg(item.id)})" style="${common}font-size:.81em;min-height:35px;padding:6px 10px;">IPAを修正</button>
+        <button type="button" onclick="ifty177EditIpa(${ifty177Arg(s.folderId)},${ifty177Arg(item.id)})" style="${common}font-size:.81em;min-height:35px;padding:6px 10px;">${ifty216Markup("IPAを修正","Edit IPA")}</button>
       </div>
       ${last?`<div style="margin-top:12px;color:#cbd5e1;">最新の添削結果：<strong style="color:#a5f3fc;">${Number(last.overallScore)||0} / 100</strong>（参考値）</div>`:''}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:9px;margin-top:16px;">
-        <button type="button" onclick="ifty177SpeakCurrent()" style="${common}background:#0369a1;">🔊 標準発音を聞く</button>
-        <button type="button" onclick="ifty177RecordCurrent()" style="${common}background:#7c3aed;">🎙 録音して添削</button>
+        <button type="button" onclick="ifty177SpeakCurrent()" style="${common}background:#0369a1;">${ifty216Markup("🔊 標準発音を聞く","🔊 Listen to model pronunciation")}</button>
+        <button type="button" onclick="ifty177RecordCurrent()" style="${common}background:#7c3aed;">${ifty216Markup("🎙 録音して添削","🎙 Record and review")}</button>
       </div>
       <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:14px;">
-        <button type="button" onclick="ifty177Next(-1)" ${s.index===0?'disabled':''} style="${common}">← 前のカード</button>
-        <button type="button" onclick="ifty177Next(1)" style="${common}background:#2563eb;">${s.index===s.ids.length-1?'完了':'次のカード →'}</button>
+        <button type="button" onclick="ifty177Next(-1)" ${s.index===0?'disabled':''} style="${common}">${ifty216Markup("← 前のカード","← Previous card")}</button>
+        <button type="button" onclick="ifty177Next(1)" style="${common}background:#2563eb;">${s.index===s.ids.length-1?ifty216T("完了","Complete"):'次のカード →'}</button>
       </div>
-      <p style="font-size:.72em;color:#b8d5f0;margin:10px 0 0;">録音採点にはALLIAを使います。通信エラーでも次のカードへ進めます。</p>`;
+      <p style="font-size:.72em;color:#b8d5f0;margin:10px 0 0;">${ifty216Markup("録音採点にはALLIAを使います。通信エラーでも次のカードへ進めます。","Recording feedback uses ALLIA. You can move on if a network error occurs.")}</p>`;
     ifty177EnqueueIpa(s.folderId,item.id);
   }
   modal.innerHTML=`<div role="dialog" aria-modal="true" aria-label="発音練習" style="box-sizing:border-box;background:#1b304b;color:#fff;border:1px solid #8199b8;border-radius:16px;width:min(730px,100%);max-height:95dvh;overflow:auto;overscroll-behavior:contain;padding:clamp(13px,4vw,22px);box-shadow:0 18px 55px #0008;">
-    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><h2 style="margin:0;font-size:1.2rem;">🎙 PRONUNCIATION</h2><button type="button" onclick="ifty177Close()" aria-label="閉じる" style="${common}min-height:38px;">✕</button></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><h2 style="margin:0;font-size:1.2rem;">🎙 PRONUNCIATION</h2><button type="button" onclick="ifty177Close()" aria-label="${ifty216Markup("閉じる","Close")}" style="${common}min-height:38px;">✕</button></div>
     <div style="margin-top:15px;">${body}</div></div>`;
 }
 
@@ -36115,8 +35595,8 @@ function ifty177Render(){
     root.querySelectorAll('.ifty-pron-guide').forEach(box => {
       if (box.querySelector('.ifty194-guide-visual-wrap')) return;
       const lines = Array.from(box.querySelectorAll('div'));
-      const mouthLine = lines.find(el => /口・唇/.test(el.textContent || ''));
-      const tongueLine = lines.find(el => /舌/.test(el.textContent || ''));
+      const mouthLine = lines.find(el => /口・唇|mouth \/ lips/i.test(el.textContent || ''));
+      const tongueLine = lines.find(el => /舌|tongue/i.test(el.textContent || ''));
       if (!mouthLine && !tongueLine) return;
       const badge = box.querySelector('span[style*="font-family:ui-monospace"], span[style*="font-family: ui-monospace"]');
       const phonetic = badge ? (badge.textContent || '').replace(/^発音\s*/, '').trim() : 'IPA';
@@ -36402,6 +35882,11 @@ window.ifty197StartTruthPart=function(setId,count){
       .ifty204-notsupported{color:#fde68a;font-size:.82rem;line-height:1.55;}
       .ifty204-check{display:inline-flex;align-items:center;gap:7px;font-size:.83rem;line-height:1.4;color:#f8fafc;}
       .ifty204-check input{width:18px;height:18px;accent-color:#14b8a6;}
+      .ifty204-field input[type=text]{width:100%;min-width:0;box-sizing:border-box;border:1px solid #94a3b8;background:#0f172a;color:#f8fafc;padding:11px;border-radius:9px;font:inherit;min-height:44px;}
+      .ifty216ReviewItem{padding:10px;border:1px solid #536782;border-radius:9px;background:#14243a;color:#f8fafc;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:7px;}
+      #ifty204Feedback,#ifty216Cues{color:#f8fafc;overflow-wrap:anywhere;white-space:normal;line-height:1.6;}
+      #ifty204Feedback strong,#ifty216Cues strong{color:#f8fafc;}
+
       #ifty204RemoteAudio{width:100%;height:36px;max-width:540px;margin-top:8px;}
       @media(max-width:640px){.ifty204-shell{padding:12px 4px 28px;}.ifty204-panel{padding:12px;}.ifty204-controls{grid-template-columns:1fr;}.ifty204-actions button{flex:1 1 135px;}.ifty204-chat{max-height:46vh;}.ifty204-bubble{max-width:100%;}.ifty204-header h1{font-size:1.5rem;}}
     `;
@@ -36425,74 +35910,111 @@ window.ifty197StartTruthPart=function(setId,count){
   const state={mode:'ai',topic:'school',level:'B2',autoVoice:false,voiceAccent:'en-GB',
     aiMessages:[],aiBusy:false,aiStarted:false,speech:null,speechBusy:false,
     friends:[],incoming:[],friendsLoaded:false,inboxTimer:null,callTimer:null,call:null,callPollBusy:false,
-    friendError:'',feedback:'',lastStatus:'',statusError:false,promptIndex:0};
+    friendError:'',feedback:null,lastStatus:'',statusError:false,promptIndex:0, ended:false, customTopic:'', learnerTargets:'', aiTargets:'', feedbackLanguage:'auto', cues:[], draft:'', accountKey:null, requestSerial:0};
 
   function e(value){return escapeHtml(String(value ?? ''));}
+  function tr(ja,en){return ifty216T(ja,en);}
+  function feedbackLang(){return state.feedbackLanguage==='auto'?getIftyHomeSubjectNameMode():state.feedbackLanguage;}
+  function targetList(text){return [...new Set(String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean))].slice(0,8).map(x=>x.slice(0,100));}
+  function requestCurrent(serial){return serial===state.requestSerial&&state.accountKey===String(currentUser||'');}
+  function sessionSettings(){return {protocol216:true,customTopic:state.customTopic,learnerTargets:targetList(state.learnerTargets),aiTargets:targetList(state.aiTargets),feedbackLanguage:feedbackLang()};}
+  function clearAiState(){state.aiMessages=[];state.feedback=null;state.cues=[];state.draft='';state.aiStarted=false;state.ended=false;}
+  function accountCheck(){const key=String(currentUser||'');if(state.accountKey!==key){state.accountKey=key;state.requestSerial++;state.aiBusy=false;clearAiState();state.customTopic='';state.learnerTargets='';state.aiTargets='';state.feedbackLanguage='auto';}}
+  // Escape first, then allow only simple bold and line structure. No AI HTML is ever inserted.
+  function formattedText(value){return e(String(value||'').replace(/\$\\(?:rightarrow|to)\$/g,'→').replace(/\\(?:rightarrow|to)\b/g,'→')).replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>').replace(/^#{1,6} +([^\n]+)/gm,'<strong>$1</strong>').replace(/^[*+-] +/gm,'• ');}
+  function renderFeedback(){const node=document.getElementById('ifty204Feedback');if(!node)return;const f=state.feedback;node.style.display=f?'block':'none';if(!f){node.textContent='';return;}
+    const header=`<h3 style="margin:0 0 8px;color:#a7f3d0;">${f.final?tr('終了時の振り返り','Final review'):tr('途中の振り返り','Progress review')}</h3><div class="ifty204-muted">${tr('対象の発言数','Learner turns reviewed')}: ${e(f.count||0)}</div>`;
+    if(typeof f.data==='string'){node.innerHTML=header+'<div style="white-space:pre-wrap;overflow-wrap:anywhere;margin-top:12px;">'+formattedText(f.data)+'</div>';return;}
+    const data=f.data||{};
+    const section=(title,items,fn)=>Array.isArray(items)&&items.length?`<section style="margin-top:15px;"><h4 style="color:#93c5fd;margin:0 0 8px;">${title}</h4>${items.map(fn).join('')}</section>`:'';
+    node.innerHTML=header+section(tr('良かった点','Strengths'),data.strengths,x=>`<div class="ifty216ReviewItem">${formattedText(x)}</div>`)+section(tr('改善点','Improvements'),data.improvements,x=>`<div class="ifty216ReviewItem"><div class="ifty204-muted">${tr('元の表現','Original')}</div><div>${formattedText(x.original)}</div><div style="color:#86efac;font-weight:800;margin:6px 0;">→ ${formattedText(x.suggested)}</div><div>${formattedText(x.reason)}</div></div>`)+section(tr('練習表現の振り返り','Target expressions'),data.targets,x=>`<div class="ifty216ReviewItem"><b>${e(x.expression)}</b><div>${formattedText(x.comment)}</div>${x.example?`<div style="color:#a7f3d0;margin-top:5px;">${formattedText(x.example)}</div>`:''}</div>`)+(data.nextTopic?`<section style="margin-top:15px;"><h4 style="color:#93c5fd;margin:0 0 6px;">${tr('次の話題','Next topic')}</h4>${formattedText(data.nextTopic)}</section>`:'');
+  }
+  function renderCues(){const node=document.getElementById('ifty216Cues');if(!node)return;node.innerHTML=state.cues.length&&!state.ended?`<h3 style="margin:0 0 7px;color:#a7f3d0;">${tr('今が使いどころ','An opportunity to use')}</h3>`+state.cues.map(x=>`<div class="ifty216ReviewItem"><b>${e(x.expression)}</b><div>${formattedText(x.reason)}</div>${x.example?`<details style="margin-top:5px;"><summary>${tr('使用例を見る','Show example')}</summary><div>${formattedText(x.example)}</div></details>`:''}</div>`).join(''):'';node.style.display=node.innerHTML?'block':'none';}
+  function receiveTurn(data){state.cues=Array.isArray(data.cues)?data.cues.slice(0,3):[];pushMessage('assistant',String(data.reply||''));}
+
   function getRoot(){return document.getElementById('ifty204ConversationPage');}
   function setStatus(text,error=false){state.lastStatus=String(text||'');state.statusError=!!error;
-    const el=document.getElementById('ifty204Status');if(el){el.textContent=state.lastStatus;el.style.color=error?'#fda4af':'#fde68a';}}
+    const el=document.getElementById('ifty204Status');if(el){el.textContent=ifty216Ui(state.lastStatus);el.style.color=error?'#fda4af':'#fde68a';}}
   function accountReady(){return !iftyDeveloperMode && !!iftySessionToken;}
-  function selectRows(rows,selected){return rows.map(([value,label])=>`<option value="${e(value)}" ${selected===value?'selected':''}>${e(label)}</option>`).join('');}
+  function selectRows(rows,selected){return rows.map(([value,label])=>`<option value="${e(value)}" ${selected===value?'selected':''}>${e(ifty216Ui(label))}</option>`).join('');}
   function textFromError(error){return String(error?.message||error||'不明なエラー');}
   function asyncApi(type,payload={}){return iftyAccountApi(type,{token:iftySessionToken,...payload});}
   function aiApi(type,payload={}){return iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,subject:'ENGLISH',orderScope:'chat',...payload})}).then(async res=>{
     let json={};try{json=await res.json();}catch(_){}if(!res.ok||json.error)throw new Error(json.error||`HTTP ${res.status}`);return json;});}
 
+  function aiUsedTargets(row){return row.role==='assistant'?targetList(state.aiTargets).filter(t=>row.content.toLowerCase().includes(t.toLowerCase())):[];}
   function renderAiLog(){
     const log=document.getElementById('ifty204AiLog');if(!log)return;
     const atEnd=log.scrollHeight-log.scrollTop-log.clientHeight<75;
     log.innerHTML=state.aiMessages.length
-      ? state.aiMessages.map((row,i)=>`<div class="ifty204-bubble ${row.role==='user'?'user':'ai'}"><div class="ifty204-chatmeta">${row.role==='user'?'あなた':'ALLIA'}</div>${e(row.content)}${row.role==='assistant'?`<div><button type="button" onclick="ifty204SpeakReply(${i})">🔊 聞く</button></div>`:''}</div>`).join('')
-      : '<div class="ifty204-muted">「会話を始める」を押すと、ALLIAが英語で質問します。マイクで英語を入力するか、キーボードで返答してください。</div>';
+      ? state.aiMessages.map((row,i)=>`<div class="ifty204-bubble ${row.role==='user'?'user':'ai'}"><div class="ifty204-chatmeta">${row.role==='user'?ifty216T("あなた","You"):'ALLIA'}</div>${e(row.content)}${aiUsedTargets(row).length?`<div style="margin-top:7px;font-size:.8em;color:#a7f3d0;font-weight:800;">${tr('ALLIAが使用した練習表現：','Target expressions used by ALLIA: ')}${e(aiUsedTargets(row).join(' / '))}</div>`:''}${row.role==='assistant'?`<div><button type="button" onclick="ifty204SpeakReply(${i})">${ifty216Markup("🔊 聞く","🔊 Listen")}</button></div>`:''}</div>`).join('')
+      : ("<div class=\"ifty204-muted\">" + ifty216Markup("「会話を始める」を押すと、ALLIAが英語で質問します。マイクで英語を入力するか、キーボードで返答してください。","Press Start conversation. ALLIA asks a question in English. Reply by microphone or keyboard.") + "</div>");
     if(atEnd||state.aiMessages.length<3)log.scrollTop=log.scrollHeight;
-    const submit=document.getElementById('ifty204SendAi');if(submit)submit.disabled=state.aiBusy;
-    const begin=document.getElementById('ifty204BeginAi');if(begin){begin.disabled=state.aiBusy||state.aiStarted;begin.textContent=state.aiStarted?'会話中':'▶ 会話を始める';}
-    const review=document.getElementById('ifty204ReviewAi');if(review)review.disabled=state.aiBusy||!state.aiMessages.length;
-    const feedback=document.getElementById('ifty204Feedback');if(feedback){feedback.textContent=state.feedback;feedback.style.display=state.feedback?'block':'none';}
+    const submit=document.getElementById('ifty204SendAi');if(submit)submit.disabled=state.aiBusy||state.ended;
+    const begin=document.getElementById('ifty204BeginAi');if(begin){begin.disabled=state.aiBusy||state.speechBusy||(state.aiStarted&&!state.ended);begin.textContent=state.ended?tr('▶ 新しい会話','▶ New conversation'):state.aiStarted?tr('会話中','In conversation'):tr('▶ 会話を始める','▶ Start conversation');}
+    const hasLearner=state.aiMessages.some(x=>x.role==='user');
+    const review=document.getElementById('ifty204ReviewAi');if(review)review.disabled=state.aiBusy||state.ended||!hasLearner;
+    const end=document.getElementById('ifty216EndAi');if(end){end.disabled=state.aiBusy||!hasLearner;end.textContent=state.ended?tr('最終振り返りを再取得','Retry final review'):tr('会話を終了して振り返る','End & review');}
+    const draft=document.getElementById('ifty204Draft');if(draft)draft.disabled=state.ended;
+    const mic=document.getElementById('ifty204Mic');if(mic)mic.disabled=state.ended||(!(window.SpeechRecognition||window.webkitSpeechRecognition));
+    const clear=document.getElementById('ifty216ClearAi');if(clear)clear.disabled=state.aiBusy;
+    renderFeedback();renderCues();
   }
   function renderAiPanel(){
     const area=document.getElementById('ifty204Body');if(!area)return;
     area.innerHTML=`
       <div class="ifty204-panel">
-        <h2 style="margin:0 0 9px;color:#f1f5f9;font-size:1.14rem;">🤖 ALLIAと英会話</h2>
-        <div class="ifty204-muted">AIが質問し、英語で会話を続けます。話した内容は文字起こしして送信できます。発音そのものを採点しているわけではありません。</div>
-        <div class="ifty204-actions"><button class="ifty204-action primary" type="button" id="ifty204BeginAi" onclick="ifty204StartAi()">▶ 会話を始める</button>
-          <button class="ifty204-action" id="ifty204ReviewAi" type="button" onclick="ifty204ReviewAi()">📝 表現を振り返る</button>
-          <button class="ifty204-action" type="button" onclick="ifty204ClearAi()">↻ 会話をリセット</button></div>
-        <label class="ifty204-check" style="margin:9px 0 12px;"><input type="checkbox" id="ifty204AutoVoice" ${state.autoVoice?'checked':''} onchange="ifty204SetAutoVoice(this.checked)">ALLIAの返答を音声で読み上げる</label>
-        <div id="ifty204AiLog" class="ifty204-chat" role="log" aria-label="ALLIAとの英会話"></div>
-        <label class="ifty204-field" style="margin-top:10px;">英語で返答
-          <textarea id="ifty204Draft" maxlength="1400" placeholder="英語で話す／入力する（例：I think school uniforms should be optional.）" onkeydown="ifty204AiKey(event)"></textarea>
+        <h2 style="margin:0 0 9px;color:#f1f5f9;font-size:1.14rem;">${ifty216Markup("🤖 ALLIAと英会話","🤖 English with ALLIA")}</h2>
+        <div class="ifty204-muted">${ifty216Markup("AIが質問し、英語で会話を続けます。話した内容は文字起こしして送信できます。発音そのものを採点しているわけではありません。","ALLIA asks questions and continues in English. Speech can be transcribed and sent. Pronunciation itself is not graded.")}</div>
+        <div class="ifty204-actions"><button class="ifty204-action primary" type="button" id="ifty204BeginAi" onclick="ifty204StartAi()">${ifty216Markup("▶ 会話を始める","▶ Start conversation")}</button>
+          <button class="ifty204-action" id="ifty204ReviewAi" type="button" onclick="ifty204ReviewAi(false)">${tr('📝 途中で振り返る','📝 Review progress')}</button>
+          <button class="ifty204-action danger" id="ifty216EndAi" type="button" onclick="ifty204ReviewAi(true)">${tr('会話を終了して振り返る','End & review')}</button>
+          <button class="ifty204-action" id="ifty216ClearAi" type="button" onclick="ifty204ClearAi()">${ifty216Markup("↻ 会話をリセット","↻ Reset conversation")}</button></div>
+        <details style="margin:12px 0;" open>
+          <summary style="font-weight:800;cursor:pointer;">${tr('話題・練習したい表現','Topic & target expressions')}</summary>
+          <div style="display:grid;gap:10px;margin-top:10px;">
+            <label class="ifty204-field">${tr('自分で話題を指定（任意）','Your own topic (optional)')}<input type="text" maxlength="300" value="${e(state.customTopic)}" oninput="ifty216ConversationSetting('customTopic',this.value)" placeholder="${tr('例：学校の制服は必要か','e.g. Are school uniforms necessary?')}"></label>
+            <label class="ifty204-field">${tr('自分が使いたい表現（1行に1つ）','Expressions I want to use (one per line)')}<textarea maxlength="800" oninput="ifty216ConversationSetting('learnerTargets',this.value)" placeholder="insofar as&#10;refrain from">${e(state.learnerTargets)}</textarea></label>
+            <label class="ifty204-field">${tr('ALLIAに使ってほしい表現（1行に1つ）','Expressions ALLIA should use (one per line)')}<textarea maxlength="800" oninput="ifty216ConversationSetting('aiTargets',this.value)" placeholder="notwithstanding&#10;in the limelight">${e(state.aiTargets)}</textarea></label>
+            <label class="ifty204-field">${tr('振り返り・使用機会の言語','Review & hint language')}<select onchange="ifty216ConversationSetting('feedbackLanguage',this.value)">${[['auto',tr('表示言語に合わせる','Follow interface')],['ja','日本語'],['en','English']].map(([v,label])=>`<option value="${v}" ${state.feedbackLanguage===v?'selected':''}>${e(label)}</option>`).join('')}</select></label>
+            <div class="ifty204-muted">${tr('次の発言から反映します。ALLIAは英語で会話し、使いどころがあればヒントを表示します。表現はそれぞれ最大8件です。','Applies to the next turn. ALLIA speaks English and shows relevant opportunities as hints. Up to 8 expressions in each list.')}</div>
+          </div>
+        </details>
+        <label class="ifty204-check" style="margin:9px 0 12px;"><input type="checkbox" id="ifty204AutoVoice" ${state.autoVoice?'checked':''} onchange="ifty204SetAutoVoice(this.checked)">${ifty216Markup("ALLIAの返答を音声で読み上げる","Read ALLIA replies aloud")}</label>
+        <div id="ifty204AiLog" class="ifty204-chat" role="log" aria-label="${ifty216Markup("ALLIAとの英会話","English conversation with ALLIA")}"></div>
+        <div id="ifty216Cues" class="ifty204-panel" style="display:none;margin-top:12px;background:#13273e;"></div>
+        <label class="ifty204-field" style="margin-top:10px;">${ifty216Markup("英語で返答","Reply in English")}
+          <textarea id="ifty204Draft" maxlength="1400" placeholder="${ifty216Markup("英語で話す／入力する（例：I think school uniforms should be optional.）","Speak or type English (e.g. I think school uniforms should be optional.)")}" oninput="ifty216ConversationSetting('draft',this.value)" onkeydown="ifty204AiKey(event)">${e(state.draft)}</textarea>
         </label>
         <div class="ifty204-actions">
-          <button class="ifty204-action" type="button" onclick="ifty204RecordAi()" id="ifty204Mic">🎤 マイクで入力</button>
-          <button class="ifty204-action purple" type="button" onclick="ifty204SendAi()" id="ifty204SendAi">送信</button>
+          <button class="ifty204-action" type="button" onclick="ifty204RecordAi()" id="ifty204Mic">${ifty216Markup("🎤 マイクで入力","🎤 Use microphone")}</button>
+          <button class="ifty204-action purple" type="button" onclick="ifty204SendAi()" id="ifty204SendAi">${ifty216Markup("送信","Send")}</button>
         </div>
-        <div class="ifty204-muted" style="margin-top:7px;">Ctrl/⌘＋Enterで送信。音声認識が使えない環境ではキーボードで練習できます。音声認識は端末・ブラウザのサービスを使用する場合があります。</div>
+        <div class="ifty204-muted" style="margin-top:7px;">${ifty216Markup("Ctrl/⌘＋Enterで送信。音声認識が使えない環境ではキーボードで練習できます。音声認識は端末・ブラウザのサービスを使用する場合があります。","Send with Ctrl/⌘ + Enter. If speech recognition is unavailable, type instead. Speech recognition may use device or browser services.")}</div>
         <div id="ifty204Feedback" class="ifty204-panel" style="display:none;background:#172033;margin:12px 0 0;white-space:pre-wrap;line-height:1.55;"></div>
       </div>`;
     renderAiLog();setStatus(state.lastStatus,state.statusError);
     if(!(window.SpeechRecognition||window.webkitSpeechRecognition)){
-      const mic=document.getElementById('ifty204Mic');if(mic){mic.disabled=true;mic.title='このブラウザでは音声認識に対応していません。';}
+      const mic=document.getElementById('ifty204Mic');if(mic){mic.disabled=true;mic.title=ifty216T("このブラウザでは音声認識に対応していません。","Speech recognition is unavailable in this browser.");}
     }
   }
   function renderFriendPanel(){
     const area=document.getElementById('ifty204Body');if(!area)return;
     const ready=accountReady();
     area.innerHTML=`<div class="ifty204-panel">
-      <h2 style="margin:0 0 9px;color:#f1f5f9;font-size:1.14rem;">👥 フレンドと英会話</h2>
-      <div class="ifty204-muted">相互承認済みフレンドだけを招待できます。両方がこの画面を開き、相手が承諾した場合に限り音声通話します。録音・公開マッチングはありません。</div>
-      <div class="ifty204-notsupported" style="margin-top:8px;">ネットワークによっては音声接続できません（無料STUNのみ、TURNサーバー未設定）。マイク許可とHTTPS接続が必要です。</div>
-      ${!ready?'<div class="ifty204-status" style="color:#fda4af;">フレンド通話にはIFTY IDでのログインが必要です。</div>':
-      `<div class="ifty204-actions"><button class="ifty204-action" onclick="ifty204RefreshFriends()">↻ フレンド・招待を更新</button><button class="ifty204-action" onclick="openIftyFriendsPage()">👥 フレンド管理</button></div>
+      <h2 style="margin:0 0 9px;color:#f1f5f9;font-size:1.14rem;">${tr('👥 フレンドと英会話','👥 English with friends')}</h2>
+      <div class="ifty204-muted">${ifty216Markup("相互承認済みフレンドだけを招待できます。両方がこの画面を開き、相手が承諾した場合に限り音声通話します。録音・公開マッチングはありません。","Invite mutual friends only. Both must open this screen and the other person must accept. No recording or public matching.")}</div>
+      <div class="ifty204-notsupported" style="margin-top:8px;">${ifty216Markup("ネットワークによっては音声接続できません（無料STUNのみ、TURNサーバー未設定）。マイク許可とHTTPS接続が必要です。","Some networks cannot connect (STUN only; no TURN). Microphone permission and HTTPS are required.")}</div>
+      ${!ready?("<div class=\"ifty204-status\" style=\"color:#fda4af;\">" + ifty216Markup("フレンド通話にはIFTY IDでのログインが必要です。","Sign in with an IFTY ID to call friends.") + "</div>"):
+      `<div class="ifty204-actions"><button class="ifty204-action" onclick="ifty204RefreshFriends()">${ifty216Markup("↻ フレンド・招待を更新","↻ Refresh friends & invitations")}</button><button class="ifty204-action" onclick="openIftyFriendsPage()">${ifty216Markup("👥 フレンド管理","👥 Manage friends")}</button></div>
         <div id="ifty204CurrentCall"></div>
-        <div class="ifty204-row" style="display:block;"><div style="font-weight:900;color:#86efac;margin-bottom:5px;">会話カード（順番に答えて練習）</div>
+        <div class="ifty204-row" style="display:block;"><div style="font-weight:900;color:#86efac;margin-bottom:5px;">${ifty216Markup("会話カード（順番に答えて練習）","Conversation cards (take turns answering)")}</div>
           <div id="ifty204PromptText" style="color:#f8fafc;line-height:1.55;"></div>
-          <button type="button" class="ifty204-action" style="margin-top:8px;" onclick="ifty204NextPrompt()">次の話題へ</button></div>
-        <h3 style="margin:15px 0 7px;font-size:.95rem;color:#f1f5f9;">届いた招待</h3>
-        <div id="ifty204Invites" class="ifty204-muted">確認中…</div>
-        <h3 style="margin:15px 0 7px;font-size:.95rem;color:#f1f5f9;">相互フレンド一覧</h3>
-        <div id="ifty204Friends" class="ifty204-muted">取得中…</div>`}
+          <button type="button" class="ifty204-action" style="margin-top:8px;" onclick="ifty204NextPrompt()">${ifty216Markup("次の話題へ","Next topic")}</button></div>
+        <h3 style="margin:15px 0 7px;font-size:.95rem;color:#f1f5f9;">${tr('届いた招待','Incoming invitations')}</h3>
+        <div id="ifty204Invites" class="ifty204-muted">${ifty216Markup("確認中…","Checking…")}</div>
+        <h3 style="margin:15px 0 7px;font-size:.95rem;color:#f1f5f9;">${tr('相互フレンド一覧','Mutual friends')}</h3>
+        <div id="ifty204Friends" class="ifty204-muted">${ifty216Markup("取得中…","Loading…")}</div>`}
     </div>`;
     renderFriendData();setStatus(state.lastStatus,state.statusError);
   }
@@ -36501,46 +36023,49 @@ window.ifty197StartTruthPart=function(setId,count){
     if(prompt){const cards=promptCards[state.topic]||promptCards.daily;prompt.textContent=cards[state.promptIndex%cards.length];}
     const calls=document.getElementById('ifty204CurrentCall');
     if(calls){const c=state.call;
-      calls.innerHTML=c?`<div class="ifty204-row"><div><div style="font-weight:900;color:#f8fafc;">${e(c.partnerName||'フレンド')}との通話</div><div class="ifty204-muted">${e(c.status==='pending'?'招待の承認を待っています':c.connected?'音声接続中':c.status==='accepted'?'音声の接続を試行中です':'接続準備中')}</div></div><div class="ifty204-actions" style="margin:0;">
-        <button class="ifty204-action" type="button" onclick="ifty204ToggleMute()">${c.muted?'🎤 ミュート解除':'🔇 ミュート'}</button>
-        <button class="ifty204-action" type="button" onclick="ifty204PlayRemote()">🔊 相手の音声</button>
-        <button class="ifty204-action danger" type="button" onclick="ifty204EndCall()">通話終了</button>
+      calls.innerHTML=c?`<div class="ifty204-row"><div><div style="font-weight:900;color:#f8fafc;">${tr('通話相手：','Call with: ')}${e(c.partnerName||tr('フレンド','Friend'))}</div><div class="ifty204-muted">${e(ifty216Ui(c.status==='pending'?'招待の承認を待っています':c.connected?'音声接続中':c.status==='accepted'?'音声の接続を試行中です':'接続準備中'))}</div></div><div class="ifty204-actions" style="margin:0;">
+        <button class="ifty204-action" type="button" onclick="ifty204ToggleMute()">${c.muted?ifty216T("🎤 ミュート解除","🎤 Unmute"):ifty216T("🔇 ミュート","🔇 Mute")}</button>
+        <button class="ifty204-action" type="button" onclick="ifty204PlayRemote()">${ifty216Markup("🔊 相手の音声","🔊 Play partner audio")}</button>
+        <button class="ifty204-action danger" type="button" onclick="ifty204EndCall()">${ifty216Markup("通話終了","End call")}</button>
       </div></div>`:'';
     }
     const invites=document.getElementById('ifty204Invites');
-    if(invites)invites.innerHTML=state.incoming.length?state.incoming.map((invite,i)=>`<div class="ifty204-row"><div><b style="color:#f8fafc;">${e(invite.from)}</b><div class="ifty204-muted">トピック：${e(options.topics.find(x=>x[0]===invite.topic)?.[1]||'日常会話')}／${e(invite.level)}</div></div><div class="ifty204-actions" style="margin:0;"><button class="ifty204-action primary" type="button" ${state.call?'disabled':''} onclick="ifty204AnswerInvite(${i},true)">受ける</button><button class="ifty204-action" type="button" onclick="ifty204AnswerInvite(${i},false)">辞退</button></div></div>`).join(''):'現在、招待はありません。';
+    if(invites)invites.innerHTML=state.incoming.length?state.incoming.map((invite,i)=>`<div class="ifty204-row"><div><b style="color:#f8fafc;">${e(invite.from)}</b><div class="ifty204-muted">${tr('トピック：','Topic: ')}${e(ifty216Ui(options.topics.find(x=>x[0]===invite.topic)?.[1]||'日常会話'))}／${e(invite.level)}</div></div><div class="ifty204-actions" style="margin:0;"><button class="ifty204-action primary" type="button" ${state.call?'disabled':''} onclick="ifty204AnswerInvite(${i},true)">${ifty216Markup("受ける","Accept")}</button><button class="ifty204-action" type="button" onclick="ifty204AnswerInvite(${i},false)">${ifty216Markup("辞退","Decline")}</button></div></div>`).join(''):ifty216Ui('現在、招待はありません。');
     const friendEl=document.getElementById('ifty204Friends');
-    if(friendEl)friendEl.innerHTML=state.friends.length?state.friends.map((f,i)=>`<div class="ifty204-row"><div style="font-weight:800;">${e(f.username)}</div><button type="button" class="ifty204-action primary" ${state.call?'disabled':''} onclick="ifty204InviteFriend(${i})">🎧 通話に招待</button></div>`).join(''):state.friendsLoaded?'相互フレンドがいません。上の「フレンド管理」から追加できます。':'取得中…';
+    if(friendEl)friendEl.innerHTML=state.friends.length?state.friends.map((f,i)=>`<div class="ifty204-row"><div style="font-weight:800;">${e(f.username)}</div><button type="button" class="ifty204-action primary" ${state.call?'disabled':''} onclick="ifty204InviteFriend(${i})">${ifty216Markup("🎧 通話に招待","🎧 Invite to call")}</button></div>`).join(''):state.friendsLoaded?ifty216Ui('相互フレンドがいません。上の「フレンド管理」から追加できます。'):ifty216Ui('取得中…');
   }
   function renderPage(){
     const host=getRoot();if(!host)return;
     const current=state.mode;
     const switcher=document.getElementById('ifty204Switch');
-    if(switcher)switcher.innerHTML=`<button type="button" aria-selected="${current==='ai'}" onclick="ifty204SetMode('ai')">🤖 ALLIA</button><button type="button" aria-selected="${current==='friends'}" onclick="ifty204SetMode('friends')">👥 フレンド通話</button>`;
+    if(switcher)switcher.innerHTML=`<button type="button" aria-selected="${current==='ai'}" onclick="ifty204SetMode('ai')">🤖 ALLIA</button><button type="button" aria-selected="${current==='friends'}" onclick="ifty204SetMode('friends')">${ifty216Markup("👥 フレンド通話","👥 Friend call")}</button>`;
     if(current==='ai')renderAiPanel();else renderFriendPanel();
     const topic=document.getElementById('ifty204Topic');if(topic)topic.value=state.topic;
     const level=document.getElementById('ifty204Level');if(level)level.value=state.level;
   }
 
   window.openIftyConversation=function(){
-    showIftyHubContent(`<section class="ifty204-shell" id="ifty204ConversationPage"><div class="ifty204-header"><div><h1>🗣 ENGLISH CONVERSATION</h1><div class="ifty204-sub">ALLIAまたは相互フレンドと英会話を練習する独立ツール</div></div><button type="button" class="ifty204-action" onclick="openIftyHome()">HOMEへ</button></div>
+    accountCheck();
+    showIftyHubContent(`<section class="ifty204-shell" id="ifty204ConversationPage"><div class="ifty204-header"><div><h1>${ifty216Markup("🗣 英会話","🗣 ENGLISH CONVERSATION")}</h1><div class="ifty204-sub">${ifty216Markup("ALLIAまたは相互フレンドと英会話を練習する独立ツール","Practise English with ALLIA or mutual friends.")}</div></div><button type="button" class="ifty204-action" onclick="openIftyHome()">${ifty216Markup("HOMEへ","Home")}</button></div>
       <div class="ifty204-panel"><div class="ifty204-controls">
-        <label class="ifty204-field">話題<select id="ifty204Topic" onchange="ifty204UpdateTopic(this.value)">${selectRows(options.topics,state.topic)}</select></label>
-        <label class="ifty204-field">英語レベル<select id="ifty204Level" onchange="ifty204UpdateLevel(this.value)">${selectRows(options.levels,state.level)}</select></label>
-      </div><div class="ifty204-muted" style="margin-top:8px;">相手と話すテーマと難易度を選択します。フレンド通話はAI採点・録音を行いません。</div></div>
+        <label class="ifty204-field">${ifty216Markup("話題","Topic")}<select id="ifty204Topic" onchange="ifty204UpdateTopic(this.value)">${selectRows(options.topics,state.topic)}</select></label>
+        <label class="ifty204-field">${ifty216Markup("英語レベル","English level")}<select id="ifty204Level" onchange="ifty204UpdateLevel(this.value)">${selectRows(options.levels,state.level)}</select></label>
+      </div><div class="ifty204-muted" style="margin-top:8px;">${ifty216Markup("相手と話すテーマと難易度を選択します。フレンド通話はAI採点・録音を行いません。","Choose a topic and difficulty. Friend calls are not AI-graded or recorded.")}</div></div>
       <div class="ifty204-switch" id="ifty204Switch"></div><div id="ifty204Body"></div>
-      <audio id="ifty204RemoteAudio" autoplay playsinline controls aria-label="フレンドの音声" style="display:none;"></audio>
+      <audio id="ifty204RemoteAudio" autoplay playsinline controls aria-label="${ifty216Markup("フレンドの音声","Friend audio")}" style="display:none;"></audio>
       <div id="ifty204Status" class="ifty204-status" role="status" aria-live="polite"></div>
     </section>`,'conversation');
     renderPage();
     if(state.mode==='friends'){window.ifty204RefreshFriends();ifty204ScheduleInbox();}
   };
+  window.ifty216ConversationSetting=function(key,value){if(key==='feedbackLanguage'){state.feedbackLanguage=['ja','en','auto'].includes(value)?value:'auto';return;}const max={customTopic:300,learnerTargets:800,aiTargets:800,draft:1400}[key];if(max)state[key]=String(value||'').slice(0,max);};
   window.ifty204UpdateTopic=function(topic){if(options.topics.some(x=>x[0]===topic)){state.topic=topic;state.promptIndex=0;renderFriendData();}};
   window.ifty204NextPrompt=function(){state.promptIndex++;renderFriendData();};
   window.ifty204UpdateLevel=function(level){if(options.levels.some(x=>x[0]===level))state.level=level;};
   window.ifty204SetAutoVoice=function(value){state.autoVoice=!!value;};
   window.ifty204SetMode=function(mode){
     if(mode!=='ai'&&mode!=='friends')return;
+    if(state.aiBusy||state.speechBusy){setStatus(tr('会話処理が終わってから切り替えてください。','Wait for the current conversation operation to finish.'),true);return;}
     if(state.call && mode!==state.mode){setStatus('通話中は先に通話を終了してください。',true);return;}
     state.mode=mode;
     if(state.inboxTimer){clearTimeout(state.inboxTimer);state.inboxTimer=null;}
@@ -36559,57 +36084,65 @@ window.ifty197StartTruthPart=function(setId,count){
       const voice=available.find(v=>String(v.lang).toLowerCase()===state.voiceAccent.toLowerCase())||available.find(v=>String(v.lang).toLowerCase().startsWith('en'));
       if(voice)utter.voice=voice;
       window.speechSynthesis.speak(utter);
-    }catch(error){setStatus('読み上げに失敗しました：'+textFromError(error),true);}
+    }catch(error){setStatus(tr('読み上げに失敗しました：','Speech playback failed: ')+textFromError(error),true);}
   };
   function pushMessage(role,content){state.aiMessages.push({role,content:String(content||'')});if(state.aiMessages.length>60)state.aiMessages=state.aiMessages.slice(-60);renderAiLog();}
   window.ifty204StartAi=async function(){
-    if(state.aiBusy||state.aiStarted)return;
-    state.aiBusy=true;renderAiLog();setStatus('ALLIAが質問を作成しています…');
+    if(state.aiBusy||state.speechBusy||(state.aiStarted&&!state.ended))return;
+    if(state.ended){if(!confirm(tr('新しい会話を始めますか？現在の振り返りは消えます。','Start a new conversation? The current review will be cleared.')))return;clearAiState();renderAiPanel();}
+    const serial=++state.requestSerial;state.aiBusy=true;renderAiLog();setStatus('ALLIAが質問を作成しています…');
     try{
-      const data=await aiApi('conv_ai_turn',{topic:state.topic,level:state.level,start:true,history:[]});
-      state.aiStarted=true;pushMessage('assistant',String(data.reply||''));setStatus('英語で答えてみてください。');
-      if(state.autoVoice)window.ifty204SpeakReply(state.aiMessages.length-1);
-    }catch(error){setStatus(textFromError(error),true);}finally{state.aiBusy=false;renderAiLog();}
+      const data=await aiApi('conv_ai_turn',{...sessionSettings(),topic:state.topic,level:state.level,start:true,history:[]});
+      if(!requestCurrent(serial))return;state.aiStarted=true;receiveTurn(data);setStatus('英語で答えてみてください。');
+      if(state.autoVoice&&getRoot())window.ifty204SpeakReply(state.aiMessages.length-1);
+    }catch(error){if(requestCurrent(serial))setStatus(textFromError(error),true);}finally{if(requestCurrent(serial)){state.aiBusy=false;renderAiLog();}}
   };
   window.ifty204SendAi=async function(){
     const input=document.getElementById('ifty204Draft');const text=String(input?.value||'').trim();
-    if(!text||state.aiBusy)return;
-    state.aiBusy=true;
-    if(input)input.value='';
+    if(!text||state.aiBusy||state.ended||state.speechBusy)return;
+    const serial=++state.requestSerial;state.aiBusy=true;
+    if(input)input.value='';state.draft='';state.cues=[];
     const history=state.aiMessages.slice(-14).map(row=>({role:row.role,content:row.content}));
     pushMessage('user',text);setStatus('ALLIAが返答しています…');
     try{
-      const result=await aiApi('conv_ai_turn',{topic:state.topic,level:state.level,message:text,history});
-      state.aiStarted=true;pushMessage('assistant',String(result.reply||''));setStatus('次の英語を話してみてください。');
-      if(state.autoVoice)window.ifty204SpeakReply(state.aiMessages.length-1);
+      const result=await aiApi('conv_ai_turn',{...sessionSettings(),topic:state.topic,level:state.level,message:text,history});
+      if(!requestCurrent(serial))return;state.aiStarted=true;receiveTurn(result);setStatus('次の英語を話してみてください。');
+      if(state.autoVoice&&getRoot())window.ifty204SpeakReply(state.aiMessages.length-1);
     }catch(error){
-      if(input && !input.value.trim())input.value=text;
+      if(!requestCurrent(serial))return;
+      if(input && !input.value.trim()){input.value=text;state.draft=text;}
       const last=state.aiMessages[state.aiMessages.length-1];
       if(last?.role==='user'&&last.content===text)state.aiMessages.pop();
-      setStatus('返答を取得できませんでした。入力を残しました：'+textFromError(error),true);
-    }finally{state.aiBusy=false;renderAiLog();}
+      setStatus(tr('返答を取得できませんでした。入力を残しました：','Could not get reply. Your input is retained: ')+textFromError(error),true);
+    }finally{if(requestCurrent(serial)){state.aiBusy=false;renderAiLog();}}
   };
   window.ifty204AiKey=function(event){if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();window.ifty204SendAi();}};
-  window.ifty204ClearAi=function(){if(state.aiMessages.length&&!confirm('この会話をリセットしますか？会話内容は保存されません。'))return;
-    window.speechSynthesis?.cancel?.();state.aiMessages=[];state.feedback='';state.aiStarted=false;renderAiPanel();setStatus('会話をリセットしました。');};
-  window.ifty204ReviewAi=async function(){
-    if(state.aiBusy||!state.aiMessages.length)return;state.aiBusy=true;renderAiLog();setStatus('表現を振り返っています…');
-    try{const data=await aiApi('conv_ai_feedback',{topic:state.topic,level:state.level,history:state.aiMessages.slice(-14)});
-      state.feedback=String(data.feedback||'');setStatus('振り返りを表示しました。');}
-    catch(error){setStatus(textFromError(error),true);}finally{state.aiBusy=false;renderAiLog();}
+  window.ifty204ClearAi=function(){if(state.aiBusy)return;if(state.aiMessages.length&&!confirm(tr('この会話をリセットしますか？会話内容は保存されません。','Reset this conversation? The conversation will not be saved.')))return;
+    try{state.speech?.abort?.();}catch(_){}state.speechBusy=false;state.speech=null;window.speechSynthesis?.cancel?.();clearAiState();renderAiPanel();setStatus(tr('会話をリセットしました。','Conversation reset.'));};
+  window.ifty204ReviewAi=async function(final=false){
+    if(state.aiBusy||state.speechBusy||!state.aiMessages.some(x=>x.role==='user')||(!final&&state.ended))return;
+    if(final&&!state.ended&&state.draft.trim()&&!confirm(tr('未送信の発言は振り返りに含まれません。終了しますか？','The unsent draft will not be reviewed. End anyway?')))return;
+    if(final){state.ended=true;state.cues=[];window.speechSynthesis?.cancel?.();}
+    const serial=++state.requestSerial;state.aiBusy=true;renderAiLog();setStatus(tr('表現を振り返っています…','Reviewing your expressions…'));
+    const history=state.aiMessages.slice(final?-60:-14);const count=history.filter(x=>x.role==='user').length;
+    try{const data=await aiApi('conv_ai_feedback',{...sessionSettings(),topic:state.topic,level:state.level,history,finalReview:!!final});
+      if(!requestCurrent(serial))return;state.feedback={final:!!final,count,data:data.review&&typeof data.review==='object'?data.review:String(data.feedback||'')};
+      setStatus(final?tr('会話を終了しました。最終振り返りを表示しました。','Conversation ended. Final review is ready.'):tr('途中の振り返りを表示しました。会話を続けられます。','Progress review is ready. You can continue.'));
+    }catch(error){if(requestCurrent(serial))setStatus(textFromError(error),true);}finally{if(requestCurrent(serial)){state.aiBusy=false;renderAiLog();document.getElementById('ifty204Feedback')?.scrollIntoView({block:'nearest'});}}
   };
   window.ifty204RecordAi=function(){
+    if(state.ended||state.aiBusy)return;
     if(state.speechBusy){state.speech?.stop?.();return;}
     const Ctor=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!Ctor){setStatus('音声認識に対応していません。テキスト入力で練習できます。',true);return;}
     try{
       const rec=new Ctor();state.speech=rec;state.speechBusy=true;
       rec.lang=state.voiceAccent;rec.interimResults=false;rec.continuous=false;rec.maxAlternatives=1;
-      const btn=document.getElementById('ifty204Mic');if(btn)btn.textContent='⏹ 録音を止める';
-      rec.onresult=event=>{const transcript=String(event.results?.[0]?.[0]?.transcript||'').trim();
-        const input=document.getElementById('ifty204Draft');if(input&&transcript){input.value=((input.value.trim()?input.value.trim()+' ':'')+transcript).slice(0,1400);input.focus();}setStatus('文字起こししました。内容を確認して送信してください。');};
-      rec.onerror=event=>setStatus('音声認識エラー：'+String(event.error||'認識できませんでした'),true);
-      rec.onend=()=>{state.speechBusy=false;state.speech=null;const b=document.getElementById('ifty204Mic');if(b)b.textContent='🎤 マイクで入力';};
+      const btn=document.getElementById('ifty204Mic');if(btn)btn.textContent=ifty216T("⏹ 録音を止める","⏹ Stop recording");
+      rec.onresult=event=>{if(state.speech!==rec||state.ended)return;const transcript=String(event.results?.[0]?.[0]?.transcript||'').trim();
+        const input=document.getElementById('ifty204Draft');if(input&&transcript){input.value=((input.value.trim()?input.value.trim()+' ':'')+transcript).slice(0,1400);state.draft=input.value;input.focus();}setStatus('文字起こししました。内容を確認して送信してください。');};
+      rec.onerror=event=>setStatus(tr('音声認識エラー：','Speech recognition error: ')+String(event.error||tr('認識できませんでした','Recognition failed')),true);
+      rec.onend=()=>{if(state.speech!==rec)return;state.speechBusy=false;state.speech=null;const b=document.getElementById('ifty204Mic');if(b)b.textContent=ifty216T("🎤 マイクで入力","🎤 Use microphone");};
       rec.start();setStatus('英語を話してください。終了後に確認して送信できます。');
     }catch(error){state.speechBusy=false;state.speech=null;setStatus(textFromError(error),true);}
   };
@@ -36695,14 +36228,14 @@ window.ifty197StartTruthPart=function(setId,count){
       }
       for(const signal of (data.signals||[])){
         if(state.call!==call)break;
-        try{await ifty204HandleSignal(call,signal);}catch(error){setStatus('音声接続処理：'+textFromError(error),true);}
+        try{await ifty204HandleSignal(call,signal);}catch(error){setStatus(tr('音声接続処理：','Audio connection: ')+textFromError(error),true);}
         call.lastSeq=Math.max(call.lastSeq||0,Number(signal.seq)||0);
       }
       renderFriendData();
-    }catch(error){if(Number(error.status)===401||Number(error.status)===403){ifty204CloseLocalCall(true);}else setStatus('接続状態を確認できません：'+textFromError(error),true);}
+    }catch(error){if(Number(error.status)===401||Number(error.status)===403){ifty204CloseLocalCall(true);}else setStatus(tr('接続状態を確認できません：','Could not check connection: ')+textFromError(error),true);}
     finally{state.callPollBusy=false;if(state.call===call)call.pollTimer=setTimeout(ifty204CheckCall,2800);}
   }
-  window.ifty204PlayRemote=function(){const audio=document.getElementById('ifty204RemoteAudio');if(audio?.srcObject)audio.play().catch(error=>setStatus('音声を再生できません：'+textFromError(error),true));else setStatus('相手の音声はまだ届いていません。');};
+  window.ifty204PlayRemote=function(){const audio=document.getElementById('ifty204RemoteAudio');if(audio?.srcObject)audio.play().catch(error=>setStatus(tr('音声を再生できません：','Could not play audio: ')+textFromError(error),true));else setStatus('相手の音声はまだ届いていません。');};
   window.ifty204ToggleMute=function(){const call=state.call;if(!call)return;call.muted=!call.muted;
     call.localStream?.getAudioTracks().forEach(track=>{track.enabled=!call.muted;});renderFriendData();};
   window.ifty204EndCall=function(){const c=state.call;if(!c)return;ifty204CloseLocalCall();
@@ -36770,4 +36303,61 @@ window.ifty197StartTruthPart=function(setId,count){
     return originalHub.apply(this,arguments);
   };
   window.addEventListener('pagehide',ifty204Shutdown);
+})();
+
+// STEP216 exact UI-only translation dictionary.
+function ifty216Ui(value){const original=String(value??'');const maps=ifty216Ui.maps||(ifty216Ui.maps={en:{"問題数":"Number of questions","削除":"Delete","戻る":"Back","次へ":"Next","閉じる":"Close","キャンセル":"Cancel","終了":"End","◀ 戻る":"◀ Back","名前変更":"Rename","PRACTICEへ戻る":"Back to practice","PRACTICEに戻る":"Back to practice","↻ 更新":"↻ Refresh","フォルダを空にする":"Empty folder","ランダム順":"Random order","あなたの回答：":"Your answer:","模範解答：":"Model answer:","消す":"Clear","送信":"Send","表示":"Display","例":"Example","＋ クイズフォルダ":"＋ Quiz folder","⭕ 正誤・訂正":"⭕ True/false & correction","↻ 最初から":"↻ Restart","最初から":"Restart","正誤・訂正":"True/false & correction","ゲーム名":"Game name","強勢：":"Stress:","全消去":"Clear all","基準：":"Reference:","再生成":"Regenerate","❓ クイズ":"❓ Quiz","2. 問題数":"2. Number of questions","▶ 開始":"▶ Start","採点に失敗しました":"Grading failed","問題に戻る":"Back to question","難易度":"Difficulty","もしかして":"Did you mean","📇 フラッシュカード":"📇 Flashcards","＋ 新規セット":"＋ New set","次へ →":"Next →","📖 模範解答で自己採点":"📖 Self-assess with model answer","問題生成に失敗しました":"Question generation failed","再試行":"Retry","📚 保存済み問題":"📚 Saved questions","1. 表示方向":"1. Card direction","2. 出題順":"2. Question order","🎉 完了":"🎉 Complete","セットへ戻る":"Back to set","チェックしたフォルダ・語彙から追加":"Add selected folders and vocabulary","選択フォルダから追加":"Add from selected folders","全語彙を追加":"Add all vocabulary","登録語彙を検索":"Search saved vocabulary","💬 ALLIAに質問":"💬 Ask ALLIA","基準・模範：":"Reference / model:","🎉 完了！":"🎉 Complete!","フォルダ":"Folder","第一アクセント":"Primary stress","第二アクセント":"Secondary stress","問題フォルダ":"Question folder","なし":"None","30秒":"30 sec","1分":"1 min","2分":"2 min","5分":"5 min","10分":"10 min","ゲームの種類":"Game type","ラウンド数":"Number of rounds","しりとりの負け文字":"Word-chain losing character","保存済み問題フォルダ":"Saved question folders","💡 正答・解答例":"💡 Correct / sample answer","地名の表示言語":"Place-name language","📰 パッチノート":"📰 Patch notes","IFTYの更新履歴・追加機能・改善内容":"IFTY updates, new features and improvements","更新履歴":"Update history","💬 オープンチャット":"💬 Open chat","QRコードを読み込み中…":"Loading QR code…","LINEオープンチャットを開く ↗":"Open LINE OpenChat ↗","IFTY パッチノート":"IFTY patch notes","クラスコードで参加":"Join with a class code","参加する":"Join","新しいクラスを作る":"Create a class","作成する":"Create","クラスコード":"Class code","クラス名":"Class name","まだ共有フォルダはありません。":"No shared folders yet.","この項目を保存":"Save this item","選択してください":"Please select","更新する":"Update","LINEに送る（共有リンク）":"Send to LINE (sharing link)","リンクをコピー":"Copy link","📄 LINE用ファイル（.txt）":"📄 LINE file (.txt)","従来のファイル（.iftyfolder）":"Original file (.iftyfolder)","🏫 クラスに共有":"🏫 Share with class","長押ししてコピーしてください。":"Touch and hold to copy.","公開するクラスを選択してください（Owner／Editorのみ）。":"Select a class to share with (Owner/Editor only).","承認":"Approve","拒否":"Reject","IFTYの学習メニュー。科目を選ぶか、ALLIA・実践へ進めます。":"Choose a subject, open ALLIA or start practice.","単語帳を開く →":"Open vocabulary →","古文単語 →":"Classical vocabulary →","漢文・返点・手書き →":"Classical Chinese, reading marks & handwriting →","漢字・熟語・手書き →":"Kanji, compounds & handwriting →","物理・化学・生物・地学 →":"Physics, chemistry, biology & earth science →","日本史・世界史・地理・公共 →":"Japanese/world history, geography & civics →","保健・情報など →":"Health, informatics and more →","今日学習した単語":"Words studied today","今日の回答":"Answers today","今日の正答率":"Accuracy today","今日の復習":"Review today","苦手候補":"Items to work on","⚔️ 実践":"⚔️ Practice","📊 学習統計":"📊 Study statistics","👥 フレンド":"👥 Friends","📦 フォルダを受け取る":"📦 Receive folder","🛟 バックアップ / 復元":"🛟 Backup / restore","🐞 不具合を報告":"🐞 Report an issue","発音ポイント":"Pronunciation tips","👄 口・唇：":"👄 Mouth / lips:","👅 舌：":"👅 Tongue:","🎵 リズム：":"🎵 Rhythm:","注意：":"Note:","🔊 聞く":"🔊 Listen","🎙 練習":"🎙 Practise","別名":"Aliases","LANGUAGESからIMPORT":"Import from Languages","選んだLANGUAGESフォルダを発音練習用に複製します。":"Copy the selected language folder for pronunciation practice.","発音ポイントを表示":"Show pronunciation tips","ALLIAへの注文":"Instructions for ALLIA","保存済みの語呂合わせを維持する":"Keep saved mnemonics","再生成を実行":"Regenerate now","返点を入力":"Enter reading marks","選んだ返点をカーソル位置へ挿入します。":"Insert the selected reading mark at the cursor.","✍️ 手書き入力":"✍️ Handwriting input","1画戻す":"Undo one stroke","候補を出す":"Show candidates","原文に訓点を付ける":"Annotate the original text","← 前の字":"← Previous character","次の字 →":"Next character →","返点":"Reading marks","送り仮名":"Reading suffix","設定":"Settings","訓点を保存":"Save reading marks","✍️ 手書き":"✍️ Handwriting","1つ戻す":"Undo","🤖 ALLIAに質問":"🤖 Ask ALLIA","今の漢文問題を開いたまま質問できます。":"Ask a question without leaving the current exercise.","パスワードを再設定":"Reset password","保存してあるIFTY復旧コードを使います。メールは不要です。":"Use your saved IFTY recovery code. Email is not required.","復旧コードでパスワードを変更":"Change password with recovery code","新しいパスワード（10文字以上）":"New password (at least 10 characters)","新しいパスワードを再入力":"Repeat new password","現在のIFTY ID：":"Current IFTY ID:","英数字・_ . - の3〜24文字で設定できます。":"Use 3–24 letters, digits, underscores, dots or hyphens.","IFTY IDを変更":"Change IFTY ID","新しいIFTY ID":"New IFTY ID","現在のパスワード":"Current password","類義語：":"Similar words:","同義語：":"Synonyms:","対義語：":"Antonyms:","意味：":"Meaning:","漢字・熟語を編集":"Edit kanji or compound","漢字・熟語":"Kanji / compound","読み（、区切り）":"Readings (separated by 、)","意味（、区切り）":"Meanings (separated by 、)","意味説明":"Meaning explanation","類義語（、区切り）":"Similar words (separated by 、)","同義語（、区切り）":"Synonyms (separated by 、)","対義語（、区切り）":"Antonyms (separated by 、)","例文（1行1例）":"Examples (one per line)","補足":"Notes","保存":"Save","編集":"Edit","教科ごとに実践フォルダを保存できます。":"Save practice folders for each subject.","他教科と同じく、フォルダごとに英文・問題形式・問題数を保存します。":"Save sentences, question types and question counts per folder.","BASIC SENTENCES / クイズ":"Basic sentences / Quiz","1. 問題形式（複数選択可）":"1. Question types (multiple allowed)","選択した形式を1回の実践で出題します。正誤・訂正を含む場合は後半の専用パートに進みます。":"Use the selected types in one session. True/false and correction questions appear in a separate later section.","✍️ 記述":"✍️ Written response","日→英 / 英→日。回答内容をALLIAが採点。":"Japanese to English or English to Japanese. ALLIA grades the response.","🧩 穴埋め":"🧩 Fill in the blanks","英文の一語を穴埋め。通常採点は端末内。":"Fill in a missing word. Standard grading runs on this device.","正しい英文は○、誤っている英文は修正して回答。ALLIAが採点。":"Mark correct English sentences as true and correct the others. ALLIA grades the response.","登録英文が少ない場合は、ある分だけ出題します。":"If there are too few sentences, only available ones will be used.","3. 英文を追加":"3. Add sentences","全英文を追加":"Add all sentences","4. 実践設定":"4. Practice settings","記述の方向":"Written response direction","日英・英日 MIX":"Mixed Japanese / English","日 → 英":"Japanese → English","英 → 日":"English → Japanese","英文・和訳を検索":"Search sentences and translations","次の問題へ →":"Next question →","今回の問題：":"Current question:","難易度・派生記述・単語別ルール":"Difficulty, derived questions & item rules","クイズの難易度":"Quiz difficulty","フォルダがありません。下のフォームからフォルダを作成してください。":"No folders yet. Create one using the form below.","全フォルダ検索に一致する単語がありません。":"No words match the all-folder search.","↻ 全件再生成":"↻ Regenerate all","残りを中止":"Cancel remaining items","🔄 再生成の要望":"🔄 Regeneration instructions","ALLIAへの要望（任意）":"Instructions for ALLIA (optional)","この内容で再生成":"Regenerate with these instructions","✅ 確認済みの事実（次回以降も引き継ぐ）":"✅ Verified facts (retain for future requests)","活用：":"Conjugation:","例文":"Example sentences","派生語：":"Derived words:","教科を切り替えて実践できます。":"Switch subjects to practise.","セットごとに保存・編集・再開できます":"Save, edit and resume each set","❓ クエスチョン":"❓ Questions","ALLIA判定の記述式クイズをフォルダごとに作れます":"Create ALLIA-graded written quizzes for each folder","閉じる ✕":"Close ✕","移動":"Move","📋 複製":"📋 Duplicate","全選択":"Select all","選択解除":"Clear selection","選択した項目の操作":"Selected item actions","📋 別フォルダに複製":"📋 Duplicate to another folder","複製先のフォルダ":"Destination folder","複製先に同じ名前があっても複製する":"Duplicate even if the name already exists","📋 複製する":"📋 Duplicate","選択項目の複製":"Duplicate selected items","登録項目が少ない場合は、ある分だけ出題します。":"Only available items will be used if there are too few.","⚖️ ALLIAの判定に反論する":"⚖️ Challenge ALLIA grading","反論理由（任意）":"Reason for challenge (optional)","⚠ 採点を完了できませんでした":"⚠ Grading could not be completed","回答は保持されています。未採点のため正誤には加算していません。":"Your answer is retained. No score has been recorded yet.","🔄 採点を再試行":"🔄 Retry grading","📖 模範解答を確認":"📖 Check model answer","解答内容を照合し、自分で正誤を選んでください。ALLIAは使用しません。":"Compare your answer and mark it yourself. No ALLIA call is made.","⭕ 正解にする":"⭕ Mark correct","❌ 不正解にする":"❌ Mark incorrect","練習完了":"Practice complete","＋ 問題を手動追加":"＋ Add question manually","セットを空にする":"Empty set","登録・模範：":"Saved / model:","漢字手書き 完了":"Kanji handwriting complete","指やペンで漢字を書いてください。ペン入力が難しければ下の文字入力も使えます。":"Write kanji with your finger or stylus. You can also type below.","一画戻す":"Undo one stroke","模範解答を表示して自己採点":"Show model answer and self-assess","キーボードで入力（任意・自動採点）":"Type an answer (optional; auto-grading)","入力した用語を自動採点":"Grade typed term","漢字手書き欄":"Kanji handwriting area","日本語の用語を入力":"Enter the Japanese term","漢字手書き":"Kanji handwriting","LANGUAGES / フラッシュカード":"Languages / Flashcards","3. 語彙を追加":"3. Add vocabulary","第一アクセントの母音をタップ":"Tap the vowel with primary stress","選んだ母音に ´ が付きます。横に長い語はスクロールできます。":"The selected vowel receives ´. Scroll horizontally for long words.","1. 出題方向":"1. Question direction","2. クイズ形式（複数選択可）":"2. Quiz types (multiple allowed)","3. 問題数":"3. Number of questions","登録語数が少ない場合は、ある分だけ出題します。":"Only available words will be used if there are too few.","4. 語彙を追加":"4. Add vocabulary","⚠️ 問題生成に失敗しました":"⚠️ Question generation failed","🔄 再試行":"🔄 Retry","アクセント位置を確認できません":"Stress position unavailable","採点せず次の語へ":"Skip without grading","終了・戻る":"End / Back","現在の問題を保持したまま質問できます":"Ask without leaving the current question","Ctrl/⌘ + Enterでも送信":"Send with Ctrl/⌘ + Enter","元の回答は保持しています。模範解答と照合して正誤を選択してください。":"Your original answer is retained. Compare it with the model answer and mark it.","⭕ 正解":"⭕ Correct","❌ 不正解":"❌ Incorrect","元の回答：":"Original answer:","Challenge理由：":"Reason for challenge:","🎉 今日の復習クイズ完了":"🎉 Today's review complete","復習フォルダへ戻る":"Back to review folder","🎉 クイズ完了":"🎉 Quiz complete","間違いだけ復習":"Review mistakes only","設定へ戻る":"Back to settings","苦手候補の学習を終了しました。":"Practice of difficult items complete.","教科へ戻る":"Back to subject","📝 クイズモード":"📝 Quiz mode","確認したい項目を選択してください。":"Select an item to review.","IFTYを使い始める":"Getting started with IFTY","科目を選ぶ":"Choose a subject","フォルダ・教材を作る":"Create folders and study items","PRACTICEで反復":"Repeat in practice","画面右下のMANUALはいつでも開けます。":"Open the manual at any time from the lower right.","検索結果は":"Search results","用語名の完全一致":"Exact term matches","元のフォルダ位置へ移動":"Go to the original folder location","フォルダテーマ":"Folder theme","別名・別表記":"Aliases and alternate spellings","○ 正しい":"○ True","✕ 誤りあり":"✕ False","☆ 必ず出す":"☆ Always include","出題形式を固定":"Fix question type","分からない／スキップ":"Don't know / Skip","解答前・解答後にALLIAへ質問":"Ask ALLIA before or after answering","？ 分からない":"? Don't know","クラス":"Class","プライバシー":"Privacy","みんなで問題を解く":"Group quizzes","問題バンク":"Question bank","1人プレイ":"Solo play","表→裏／裏→表":"Front → Back / Back → Front","レベルバッジ":"Level badge","↕ 移動先":"↕ Jump to","ページ ↑ 先頭":"Page ↑ Top","ページ ↓ 末尾":"Page ↓ Bottom","フォルダ ↑ 先頭":"Folder ↑ Top","フォルダ ↓ 末尾":"Folder ↓ Bottom","PERIODIC（自動）":"Periodic (automatic)","MANUAL（手動）":"Manual","復旧コード":"Recovery code","重要":"Important","口：":"Mouth:","舌：":"Tongue:","コツ：":"Tip:","英語の発音記号（IPA）":"English phonetic symbols (IPA)","長音記号":"Length mark","英米差：":"British / American differences:","アクセント記号の読み方":"Reading stress marks","直後の音節":"Following syllable","長さだけでなく母音の質":"Vowel quality as well as length","前置詞：":"Preposition:","基本イメージ：":"Core image:","該当：":"Applies to:","新しいゲーム":"New game","出題方式":"Question source","① 用語からALLIAが毎問生成":"① ALLIA generates each question from terms","② 保存済み問題を出題":"② Use saved questions","教科":"Subject","出題する学習フォルダ":"Study folder for questions","📁 問題フォルダを管理":"📁 Manage question folders","問題数 (1〜30)":"Questions (1–30)","ゲームマスター":"Game master","なし（ALLIAが採点）":"None (ALLIA grades)","あり（作成後に変更可能）":"Yes (can change after creation)","採点方式":"Grading method","ALLIAが採点 → マスターが確認・修正":"ALLIA grades → master reviews and edits","マスターが採点 → 必要なときALLIAに相談":"Master grades → consult ALLIA if needed","ALLIAが自動採点":"ALLIA auto-grades","採点タイミング":"Grading timing","毎問採点":"Grade each question","全問終了後にまとめて採点":"Grade after all questions","解答中にALLIAへのヒント質問を許可する":"Allow ALLIA hints while answering","全回答者が納得したら次へ進む":"Proceed when all respondents agree","マスターの操作で強制的に進める":"Master can force progression","解答の制限時間":"Answer time limit","結果発表後、強制進行まで":"Time before forced progression after results","＋ ゲームを作成":"＋ Create game","📁 問題フォルダ":"📁 Question folder","まだゲームはありません。":"No games yet.","まだ問題がありません。":"No questions yet.","最初にフォルダを作成してください。":"Create a folder first.","解答を締め切る":"Close answers","＋ 新しいCHAT GAME":"＋ New chat game","テーマ（連想・知識バトル）":"Topic (association / knowledge battle)","多数派のお題":"Majority topic","少数派のお題":"Minority topic","少数派人数":"Minority count","早押し問題の登録方法":"Buzzer question source","手動入力（1行につき「問題 | 正解 | 解説」）":"Manual input (Question | Answer | Explanation per line)","既存の問題フォルダを利用":"Use existing question folder","問題一覧（1〜100問）":"Question list (1–100)","⚙️ ゲームマスターの詳細設定":"⚙️ Game master settings","回答制限時間（秒・0は無制限）":"Answer time limit (seconds; 0 = unlimited)","参加上限人数":"Maximum participants","正答ポイント":"Points for correct answers","不正解時の得点変動":"Points for incorrect answers","早押し・不正解時":"Buzzer incorrect answer","次の回答権へ":"Next respondent","再度早押しを受け付ける":"Reopen buzzer","問題を打ち切る":"End question","しりとり等の順番":"Word-chain order","参加順":"Join order","ランダム":"Random","問題文表示":"Question display","全文一括":"Show all at once","徐々に表示":"Reveal gradually","徐々に表示する秒数":"Gradual reveal duration","ゲームマスターも回答者として参加":"Game master also answers","ALLIAも参加（手動呼び出し・AI利用枠を消費）":"ALLIA participates (manual calls use AI quota)","参加にゲームマスターの承認が必要":"Require game master approval","観戦者を許可":"Allow spectators","チーム制":"Teams","進行中の得点を表示":"Show current scores","早押しは先着1人だけが回答可能":"Only the first buzzer participant can answer","しりとりは発音ベース（判定はマスター）":"Word chain uses pronunciation (master judges)","ゲームを作成":"Create game","まだCHAT GAMEはありません。":"No chat games yet.","参加申請済みです。マスターの承認を待ってください。":"Join request sent. Wait for master approval.","クラスに所属している人が参加できます。":"Class members can participate.","👑 ゲームマスター操作":"👑 Game master controls","💾 今の状態を手動保存":"💾 Save current state manually","保存時点へ復元":"Restore saved state","ゲームを削除":"Delete game","あなたのお題：":"Your topic:","参加すると自分のお題を表示します。":"Your topic appears when you join.","問題は開始後に表示されます。":"Questions appear after the game starts.","まだ発言がありません。":"No messages yet.","🎮 1人プレイを始める":"🎮 Start solo play","テーマ（自由でも可）":"Topic (optional)","早押し問題の用意":"Prepare buzzer questions","ALLIAに問題を作ってもらう":"Generate questions with ALLIA","自分で問題を入力":"Enter your own questions","問題 | 正解 | 解説（1行に1問）":"Question | Answer | Explanation (one per line)","読み込み中":"Loading","▶ ALLIAと対戦を始める":"▶ Start game with ALLIA","過去の1人プレイ":"Previous solo games","まだ履歴はありません。":"No history yet.","開始を押すと問題が表示されます。":"Press Start to show the question.","回答は送信済みです。採点を完了してください。":"Answer sent. Complete grading.","ALLIAの採点を再試行":"Retry ALLIA grading","判定待ちです。更新してください。":"Awaiting judgment. Refresh to check.","あなたにだけ見えるお題：":"Your private topic:","最初の質問やヒントを話しかけましょう。":"Start with a question or a clue.","おつかれさま！":"Well done!","⌘/Ctrl + Enter で送信":"Send with ⌘/Ctrl + Enter","ALLIAへの質問":"Question for ALLIA","ALLIAが考えています…":"ALLIA is thinking…","保存済みの年号・出来事から四択／記述を作成します。":"Create multiple-choice or written questions from saved dates and events.","📁 出題フォルダ":"📁 Question folder","❓ 問題の設定":"❓ Question settings","出題方向":"Question direction","回答方式":"Answer format","ランダム出題":"Random questions","▶ 練習開始":"▶ Start practice","設定をクイズフォルダとして保存":"Save settings as a quiz folder","📚 保存済みクイズフォルダ":"📚 Saved quiz folders","年号のあるフォルダがありません。先に年号を登録してください。":"No folders with dates. Register dates first.","まだ保存されていません。":"Nothing saved yet.","◀ 一覧へ戻る":"◀ Back to list","YEARS PRACTICE 結果":"Years practice results","◀ PRACTICEへ戻る":"◀ Back to practice","出題フォルダ":"Question folder","選択項目：":"Selected items:","件":"items","▶ 正誤問題を開始":"▶ Start true/false practice","正誤問題 完了":"True/false practice complete","📚 保存済み問題で練習":"📚 Practise saved questions","この1問をスキップ →":"Skip this question →","次の文の正誤を判定しなさい。":"Judge whether the following statement is true or false.","⚠️ ALLIAの採点を完了できませんでした":"⚠️ ALLIA could not finish grading","回答は保存されています。正誤カウントはまだ変更していません。":"Your answer is saved. The score has not changed.","🔄 再採点":"🔄 Retry grading","📖 自己採点":"📖 Self-assessment","📖 模範解答：":"📖 Model answer:","⭕ 自己採点：正解":"⭕ Self-assessment: Correct","❌ 自己採点：不正解":"❌ Self-assessment: Incorrect","正しい文・訂正例：":"Correct statement / correction:","🔁 実践の誤答をそのまま復習":"🔁 Review the same missed questions","復習する →":"Review →","解答を確認":"Check answer","並び順を記入（自己採点）":"Enter order (self-assessment)","🔁 誤答問題の復習 完了":"🔁 Mistake review complete","保存した正答・解説（AIは使用していません）":"Saved answer and explanation (no AI call)","✕ まだ不正解":"✕ Still incorrect","○ 正解・次へ":"○ Correct / Next","📋 問題ごとの振り返り":"📋 Review by question","問題：":"Question:","解説：":"Explanation:","まだ書き込みがありません。":"No map entries yet.","地図はまだありません。「新しい地図」から始めてください。":"No maps yet. Start with a new map.","① 書き込み方法を選ぶ":"① Choose an entry method","📍 自分で位置を指定":"📍 Set location manually","✨ ALLIAに生成させる":"✨ Generate with ALLIA","🖐 移動":"🖐 Pan","📍 配置":"📍 Place","表示名":"Display name","種類":"Type","アイコン":"Icon","名称（基本・ALLIA検索用）":"Name (primary / ALLIA search)","日本語名（任意）":"Japanese name (optional)","English name（任意）":"English name (optional)","色":"Colour","開始年（紀元前は負の値）":"Start year (negative for BCE)","終了年":"End year","関連人物（1人1行・複数可）":"Related people (one per line)","関連する出来事（1件1行・複数可）":"Related events (one per line)","解説・原因・結果":"Explanation, causes and effects","地図操作モード":"Map interaction mode","任意":"Optional","地図名（基本）":"Map name (primary)","日本語名（地図）":"Japanese map name","英語名（地図）":"English map name","表示地域":"Region","投影法":"Projection","表示年代（空欄で全時代）":"Year filter (blank for all periods)","自分の説明を模範解答と比較してください":"Compare your explanation with the model answer","自分の回答：":"Your answer:","正解：":"Correct answer:","ALLIAが使えないときも再出題／手動問題を追加できます":"Reuse questions or add manual ones even when ALLIA is unavailable","＋ 問題を作る":"＋ Create question","📖 保存問題で練習":"📖 Practise saved questions","出題形式":"Question type","四択・選択":"Multiple choice","記述（自己採点）":"Written response (self-assessment)","年号記述（年の一致で採点）":"Year response (exact year grading)","問題文":"Question text","選択肢（1行に1つ、2〜8個）":"Options (2–8, one per line)","正誤":"True / false","正しい文（○）":"True statement (○)","誤りのある文（✕）":"False statement (✕)","正答・模範解答":"Correct / model answer","解説（任意）":"Explanation (optional)","💾 保存する":"💾 Save","選択問題では選択肢と同じ文字列を入力":"For choice questions, enter an exact option","✅ 保存済み問題の練習完了":"✅ Saved-question practice complete","問題一覧へ":"Back to questions","⭕ 正解として記録・次へ":"⭕ Record correct / Next","❌ 不正解として記録・次へ":"❌ Record incorrect / Next","🎉 発音練習終了":"🎉 Pronunciation practice complete","IPAを修正":"Edit IPA","🔊 標準発音を聞く":"🔊 Listen to model pronunciation","🎙 録音して添削":"🎙 Record and review","← 前のカード":"← Previous card","録音採点にはALLIAを使います。通信エラーでも次のカードへ進めます。":"Recording feedback uses ALLIA. You can move on if a network error occurs.","受ける":"Accept","辞退":"Decline","表示言語":"Interface language","IFTYの表示・データ・アカウント設定。":"IFTY display, data and account settings.","HOMEへ戻る":"Back to Home","HOMEへ":"Home","左上のメニューボタンに表示するプロフィール画像です。プリセットまたは自分の画像を使用できます。":"Profile image shown on the menu button. Use a preset or your own image.","画像で置き換える":"Replace with an image","ホーム画面用アイコンは無限マークのみ。背景を白または黒から選べます。":"Home screen icon uses the infinity mark. Choose a white or black background.","白":"White","黒":"Black","プロフィール":"Profile","白背景":"White background","黒背景":"Black background","ALLIAまたは相互フレンドと英会話を練習する独立ツール":"Practise English with ALLIA or mutual friends.","相手と話すテーマと難易度を選択します。フレンド通話はAI採点・録音を行いません。":"Choose a topic and difficulty. Friend calls are not AI-graded or recorded.","話題":"Topic","英語レベル":"English level","日常会話":"Everyday conversation","学校・教育":"School & education","旅行":"Travel","空港・接客":"Airport & customer service","世界史・文化":"World history & culture","社会問題・ディベート":"Social issues & debate","面接":"Interview","自由会話":"Free conversation","A2（やさしい）":"A2 (elementary)","B1（標準）":"B1 (intermediate)","B2（英検準1級目安）":"B2 (upper intermediate)","C1（高度）":"C1 (advanced)","あなた":"You","🤖 ALLIAと英会話":"🤖 English with ALLIA","AIが質問し、英語で会話を続けます。話した内容は文字起こしして送信できます。発音そのものを採点しているわけではありません。":"ALLIA asks questions and continues in English. Speech can be transcribed and sent. Pronunciation itself is not graded.","▶ 会話を始める":"▶ Start conversation","会話中":"In conversation","↻ 会話をリセット":"↻ Reset conversation","ALLIAの返答を音声で読み上げる":"Read ALLIA replies aloud","ALLIAとの英会話":"English conversation with ALLIA","英語で返答":"Reply in English","英語で話す／入力する（例：I think school uniforms should be optional.）":"Speak or type English (e.g. I think school uniforms should be optional.)","🎤 マイクで入力":"🎤 Use microphone","⏹ 録音を止める":"⏹ Stop recording","Ctrl/⌘＋Enterで送信。音声認識が使えない環境ではキーボードで練習できます。音声認識は端末・ブラウザのサービスを使用する場合があります。":"Send with Ctrl/⌘ + Enter. If speech recognition is unavailable, type instead. Speech recognition may use device or browser services.","このブラウザでは音声認識に対応していません。":"Speech recognition is unavailable in this browser.","「会話を始める」を押すと、ALLIAが英語で質問します。マイクで英語を入力するか、キーボードで返答してください。":"Press Start conversation. ALLIA asks a question in English. Reply by microphone or keyboard.","👥 フレンド通話":"👥 Friend call","フレンドの音声":"Friend audio","相互承認済みフレンドだけを招待できます。両方がこの画面を開き、相手が承諾した場合に限り音声通話します。録音・公開マッチングはありません。":"Invite mutual friends only. Both must open this screen and the other person must accept. No recording or public matching.","ネットワークによっては音声接続できません（無料STUNのみ、TURNサーバー未設定）。マイク許可とHTTPS接続が必要です。":"Some networks cannot connect (STUN only; no TURN). Microphone permission and HTTPS are required.","フレンド通話にはIFTY IDでのログインが必要です。":"Sign in with an IFTY ID to call friends.","↻ フレンド・招待を更新":"↻ Refresh friends & invitations","👥 フレンド管理":"👥 Manage friends","会話カード（順番に答えて練習）":"Conversation cards (take turns answering)","次の話題へ":"Next topic","確認中…":"Checking…","取得中…":"Loading…","招待の承認を待っています":"Waiting for acceptance","音声接続中":"Audio connected","音声の接続を試行中です":"Connecting audio","接続準備中":"Preparing connection","🎤 ミュート解除":"🎤 Unmute","🔇 ミュート":"🔇 Mute","🔊 相手の音声":"🔊 Play partner audio","通話終了":"End call","現在、招待はありません。":"No invitations at the moment.","🎧 通話に招待":"🎧 Invite to call","相互フレンドがいません。上の「フレンド管理」から追加できます。":"No mutual friends. Add friends using Manage friends above.","ALLIAが質問を作成しています…":"ALLIA is preparing a question…","英語で答えてみてください。":"Try answering in English.","ALLIAが返答しています…":"ALLIA is replying…","次の英語を話してみてください。":"Try your next English response.","文字起こししました。内容を確認して送信してください。":"Transcribed. Check the text before sending.","英語を話してください。終了後に確認して送信できます。":"Speak in English. Review the transcription before sending.","音声認識に対応していません。テキスト入力で練習できます。":"Speech recognition is unavailable. You can practise by typing.","通話を終了しました。":"Call ended.","招待を送信しました。相手がこの画面から承諾すると音声通話を開始します。":"Invitation sent. The call starts when your friend accepts here.","承諾しました。音声通話の接続を開始します。":"Accepted. Connecting the call.","通話中は先に通話を終了してください。":"End the current call first.","このブラウザは音声読み上げに対応していません。":"Speech synthesis is unavailable in this browser.","問題を生成しています…":"Generating question…","正解":"Correct","不正解":"Incorrect","要復習":"Review needed","分からない":"Don't know","？ 分からない（答えを見る）":"? Don't know (show answer)","回答":"Answer","回答する":"Submit answer","採点する":"Grade","答える":"Answer","回答を送信":"Submit answer","採点中…":"Grading…","ALLIAが採点中…":"ALLIA is grading…","検索":"Search","追加":"Add","＋ 追加":"＋ Add","＋ フォルダ作成":"＋ Create folder","＋ 英文・和訳を登録":"＋ Add sentence & translation","英文・和訳・メモで全フォルダ検索":"Search all folders by English, translation or notes","クリア":"Clear","登録英文":"Saved sentences","英文をフォルダで整理できます。フォルダと英文は ↑ ↓ で並べ替えられます。":"Organise sentences in folders. Reorder folders and sentences with ↑ ↓.","テーマ":"Theme","共有":"Share","フォルダを作成":"Create folder","新しいフォルダ":"New folder","選択":"Select","折りたたむ":"Collapse","展開":"Expand","スキップ":"Skip","四択":"Multiple choice","記述":"Written response","用語記述":"Term response","派生記述":"Derived response","用語定義説明":"Define a term","定義記述":"Definition response","並べ替え":"Reorder","穴埋め":"Fill in the blanks","リスニング":"Listening","アクセント記号":"Stress mark","回答を入力":"Enter an answer","ここに説明を書く":"Write your explanation here","正しいものをすべて選択してください。複数正解の場合があります。":"Select every correct option. More than one may be correct.","科学的に正しい過程・因果・手順の順に並べてください。":"Arrange the items in the required sequence.","模範：":"Model:","正しい順：":"Correct order:","年号を入力":"Enter the year","理由や根拠を含めて説明してください（記述）":"Explain your reasoning and evidence (written response)","模範解答（登録済み）":"Saved model answer","正しく書けた":"Written correctly","書き間違えた":"Written incorrectly","分からなかった":"Did not know","登録済みの用語：":"Saved term:","対応する用語を入力":"Enter the corresponding term","通常採点ではALLIAを使用していません。":"Standard grading does not use ALLIA.","✍️ 用語記述":"✍️ Term response","用語記述 完了":"Term response complete","通常採点はALLIAなし":"Standard grading without ALLIA","解答を見る":"Show answer","模範解答":"Model answer","自動":"Automatic","従来":"Classic","すべて":"All","名前":"Name","保存する":"Save","作成":"Create","英文":"English sentence","和訳":"Japanese translation","メモ":"Notes","問題":"Question","問題形式":"Question type","出題順":"Question order","回答方向":"Answer direction","日→英":"Japanese → English","英→日":"English → Japanese","学習フォルダ単位で追加":"Add by study folder","穴にする単語数":"Number of blanks","空欄の選び方":"Blank selection method","質問":"Question","全件":"All items","一覧へ戻る":"Back to list","次の問題へ":"Next question","更新":"Refresh","読み込み中…":"Loading…","登録":"Register","登録済み":"Saved","正答率":"Accuracy","自動保存":"Auto-save","手動保存":"Manual save","同期":"Sync","クラウド同期":"Cloud sync","バックアップ":"Backup","復元":"Restore","ログアウト":"Log out","ログイン":"Log in","アカウント":"Account","表示設定":"Display settings","不具合報告":"Report an issue","復習":"Review","苦手":"Difficult items","学習統計":"Study statistics","フラッシュカード":"Flashcards","クイズ":"Quiz","英会話":"English conversation","年号":"Years","基本文":"Basic sentences","全フォルダ検索":"Search all folders","フォルダ内検索":"Search within folder","意味":"Meaning","発音":"Pronunciation","発音記号":"IPA","用語":"Term","説明":"Explanation","解説":"Explanation","日付":"Date","図・装置・資料名：":"Image / device / source name:","画像の核：":"Key visual feature:","単語の丸暗記だけでなく、「何を指す用語か」と「他と区別するための核となる特徴」を説明してください。原因・影響・類似用語との比較は派生記述で扱います。":"Explain what the term refers to and its distinguishing features. Causes, effects and comparisons belong to derived questions.","🔎 検索":"🔎 Search","← 登録へ戻る":"← Back to registration","⏭ スキップ":"⏭ Skip","実践画面を閉じる":"Close practice","使い始める":"Get started","日本語":"Japanese","登録済みの模範解答":"Saved model answer","自動・重要表現と苦手を優先":"Auto: important expressions and weak points","従来・長い単語を優先":"Classic: longer words first","フォルダ名":"Folder name","単語":"Words","項目":"Items","英文・和訳を登録":"Add sentence & translation","この端末":"This device","未測定":"Not measured","詳細":"Details","ヘルプ":"Help","選択中":"Selected","全解除":"Deselect all","全て選択":"Select all","＋ 新規作成":"＋ New","開始":"Start","完了":"Complete","結果":"Results","単語を追加":"Add word","検索する":"Search","＋ 新しいフォルダ":"＋ New folder","編集する":"Edit","削除する":"Delete","名前を変更":"Rename","次の問題":"Next question","前の問題":"Previous question","もう一度":"Again","音声認識エラー：":"Speech recognition error:","トピック：":"Topic:","会話をリセットしました。":"Conversation reset.","音声を再生できません：":"Could not play audio:","相手の音声はまだ届いていません。":"Partner audio has not arrived yet.","この教科のORDERだけを読み込み、他教科のORDERは参照しません。":"Use this subject ORDER only. Other subject ORDER settings are not used."},ja:{"HOME":"ホーム","SETTINGS":"設定","PROFILE IMAGE":"プロフィール画像","HOME SCREEN ICON":"ホーム画面アイコン","ENGLISH":"英語","LANGUAGES":"言語・語彙","ANCIENT":"古文","KANBUN":"漢文","KANJI":"漢字","SCIENCE":"理科","SOCIAL STUDIES":"社会","OTHERS":"その他","BASIC SENTENCES":"基本文","YEARS":"年号","PRACTICE":"実践","⚔️ PRACTICE":"⚔️ 実践","📊 TODAY / REVIEW":"📊 今日の学習・復習","🗣 ENGLISH CONVERSATION":"🗣 英会話","ENGLISH CONVERSATION":"英会話","FRIENDS":"フレンド","CLASSES":"クラス","SUBJECTS":"教科","TOOLS":"ツール","MANUAL":"マニュアル","EXAMPLES":"例文","EXAMPLE BANK":"例文バンク","PRONUNCIATION":"発音","PATCH NOTES":"パッチノート","IMPORT FOLDER":"フォルダを受け取る","LOG OUT":"ログアウト","LOGIN":"ログイン","BACKUP / RESTORE":"バックアップ・復元","BASIC":"基本","AI & TOOLS":"AI・ツール","ACCOUNT & DATA":"アカウント・データ","SETTINGS & TROUBLE":"設定・トラブル対応","ADDED FEATURES":"追加機能","ADDED FEATURES · STEP104–152":"追加機能 · STEP104–152","CHAT GAME":"チャットゲーム","🌐 LANGUAGES":"🌐 言語・語彙","💬 BASIC SENTENCES":"💬 基本文","📜 KANBUN":"📜 漢文","🈶 KANJI":"🈶 漢字","📚 TOOLS → EXAMPLES":"📚 ツール → 例文","📝 TOOLS → BASIC SENTENCES":"📝 ツール → 基本文","📅 TOOLS → YEARS":"📅 ツール → 年号","🎯 TOOLS → PRACTICE":"🎯 ツール → 実践","VOWELS":"母音","CONSONANTS":"子音","IMPORTANT CONTRASTS":"重要な音の区別","CORE IMAGES":"核イメージ","CONFUSING PAIRS":"混同しやすい表現","WORD STRESS":"単語の強勢","CONNECTED SPEECH":"連続発話","WEAK FORMS & CONTRACTIONS":"弱形・短縮形","BRITISH / AMERICAN / OTHER REGIONS":"英・米・その他の地域","PRACTICE ORDER":"実践用ORDER","⚔️ PRACTICE / YEARS":"⚔️ 実践 / 年号","⚔️ PLACES PRACTICE":"⚔️ 地図・地名の実践"}});const map=maps[getIftyHomeSubjectNameMode()];return Object.hasOwn(map,original)?map[original]:original;}
+function ifty216Markup(ja,en){return escapeHtml(ifty216T(ja,en)).replace(/'/g,'&#39;');}
+
+// STEP216: optional display-only quiz translation. No answer/key/content mutations.
+function ifty216EligibleSubject(subject){return ['SOCIAL STUDIES','SCIENCE','OTHERS','YEARS'].includes(String(subject||'').toUpperCase());}
+function ifty216QuizText(value,eligible=true,keepOriginal=false){
+  const original=String(value??'');
+  if(!eligible||ifty216QuizLanguage()!=='follow'||!original.trim()||original.length>1000)return escapeHtml(original);
+  const ja=/[\u3040-\u30ff\u3400-\u9fff]/u.test(original),en=/[a-zA-Z]{2,}/.test(original);
+  if(getIftyHomeSubjectNameMode()==='en'?!ja:ja||!en)return escapeHtml(original);
+  return `<span data-ifty216-quiz-display="1" data-ifty216-keep-original="${keepOriginal?'1':'0'}">${escapeHtml(original)}</span>`;
+}
+(function ifty216InstallQuizTranslations(){
+  const cache=new Map(),pending=new Set();let queued=false,account='',epoch=0;
+  function key(text,lang){return lang+'\u0000'+text;}
+  function syncAccount(){const id=String(typeof currentUser!=='undefined'?currentUser||'':'');if(id!==account){account=id;epoch++;cache.clear();pending.clear();}}
+  function apply(node,original,translated){
+    if(!node.isConnected||node.dataset.ifty216Done==='1')return;
+    node.dataset.ifty216Done='1';
+    if(!translated||translated===original)return;
+    node.textContent=translated;
+    // Preserve access to source wording; typed term questions continue to use the registered spelling.
+    node.title=original;node.lang=getIftyHomeSubjectNameMode();
+    const source=document.createElement('small');source.style.cssText='display:block;color:inherit;opacity:.78;font-size:.77em;line-height:1.45;overflow-wrap:anywhere;margin-top:3px;';
+    source.textContent=(getIftyHomeSubjectNameMode()==='en'?'Original: ':'原文：')+original;
+    node.appendChild(source);
+  }
+  async function scan(){
+    queued=false;syncAccount();if(ifty216QuizLanguage()!=='follow')return;
+    const lang=getIftyHomeSubjectNameMode(),currentEpoch=epoch,items=[],keys=[];let total=0;
+    for(const node of document.querySelectorAll('[data-ifty216-quiz-display]:not([data-ifty216-done])')){
+      if(node.closest('[hidden]')||!node.getClientRects().length)continue;
+      const original=node.textContent,k=key(original,lang);
+      if(cache.has(k)){apply(node,original,cache.get(k));continue;}
+      if(pending.has(k)||keys.includes(k))continue;
+      if(items.length>=24||total+original.length>10000)break;
+      keys.push(k);items.push(original);total+=original.length;
+    }
+    if(!items.length)return;
+    if(typeof navigator!=='undefined'&&navigator.onLine===false)return;
+    keys.forEach(k=>pending.add(k));
+    let translations=[];
+    try{
+      const res=await iftyAlliaFetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'ifty216_quiz_translate',language:lang,items})});
+      const data=await res.json();if(res.ok&&Array.isArray(data.translations)&&data.translations.length===items.length)translations=data.translations;
+    }catch(_){}
+    syncAccount();if(epoch!==currentEpoch)return;
+    keys.forEach((k,i)=>{pending.delete(k);cache.set(k,typeof translations[i]==='string'?translations[i]:'');});
+    while(cache.size>400)cache.delete(cache.keys().next().value);
+    schedule();
+  }
+  function schedule(){if(queued||ifty216QuizLanguage()!=='follow')return;queued=true;setTimeout(scan,80);}
+  function install(){if(!document.body)return;new MutationObserver(records=>{if(ifty216QuizLanguage()!=='follow')return;for(const record of records){for(const node of record.addedNodes){if(node.nodeType===1&&(node.matches?.('[data-ifty216-quiz-display]')||node.querySelector?.('[data-ifty216-quiz-display]'))){schedule();return;}}}}).observe(document.body,{childList:true,subtree:true});window.addEventListener('online',schedule);schedule();}
+  if(document.body)install();else document.addEventListener('DOMContentLoaded',install,{once:true});
 })();
