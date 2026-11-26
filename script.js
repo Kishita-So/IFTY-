@@ -35966,7 +35966,10 @@ window.ifty197StartTruthPart=function(setId,count){
     const review=document.getElementById('ifty204ReviewAi');if(review)review.disabled=state.aiBusy||state.ended||!hasLearner;
     const end=document.getElementById('ifty216EndAi');if(end){end.disabled=state.aiBusy||!hasLearner;end.textContent=state.ended?tr('最終振り返りを再取得','Retry final review'):tr('会話を終了して振り返る','End & review');}
     const draft=document.getElementById('ifty204Draft');if(draft)draft.disabled=state.ended||!state.aiStarted;
-    const first=document.getElementById('ifty217FirstSpeaker');if(first)first.disabled=state.aiBusy||(state.aiStarted&&!state.ended);
+    const locked=state.aiBusy||state.speechBusy||(state.aiStarted&&!state.ended);
+    getRoot()?.querySelectorAll('[data-first-speaker]').forEach(button=>{const selected=button.dataset.firstSpeaker===state.firstSpeaker;button.disabled=locked;button.setAttribute('aria-pressed',String(selected));button.style.background=selected?'#1d4ed8':'#334155';button.style.color='#fff';button.style.borderColor=selected?'#93c5fd':'#64748b';});
+    const firstHint=document.getElementById('ifty240FirstHint');if(firstHint)firstHint.textContent=locked?tr('会話中は変更できません。変更するには会話を終了またはリセットしてください。','End or reset the conversation to change who starts.'):state.firstSpeaker==='learner'?tr('選択中：自分から話す','Selected: I start'):tr('選択中：ALLIAから話す','Selected: ALLIA starts');
+    if(begin&&!state.aiStarted&&!state.ended)begin.textContent=state.firstSpeaker==='learner'?tr('▶ 自分から会話を始める','▶ I start the conversation'):tr('▶ ALLIAから会話を始める','▶ ALLIA starts the conversation');
     const mic=document.getElementById('ifty204Mic');if(mic)mic.disabled=state.ended||!state.aiStarted||(!(window.SpeechRecognition||window.webkitSpeechRecognition));
     const clear=document.getElementById('ifty216ClearAi');if(clear)clear.disabled=state.aiBusy;
     renderFeedback();renderCues();
@@ -35977,7 +35980,7 @@ window.ifty197StartTruthPart=function(setId,count){
       <div class="ifty204-panel">
         <h2 style="margin:0 0 9px;color:#f1f5f9;font-size:1.14rem;">${ifty216Markup("🤖 ALLIAと英会話","🤖 English with ALLIA")}</h2>
         <div class="ifty204-muted">${tr('英語で会話します。音声は文字起こしして送信できます。発音自体は採点しません。','Converse in English. Speech can be transcribed; pronunciation itself is not graded.')}</div>
-        <label class="ifty204-field" style="margin-top:10px;">${tr('先手・後手','Who speaks first?')}<select id="ifty217FirstSpeaker" onchange="ifty217SetFirstSpeaker(this.value)"><option value="allia" ${state.firstSpeaker==='allia'?'selected':''}>${tr('後手：ALLIAから','Second: ALLIA starts')}</option><option value="learner" ${state.firstSpeaker==='learner'?'selected':''}>${tr('先手：自分から','First: I start')}</option></select></label>
+        <fieldset style="min-width:0;margin:12px 0;padding:12px;border:1px solid #64748b;border-radius:12px;"><legend style="font-weight:800;color:#f1f5f9;">${tr('どちらから話し始める？','Who speaks first?')}</legend><div style="display:grid;gap:8px;">${[['learner',tr('先手：自分から話す','First: I start'),tr('自分で質問や話題を切り出す。','Ask a question or introduce a topic.')],['allia',tr('後手：ALLIAから話す','Second: ALLIA starts'),tr('ALLIAの最初の発言に答える。','Respond to ALLIA’s opening message.')]].map(([v,label,desc])=>`<button type="button" class="ifty204-action" data-first-speaker="${v}" aria-pressed="${state.firstSpeaker===v}" onclick="ifty217SetFirstSpeaker('${v}')" style="text-align:left;white-space:normal;min-height:52px;width:100%;"><b>${e(label)}</b><span style="display:block;font-size:.85em;margin-top:4px;">${e(desc)}</span></button>`).join('')}</div><div id="ifty240FirstHint" class="ifty204-muted" style="margin-top:8px;"></div></fieldset>
         <div class="ifty204-actions"><button class="ifty204-action primary" type="button" id="ifty204BeginAi" onclick="ifty204StartAi()">${ifty216Markup("▶ 会話を始める","▶ Start conversation")}</button>
           <button class="ifty204-action" id="ifty204ReviewAi" type="button" onclick="ifty204ReviewAi(false)">${tr('📝 途中で振り返る','📝 Review progress')}</button>
           <button class="ifty204-action danger" id="ifty216EndAi" type="button" onclick="ifty204ReviewAi(true)">${tr('会話を終了して振り返る','End & review')}</button>
@@ -36072,7 +36075,7 @@ window.ifty197StartTruthPart=function(setId,count){
     if(state.mode==='friends'){window.ifty204RefreshFriends();ifty204ScheduleInbox();}
   };
   window.ifty216ConversationSetting=function(key,value){if(key==='feedbackLanguage'){state.feedbackLanguage=['ja','en','auto'].includes(value)?value:'auto';renderAiLog(true);return;}const max={customTopic:300,learnerTargets:800,aiTargets:800,draft:1400}[key];if(max)state[key]=String(value||'').slice(0,max);};
-  window.ifty217SetFirstSpeaker=function(value){if(state.aiBusy||(state.aiStarted&&!state.ended))return;state.firstSpeaker=value==='learner'?'learner':'allia';};
+  window.ifty217SetFirstSpeaker=function(value){if(state.aiBusy||state.speechBusy||(state.aiStarted&&!state.ended)||!['learner','allia'].includes(value))return;state.firstSpeaker=value;renderAiLog(true);};
   window.ifty204UpdateTopic=function(topic){if(options.topics.some(x=>x[0]===topic)){state.topic=topic;state.promptIndex=0;renderFriendData();}};
   window.ifty204NextPrompt=function(){state.promptIndex++;renderFriendData();};
   window.ifty204UpdateLevel=function(level){if(options.levels.some(x=>x[0]===level))state.level=level;};
